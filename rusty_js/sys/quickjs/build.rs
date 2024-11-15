@@ -68,6 +68,7 @@ fn generate_binding(out_dir: &PathBuf) {
         "JS_ToCString",
         "JS_FreeCString",
         "JS_ThrowTypeError",
+        "JS_ToInt64",
         "QJS_RunScript",
         "QJS_RunJobs",
     ];
