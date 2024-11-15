@@ -12,7 +12,7 @@ fn checkout_submodule() {
     if stdout.lines().any(|line| line.starts_with('-')) {
         Command::new("git")
             .args(["submodule", "update", "--init"])
-            .status()
+            .output()
             .expect("Failed to checkout quickjs-ng");
     }
 }
@@ -51,10 +51,16 @@ fn build_static_archive() {
         android_setup();
     }
 
-    Command::new("make")
+    let output = Command::new("make")
         .args(["-j4"])
-        .status()
-        .expect("Failed to make make");
+        .output()
+        .expect("Failed to execute make");
+
+    assert!(
+        output.status.success(),
+        "Make failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 fn generate_binding(out_dir: &String) {
