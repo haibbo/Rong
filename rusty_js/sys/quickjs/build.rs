@@ -1,5 +1,5 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 
 fn checkout_submodule() {
@@ -57,7 +57,7 @@ fn build_static_archive() {
         .expect("Failed to make make");
 }
 
-fn generate_binding(out_dir: &PathBuf) {
+fn generate_binding(out_dir: &String) {
     let allow_funcs = vec![
         "JS_NewRuntime",
         "JS_FreeRuntime",
@@ -69,28 +69,28 @@ fn generate_binding(out_dir: &PathBuf) {
         "JS_FreeCString",
         "JS_ThrowTypeError",
         "JS_ToInt64",
-        "QJS_RunScript",
-        "QJS_RunJobs",
+        "QJS_.*",
     ];
 
     let mut builder = bindgen::Builder::default()
-        .header("quickjs-ng/quickjs.h")
-        .header("patch/qjs.h");
+        .header("quickjs.wrapper.h")
+        .clang_arg("-I./quickjs-ng")
+        .clang_arg("-I./patch");
 
     for item in &allow_funcs {
         builder = builder.allowlist_function(item);
     }
+    let bindings = builder
+        .generate()
+        .expect("Unable to generating bingdings for quickjs");
 
-    let dest = out_dir.join("bindings.rs");
-
-    let bindings = builder.generate().expect("Unable to generating bingdings");
     bindings
-        .write_to_file(dest)
+        .write_to_file(Path::new(out_dir).join("quickjs.bindings.rs"))
         .expect("Failed to write bindings!");
 }
 
 fn main() {
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_dir = env::var("OUT_DIR").unwrap();
 
     checkout_submodule();
     build_static_archive();
@@ -101,6 +101,6 @@ fn main() {
     println!("cargo:rerun-if-changed=patch/*");
 
     // where to find static library libquickjs
-    println!("cargo:rustc-link-search=native={}", out_dir.display());
+    println!("cargo:rustc-link-search=native={}", out_dir);
     println!("cargo:rustc-link-lib=static=quickjs");
 }

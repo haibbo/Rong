@@ -19,7 +19,7 @@ INCLUDE_DIRS = -I$(SRC_DIR_QJS) -I$(SRC_DIR_PATCH)
 QJS_FILENAMES = libregexp.c libunicode.c cutils.c libbf.c
 
 # Patch source files
-PATCH_FILENAMES = qjs.c
+PATCH_FILENAMES = qjs.c inline.c
 
 # File name of merged quickjs.c
 NEW_QUICKJS=new_quickjs.c

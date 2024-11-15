@@ -1,4 +1,4 @@
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+include!(concat!(env!("OUT_DIR"), "/quickjs.bindings.rs"));
 
 #[cfg(test)]
 mod tests {
