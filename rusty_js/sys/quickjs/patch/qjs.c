@@ -2,6 +2,10 @@
 
 #include "qjs.h"
 
+// used for getting class ID from constructor etc
+extern JS_BOOL _QJS_SetCFuncMagic(JSValue func_obj, int magic);
+extern int _QJS_GetCFuncMagic(JSValue func_obj);
+
 // TODO: handle exeception
 JSValue QJS_RunScript(JSContext *ctx, char *script, int len){
     JSValue val;
