@@ -55,3 +55,8 @@ $(LIB_TARGET): $(addprefix $(OUT_DIR)/, $(patsubst %.c, %.o, $(QJS_FILENAMES) $(
 clean:
 	@rm -rf $(OUT_DIR)
 
+$(OUT_DIR)/class.o: $(SRC_DIR_PATCH)/example/class.c
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -c $< -o $@
+
+class: $(LIB_TARGET) $(OUT_DIR)/class.o
+	$(CC) $^ -o $(OUT_DIR)/$@

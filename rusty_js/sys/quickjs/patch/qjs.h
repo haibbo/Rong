@@ -18,7 +18,13 @@ JS_BOOL QJS_IsString(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsSymbol(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsObject(JSContext *ctx, JSValue v);
 
-JSValue QJS_RunScript(JSContext *ctx, char *script, int len);
+JSValue QJS_RunScript(JSContext *ctx, const char *script, int len);
 void QJS_RunJobs(JSRuntime *rt);
+
+JSValue QJS_CreateClass(JSContext *ctx, const char *class_name, JSCFunction *constructorCb,
+                        JSClassCall *callAsFuncCb, JSClassFinalizer *finalizer);
+
+JSValue QJS_ObjectMake(JSContext *ctx, JSValue constructor, void *privateDate);
+void *QJS_ObjectGetPrivate(JSValue object);
 
 #endif
