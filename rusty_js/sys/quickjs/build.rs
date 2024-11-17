@@ -64,28 +64,29 @@ fn build_static_archive() {
 }
 
 fn generate_binding(out_dir: &String) {
-    let allow_funcs = vec![
-        "JS_NewRuntime",
-        "JS_FreeRuntime",
-        "JS_NewContext",
-        "JS_FreeContext",
-        "JS_DupContext",
-        "JS_FreeValue",
-        "JS_ToCString",
-        "JS_FreeCString",
-        "JS_ThrowTypeError",
-        "JS_ToInt64",
-        "QJS_.*",
-    ];
-
-    let mut builder = bindgen::Builder::default()
+    let builder = bindgen::Builder::default()
         .header("quickjs.wrapper.h")
         .clang_arg("-I./quickjs-ng")
-        .clang_arg("-I./patch");
+        .clang_arg("-I./patch")
+        .blocklist_type("JSClassID")
+        .blocklist_type("JS_MarkFunc")
+        .blocklist_type("JSClass")
+        .blocklist_type("JSClassDef")
+        .blocklist_type("JSClassGCMark")
+        .blocklist_type("JSCFunctionListEntry.*")
+        .blocklist_type("JSClassExoticMethods")
+        .opaque_type("FILE")
+        .blocklist_type("FILE")
+        .allowlist_function("[Q]*JS_.*")
+        .blocklist_function("JS_.*Class.*")
+        .blocklist_function("JS_.*Opaque[2]*")
+        .blocklist_function("JS_NewCFunc.*")
+        .blocklist_function("JS_MarkValue")
+        .blocklist_function("JS_.*List")
+        .blocklist_function("JS_MarkValue")
+        .blocklist_function("JS_DumpMemoryUsage")
+        .blocklist_item("JSCFunctionEnum.*");
 
-    for item in &allow_funcs {
-        builder = builder.allowlist_function(item);
-    }
     let bindings = builder
         .generate()
         .expect("Unable to generating bingdings for quickjs");
