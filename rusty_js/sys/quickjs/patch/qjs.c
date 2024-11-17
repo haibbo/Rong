@@ -6,7 +6,6 @@ extern JS_BOOL _QJS_SetCFuncMagic(JSValue func_obj, int magic);
 // used for get class ID from constructor
 extern int _QJS_GetCFuncMagic(JSValue func_obj);
 
-// TODO: handle exeception
 JSValue QJS_RunScript(JSContext *ctx, const char *script, int len){
     JSValue val;
 
@@ -14,35 +13,25 @@ JSValue QJS_RunScript(JSContext *ctx, const char *script, int len){
     return val;
 }
 
-// TODO: handle exeception
-void QJS_RunJobs(JSRuntime *rt){
+JSValue QJS_RunJobs(JSRuntime *rt){
     int ret;
     JSContext *ctx;
 
     for(;;) {
 
         ret=JS_ExecutePendingJob(rt, &ctx);
-        if (ret==0) break; // no job pending
+        if (ret==0) {
+            return JS_UNDEFINED; // no job pending
+        }
 
         if (ret<0){
-           // TODO: handle exeception
-            break;
+            return JS_GetException(ctx);
         }
     }
+
+    return JS_UNDEFINED;
 }
 
-/*
-* create class
-*
-* @param name: Name of the JavaScript constructor function
-* @param constructorCb: constructor callback function
-* @param callAsFuncCb: callback function when call object as function
-* #param finalizer: finalizer callback to release resource required by constructor
-* @return A JSValue representing the constructor function for the class.
-*
-* in quickjs-ng, class ID is managed at Runtime level
-* caller is responsible for avoid duplicated registration
-*/
 JSValue QJS_CreateClass(JSContext *ctx, const char *class_name, JSCFunction *constructorCb,
                         JSClassCall *callAsFuncCb, JSClassFinalizer *finalizer) {
 

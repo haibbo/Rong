@@ -18,13 +18,55 @@ JS_BOOL QJS_IsString(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsSymbol(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsObject(JSContext *ctx, JSValue v);
 
+/*
+ * Eval JavaScript script @param script
+ *
+ * How to handle Exception/Error ?
+ * 1. use QJS_IsException to check whether it's Exception, if true, then
+ * 2. dump exception message using JS_ToCStringLen2
+ * 3. Then use JS_IsError to check whether it's error, if true, then
+ * 4. get "stack"/"message" error
+ *   val = JS_GetPropertyStr(ctx, exception, "stack");
+ *   if (!JS_IsUndefined(val)) {
+ *         dump w/ JS_ToCStringLen2
+ *   }
+ *   JS_FreeValue(ctx, val);
+ */
 JSValue QJS_RunScript(JSContext *ctx, const char *script, int len);
-void QJS_RunJobs(JSRuntime *rt);
 
+
+/*
+ * Run internal micro tasks
+ *
+ * Exception/Error, the same as QJS_RunScript
+ */
+JSValue QJS_RunJobs(JSRuntime *rt);
+
+/*
+* create class
+*
+* @param name: Name of the JavaScript constructor function
+* @param constructorCb: constructor callback function
+* @param callAsFuncCb: callback function when call object as function
+* #param finalizer: finalizer callback to release resource required by constructor
+* @return A JSValue representing the constructor function for the class.
+*
+* in quickjs-ng, class ID is managed at Runtime level
+* caller is responsible for avoid duplicated registration
+*/
 JSValue QJS_CreateClass(JSContext *ctx, const char *class_name, JSCFunction *constructorCb,
                         JSClassCall *callAsFuncCb, JSClassFinalizer *finalizer);
 
+/*
+ * create object of class represented by @param constructor
+ *
+ * @param: privateDate is option opaque to save into object
+ */
 JSValue QJS_ObjectMake(JSContext *ctx, JSValue constructor, void *privateDate);
+
+/*
+ * get private date from object
+ */
 void *QJS_ObjectGetPrivate(JSValue object);
 
 #endif
