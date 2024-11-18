@@ -23,8 +23,8 @@ JS_BOOL QJS_IsObject(JSContext *ctx, JSValue v);
  *
  * How to handle Exception/Error ?
  * 1. use QJS_IsException to check whether it's Exception, if true, then
- * 2. dump exception message using JS_ToCStringLen2
- * 3. Then use JS_IsError to check whether it's error, if true, then
+ * 2. use API JS_GetException to get exception then dump it by JS_ToCStringLen2
+ * 3. use JS_IsError to check whether exception is an error also, if true, then
  * 4. get "stack"/"message" error
  *   val = JS_GetPropertyStr(ctx, exception, "stack");
  *   if (!JS_IsUndefined(val)) {
