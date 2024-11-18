@@ -1,0 +1,7 @@
+[package]
+name = "rusty-js-quickjs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusty-js-quickjs-sys={path="./sys/"}
