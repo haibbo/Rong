@@ -1,6 +1,7 @@
 use crate::{impl_js_values, FromWithCtx};
 use crate::{JSCtx, JSValueInner};
 
+#[derive(Clone)]
 pub struct JSValue<'ctx>(pub(crate) JSValueInner<'ctx>);
 
 impl<'ctx> From<JSValueInner<'ctx>> for JSValue<'ctx> {
