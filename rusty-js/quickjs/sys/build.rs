@@ -85,7 +85,8 @@ fn generate_binding(out_dir: &String) {
         .blocklist_function("JS_.*List")
         .blocklist_function("JS_MarkValue")
         .blocklist_function("JS_DumpMemoryUsage")
-        .blocklist_item("JSCFunctionEnum.*");
+        .blocklist_item("JSCFunctionEnum.*")
+        .blocklist_item("JSCFunctionType");
 
     let bindings = builder
         .generate()

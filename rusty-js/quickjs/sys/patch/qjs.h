@@ -4,7 +4,10 @@
 #include "quickjs.h"
 
 JSValue QJS_NewBool(JSContext *ctx, JS_BOOL val);
+
 JSValue QJS_NewInt32(JSContext *ctx, int32_t val);
+int QJS_ToUint32(JSContext *ctx, uint32_t *pres, JSValue val);
+
 JSValue QJS_NewFloat64(JSContext *ctx, double val);
 
 JSValue QJS_NewInt64(JSContext *ctx, int64_t val);

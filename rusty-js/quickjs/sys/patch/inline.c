@@ -45,6 +45,11 @@ JSValue QJS_NewUint32(JSContext *ctx, uint32_t val)
     return v;
 }
 
+int QJS_ToUint32(JSContext *ctx, uint32_t *pres, JSValue val)
+{
+    return JS_ToInt32(ctx, (int32_t*)pres, val);
+}
+
 
 JS_BOOL QJS_IsNumber(JSContext *ctx, JSValue v)
 {
