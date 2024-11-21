@@ -1,0 +1,16 @@
+[package]
+name = "rusty-js"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusty-js-traits = { path = "./traits" }
+
+# Conditional dependencies based on features
+rusty-js-quickjs = { path = "./quickjs", optional = true }
+
+[features]
+quickjs=["rusty-js-quickjs"]
+jscore=[]
+
+default=["quickjs"]
