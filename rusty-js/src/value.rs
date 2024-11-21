@@ -3,7 +3,27 @@ use crate::{JSCtx, JSValueInner};
 
 pub struct JSValue<'ctx>(pub(crate) JSValueInner<'ctx>);
 
-impl_js_values!(bool, i32, u32, i64, u64, f64, String);
+impl<'ctx> From<JSValueInner<'ctx>> for JSValue<'ctx> {
+    fn from(v: JSValueInner<'ctx>) -> Self {
+        Self(v)
+    }
+}
+
+impl<'ctx> FromWithCtx<'ctx, &str> for JSValue<'ctx> {
+    type Context = JSCtx;
+    fn from_with_ctx(ctx: &'ctx Self::Context, value: &str) -> Self {
+        JSValueInner::from_with_ctx(&ctx.0, value).into()
+    }
+}
+
+impl<'ctx> TryInto<String> for JSValue<'ctx> {
+    type Error = ();
+    fn try_into(self) -> Result<String, Self::Error> {
+        self.0.try_into()
+    }
+}
+
+impl_js_values!(bool, i32, u32, i64, u64, f64);
 
 #[cfg(test)]
 mod test {
@@ -31,9 +51,12 @@ mod test {
             let jsvalue = JSValue::from_with_ctx(ctx, f64::MIN);
             assert_eq!(f64::MIN, jsvalue.try_into().unwrap());
 
-            let str: String = String::from("hi");
-            let jsvalue = JSValue::from_with_ctx(ctx, str.clone());
-            assert_eq!(str, TryInto::<String>::try_into(jsvalue).unwrap());
+            let hello = "Hello";
+            let jsvalue = JSValue::from_with_ctx(ctx, hello.as_ref());
+            assert_eq!(
+                String::from(hello),
+                TryInto::<String>::try_into(jsvalue).unwrap()
+            );
         });
     }
 }

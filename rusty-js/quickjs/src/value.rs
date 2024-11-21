@@ -1,7 +1,7 @@
 use crate::qjs;
 use crate::JSCtxInner;
 use rusty_js_traits::{impl_js_value, FromRaw, FromWithCtx};
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::string::String;
 
 // JSValue's lifetime depends on JSCtxInner
@@ -88,10 +88,10 @@ impl_js_value!(
 );
 
 impl_js_value!(
-    String,
-    |ctx, value| {
-        let c_str = CString::new(value).unwrap();
-        qjs::JS_NewStringLen(ctx, c_str.as_ptr(), c_str.count_bytes())
+    &str,
+    |ctx, value: &str| {
+        let len = value.as_bytes().len();
+        qjs::JS_NewStringLen(ctx, value.as_ptr() as _, len as _)
     },
     |ctx, result: *mut String, value| {
         if qjs::QJS_IsString(ctx, value) < 0 {
@@ -99,7 +99,9 @@ impl_js_value!(
         } else {
             let ptr = qjs::JS_ToCStringLen2(ctx, std::ptr::null_mut(), value, 0);
             *result = CStr::from_ptr(ptr).to_string_lossy().into_owned();
+            qjs::JS_FreeCString(ctx, ptr);
             0
         }
-    }
+    },
+    String
 );

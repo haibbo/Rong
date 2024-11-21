@@ -14,6 +14,10 @@ pub trait FromRaw<'ctx, T> {
 #[macro_export]
 macro_rules! impl_js_value {
     ($type:ty, $create_fn:expr, $to_fn:expr) => {
+        impl_js_value!($type, $create_fn, $to_fn, $type);
+    };
+
+    ($type:ty, $create_fn:expr, $to_fn:expr, $to_type:ty) => {
         impl<'ctx> FromWithCtx<'ctx, $type> for JSValueInner<'ctx> {
             type Context = JSCtxInner;
             fn from_with_ctx(ctx: &'ctx Self::Context, value: $type) -> Self {
@@ -22,10 +26,10 @@ macro_rules! impl_js_value {
             }
         }
 
-        impl<'ctx> TryInto<$type> for JSValueInner<'ctx> {
+        impl<'ctx> TryInto<$to_type> for JSValueInner<'ctx> {
             type Error = (); // don't care error detail
-            fn try_into(self) -> Result<$type, Self::Error> {
-                let mut result: $type = Default::default();
+            fn try_into(self) -> Result<$to_type, Self::Error> {
+                let mut result: $to_type = Default::default();
                 if unsafe { $to_fn(self.ctx.as_ptr(), &mut result, self.value) } < 0 {
                     Err(())
                 } else {
