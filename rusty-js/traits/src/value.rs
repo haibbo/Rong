@@ -1,15 +1,21 @@
-/// New JSValue from T of rust type with Context
-pub trait FromWithCtx<'ctx, T> {
+/// Convert JSValue to rust type
+pub trait IntoHost<T> {
+    fn into_host(self) -> Option<T>;
+}
+
+/// New JSValue from rust type
+pub trait FromHost<'ctx, T>: Sized {
     type Context;
-    fn from_with_ctx(ctx: &'ctx Self::Context, value: T) -> Self;
+    fn from_host(ctx: &'ctx Self::Context, v: T) -> Self;
 }
 
 /// New JSValue from raw
-pub trait FromRaw<'ctx, T> {
+pub trait FromRaw<'ctx, T>: Sized {
     type Context;
-    fn from_raw(ctx: &'ctx Self::Context, raw: T) -> Self;
+    fn from_raw(ctx: &'ctx Self::Context, v: T) -> Self;
 }
 
+//
 /// help implement traits for JSValueInner
 #[macro_export]
 macro_rules! impl_js_value {
@@ -18,22 +24,21 @@ macro_rules! impl_js_value {
     };
 
     ($type:ty, $create_fn:expr, $to_fn:expr, $to_type:ty) => {
-        impl<'ctx> FromWithCtx<'ctx, $type> for JSValueInner<'ctx> {
+        impl<'ctx> FromHost<'ctx, $type> for JSValueInner<'ctx> {
             type Context = JSCtxInner;
-            fn from_with_ctx(ctx: &'ctx Self::Context, value: $type) -> Self {
+            fn from_host(ctx: &'ctx Self::Context, value: $type) -> Self {
                 let value = unsafe { $create_fn(ctx.as_ptr(), value) };
                 JSValueInner::from_raw(ctx, value)
             }
         }
 
-        impl<'ctx> TryInto<$to_type> for JSValueInner<'ctx> {
-            type Error = (); // don't care error detail
-            fn try_into(self) -> Result<$to_type, Self::Error> {
+        impl<'ctx> IntoHost<$to_type> for JSValueInner<'ctx> {
+            fn into_host(self) -> Option<$to_type> {
                 let mut result: $to_type = Default::default();
                 if unsafe { $to_fn(self.ctx.as_ptr(), &mut result, self.value) } < 0 {
-                    Err(())
+                    None
                 } else {
-                    Ok(result)
+                    Some(result)
                 }
             }
         }
@@ -45,17 +50,16 @@ macro_rules! impl_js_value {
 macro_rules! impl_js_values {
     ($($type:ty),*) => {
         $(
-            impl<'ctx> FromWithCtx<'ctx, $type> for JSValue<'ctx> {
+            impl<'ctx> FromHost<'ctx, $type> for JSValue<'ctx> {
                 type Context = JSCtx;
-                fn from_with_ctx(ctx: &'ctx Self::Context, value: $type) -> Self {
-                    JSValue(JSValueInner::from_with_ctx(&ctx.0, value))
+                fn from_host(ctx: &'ctx Self::Context, value: $type) -> Self {
+                    JSValue(JSValueInner::from_host(&ctx.0, value))
                 }
             }
 
-            impl<'ctx> TryInto<$type> for JSValue<'ctx> {
-                type Error=();
-                fn try_into(self) -> Result<$type, Self::Error> {
-                    self.0.try_into()
+            impl<'ctx> IntoHost<$type> for JSValue<'ctx> {
+                fn into_host(self) -> Option<$type> {
+                    self.0.into_host()
                 }
             }
         )*

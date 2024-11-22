@@ -10,7 +10,7 @@ mod value;
 
 pub use context::JSCtx;
 pub use runtime::JSRuntime;
-pub use rusty_js_traits::{impl_js_values, FromWithCtx};
+pub use rusty_js_traits::{impl_js_values, FromHost, IntoHost};
 pub use value::JSValue;
 
 #[cfg(test)]
