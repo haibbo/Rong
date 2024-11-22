@@ -22,11 +22,11 @@ JS_BOOL QJS_IsSymbol(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsObject(JSContext *ctx, JSValue v);
 
 /*
- * Eval JavaScript script @param script
+ * Run internal micro tasks
  *
  * How to handle Exception/Error ?
  * 1. use QJS_IsException to check whether it's Exception, if true, then
- * 2. use API JS_GetException to get exception then dump it by JS_ToCStringLen2
+ * 2. use API JS_GetException to get last exception and dump it by JS_ToCStringLen2
  * 3. use JS_IsError to check whether exception is an error also, if true, then
  * 4. get "stack"/"message" error
  *   val = JS_GetPropertyStr(ctx, exception, "stack");
@@ -35,15 +35,8 @@ JS_BOOL QJS_IsObject(JSContext *ctx, JSValue v);
  *   }
  *   JS_FreeValue(ctx, val);
  */
-JSValue QJS_RunScript(JSContext *ctx, const char *script, int len);
-
-
-/*
- * Run internal micro tasks
- *
- * Exception/Error, the same as QJS_RunScript
- */
 JSValue QJS_RunJobs(JSRuntime *rt);
+
 
 /*
 * create class

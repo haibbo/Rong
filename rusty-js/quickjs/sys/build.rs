@@ -68,6 +68,7 @@ fn generate_binding(out_dir: &String) {
         .header("quickjs.wrapper.h")
         .clang_arg("-I./quickjs-ng")
         .clang_arg("-I./patch")
+        .allowlist_var("JS_.*")
         .blocklist_type("JSClassID")
         .blocklist_type("JS_MarkFunc")
         .blocklist_type("JSClass")

@@ -6,13 +6,6 @@ extern JS_BOOL _QJS_SetCFuncMagic(JSValue func_obj, int magic);
 // used for get class ID from constructor
 extern int _QJS_GetCFuncMagic(JSValue func_obj);
 
-JSValue QJS_RunScript(JSContext *ctx, const char *script, int len){
-    JSValue val;
-
-    val = JS_Eval(ctx, script, len, "script", 0);
-    return val;
-}
-
 JSValue QJS_RunJobs(JSRuntime *rt){
     int ret;
     JSContext *ctx;
