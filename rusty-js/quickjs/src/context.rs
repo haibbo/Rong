@@ -37,9 +37,10 @@ impl Drop for JSCtxInner {
 
 impl Clone for JSCtxInner {
     fn clone(&self) -> Self {
-        unsafe {
+        let ctx = unsafe {
             let ctx = qjs::JS_DupContext(self.ctx.as_ptr());
-            Self::from_ffi(ctx)
-        }
+            NonNull::new_unchecked(ctx)
+        };
+        JSCtxInner { ctx }
     }
 }
