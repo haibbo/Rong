@@ -2,7 +2,7 @@ use crate::qjs;
 use crate::runtime::JSRtInner;
 use crate::value::JSValueInner;
 use anyhow;
-use rusty_js_traits::{FromRaw, IntoHost, JSCtxExt, JSError};
+use rusty_js_core::{FromRaw, IntoHost, JSCtxExt, JSError};
 use std::ffi::CString;
 use std::ptr::NonNull;
 

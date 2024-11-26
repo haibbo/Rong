@@ -6,4 +6,4 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.93"
 rusty-js-quickjs-sys={path="./sys/"}
-rusty-js-traits = { path = "../traits" }
+rusty-js-core = { path = "../core" }

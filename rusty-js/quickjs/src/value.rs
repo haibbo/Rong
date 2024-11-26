@@ -1,6 +1,6 @@
 use crate::qjs;
 use crate::JSCtxInner;
-use rusty_js_traits::{impl_js_value, ExtractJSError, FromHost, FromRaw, IntoHost};
+use rusty_js_core::{impl_js_value, ExtractJSError, FromHost, FromRaw, IntoHost};
 use std::ffi::CStr;
 use std::string::String;
 

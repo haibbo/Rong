@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rusty-js-traits = { path = "./traits" }
+rusty-js-core = { path = "./core" }
 
 # Conditional dependencies based on features
 rusty-js-quickjs = { path = "./quickjs", optional = true }
