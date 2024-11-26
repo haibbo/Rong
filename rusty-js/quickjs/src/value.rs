@@ -1,6 +1,6 @@
 use crate::qjs;
 use crate::JSCtxInner;
-use rusty_js_traits::{impl_js_value, FromHost, FromRaw, IntoHost};
+use rusty_js_traits::{impl_js_value, ExtractJSError, FromHost, FromRaw, IntoHost};
 use std::ffi::CStr;
 use std::string::String;
 
@@ -42,6 +42,33 @@ impl<'ctx> PartialEq for JSValueInner<'ctx> {
 }
 
 impl<'ctx> Eq for JSValueInner<'ctx> {}
+
+impl<'ctx> ExtractJSError for JSValueInner<'ctx> {
+    fn extract_err_msg(&self) -> String {
+        let excep_val = unsafe { qjs::JS_GetException(self.ctx.as_ptr()) };
+        let err_val = unsafe { qjs::JS_DupValue(self.ctx.as_ptr(), excep_val) };
+
+        let value = JSValueInner::from_raw(self.ctx, excep_val);
+        let mut err_msg: String = value.into_host().unwrap();
+
+        unsafe {
+            if qjs::JS_IsError(self.ctx.as_ptr(), err_val) > 0 {
+                let cstr = CStr::from_bytes_with_nul(b"stack\0").unwrap();
+                let val = qjs::JS_GetPropertyStr(self.ctx.as_ptr(), err_val, cstr.as_ptr());
+
+                if qjs::QJS_IsUndefined(self.ctx.as_ptr(), val) == 0 {
+                    let stack = JSValueInner::from_raw(self.ctx, val);
+                    let stack_msg: String = stack.into_host().unwrap();
+
+                    err_msg.push_str("\nstack:\n");
+                    err_msg.push_str(&stack_msg);
+                }
+            }
+            qjs::JS_FreeValue(self.ctx.as_ptr(), err_val);
+        }
+        err_msg
+    }
+}
 
 impl_js_value!(
     bool,
