@@ -2,6 +2,8 @@ use crate::{qjs, QJSContext};
 use rusty_js_core::{impl_js_converter, JSContext, JSValue, JSValueFrom, JSValueInto, JSValueRaw};
 use std::ffi::CStr;
 
+mod valuetype;
+
 pub struct QJSValue {
     value: qjs::JSValue,
     ctx: *mut qjs::JSContext,
@@ -29,6 +31,12 @@ impl Drop for QJSValue {
 impl QJSValue {
     fn from_ffi(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Self {
         Self { value, ctx }
+    }
+    fn get_ctx(&self) -> *mut qjs::JSContext {
+        self.ctx
+    }
+    fn get_raw(&self) -> qjs::JSValue {
+        self.value
     }
 }
 

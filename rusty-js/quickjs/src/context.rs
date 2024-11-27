@@ -22,14 +22,6 @@ impl Clone for QJSContext {
     }
 }
 
-impl QJSContext {
-    pub fn from_ffi(raw: *mut qjs::JSContext) -> Self {
-        Self {
-            raw: unsafe { qjs::JS_DupContext(raw) },
-        }
-    }
-}
-
 impl JSContextRaw for QJSContext {
     type Raw = *mut qjs::JSContext;
     type Runtime = QJSRuntime;
