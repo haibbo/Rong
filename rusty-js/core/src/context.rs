@@ -1,10 +1,30 @@
-use crate::IntoHost;
-use anyhow;
+use crate::{JSRuntime, JSRuntimeRaw};
 
-pub trait JSCtxExt<'ctx>: Sized {
-    type Value;
-    fn eval<S, T>(&'ctx self, source: S) -> anyhow::Result<T>
-    where
-        S: AsRef<str>,
-        Self::Value: IntoHost<T>;
+pub trait JSContextRaw {
+    type Raw: Copy;
+    type Runtime: JSRuntimeRaw;
+
+    fn new(runtime: &JSRuntime<Self::Runtime>) -> Self;
+
+    fn as_raw(&self) -> &Self::Raw;
+}
+
+pub struct JSContext<C: JSContextRaw> {
+    inner: C,
+}
+
+impl<C: JSContextRaw> JSContext<C> {
+    pub fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
+        Self {
+            inner: C::new(runtime),
+        }
+    }
+
+    pub fn as_raw(&self) -> &C::Raw {
+        self.inner.as_raw()
+    }
+
+    pub fn get_raw(&self) -> C::Raw {
+        *self.as_raw()
+    }
 }

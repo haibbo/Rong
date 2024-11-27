@@ -1,21 +1,23 @@
+pub use rusty_js_core::{
+    JSContext as CoreJSContext, JSRuntime as CoreJSRuntime, JSValue as CoreJSValue, JSValueFrom,
+    JSValueInto,
+};
+
 #[cfg(feature = "quickjs")]
 mod engine {
-    pub use rusty_js_quickjs::{JSCtxInner, JSRtInner, JSValueInner};
+    use rusty_js_quickjs::{QJSContext, QJSRuntime, QJSValue};
+    pub type JSContext = super::CoreJSContext<QJSContext>;
+    pub type JSRuntime = super::CoreJSRuntime<QJSRuntime>;
+    pub type JSValue<'ctx> = super::CoreJSValue<'ctx, QJSValue>;
 }
-use engine::*;
 
-mod context;
-mod runtime;
-mod value;
-
-pub use context::JSCtx;
-pub use runtime::JSRuntime;
-pub use rusty_js_core::{impl_js_values, FromHost, IntoHost, JSCtxExt};
-pub use value::JSValue;
+#[cfg(feature = "quickjs")]
+pub use engine::*;
 
 #[cfg(test)]
-pub(crate) fn test_with<F: FnOnce(&JSCtx)>(f: F) {
-    let rt = JSRuntime::new().unwrap();
-    let ctx = JSCtx::new(&rt).unwrap();
+pub(crate) fn test_with<F: FnOnce(&JSContext)>(f: F) {
+    let rt = JSRuntime::new();
+    let ctx = JSContext::new(&rt);
     f(&ctx);
 }
+mod test;

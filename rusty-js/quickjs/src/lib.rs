@@ -7,6 +7,6 @@ mod qjs {
     pub use rusty_js_quickjs_sys::*;
 }
 
-pub use context::JSCtxInner;
-pub use runtime::JSRtInner;
-pub use value::JSValueInner;
+pub use context::QJSContext;
+pub use runtime::QJSRuntime;
+pub use value::QJSValue;

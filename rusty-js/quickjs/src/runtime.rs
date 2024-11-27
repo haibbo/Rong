@@ -1,24 +1,31 @@
-use crate::qjs;
-use std::ptr::NonNull;
+use crate::{qjs, QJSContext};
+use rusty_js_core::JSRuntimeRaw;
 
-pub struct JSRtInner(pub(crate) NonNull<qjs::JSRuntime>);
+pub struct QJSRuntime {
+    raw: *mut qjs::JSRuntime,
+}
 
-impl JSRtInner {
-    pub fn new() -> Result<Self, String> {
-        let rt_ptr = unsafe { qjs::JS_NewRuntime() };
-        let rt = NonNull::new(rt_ptr).ok_or_else(|| String::from("Failed to create JSRuntime"))?;
-        Ok(JSRtInner(rt))
-    }
-
-    fn as_ptr(&self) -> *mut qjs::JSRuntime {
-        self.0.as_ptr()
+impl Drop for QJSRuntime {
+    fn drop(&mut self) {
+        // println!("free QJS Runtime");
+        unsafe {
+            qjs::JS_FreeRuntime(self.raw);
+        }
     }
 }
 
-impl Drop for JSRtInner {
-    fn drop(&mut self) {
-        unsafe {
-            qjs::JS_FreeRuntime(self.0.as_ptr());
+impl JSRuntimeRaw for QJSRuntime {
+    type Raw = *mut qjs::JSRuntime;
+    type Context = QJSContext;
+
+    // new raw JS Runtime
+    fn new() -> Self {
+        Self {
+            raw: unsafe { qjs::JS_NewRuntime() },
         }
+    }
+
+    fn as_raw(&self) -> &Self::Raw {
+        &self.raw
     }
 }

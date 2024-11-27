@@ -1,67 +1,86 @@
-/// Convert JSValue to rust type
-pub trait IntoHost<T> {
-    fn into_host(self) -> Option<T>;
+use crate::{JSContext, JSContextRaw};
+
+mod convert;
+pub use convert::{JSValueFrom, JSValueInto};
+
+pub trait JSValueRaw {
+    // raw JS Value type
+    type Raw: Copy;
+    type Context: JSContextRaw;
+
+    fn new(ctx: &JSContext<Self::Context>, raw: Self::Raw) -> Self;
+    fn as_raw(&self) -> &Self::Raw;
 }
 
-/// New JSValue from rust type
-pub trait FromHost<'ctx, T>: Sized {
-    type Context;
-    fn from_host(ctx: &'ctx Self::Context, v: T) -> Self;
+pub struct JSValue<'ctx, V: JSValueRaw> {
+    raw: V,
+    ctx: &'ctx JSContext<V::Context>,
 }
 
-/// New JSValue from raw
-pub trait FromRaw<'ctx, T>: Sized {
-    type Context;
-    fn from_raw(ctx: &'ctx Self::Context, v: T) -> Self;
+impl<'ctx, V: JSValueRaw> JSValue<'ctx, V> {
+    pub fn as_ctx(&self) -> &'ctx JSContext<V::Context> {
+        self.ctx
+    }
+
+    pub fn new(ctx: &'ctx JSContext<V::Context>, raw: V) -> Self {
+        Self { raw, ctx }
+    }
+
+    pub fn as_raw(&self) -> &V::Raw {
+        self.raw.as_raw()
+    }
+
+    pub fn get_raw(&self) -> V::Raw {
+        *self.as_raw()
+    }
 }
 
-//
-/// help implement traits for JSValueInner
+impl<'ctx, V> JSValue<'ctx, V>
+where
+    V: JSValueRaw,
+{
+    /// Converts a Rust value into a `JSValue`.
+    pub fn from_rust<T>(ctx: &'ctx JSContext<V::Context>, val: T) -> Self
+    where
+        V: JSValueFrom<T>,
+    {
+        let raw_value = V::from_rust(ctx, val);
+        JSValue::new(ctx, raw_value)
+    }
+
+    /// Converts a `JSValue` into a Rust value.
+    pub fn into_rust<T>(self) -> Option<T>
+    where
+        V: JSValueInto<T>,
+        T: Default,
+    {
+        V::into_rust(self)
+    }
+}
+
 #[macro_export]
-macro_rules! impl_js_value {
-    ($type:ty, $create_fn:expr, $to_fn:expr) => {
-        impl_js_value!($type, $create_fn, $to_fn, $type);
-    };
-
-    ($type:ty, $create_fn:expr, $to_fn:expr, $to_type:ty) => {
-        impl<'ctx> FromHost<'ctx, $type> for JSValueInner<'ctx> {
-            type Context = JSCtxInner;
-            fn from_host(ctx: &'ctx Self::Context, value: $type) -> Self {
-                let value = unsafe { $create_fn(ctx.as_ptr(), value) };
-                JSValueInner::from_raw(ctx, value)
-            }
-        }
-
-        impl<'ctx> IntoHost<$to_type> for JSValueInner<'ctx> {
-            fn into_host(self) -> Option<$to_type> {
-                let mut result: $to_type = Default::default();
-                if unsafe { $to_fn(self.ctx.as_ptr(), &mut result, self.value) } < 0 {
+macro_rules! impl_js_converter {
+    ($target:ty, $in_type:ty, $out_type:ty, $create_fn:expr, $to_fn:expr) => {
+        impl JSValueInto<$out_type> for $target {
+            fn into_rust(value: JSValue<Self>) -> Option<$out_type> {
+                let mut result: $out_type = Default::default();
+                if unsafe { $to_fn(value.as_ctx().get_raw(), value.get_raw(), &mut result) } < 0 {
                     None
                 } else {
                     Some(result)
                 }
             }
         }
+
+        impl JSValueFrom<$in_type> for $target {
+            fn from_rust(ctx: &JSContext<Self::Context>, val: $in_type) -> Self {
+                let raw = unsafe { $create_fn(ctx.get_raw(), val) };
+                Self::new(ctx, raw)
+            }
+        }
     };
-}
 
-/// help implement traits for JSValue
-#[macro_export]
-macro_rules! impl_js_values {
-    ($($type:ty),*) => {
-        $(
-            impl<'ctx> FromHost<'ctx, $type> for JSValue<'ctx> {
-                type Context = JSCtx;
-                fn from_host(ctx: &'ctx Self::Context, value: $type) -> Self {
-                    JSValue(JSValueInner::from_host(&ctx.0, value))
-                }
-            }
-
-            impl<'ctx> IntoHost<$type> for JSValue<'ctx> {
-                fn into_host(self) -> Option<$type> {
-                    self.0.into_host()
-                }
-            }
-        )*
+    ($target:ty, $type:ty, $create_fn:expr, $to_fn:expr) => {
+        impl_js_converter!($target, $type, $type, $create_fn, $to_fn);
     };
 }
