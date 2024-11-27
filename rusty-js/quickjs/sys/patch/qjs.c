@@ -78,3 +78,11 @@ void *QJS_ObjectGetPrivate(JSValue object) {
     int class_id=JS_GetClassID(object);
     return JS_GetOpaque(object, class_id);
 }
+
+JS_BOOL QJS_IsPromise(JSContext *ctx, JSValue v)
+{
+    // JS_CLASS_PROMISE == 47
+    void *p = JS_GetOpaque(v, 47);
+
+    return p != NULL;
+}

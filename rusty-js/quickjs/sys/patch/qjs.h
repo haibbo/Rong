@@ -17,9 +17,12 @@ JS_BOOL QJS_IsBigInt(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsBool(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsUndefined(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsException(JSContext *ctx, JSValue v);
+JS_BOOL QJS_IsNull(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsString(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsSymbol(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsObject(JSContext *ctx, JSValue v);
+JS_BOOL QJS_IsPromise(JSContext *ctx, JSValue v);
+
 
 /*
  * Run internal micro tasks

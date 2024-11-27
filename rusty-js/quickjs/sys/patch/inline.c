@@ -81,6 +81,12 @@ JS_BOOL QJS_IsException(JSContext *ctx, JSValue v)
     return JS_VALUE_GET_TAG(v) == JS_TAG_EXCEPTION;
 }
 
+JS_BOOL QJS_IsNull(JSContext *ctx, JSValue v)
+{
+    return JS_VALUE_GET_TAG(v) == JS_TAG_NULL;
+}
+
+
 JS_BOOL QJS_IsString(JSContext *ctx, JSValue v)
 {
     return JS_VALUE_GET_TAG(v) == JS_TAG_STRING;
