@@ -3,6 +3,9 @@ use crate::{JSContext, JSContextRaw};
 mod convert;
 pub use convert::{JSValueFrom, JSValueInto};
 
+mod valuetype;
+pub use valuetype::{JSTypeOf, ValueType};
+
 pub trait JSValueRaw {
     // raw JS Value type
     type Raw: Copy;
