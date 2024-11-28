@@ -12,6 +12,7 @@ JSValue QJS_NewFloat64(JSContext *ctx, double val);
 
 JSValue QJS_NewInt64(JSContext *ctx, int64_t val);
 JSValue QJS_NewUint32(JSContext *ctx, uint32_t val);
+JSValue QJS_NewUndefined(JSContext *ctx, int32_t val);
 JS_BOOL QJS_IsNumber(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsBigInt(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsBool(JSContext *ctx, JSValue v);

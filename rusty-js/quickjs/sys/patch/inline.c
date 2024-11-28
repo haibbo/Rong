@@ -76,6 +76,13 @@ JS_BOOL QJS_IsUndefined(JSContext *ctx, JSValue v)
     return JS_VALUE_GET_TAG(v) == JS_TAG_UNDEFINED;
 }
 
+JSValue QJS_NewUndefined(JSContext *ctx, int32_t val)
+{
+    (void)&ctx;
+    return JS_MKVAL(JS_TAG_UNDEFINED, 0);
+}
+
+
 JS_BOOL QJS_IsException(JSContext *ctx, JSValue v)
 {
     return JS_VALUE_GET_TAG(v) == JS_TAG_EXCEPTION;
