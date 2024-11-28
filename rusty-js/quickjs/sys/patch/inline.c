@@ -76,7 +76,7 @@ JS_BOOL QJS_IsUndefined(JSContext *ctx, JSValue v)
     return JS_VALUE_GET_TAG(v) == JS_TAG_UNDEFINED;
 }
 
-JSValue QJS_NewUndefined(JSContext *ctx, int32_t val)
+JSValue QJS_NewUndefined(JSContext *ctx)
 {
     (void)&ctx;
     return JS_MKVAL(JS_TAG_UNDEFINED, 0);
