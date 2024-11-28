@@ -1,19 +1,19 @@
-use crate::{JSRuntime, JSRuntimeRaw};
+use crate::{JSRuntime, JSRuntimeKind};
 
-pub trait JSContextRaw {
+pub trait JSContextKind {
     type Raw: Copy;
-    type Runtime: JSRuntimeRaw;
+    type Runtime: JSRuntimeKind;
 
     fn new(runtime: &JSRuntime<Self::Runtime>) -> Self;
 
     fn as_raw(&self) -> &Self::Raw;
 }
 
-pub struct JSContext<C: JSContextRaw> {
+pub struct JSContext<C: JSContextKind> {
     inner: C,
 }
 
-impl<C: JSContextRaw> JSContext<C> {
+impl<C: JSContextKind> JSContext<C> {
     pub fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
         Self {
             inner: C::new(runtime),

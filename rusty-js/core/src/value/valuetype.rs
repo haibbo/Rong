@@ -1,4 +1,4 @@
-use crate::{JSValue, JSValueRaw};
+use crate::{JSValue, JSValueKind};
 
 #[derive(Clone)]
 pub enum ValueType {
@@ -36,7 +36,7 @@ pub trait JSTypeOf {
 
 impl<'ctx, V> JSValue<'ctx, V>
 where
-    V: JSValueRaw + JSTypeOf,
+    V: JSValueKind,
 {
     pub fn is_exception(&self) -> bool {
         self.raw.is_exception()

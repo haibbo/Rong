@@ -1,5 +1,5 @@
 use crate::{qjs, QJSContext};
-use rusty_js_core::{impl_js_converter, JSContext, JSValue, JSValueFrom, JSValueInto, JSValueRaw};
+use rusty_js_core::{impl_js_converter, JSContext, JSValue, JSValueFrom, JSValueInto, JSValueKind};
 use std::ffi::CStr;
 
 mod valuetype;
@@ -40,7 +40,7 @@ impl QJSValue {
     }
 }
 
-impl JSValueRaw for QJSValue {
+impl JSValueKind for QJSValue {
     type Raw = qjs::JSValue;
     type Context = QJSContext;
 

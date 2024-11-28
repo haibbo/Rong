@@ -1,5 +1,5 @@
 use crate::{qjs, QJSContext};
-use rusty_js_core::JSRuntimeRaw;
+use rusty_js_core::JSRuntimeKind;
 
 pub struct QJSRuntime {
     raw: *mut qjs::JSRuntime,
@@ -14,7 +14,7 @@ impl Drop for QJSRuntime {
     }
 }
 
-impl JSRuntimeRaw for QJSRuntime {
+impl JSRuntimeKind for QJSRuntime {
     type Raw = *mut qjs::JSRuntime;
     type Context = QJSContext;
 

@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextRaw};
+use crate::{JSContext, JSContextKind};
 
 mod convert;
 pub use convert::{JSValueFrom, JSValueInto};
@@ -6,21 +6,21 @@ pub use convert::{JSValueFrom, JSValueInto};
 mod valuetype;
 pub use valuetype::{JSTypeOf, ValueType};
 
-pub trait JSValueRaw {
+pub trait JSValueKind: JSTypeOf {
     // raw JS Value type
     type Raw: Copy;
-    type Context: JSContextRaw;
+    type Context: JSContextKind;
 
     fn new(ctx: &JSContext<Self::Context>, raw: Self::Raw) -> Self;
     fn as_raw(&self) -> &Self::Raw;
 }
 
-pub struct JSValue<'ctx, V: JSValueRaw> {
+pub struct JSValue<'ctx, V: JSValueKind> {
     raw: V,
     ctx: &'ctx JSContext<V::Context>,
 }
 
-impl<'ctx, V: JSValueRaw> JSValue<'ctx, V> {
+impl<'ctx, V: JSValueKind> JSValue<'ctx, V> {
     pub fn as_ctx(&self) -> &'ctx JSContext<V::Context> {
         self.ctx
     }
@@ -40,7 +40,7 @@ impl<'ctx, V: JSValueRaw> JSValue<'ctx, V> {
 
 impl<'ctx, V> JSValue<'ctx, V>
 where
-    V: JSValueRaw,
+    V: JSValueKind,
 {
     /// Converts a Rust value into a `JSValue`.
     pub fn from_rust<T>(ctx: &'ctx JSContext<V::Context>, val: T) -> Self

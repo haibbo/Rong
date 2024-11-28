@@ -1,9 +1,9 @@
-use crate::JSContextRaw;
+use crate::JSContextKind;
 
-pub trait JSRuntimeRaw {
+pub trait JSRuntimeKind {
     // type of raw JS runtime
     type Raw;
-    type Context: JSContextRaw;
+    type Context: JSContextKind;
 
     // new raw JS Runtime
     fn new() -> Self;
@@ -11,11 +11,11 @@ pub trait JSRuntimeRaw {
     fn as_raw(&self) -> &Self::Raw;
 }
 
-pub struct JSRuntime<R: JSRuntimeRaw> {
+pub struct JSRuntime<R: JSRuntimeKind> {
     inner: R,
 }
 
-impl<R: JSRuntimeRaw> JSRuntime<R> {
+impl<R: JSRuntimeKind> JSRuntime<R> {
     pub fn new() -> Self {
         Self { inner: R::new() }
     }
