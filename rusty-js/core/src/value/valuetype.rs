@@ -1,6 +1,6 @@
 use crate::{JSValue, JSValueKind};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ValueType {
     Undefined,
     Null,
@@ -32,6 +32,38 @@ pub trait JSTypeOf {
     fn is_symbol(&self) -> bool;
     fn is_function(&self) -> bool;
     fn is_object(&self) -> bool;
+
+    fn type_of(&self) -> ValueType {
+        if self.is_exception() {
+            ValueType::Exception
+        } else if self.is_error() {
+            ValueType::Error
+        } else if self.is_promise() {
+            ValueType::Promise
+        } else if self.is_array() {
+            ValueType::Array
+        } else if self.is_function() {
+            ValueType::Function
+        } else if self.is_object() {
+            ValueType::Object
+        } else if self.is_undefined() {
+            ValueType::Undefined
+        } else if self.is_null() {
+            ValueType::Null
+        } else if self.is_boolean() {
+            ValueType::Boolean
+        } else if self.is_number() {
+            ValueType::Number
+        } else if self.is_bigint() {
+            ValueType::BigInt
+        } else if self.is_string() {
+            ValueType::String
+        } else if self.is_symbol() {
+            ValueType::Symbol
+        } else {
+            ValueType::Unknown
+        }
+    }
 }
 
 impl<'ctx, V> JSValue<'ctx, V>
@@ -91,34 +123,6 @@ where
     }
 
     pub fn type_of(&self) -> ValueType {
-        if self.is_exception() {
-            ValueType::Exception
-        } else if self.is_error() {
-            ValueType::Error
-        } else if self.is_promise() {
-            ValueType::Promise
-        } else if self.is_array() {
-            ValueType::Array
-        } else if self.is_function() {
-            ValueType::Function
-        } else if self.is_object() {
-            ValueType::Object
-        } else if self.is_undefined() {
-            ValueType::Undefined
-        } else if self.is_null() {
-            ValueType::Null
-        } else if self.is_boolean() {
-            ValueType::Boolean
-        } else if self.is_number() {
-            ValueType::Number
-        } else if self.is_bigint() {
-            ValueType::BigInt
-        } else if self.is_string() {
-            ValueType::String
-        } else if self.is_symbol() {
-            ValueType::Symbol
-        } else {
-            ValueType::Unknown
-        }
+        self.raw.type_of()
     }
 }
