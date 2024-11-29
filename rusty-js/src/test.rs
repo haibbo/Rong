@@ -5,7 +5,7 @@ mod tests {
     use std::string::String;
 
     #[test]
-    fn convert() {
+    fn test_convert() {
         test_with(|ctx| {
             let jsvalue = JSValue::from_rust(ctx, false);
             assert!(jsvalue.is_boolean());
@@ -34,6 +34,17 @@ mod tests {
                 String::from(hello),
                 JSValueInto::<String>::into_rust(jsvalue).unwrap()
             );
+        });
+    }
+
+    #[test]
+    fn test_eval() {
+        test_with(|ctx| {
+            let result: i32 = ctx.eval("Math.sqrt(16)").unwrap();
+            assert_eq!(4, result);
+
+            let result: String = ctx.eval("'hi'").unwrap(); // don't forget ''
+            assert_eq!(String::from("hi"), result);
         });
     }
 }

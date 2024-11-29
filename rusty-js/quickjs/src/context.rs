@@ -1,5 +1,6 @@
-use crate::{qjs, QJSRuntime};
-use rusty_js_core::{JSContextKind, JSRuntime};
+use crate::{qjs, QJSRuntime, QJSValue};
+use rusty_js_core::{JSCodeRunner, JSContextKind, JSRuntime};
+use std::ffi::CString;
 
 pub struct QJSContext {
     raw: *mut qjs::JSContext,
@@ -35,5 +36,81 @@ impl JSContextKind for QJSContext {
     }
     fn as_raw(&self) -> &Self::Raw {
         &self.raw
+    }
+}
+
+// eval option assiciated with JS_EVAL_*
+struct EvalOptions {
+    global: bool,
+    strict: bool,
+    promise: bool,
+    backtrace_barrier: bool,
+}
+
+impl Default for EvalOptions {
+    fn default() -> Self {
+        Self {
+            global: true,
+            strict: true,
+            promise: false,
+            backtrace_barrier: false,
+        }
+    }
+}
+
+impl EvalOptions {
+    fn to_flags(self) -> i32 {
+        let mut flags = if self.global {
+            qjs::JS_EVAL_TYPE_GLOBAL
+        } else {
+            qjs::JS_EVAL_TYPE_MODULE
+        };
+
+        if self.strict {
+            flags |= qjs::JS_EVAL_FLAG_STRICT;
+        }
+
+        if self.promise {
+            flags |= qjs::JS_EVAL_FLAG_ASYNC;
+        }
+        if self.backtrace_barrier {
+            flags |= qjs::JS_EVAL_FLAG_BACKTRACE_BARRIER;
+        }
+        flags as _
+    }
+}
+
+impl QJSContext {
+    fn eval_raw(
+        &self,
+        source: impl AsRef<str>,
+        file_name: impl AsRef<str>,
+        flags: i32,
+    ) -> QJSValue {
+        let source = source.as_ref();
+        let c_source = CString::new(source).unwrap();
+        let file_name = file_name.as_ref();
+        let c_file_name = CString::new(file_name).unwrap();
+
+        let qjs_value = unsafe {
+            qjs::JS_Eval(
+                self.raw,
+                c_source.as_ptr(),
+                source.len(),
+                c_file_name.as_ptr(),
+                flags,
+            )
+        };
+
+        QJSValue::from_ffi(self.raw, qjs_value)
+    }
+}
+
+impl JSCodeRunner for QJSContext {
+    type Value = QJSValue;
+
+    fn eval(&self, source: impl AsRef<str>) -> Self::Value {
+        let file_name = "eval";
+        self.eval_raw(source, file_name, EvalOptions::default().to_flags())
     }
 }

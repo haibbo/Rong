@@ -18,7 +18,7 @@ pub enum ValueType {
     Unknown,
 }
 
-pub trait JSTypeOf {
+pub trait JSTypeOf: JSValueKind {
     fn is_exception(&self) -> bool;
     fn is_error(&self) -> bool;
     fn is_array(&self) -> bool;
@@ -68,7 +68,7 @@ pub trait JSTypeOf {
 
 impl<'ctx, V> JSValue<'ctx, V>
 where
-    V: JSValueKind,
+    V: JSTypeOf,
 {
     pub fn is_exception(&self) -> bool {
         self.raw.is_exception()

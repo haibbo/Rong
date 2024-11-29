@@ -6,7 +6,7 @@ pub use convert::{JSValueFrom, JSValueInto};
 mod valuetype;
 pub use valuetype::{JSTypeOf, ValueType};
 
-pub trait JSValueKind: JSTypeOf {
+pub trait JSValueKind {
     // raw JS Value type
     type Raw: Copy;
     type Context: JSContextKind;

@@ -29,12 +29,14 @@ impl Drop for QJSValue {
 }
 
 impl QJSValue {
-    fn from_ffi(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Self {
+    pub(crate) fn from_ffi(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Self {
         Self { value, ctx }
     }
+
     fn get_ctx(&self) -> *mut qjs::JSContext {
         self.ctx
     }
+
     fn get_raw(&self) -> qjs::JSValue {
         self.value
     }
