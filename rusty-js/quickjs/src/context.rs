@@ -104,6 +104,15 @@ impl QJSContext {
 
         QJSValue::from_ffi(self.raw, qjs_value)
     }
+
+    fn throw_error_internal<F>(&self, message: &str, throw_fn: F) -> QJSValue
+    where
+        F: FnOnce(*mut qjs::JSContext, *const i8, *const i8) -> qjs::JSValue,
+    {
+        let c_message = CString::new(message).unwrap();
+        let raw = { throw_fn(self.raw, b"%s\0".as_ptr() as *const i8, c_message.as_ptr()) };
+        QJSValue::from_ffi(self.raw, raw)
+    }
 }
 
 impl JSCodeRunner for QJSContext {
@@ -112,5 +121,40 @@ impl JSCodeRunner for QJSContext {
     fn eval(&self, source: impl AsRef<str>) -> Self::Value {
         let file_name = "eval";
         self.eval_raw(source, file_name, EvalOptions::default().to_flags())
+    }
+
+    fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value {
+        self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
+            qjs::JS_ThrowSyntaxError(ctx, fmt, msg)
+        })
+    }
+
+    fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value {
+        self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
+            qjs::JS_ThrowTypeError(ctx, fmt, msg)
+        })
+    }
+
+    fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value {
+        self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
+            qjs::JS_ThrowReferenceError(ctx, fmt, msg)
+        })
+    }
+
+    fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value {
+        self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
+            qjs::JS_ThrowRangeError(ctx, fmt, msg)
+        })
+    }
+
+    fn throw_error(&self, message: impl AsRef<str>) -> Self::Value {
+        self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
+            qjs::JS_ThrowPlainError(ctx, fmt, msg)
+        })
+    }
+
+    fn get_last_exception(&self) -> Self::Value {
+        let raw = unsafe { qjs::JS_GetException(self.raw) };
+        QJSValue::from_ffi(self.raw, raw)
     }
 }

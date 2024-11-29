@@ -6,7 +6,7 @@ pub use convert::{JSValueFrom, JSValueInto};
 mod valuetype;
 pub use valuetype::{JSTypeOf, ValueType};
 
-pub trait JSValueKind {
+pub trait JSValueKind: Clone {
     // raw JS Value type
     type Raw: Copy;
     type Context: JSContextKind;
@@ -18,6 +18,18 @@ pub trait JSValueKind {
 pub struct JSValue<'ctx, V: JSValueKind> {
     raw: V,
     ctx: &'ctx JSContext<V::Context>,
+}
+
+impl<'ctx, V> Clone for JSValue<'ctx, V>
+where
+    V: JSValueKind,
+{
+    fn clone(&self) -> Self {
+        Self {
+            raw: self.raw.clone(),
+            ctx: self.ctx,
+        }
+    }
 }
 
 impl<'ctx, V: JSValueKind> JSValue<'ctx, V> {

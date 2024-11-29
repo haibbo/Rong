@@ -47,4 +47,21 @@ mod tests {
             assert_eq!(String::from("hi"), result);
         });
     }
+
+    #[test]
+    fn test_throw_error() {
+        test_with(|ctx| {
+            let error = ctx.throw_syntax_error("Invalid syntax");
+            assert!(error.is_exception());
+
+            let error = ctx.throw_type_error("Invalid type");
+            assert!(error.is_exception());
+
+            let error = ctx.throw_reference_error("Undefined variable");
+            assert!(error.is_exception());
+
+            // let result: Result<(), _> = ctx.eval("throw new Error('test error')");
+            // assert!(result.is_err());
+        });
+    }
 }
