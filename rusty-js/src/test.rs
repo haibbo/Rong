@@ -60,8 +60,13 @@ mod tests {
             let error = ctx.throw_reference_error("Undefined variable");
             assert!(error.is_exception());
 
-            // let result: Result<(), _> = ctx.eval("throw new Error('test error')");
-            // assert!(result.is_err());
+            let error = ctx.eval::<()>("throw 'throw-error'").unwrap_err();
+            let error = error.to_string();
+            assert!(
+                error.contains("throw-error"),
+                "Expected error message to contain 'throw-error', but got: {}",
+                error
+            );
         });
     }
 }

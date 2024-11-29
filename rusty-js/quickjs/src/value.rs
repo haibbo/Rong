@@ -63,6 +63,12 @@ impl JSValueKind for QJSValue {
 // use default implementation
 impl JSValueError for QJSValue {}
 
+impl JSValueInto<()> for QJSValue {
+    fn into_rust(_value: JSValue<Self>) -> Option<()> {
+        Some(())
+    }
+}
+
 impl_js_converter!(
     QJSValue,
     bool,
