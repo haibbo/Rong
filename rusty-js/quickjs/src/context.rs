@@ -1,6 +1,7 @@
 use crate::{qjs, QJSRuntime, QJSValue};
 use rusty_js_core::{JSCodeRunner, JSContextKind, JSRuntime};
 use std::ffi::CString;
+use std::os::raw::c_char;
 
 pub struct QJSContext {
     raw: *mut qjs::JSContext,
@@ -107,10 +108,10 @@ impl QJSContext {
 
     fn throw_error_internal<F>(&self, message: &str, throw_fn: F) -> QJSValue
     where
-        F: FnOnce(*mut qjs::JSContext, *const i8, *const i8) -> qjs::JSValue,
+        F: FnOnce(*mut qjs::JSContext, *const c_char, *const c_char) -> qjs::JSValue,
     {
         let c_message = CString::new(message).unwrap();
-        let raw = { throw_fn(self.raw, b"%s\0".as_ptr() as *const i8, c_message.as_ptr()) };
+        let raw = { throw_fn(self.raw, b"%s\0".as_ptr() as _, c_message.as_ptr()) };
         QJSValue::from_ffi(self.raw, raw)
     }
 }
