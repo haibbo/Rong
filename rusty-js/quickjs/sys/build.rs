@@ -44,11 +44,52 @@ fn android_setup() {
     );
 }
 
+// use utility xcrun to get path of sdk and clang
+fn ios_setup() {
+    let sdk = Command::new("xcrun")
+        .args(["--show-sdk-path", "--sdk", "iphoneos"])
+        .output()
+        .expect("failed to execute xcrun")
+        .stdout;
+    let sdk_path = String::from_utf8_lossy(&sdk).trim().to_string();
+
+    let clang = Command::new("xcrun")
+        .args(["--find", "clang"])
+        .output()
+        .expect("failed to find clang")
+        .stdout;
+    let clang_path = String::from_utf8_lossy(&clang).trim().to_string();
+
+    env::set_var(
+        "CC",
+        format!(
+            "{} -isysroot {} -arch arm64 -mios-version-min=11.0",
+            clang_path, sdk_path
+        ),
+    );
+
+    let ar = Command::new("xcrun")
+        .args(["--find", "ar"])
+        .output()
+        .expect("failed to find ar")
+        .stdout;
+    let ar_path = String::from_utf8_lossy(&ar).trim().to_string();
+    env::set_var("AR", ar_path);
+
+    // extra args for bindgen
+    env::set_var(
+        "BINDGEN_EXTRA_CLANG_ARGS",
+        format!("-isysroot {}", sdk_path),
+    );
+}
+
 fn build_static_archive() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
 
-    if target_os == "android" {
-        android_setup();
+    match target_os.as_str() {
+        "android" => android_setup(),
+        "ios" => ios_setup(),
+        _ => {}
     }
 
     let output = Command::new("make")
