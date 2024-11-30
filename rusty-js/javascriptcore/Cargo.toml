@@ -1,0 +1,8 @@
+[package]
+name = "rusty-js-jscore"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusty-js-jscore-sys={path="./sys/"}
+rusty-js-core = { path = "../core" }

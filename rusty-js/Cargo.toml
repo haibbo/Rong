@@ -8,9 +8,10 @@ rusty-js-core = { path = "./core" }
 
 # Conditional dependencies based on features
 rusty-js-quickjs = { path = "./quickjs", optional = true }
+rusty-js-jscore = { path = "./javascriptcore", optional = true }
 
 [features]
 quickjs=["rusty-js-quickjs"]
-jscore=[]
+jscore=["rusty-js-jscore"]
 
 default=["quickjs"]
