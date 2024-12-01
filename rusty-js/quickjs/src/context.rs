@@ -1,5 +1,5 @@
 use crate::{qjs, QJSRuntime, QJSValue};
-use rusty_js_core::{JSCodeRunner, JSContextKind, JSRuntime};
+use rusty_js_core::{JSCodeRunner, JSContextKind, JSExceptionHandler, JSRuntime};
 use std::ffi::CString;
 use std::os::raw::c_char;
 
@@ -124,6 +124,15 @@ impl JSCodeRunner for QJSContext {
         self.eval_raw(source, file_name, EvalOptions::default().to_flags())
     }
 
+    fn get_last_exception(&self) -> Self::Value {
+        let raw = unsafe { qjs::JS_GetException(self.raw) };
+        QJSValue::from_ffi(self.raw, raw)
+    }
+}
+
+impl JSExceptionHandler for QJSContext {
+    type Value = QJSValue;
+
     fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value {
         self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
             qjs::JS_ThrowSyntaxError(ctx, fmt, msg)
@@ -152,10 +161,5 @@ impl JSCodeRunner for QJSContext {
         self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
             qjs::JS_ThrowPlainError(ctx, fmt, msg)
         })
-    }
-
-    fn get_last_exception(&self) -> Self::Value {
-        let raw = unsafe { qjs::JS_GetException(self.raw) };
-        QJSValue::from_ffi(self.raw, raw)
     }
 }

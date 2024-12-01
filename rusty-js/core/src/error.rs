@@ -1,4 +1,4 @@
-use crate::{JSCodeRunner, JSValue, JSValueInto, JSValueKind};
+use crate::{JSContext, JSContextKind, JSValue, JSValueInto, JSValueKind};
 use std::fmt;
 
 /// extract exception and error details from JSValue
@@ -26,13 +26,11 @@ where
 impl<'ctx, V> JSValue<'ctx, V>
 where
     V: JSValueError,
-    V::Context: JSCodeRunner<Value = V>,
 {
     pub fn into_error(self) -> JSErrorInfo {
-        let exception = self.as_ctx().get_last_exception();
         JSErrorInfo {
-            message: V::get_exception_message(&exception),
-            stack: V::get_exception_stack(&exception),
+            message: V::get_exception_message(&self),
+            stack: V::get_exception_stack(&self),
         }
     }
 }
@@ -55,3 +53,44 @@ impl fmt::Display for JSErrorInfo {
 }
 
 impl std::error::Error for JSErrorInfo {}
+
+pub trait JSExceptionHandler: JSContextKind {
+    type Value: JSValueKind<Context = Self>;
+
+    fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value;
+    fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value;
+    fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value;
+    fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value;
+    fn throw_error(&self, message: impl AsRef<str>) -> Self::Value;
+}
+
+impl<C> JSContext<C>
+where
+    C: JSContextKind + JSExceptionHandler,
+    C::Value: JSValueKind,
+{
+    pub fn throw_syntax_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
+        let raw = self.inner.throw_syntax_error(message);
+        JSValue::new(self, raw)
+    }
+
+    pub fn throw_type_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
+        let raw = self.inner.throw_type_error(message);
+        JSValue::new(self, raw)
+    }
+
+    pub fn throw_reference_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
+        let raw = self.inner.throw_reference_error(message);
+        JSValue::new(self, raw)
+    }
+
+    pub fn throw_range_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
+        let raw = self.inner.throw_range_error(message);
+        JSValue::new(self, raw)
+    }
+
+    pub fn throw_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
+        let raw = self.inner.throw_error(message);
+        JSValue::new(self, raw)
+    }
+}
