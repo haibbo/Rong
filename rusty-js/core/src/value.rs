@@ -16,7 +16,7 @@ pub trait JSValueKind: Clone {
 }
 
 pub struct JSValue<'ctx, V: JSValueKind> {
-    raw: V,
+    inner: V,
     ctx: &'ctx JSContext<V::Context>,
 }
 
@@ -26,7 +26,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            raw: self.raw.clone(),
+            inner: self.inner.clone(),
             ctx: self.ctx,
         }
     }
@@ -38,11 +38,11 @@ impl<'ctx, V: JSValueKind> JSValue<'ctx, V> {
     }
 
     pub fn new(ctx: &'ctx JSContext<V::Context>, raw: V) -> Self {
-        Self { raw, ctx }
+        Self { inner: raw, ctx }
     }
 
     pub fn as_raw(&self) -> &V::Raw {
-        self.raw.as_raw()
+        self.inner.as_raw()
     }
 
     pub fn get_raw(&self) -> V::Raw {

@@ -71,58 +71,58 @@ where
     V: JSTypeOf,
 {
     pub fn is_exception(&self) -> bool {
-        self.raw.is_exception()
+        self.inner.is_exception()
     }
 
     pub fn is_error(&self) -> bool {
-        self.raw.is_error()
+        self.inner.is_error()
     }
 
     pub fn is_array(&self) -> bool {
-        self.raw.is_array()
+        self.inner.is_array()
     }
 
     pub fn is_promise(&self) -> bool {
-        self.raw.is_promise()
+        self.inner.is_promise()
     }
 
     pub fn is_undefined(&self) -> bool {
-        self.raw.is_undefined()
+        self.inner.is_undefined()
     }
 
     pub fn is_null(&self) -> bool {
-        self.raw.is_null()
+        self.inner.is_null()
     }
 
     pub fn is_boolean(&self) -> bool {
-        self.raw.is_boolean()
+        self.inner.is_boolean()
     }
 
     pub fn is_number(&self) -> bool {
-        self.raw.is_number()
+        self.inner.is_number()
     }
 
     pub fn is_bigint(&self) -> bool {
-        self.raw.is_bigint()
+        self.inner.is_bigint()
     }
 
     pub fn is_string(&self) -> bool {
-        self.raw.is_string()
+        self.inner.is_string()
     }
 
     pub fn is_symbol(&self) -> bool {
-        self.raw.is_symbol()
+        self.inner.is_symbol()
     }
 
     pub fn is_function(&self) -> bool {
-        self.raw.is_function()
+        self.inner.is_function()
     }
 
     pub fn is_object(&self) -> bool {
-        self.raw.is_object()
+        self.inner.is_object()
     }
 
     pub fn type_of(&self) -> ValueType {
-        self.raw.type_of()
+        self.inner.type_of()
     }
 }
