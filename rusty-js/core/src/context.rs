@@ -4,12 +4,11 @@ use std::any::type_name;
 use std::default::Default;
 
 pub trait JSContextKind {
-    type Raw: Copy;
+    type RawContext: Copy;
     type Runtime: JSRuntimeKind;
 
     fn new(runtime: &JSRuntime<Self::Runtime>) -> Self;
-
-    fn as_raw(&self) -> &Self::Raw;
+    fn as_raw(&self) -> &Self::RawContext;
 }
 
 pub struct JSContext<C: JSContextKind> {
@@ -23,11 +22,11 @@ impl<C: JSContextKind> JSContext<C> {
         }
     }
 
-    pub fn as_raw(&self) -> &C::Raw {
+    pub fn as_raw(&self) -> &C::RawContext {
         self.inner.as_raw()
     }
 
-    pub fn get_raw(&self) -> C::Raw {
+    pub fn get_raw(&self) -> C::RawContext {
         *self.as_raw()
     }
 }

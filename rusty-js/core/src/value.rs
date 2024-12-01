@@ -7,16 +7,23 @@ mod valuetype;
 pub use valuetype::{JSTypeOf, ValueType};
 
 pub trait JSValueKind: Clone {
-    // raw JS Value type
-    type Raw: Copy;
+    /// Raw JavaScript value type, e.g. qjs::JSValue
+    type RawValue: Copy;
+
+    /// Associates with a type that implements JSContextKind
+    /// This represents the context wrapper type (e.g. QJSContext)
     type Context: JSContextKind;
 
-    fn new(ctx: &JSContext<Self::Context>, raw: Self::Raw) -> Self;
-    fn as_raw(&self) -> &Self::Raw;
+    fn from_ffi(
+        ctx_raw: <Self::Context as JSContextKind>::RawContext,
+        value_raw: Self::RawValue,
+    ) -> Self;
+    fn as_raw_value(&self) -> &Self::RawValue;
+    fn as_raw_context(&self) -> &<Self::Context as JSContextKind>::RawContext;
 }
 
 pub struct JSValue<'ctx, V: JSValueKind> {
-    inner: V,
+    pub inner: V, // todo: remove pub
     ctx: &'ctx JSContext<V::Context>,
 }
 
@@ -33,20 +40,8 @@ where
 }
 
 impl<'ctx, V: JSValueKind> JSValue<'ctx, V> {
-    pub fn as_ctx(&self) -> &'ctx JSContext<V::Context> {
-        self.ctx
-    }
-
     pub fn new(ctx: &'ctx JSContext<V::Context>, raw: V) -> Self {
         Self { inner: raw, ctx }
-    }
-
-    pub fn as_raw(&self) -> &V::Raw {
-        self.inner.as_raw()
-    }
-
-    pub fn get_raw(&self) -> V::Raw {
-        *self.as_raw()
     }
 }
 
@@ -79,7 +74,14 @@ macro_rules! impl_js_converter {
         impl JSValueInto<$out_type> for $target {
             fn into_rust(value: JSValue<Self>) -> Option<$out_type> {
                 let mut result: $out_type = Default::default();
-                if unsafe { $to_fn(value.as_ctx().get_raw(), value.get_raw(), &mut result) } < 0 {
+                if unsafe {
+                    $to_fn(
+                        *value.inner.as_raw_context(),
+                        *value.inner.as_raw_value(),
+                        &mut result,
+                    )
+                } < 0
+                {
                     None
                 } else {
                     Some(result)
@@ -90,7 +92,7 @@ macro_rules! impl_js_converter {
         impl JSValueFrom<$in_type> for $target {
             fn from_rust(ctx: &JSContext<Self::Context>, val: $in_type) -> Self {
                 let raw = unsafe { $create_fn(ctx.get_raw(), val) };
-                Self::new(ctx, raw)
+                Self::from_ffi(ctx.get_raw(), raw)
             }
         }
     };

@@ -1,6 +1,7 @@
 use crate::{qjs, QJSContext};
 use rusty_js_core::{
-    impl_js_converter, JSContext, JSValue, JSValueError, JSValueFrom, JSValueInto, JSValueKind,
+    impl_js_converter, JSContext, JSContextKind, JSValue, JSValueError, JSValueFrom, JSValueInto,
+    JSValueKind,
 };
 use std::ffi::CStr;
 
@@ -30,25 +31,26 @@ impl Drop for QJSValue {
     }
 }
 
-impl QJSValue {
-    pub(crate) fn from_ffi(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Self {
-        Self { value, ctx }
-    }
-}
-
 impl JSValueKind for QJSValue {
-    type Raw = qjs::JSValue;
+    type RawValue = qjs::JSValue;
     type Context = QJSContext;
 
-    fn new(ctx: &JSContext<Self::Context>, raw: Self::Raw) -> Self {
+    fn from_ffi(
+        ctx_raw: <Self::Context as JSContextKind>::RawContext,
+        value_raw: Self::RawValue,
+    ) -> Self {
         Self {
-            value: raw,
-            ctx: *ctx.as_raw(),
+            value: value_raw,
+            ctx: ctx_raw,
         }
     }
 
-    fn as_raw(&self) -> &Self::Raw {
+    fn as_raw_value(&self) -> &Self::RawValue {
         &self.value
+    }
+
+    fn as_raw_context(&self) -> &<Self::Context as JSContextKind>::RawContext {
+        &self.ctx
     }
 }
 

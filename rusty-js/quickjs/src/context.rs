@@ -1,10 +1,10 @@
 use crate::{qjs, QJSRuntime, QJSValue};
-use rusty_js_core::{JSCodeRunner, JSContextKind, JSExceptionHandler, JSRuntime};
+use rusty_js_core::{JSCodeRunner, JSContextKind, JSExceptionHandler, JSRuntime, JSValueKind};
 use std::ffi::CString;
 use std::os::raw::c_char;
 
 pub struct QJSContext {
-    raw: *mut qjs::JSContext,
+    pub(crate) raw: *mut qjs::JSContext,
 }
 
 impl Drop for QJSContext {
@@ -25,7 +25,7 @@ impl Clone for QJSContext {
 }
 
 impl JSContextKind for QJSContext {
-    type Raw = *mut qjs::JSContext;
+    type RawContext = *mut qjs::JSContext;
     type Runtime = QJSRuntime;
 
     fn new(runtime: &JSRuntime<Self::Runtime>) -> Self {
@@ -35,7 +35,7 @@ impl JSContextKind for QJSContext {
             }
         }
     }
-    fn as_raw(&self) -> &Self::Raw {
+    fn as_raw(&self) -> &Self::RawContext {
         &self.raw
     }
 }

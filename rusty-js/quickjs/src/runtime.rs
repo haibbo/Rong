@@ -15,7 +15,7 @@ impl Drop for QJSRuntime {
 }
 
 impl JSRuntimeKind for QJSRuntime {
-    type Raw = *mut qjs::JSRuntime;
+    type RawRuntime = *mut qjs::JSRuntime;
     type Context = QJSContext;
 
     // new raw JS Runtime
@@ -25,7 +25,7 @@ impl JSRuntimeKind for QJSRuntime {
         }
     }
 
-    fn as_raw(&self) -> &Self::Raw {
+    fn as_raw(&self) -> &Self::RawRuntime {
         &self.raw
     }
 }
