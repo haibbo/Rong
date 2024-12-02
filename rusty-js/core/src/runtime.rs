@@ -1,7 +1,7 @@
 use crate::JSContextKind;
 
 pub trait JSRuntimeKind {
-    type RawRuntime;
+    type RawRuntime: Copy;
     type Context: JSContextKind;
 
     fn new() -> Self;
@@ -9,7 +9,7 @@ pub trait JSRuntimeKind {
 }
 
 pub struct JSRuntime<R: JSRuntimeKind> {
-    inner: R,
+    pub(crate) inner: R,
 }
 
 impl<R: JSRuntimeKind> JSRuntime<R> {

@@ -1,10 +1,10 @@
 use crate::{JSRuntime, JSRuntimeKind, JSTypeOf, JSValue, JSValueError, JSValueKind};
 
 pub trait JSContextKind {
-    type RawContext;
+    type RawContext: Copy;
     type Runtime: JSRuntimeKind;
 
-    fn new(runtime: &JSRuntime<Self::Runtime>) -> Self
+    fn new(runtime: &Self::Runtime) -> Self
     where
         Self: Sized;
     fn as_raw(&self) -> &Self::RawContext;
@@ -21,7 +21,7 @@ pub struct JSContext<C: JSContextKind> {
 impl<C: JSContextKind> JSContext<C> {
     pub fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
         Self {
-            inner: C::new(runtime),
+            inner: C::new(&runtime.inner),
         }
     }
 
