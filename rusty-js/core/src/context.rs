@@ -36,7 +36,7 @@ pub trait JSCodeRunner: JSContextKind {
     fn eval(&self, source: impl AsRef<str>) -> Self::Value;
     fn get_last_exception(&self) -> Self::Value;
 
-    // todo: add global_object()->JSObject,  JSValue into JSObject
+    fn global_object(&self) -> Self::Value;
 }
 
 impl<C: JSContextKind> JSContext<C> {

@@ -128,6 +128,11 @@ impl JSCodeRunner for QJSContext {
         let raw = unsafe { qjs::JS_GetException(self.raw) };
         QJSValue::from_ffi(self.raw, raw)
     }
+
+    fn global_object(&self) -> Self::Value {
+        let raw = unsafe { qjs::JS_GetGlobalObject(self.raw) };
+        QJSValue::from_ffi(self.raw, raw)
+    }
 }
 
 impl JSExceptionHandler for QJSContext {
