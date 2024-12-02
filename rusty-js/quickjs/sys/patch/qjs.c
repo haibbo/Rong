@@ -18,7 +18,7 @@ JSValue QJS_RunJobs(JSRuntime *rt){
         }
 
         if (ret<0){
-            return JS_GetException(ctx);
+            return JS_EXCEPTION;
         }
     }
 
