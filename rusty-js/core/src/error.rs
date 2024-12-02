@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextKind, JSValue, JSValueInto, JSValueKind};
+use crate::{JSContext, JSContextKind, JSValue, JSValueKind};
 use std::fmt;
 
 /// extract exception and error details from JSValue
@@ -6,10 +6,14 @@ use std::fmt;
 pub trait JSValueError: JSValueKind
 where
     Self: Sized,
-    Self: JSValueInto<String>,
+    Self: TryInto<String, Error = String>,
 {
     fn get_exception_message(value: &JSValue<Self>) -> Option<String> {
-        value.clone().into_rust()
+        let msg: Result<String, String> = value.clone().try_into();
+        match msg {
+            Ok(v) => Some(v),
+            Err(v) => Some(v),
+        }
     }
 
     fn get_exception_stack(_value: &JSValue<Self>) -> Option<String> {

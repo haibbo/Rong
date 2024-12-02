@@ -1,7 +1,6 @@
 use crate::JSContextKind;
 
 pub trait JSRuntimeKind {
-    // type of raw JS runtime
     type RawRuntime;
     type Context: JSContextKind;
 
@@ -19,6 +18,6 @@ impl<R: JSRuntimeKind> JSRuntime<R> {
     }
 
     pub fn as_raw(&self) -> &R::RawRuntime {
-        self.inner.as_raw()
+        &self.inner.as_raw()
     }
 }

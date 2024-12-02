@@ -1,14 +1,11 @@
 use crate::{JSContext, JSContextKind};
 
-mod convert;
-pub use convert::{JSValueFrom, JSValueInto};
-
 mod valuetype;
 pub use valuetype::{JSTypeOf, ValueType};
 
 pub trait JSValueKind: Clone {
     /// Raw JavaScript value type, e.g. qjs::JSValue
-    type RawValue: Copy;
+    type RawValue;
 
     /// Associates with a type that implements JSContextKind
     /// This represents the context wrapper type (e.g. QJSContext)
@@ -23,7 +20,7 @@ pub trait JSValueKind: Clone {
 }
 
 pub struct JSValue<'ctx, V: JSValueKind> {
-    pub inner: V, // todo: remove pub
+    inner: V,
     ctx: &'ctx JSContext<V::Context>,
 }
 
@@ -39,9 +36,12 @@ where
     }
 }
 
-impl<'ctx, V: JSValueKind> JSValue<'ctx, V> {
-    pub fn new(ctx: &'ctx JSContext<V::Context>, raw: V) -> Self {
-        Self { inner: raw, ctx }
+impl<'ctx, V> JSValue<'ctx, V>
+where
+    V: JSValueKind,
+{
+    pub fn new(ctx: &'ctx JSContext<V::Context>, value: V) -> Self {
+        Self { inner: value, ctx }
     }
 }
 
@@ -50,49 +50,56 @@ where
     V: JSValueKind,
 {
     /// Converts a Rust value into a `JSValue`.
-    pub fn from_rust<T>(ctx: &'ctx JSContext<V::Context>, val: T) -> Self
+    pub fn from<T>(ctx: &'ctx JSContext<V::Context>, val: T) -> Self
     where
-        V: JSValueFrom<T>,
+        V: From<(&'ctx V::Context, T)>,
     {
-        let raw_value = V::from_rust(ctx, val);
-        JSValue::new(ctx, raw_value)
+        let value = V::from((&ctx.inner, val));
+        JSValue::new(ctx, value)
     }
 
     /// Converts a `JSValue` into a Rust value.
-    pub fn into_rust<T>(self) -> Option<T>
+    pub fn try_into<T>(self) -> Result<T, String>
     where
-        V: JSValueInto<T>,
+        V: TryInto<T, Error = String>,
         T: Default,
     {
-        V::into_rust(self)
+        self.inner.try_into()
     }
 }
 
 #[macro_export]
 macro_rules! impl_js_converter {
     ($target:ty, $in_type:ty, $out_type:ty, $create_fn:expr, $to_fn:expr) => {
-        impl JSValueInto<$out_type> for $target {
-            fn into_rust(value: JSValue<Self>) -> Option<$out_type> {
+        impl TryInto<$out_type> for $target
+        where
+            $target: JSValueKind,
+        {
+            type Error = String;
+            fn try_into(self) -> Result<$out_type, Self::Error> {
                 let mut result: $out_type = Default::default();
-                if unsafe {
-                    $to_fn(
-                        *value.inner.as_raw_context(),
-                        *value.inner.as_raw_value(),
-                        &mut result,
-                    )
-                } < 0
+                if unsafe { $to_fn(*self.as_raw_context(), *self.as_raw_value(), &mut result) } < 0
                 {
-                    None
+                    let err = format!(
+                        "Failed to convert JS Value into Rust type: {}",
+                        std::any::type_name::<$out_type>()
+                    );
+                    Err(err)
                 } else {
-                    Some(result)
+                    Ok(result)
                 }
             }
         }
 
-        impl JSValueFrom<$in_type> for $target {
-            fn from_rust(ctx: &JSContext<Self::Context>, val: $in_type) -> Self {
-                let raw = unsafe { $create_fn(ctx.get_raw(), val) };
-                Self::from_ffi(ctx.get_raw(), raw)
+        impl<T> From<(&T, $in_type)> for $target
+        where
+            T: JSContextKind<RawContext = <$target as JSRawContext>::RawContext>,
+            $target: JSValueKind<Context = T>,
+        {
+            fn from(t: (&T, $in_type)) -> Self {
+                let ctx = *t.0.as_raw();
+                let raw = unsafe { $create_fn(ctx, t.1) };
+                Self::from_ffi(ctx, raw)
             }
         }
     };
