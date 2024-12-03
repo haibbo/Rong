@@ -12,11 +12,3 @@ mod engine {
 
 #[cfg(feature = "quickjs")]
 pub use engine::*;
-
-#[cfg(test)]
-pub(crate) fn test_with<F: FnOnce(&JSContext)>(f: F) {
-    let rt = JSRuntime::new();
-    let ctx = JSContext::new(&rt);
-    f(&ctx);
-}
-mod test;
