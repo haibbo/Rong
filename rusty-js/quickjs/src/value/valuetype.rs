@@ -51,6 +51,10 @@ impl JSTypeOf for QJSValue {
         unsafe { qjs::JS_IsFunction(self.ctx, self.value) != 0 }
     }
 
+    fn is_constructor(&self) -> bool {
+        unsafe { qjs::JS_IsConstructor(self.ctx, self.value) != 0 }
+    }
+
     fn is_object(&self) -> bool {
         unsafe { qjs::QJS_IsObject(self.ctx, self.value) != 0 }
     }

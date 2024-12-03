@@ -13,6 +13,7 @@ pub enum ValueType {
     Object,
     Array,
     Function,
+    Constructor,
     Promise,
     Symbol,
     Unknown,
@@ -32,6 +33,7 @@ pub trait JSTypeOf: JSValueKind {
     fn is_symbol(&self) -> bool;
     fn is_function(&self) -> bool;
     fn is_object(&self) -> bool;
+    fn is_constructor(&self) -> bool;
 
     fn type_of(&self) -> ValueType {
         if self.is_exception() {
@@ -44,6 +46,8 @@ pub trait JSTypeOf: JSValueKind {
             ValueType::Array
         } else if self.is_function() {
             ValueType::Function
+        } else if self.is_constructor() {
+            ValueType::Constructor
         } else if self.is_object() {
             ValueType::Object
         } else if self.is_undefined() {
@@ -116,6 +120,10 @@ where
 
     pub fn is_function(&self) -> bool {
         self.inner.is_function()
+    }
+
+    pub fn is_constructor(&self) -> bool {
+        self.inner.is_constructor()
     }
 
     pub fn is_object(&self) -> bool {
