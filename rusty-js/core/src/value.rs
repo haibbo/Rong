@@ -5,7 +5,7 @@ pub use valuetype::{JSTypeOf, ValueType};
 
 pub trait JSValueKind: Clone {
     /// Raw JavaScript value type, e.g. qjs::JSValue
-    type RawValue;
+    type RawValue: Copy;
 
     /// Associates with a type that implements JSContextKind
     /// This represents the context wrapper type (e.g. QJSContext)
