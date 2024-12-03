@@ -74,63 +74,39 @@ impl<'ctx, V> JSValue<'ctx, V>
 where
     V: JSTypeOf,
 {
-    pub fn is_exception(&self) -> bool {
-        self.inner.is_exception()
-    }
-
-    pub fn is_error(&self) -> bool {
-        self.inner.is_error()
-    }
-
-    pub fn is_array(&self) -> bool {
-        self.inner.is_array()
-    }
-
-    pub fn is_promise(&self) -> bool {
-        self.inner.is_promise()
-    }
-
-    pub fn is_undefined(&self) -> bool {
-        self.inner.is_undefined()
-    }
-
-    pub fn is_null(&self) -> bool {
-        self.inner.is_null()
-    }
-
-    pub fn is_boolean(&self) -> bool {
-        self.inner.is_boolean()
-    }
-
-    pub fn is_number(&self) -> bool {
-        self.inner.is_number()
-    }
-
-    pub fn is_bigint(&self) -> bool {
-        self.inner.is_bigint()
-    }
-
-    pub fn is_string(&self) -> bool {
-        self.inner.is_string()
-    }
-
-    pub fn is_symbol(&self) -> bool {
-        self.inner.is_symbol()
-    }
-
-    pub fn is_function(&self) -> bool {
-        self.inner.is_function()
-    }
-
-    pub fn is_constructor(&self) -> bool {
-        self.inner.is_constructor()
-    }
-
-    pub fn is_object(&self) -> bool {
-        self.inner.is_object()
-    }
-
     pub fn type_of(&self) -> ValueType {
         self.inner.type_of()
     }
 }
+
+macro_rules! generate_is_type {
+    ($($method: ident),*) => {
+        impl<'ctx, V> JSValue<'ctx, V>
+        where
+            V: JSTypeOf,
+        {
+            $(
+                pub fn $method(&self) -> bool {
+                    self.inner.$method()
+                }
+            )*
+        }
+    }
+}
+
+generate_is_type!(
+    is_exception,
+    is_error,
+    is_array,
+    is_promise,
+    is_function,
+    is_constructor,
+    is_object,
+    is_undefined,
+    is_null,
+    is_boolean,
+    is_number,
+    is_bigint,
+    is_string,
+    is_symbol
+);
