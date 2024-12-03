@@ -40,7 +40,7 @@ impl<'ctx, V> JSValue<'ctx, V>
 where
     V: JSValueImpl,
 {
-    pub fn new(ctx: &'ctx JSContext<V::Context>, value: V) -> Self {
+    pub(crate) fn new(ctx: &'ctx JSContext<V::Context>, value: V) -> Self {
         Self { inner: value, ctx }
     }
 }
