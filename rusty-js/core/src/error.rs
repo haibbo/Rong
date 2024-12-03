@@ -1,9 +1,9 @@
-use crate::{JSContext, JSContextKind, JSValue, JSValueKind};
+use crate::{JSContext, JSContextImpl, JSValue, JSValueImpl};
 use std::fmt;
 
 /// extract exception and error details from JSValue
 /// this trait can only be implemented by JSValue
-pub trait JSValueError: JSValueKind
+pub trait JSValueError: JSValueImpl
 where
     Self: Sized,
     Self: TryInto<String, Error = String>,
@@ -58,8 +58,8 @@ impl fmt::Display for JSErrorInfo {
 
 impl std::error::Error for JSErrorInfo {}
 
-pub trait JSExceptionHandler: JSContextKind {
-    type Value: JSValueKind<Context = Self>;
+pub trait JSExceptionHandler: JSContextImpl {
+    type Value: JSValueImpl<Context = Self>;
 
     fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value;
     fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value;
@@ -70,8 +70,8 @@ pub trait JSExceptionHandler: JSContextKind {
 
 impl<C> JSContext<C>
 where
-    C: JSContextKind + JSExceptionHandler,
-    C::Value: JSValueKind,
+    C: JSContextImpl + JSExceptionHandler,
+    C::Value: JSValueImpl,
 {
     pub fn throw_syntax_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.inner.throw_syntax_error(message);

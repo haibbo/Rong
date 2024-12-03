@@ -1,5 +1,5 @@
 use crate::{qjs, QJSRuntime, QJSValue};
-use rusty_js_core::{JSCodeRunner, JSContextKind, JSExceptionHandler, JSRuntimeKind, JSValueKind};
+use rusty_js_core::{JSCodeRunner, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl};
 use std::ffi::CString;
 use std::os::raw::c_char;
 
@@ -24,7 +24,7 @@ impl Clone for QJSContext {
     }
 }
 
-impl JSContextKind for QJSContext {
+impl JSContextImpl for QJSContext {
     type RawContext = *mut qjs::JSContext;
     type Runtime = QJSRuntime;
 

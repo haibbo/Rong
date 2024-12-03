@@ -1,5 +1,5 @@
 use crate::{qjs, QJSContext};
-use rusty_js_core::{impl_js_converter, JSContextKind, JSRawContext, JSValueError, JSValueKind};
+use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueError, JSValueImpl};
 use std::ffi::CStr;
 
 mod valuetype;
@@ -32,12 +32,12 @@ impl JSRawContext for QJSValue {
     type RawContext = *mut qjs::JSContext;
 }
 
-impl JSValueKind for QJSValue {
+impl JSValueImpl for QJSValue {
     type RawValue = qjs::JSValue;
     type Context = QJSContext;
 
     fn from_ffi(
-        ctx_raw: <Self::Context as JSContextKind>::RawContext,
+        ctx_raw: <Self::Context as JSContextImpl>::RawContext,
         value_raw: Self::RawValue,
     ) -> Self {
         Self {
@@ -50,7 +50,7 @@ impl JSValueKind for QJSValue {
         &self.value
     }
 
-    fn as_raw_context(&self) -> &<Self::Context as JSContextKind>::RawContext {
+    fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext {
         &self.ctx
     }
 }
@@ -60,7 +60,7 @@ impl JSValueError for QJSValue {}
 
 impl TryInto<()> for QJSValue
 where
-    QJSValue: JSValueKind,
+    QJSValue: JSValueImpl,
 {
     type Error = String;
     fn try_into(self) -> Result<(), Self::Error> {

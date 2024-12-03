@@ -1,4 +1,4 @@
-use crate::{JSValue, JSValueKind};
+use crate::{JSValue, JSValueImpl};
 
 #[derive(Clone, Debug)]
 pub enum ValueType {
@@ -19,7 +19,7 @@ pub enum ValueType {
     Unknown,
 }
 
-pub trait JSTypeOf: JSValueKind {
+pub trait JSTypeOf: JSValueImpl {
     fn is_exception(&self) -> bool;
     fn is_error(&self) -> bool;
     fn is_array(&self) -> bool;

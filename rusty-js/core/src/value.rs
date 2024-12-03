@@ -1,32 +1,32 @@
-use crate::{JSContext, JSContextKind};
+use crate::{JSContext, JSContextImpl};
 
 mod valuetype;
 pub use valuetype::{JSTypeOf, ValueType};
 
-pub trait JSValueKind: Clone {
+pub trait JSValueImpl: Clone {
     /// Raw JavaScript value type, e.g. qjs::JSValue
     type RawValue: Copy;
 
-    /// Associates with a type that implements JSContextKind
+    /// Associates with a type that implements JSContextImpl
     /// This represents the context wrapper type (e.g. QJSContext)
-    type Context: JSContextKind;
+    type Context: JSContextImpl;
 
     fn from_ffi(
-        ctx_raw: <Self::Context as JSContextKind>::RawContext,
+        ctx_raw: <Self::Context as JSContextImpl>::RawContext,
         value_raw: Self::RawValue,
     ) -> Self;
     fn as_raw_value(&self) -> &Self::RawValue;
-    fn as_raw_context(&self) -> &<Self::Context as JSContextKind>::RawContext;
+    fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext;
 }
 
-pub struct JSValue<'ctx, V: JSValueKind> {
+pub struct JSValue<'ctx, V: JSValueImpl> {
     inner: V,
     ctx: &'ctx JSContext<V::Context>,
 }
 
 impl<'ctx, V> Clone for JSValue<'ctx, V>
 where
-    V: JSValueKind,
+    V: JSValueImpl,
 {
     fn clone(&self) -> Self {
         Self {
@@ -38,7 +38,7 @@ where
 
 impl<'ctx, V> JSValue<'ctx, V>
 where
-    V: JSValueKind,
+    V: JSValueImpl,
 {
     pub fn new(ctx: &'ctx JSContext<V::Context>, value: V) -> Self {
         Self { inner: value, ctx }
@@ -47,7 +47,7 @@ where
 
 impl<'ctx, V> JSValue<'ctx, V>
 where
-    V: JSValueKind,
+    V: JSValueImpl,
 {
     /// Converts a Rust value into a `JSValue`.
     pub fn from<T>(ctx: &'ctx JSContext<V::Context>, val: T) -> Self
@@ -73,7 +73,7 @@ macro_rules! impl_js_converter {
     ($target:ty, $in_type:ty, $out_type:ty, $create_fn:expr, $to_fn:expr) => {
         impl TryInto<$out_type> for $target
         where
-            $target: JSValueKind,
+            $target: JSValueImpl,
         {
             type Error = String;
             fn try_into(self) -> Result<$out_type, Self::Error> {
@@ -93,8 +93,8 @@ macro_rules! impl_js_converter {
 
         impl<T> From<(&T, $in_type)> for $target
         where
-            T: JSContextKind<RawContext = <$target as JSRawContext>::RawContext>,
-            $target: JSValueKind<Context = T>,
+            T: JSContextImpl<RawContext = <$target as JSRawContext>::RawContext>,
+            $target: JSValueImpl<Context = T>,
         {
             fn from(t: (&T, $in_type)) -> Self {
                 let ctx = *t.0.as_raw();
