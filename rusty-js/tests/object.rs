@@ -16,5 +16,12 @@ fn test_object() {
 
         obj.del(key);
         assert!(!obj.has(key));
+
+        let value = JSValue::from(ctx, v);
+        assert!(obj.set(key, value.clone()));
+        assert_eq!(obj.get(key).try_into::<i32>().unwrap(), v);
+
+        assert!(obj.set(9, value.clone()));
+        assert_eq!(obj.get(9).try_into::<i32>().unwrap(), v);
     });
 }

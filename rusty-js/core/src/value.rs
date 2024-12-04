@@ -80,6 +80,15 @@ where
     }
 }
 
+impl<'ctx, V> IntoPropertyValue<'ctx, V> for JSValue<'ctx, V>
+where
+    V: JSValueImpl,
+{
+    fn into_value(self, _ctx: &'ctx JSContext<V::Context>) -> V {
+        self.inner
+    }
+}
+
 #[macro_export]
 macro_rules! impl_js_converter {
     ($target:ty, $in_type:ty, $out_type:ty, $create_fn:expr, $to_fn:expr) => {
