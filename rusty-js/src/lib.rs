@@ -1,5 +1,6 @@
 pub use rusty_js_core::{
-    JSContext as CoreJSContext, JSObject, JSRuntime as CoreJSRuntime, JSValue as CoreJSValue,
+    JSContext as CoreJSContext, JSObject as CoreJSObject, JSRuntime as CoreJSRuntime,
+    JSValue as CoreJSValue,
 };
 
 #[cfg(feature = "quickjs")]
@@ -8,6 +9,7 @@ mod engine {
     pub type JSContext = super::CoreJSContext<QJSContext>;
     pub type JSRuntime = super::CoreJSRuntime<QJSRuntime>;
     pub type JSValue<'ctx> = super::CoreJSValue<'ctx, QJSValue>;
+    pub type JSObject<'ctx> = super::CoreJSObject<'ctx, QJSValue>;
 }
 
 #[cfg(feature = "quickjs")]

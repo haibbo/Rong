@@ -1,8 +1,8 @@
 use crate::{JSContext, JSValue, JSValueImpl};
 
 use super::JSTypeOf;
-mod key;
-pub use key::IntoPropertyKey;
+mod property;
+pub use property::{IntoPropertyKey, IntoPropertyValue};
 
 pub struct JSObject<'ctx, V: JSValueImpl>(JSValue<'ctx, V>);
 
@@ -82,12 +82,13 @@ impl<'ctx, V> JSObject<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
 {
-    pub fn set<K>(&self, k: K, value: JSValue<'ctx, V>) -> bool
+    pub fn set<K, KV>(&self, k: K, kv: KV) -> bool
     where
         K: IntoPropertyKey<'ctx, V>,
+        KV: IntoPropertyValue<'ctx, V>,
     {
         let key = k.into_key(self.0.ctx);
-        self.0.inner.set_property(key, value.inner)
+        self.0.inner.set_property(key, kv.into_value(self.0.ctx))
     }
 
     pub fn del<K>(&self, k: K) -> bool
