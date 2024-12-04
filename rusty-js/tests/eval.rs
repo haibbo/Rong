@@ -11,5 +11,8 @@ fn test_eval() {
 
         let result: String = ctx.eval("'hi'").unwrap(); // don't forget ''
         assert_eq!(String::from("hi"), result);
+
+        let obj = ctx.global_object();
+        assert!(obj.as_value().is_object());
     });
 }

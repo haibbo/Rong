@@ -1,4 +1,4 @@
-use crate::{JSRuntime, JSRuntimeImpl, JSTypeOf, JSValue, JSValueError, JSValueImpl};
+use crate::{JSObject, JSRuntime, JSRuntimeImpl, JSTypeOf, JSValue, JSValueError, JSValueImpl};
 
 pub trait JSContextImpl {
     type RawContext: Copy;
@@ -33,17 +33,24 @@ impl<C: JSContextImpl> JSContext<C> {
 pub trait JSCodeRunner: JSContextImpl {
     type Value: JSValueImpl<Context = Self>;
 
+    /// eval javascript
     fn eval(&self, source: impl AsRef<str>) -> Self::Value;
+
+    /// get last exception
     fn get_last_exception(&self) -> Self::Value;
 
+    /// get global object
     fn global_object(&self) -> Self::Value;
 }
 
-impl<C: JSContextImpl> JSContext<C> {
+impl<'ctx, C> JSContext<C>
+where
+    C: JSContextImpl + JSCodeRunner,
+{
+    /// eval javascript
     pub fn eval<T>(&self, source: impl AsRef<str>) -> Result<T, String>
     where
         T: Default,
-        C: JSCodeRunner,
         C::Value: TryInto<T, Error = String> + JSTypeOf + JSValueError,
     {
         let raw = self.inner.eval(source);
@@ -55,5 +62,11 @@ impl<C: JSContextImpl> JSContext<C> {
         } else {
             result.try_into()
         }
+    }
+
+    /// get global object
+    pub fn global_object(&'ctx self) -> JSObject<'ctx, C::Value> {
+        let raw = self.inner.global_object();
+        JSValue::new(self, raw).into()
     }
 }
