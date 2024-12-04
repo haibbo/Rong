@@ -23,5 +23,9 @@ fn test_object() {
 
         assert!(obj.set(9, value.clone()));
         assert_eq!(obj.get(9).try_into::<i32>().unwrap(), v);
+
+        let objv = JSObject::new(ctx);
+        assert!(obj.set("obj", objv));
+        assert!(obj.has("obj"));
     });
 }

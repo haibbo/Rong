@@ -1,6 +1,5 @@
 use crate::{JSContext, JSValue, JSValueImpl};
 
-use super::JSTypeOf;
 mod property;
 pub use property::{IntoPropertyKey, IntoPropertyValue};
 
@@ -15,20 +14,18 @@ where
     }
 }
 
-impl<'ctx, V: JSTypeOf> JSValue<'ctx, V> {
-    pub fn as_object(&self) -> Option<&JSObject<'ctx, V>> {
-        if self.is_object() {
-            // it's safe, because JSObject is just wrapper of JSValue
-            Some(unsafe { std::mem::transmute(self) })
-        } else {
-            None
-        }
-    }
-}
-
 impl<'ctx, V: JSValueImpl> JSObject<'ctx, V> {
     pub fn as_value(&self) -> &JSValue<'ctx, V> {
         &self.0
+    }
+}
+
+impl<'ctx, V> IntoPropertyValue<'ctx, V> for JSObject<'ctx, V>
+where
+    V: JSValueImpl,
+{
+    fn into_value(self, _ctx: &'ctx JSContext<V::Context>) -> V {
+        self.0.inner
     }
 }
 
