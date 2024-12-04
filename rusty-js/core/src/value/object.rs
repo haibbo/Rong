@@ -1,6 +1,8 @@
 use crate::{JSContext, JSValue, JSValueImpl};
 
 use super::JSTypeOf;
+mod key;
+pub use key::IntoPropertyKey;
 
 pub struct JSObject<'ctx, V: JSValueImpl>(JSValue<'ctx, V>);
 
@@ -50,7 +52,6 @@ pub trait JSObjectOps<'ctx>: JSValueImpl {
     fn get_property(&self, key: Self) -> Self;
 }
 
-/// TODO: provide trait to convert T to Key
 impl<'ctx, V> JSObject<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
@@ -75,21 +76,42 @@ where
     pub fn get_opaque<T>(&self) -> *mut T {
         self.0.inner.get_opaque()
     }
+}
 
-    pub fn set(&self, key: JSValue<'ctx, V>, value: JSValue<'ctx, V>) -> bool {
-        self.0.inner.set_property(key.inner, value.inner)
+impl<'ctx, V> JSObject<'ctx, V>
+where
+    V: JSObjectOps<'ctx>,
+{
+    pub fn set<K>(&self, k: K, value: JSValue<'ctx, V>) -> bool
+    where
+        K: IntoPropertyKey<'ctx, V>,
+    {
+        let key = k.into_key(self.0.ctx);
+        self.0.inner.set_property(key, value.inner)
     }
 
-    pub fn del(&self, key: JSValue<'ctx, V>) -> bool {
-        self.0.inner.del_property(key.inner)
+    pub fn del<K>(&self, k: K) -> bool
+    where
+        K: IntoPropertyKey<'ctx, V>,
+    {
+        let key = k.into_key(self.0.ctx);
+        self.0.inner.del_property(key)
     }
 
-    pub fn has(&self, key: JSValue<'ctx, V>) -> bool {
-        self.0.inner.has_property(key.inner)
+    pub fn has<K>(&self, k: K) -> bool
+    where
+        K: IntoPropertyKey<'ctx, V>,
+    {
+        let key = k.into_key(self.0.ctx);
+        self.0.inner.has_property(key)
     }
 
-    pub fn get(&self, key: JSValue<'ctx, V>) -> JSValue<'ctx, V> {
-        let value = self.0.inner.get_property(key.inner);
-        JSValue::new(key.ctx, value)
+    pub fn get<K>(&self, k: K) -> JSValue<'ctx, V>
+    where
+        K: IntoPropertyKey<'ctx, V>,
+    {
+        let key = k.into_key(self.0.ctx);
+        let value = self.0.inner.get_property(key);
+        JSValue::new(self.0.ctx, value)
     }
 }
