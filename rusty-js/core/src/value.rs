@@ -3,6 +3,9 @@ use crate::{JSContext, JSContextImpl};
 mod valuetype;
 pub use valuetype::{JSTypeOf, ValueType};
 
+mod object;
+pub use object::*;
+
 pub trait JSValueImpl: Clone {
     /// Raw JavaScript value type, e.g. qjs::JSValue
     type RawValue: Copy;

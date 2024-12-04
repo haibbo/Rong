@@ -1,0 +1,66 @@
+use crate::qjs;
+use crate::QJSValue;
+use rusty_js_core::{JSContextImpl, JSObjectOps, JSValueImpl};
+
+impl<'ctx> JSObjectOps<'ctx> for QJSValue {
+    fn new_object(ctx: &'ctx Self::Context) -> Self {
+        let ctx = *ctx.as_raw();
+        let v = unsafe { qjs::JS_NewObject(ctx) };
+        QJSValue::from_ffi(ctx, v)
+    }
+
+    fn make_object<T>(ctx: &'ctx Self::Context, constructor: Self, data: *mut T) -> Self {
+        let ctx = *ctx.as_raw();
+        let v = unsafe { qjs::QJS_ObjectMake(ctx, constructor.value, data.cast()) };
+        QJSValue::from_ffi(ctx, v)
+    }
+
+    fn get_opaque<T>(&self) -> *mut T {
+        let v = unsafe { qjs::QJS_ObjectGetPrivate(self.value) };
+        v as *mut T
+    }
+
+    fn del_property(&self, key: Self) -> bool {
+        let v = unsafe {
+            let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
+            let v = qjs::JS_DeleteProperty(
+                self.ctx, self.value, atom, 0, // flags is 0, OK ?
+            );
+            qjs::JS_FreeAtom(self.ctx, atom);
+            v
+        };
+
+        v != 0
+    }
+
+    fn has_property(&self, key: Self) -> bool {
+        let v = unsafe {
+            let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
+            let v = qjs::JS_HasProperty(self.ctx, self.value, atom);
+            qjs::JS_FreeAtom(self.ctx, atom);
+            v
+        };
+
+        v != 0
+    }
+
+    fn set_property(&self, key: Self, value: Self) -> bool {
+        let v = unsafe {
+            let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
+            let v = qjs::JS_SetProperty(self.ctx, self.value, atom, value.value);
+            qjs::JS_FreeAtom(self.ctx, atom);
+            v
+        };
+        v != 0
+    }
+
+    fn get_property(&self, key: Self) -> Self {
+        let v = unsafe {
+            let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
+            let v = qjs::JS_GetProperty(key.ctx, self.value, atom);
+            qjs::JS_FreeAtom(self.ctx, atom);
+            v
+        };
+        QJSValue::from_ffi(key.ctx, v)
+    }
+}

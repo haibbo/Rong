@@ -1,5 +1,5 @@
 pub use rusty_js_core::{
-    JSContext as CoreJSContext, JSRuntime as CoreJSRuntime, JSValue as CoreJSValue,
+    JSContext as CoreJSContext, JSObject, JSRuntime as CoreJSRuntime, JSValue as CoreJSValue,
 };
 
 #[cfg(feature = "quickjs")]
