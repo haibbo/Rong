@@ -82,12 +82,10 @@ where
 
 impl<'ctx, V: JSTypeOf> JSValue<'ctx, V> {
     pub fn as_object(&self) -> Option<&JSObject<'ctx, V>> {
-        if self.is_object() {
+        self.is_object().and_then(|_| {
             // it's safe, because JSObject is just wrapper of JSValue
             Some(unsafe { std::mem::transmute(self) })
-        } else {
-            None
-        }
+        })
     }
 }
 

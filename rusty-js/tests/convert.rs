@@ -7,11 +7,11 @@ use std::string::String;
 fn test_convert() {
     run(|ctx| {
         let jsvalue = JSValue::from(ctx, false);
-        assert!(jsvalue.is_boolean());
+        assert_some!(jsvalue.is_boolean());
         assert_eq!(false, jsvalue.try_into().unwrap());
 
         let jsvalue = JSValue::from(ctx, i32::MIN);
-        assert!(jsvalue.is_number());
+        assert_some!(jsvalue.is_number());
         assert_eq!(i32::MIN, jsvalue.try_into().unwrap());
 
         let jsvalue = JSValue::from(ctx, u32::MAX);
@@ -28,11 +28,11 @@ fn test_convert() {
 
         let hello = "Hello";
         let jsvalue = JSValue::from(ctx, hello.as_ref());
-        assert!(jsvalue.is_string());
+        assert_some!(jsvalue.is_string());
         let output: String = jsvalue.try_into().unwrap();
         assert_eq!(String::from(hello), output);
 
         let jsvalue = JSValue::undefined(ctx);
-        assert!(jsvalue.is_undefined());
+        assert_some!(jsvalue.is_undefined());
     });
 }

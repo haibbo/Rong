@@ -55,13 +55,15 @@ where
     {
         let raw = self.inner.eval(source);
         let result = JSValue::new(self, raw);
-        if result.is_exception() {
-            let exception = self.inner.get_last_exception();
-            let result = JSValue::new(self, exception);
-            Err(result.into_error().to_string())
-        } else {
-            result.try_into()
-        }
+
+        result
+            .is_exception()
+            .map(|_| {
+                let exception = self.inner.get_last_exception();
+                let result = JSValue::new(self, exception);
+                Err(result.into_error().to_string())
+            })
+            .unwrap_or_else(|| result.try_into())
     }
 
     /// get global object

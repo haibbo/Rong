@@ -86,8 +86,12 @@ macro_rules! generate_is_type {
             V: JSTypeOf,
         {
             $(
-                pub fn $method(&self) -> bool {
-                    self.inner.$method()
+                pub fn $method(&self) -> Option<&Self> {
+                    if self.inner.$method() {
+                        Some(self)
+                    }else{
+                        None
+                    }
                 }
             )*
         }
