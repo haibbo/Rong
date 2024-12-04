@@ -31,5 +31,8 @@ fn test_convert() {
         assert!(jsvalue.is_string());
         let output: String = jsvalue.try_into().unwrap();
         assert_eq!(String::from(hello), output);
+
+        let jsvalue = JSValue::undefined(ctx);
+        assert!(jsvalue.is_undefined());
     });
 }

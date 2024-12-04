@@ -69,6 +69,15 @@ where
     {
         self.inner.try_into()
     }
+
+    /// create JS UNDEFINED Value
+    pub fn undefined(ctx: &'ctx JSContext<V::Context>) -> Self
+    where
+        V: From<(&'ctx V::Context, ())>,
+    {
+        let value = V::from((&ctx.inner, ()));
+        JSValue::new(ctx, value)
+    }
 }
 
 #[macro_export]

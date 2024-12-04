@@ -59,15 +59,15 @@ impl JSValueImpl for QJSValue {
 // use default implementation
 impl JSValueError for QJSValue {}
 
-impl TryInto<()> for QJSValue
-where
-    QJSValue: JSValueImpl,
-{
-    type Error = String;
-    fn try_into(self) -> Result<(), Self::Error> {
-        Ok(())
+impl_js_converter!(
+    QJSValue,
+    (),
+    |ctx, _value| qjs::QJS_NewUndefined(ctx),
+    |_ctx, _value, result: *mut ()| {
+        *result = ();
+        0
     }
-}
+);
 
 impl_js_converter!(
     QJSValue,
