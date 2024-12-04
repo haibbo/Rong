@@ -1,5 +1,7 @@
 use crate::{JSContext, JSValue, JSValueImpl};
 
+use super::JSTypeOf;
+
 pub struct JSObject<'ctx, V: JSValueImpl>(JSValue<'ctx, V>);
 
 impl<'ctx, V> From<JSValue<'ctx, V>> for JSObject<'ctx, V>
@@ -11,10 +13,24 @@ where
     }
 }
 
-pub trait JSObjectOps<'ctx>
-where
-    Self: JSValueImpl,
-{
+impl<'ctx, V: JSTypeOf> JSValue<'ctx, V> {
+    pub fn as_object(&self) -> Option<&JSObject<'ctx, V>> {
+        if self.is_object() {
+            // it's safe, because JSObject is just wrapper of JSValue
+            Some(unsafe { std::mem::transmute(self) })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'ctx, V: JSValueImpl> JSObject<'ctx, V> {
+    pub fn as_value(&self) -> &JSValue<'ctx, V> {
+        &self.0
+    }
+}
+
+pub trait JSObjectOps<'ctx>: JSValueImpl {
     /// if failed, it needs to return EXCEPTION
     fn new_object(ctx: &'ctx Self::Context) -> Self;
 
@@ -37,16 +53,12 @@ where
 /// TODO: provide trait to convert T to Key
 impl<'ctx, V> JSObject<'ctx, V>
 where
-    V: JSValueImpl + JSObjectOps<'ctx>,
+    V: JSObjectOps<'ctx>,
 {
     /// new a general object
     pub fn new(ctx: &'ctx JSContext<V::Context>) -> Self {
         let value = V::new_object(&ctx.inner);
         JSValue::new(ctx, value).into()
-    }
-
-    pub fn as_value(&self) -> &JSValue<'ctx, V> {
-        &self.0
     }
 
     /// new object instance of Class with private data
