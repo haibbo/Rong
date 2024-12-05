@@ -1,5 +1,8 @@
 use crate::{JSContext, JSContextImpl};
 
+mod exception;
+pub use exception::*;
+
 mod valuetype;
 pub use valuetype::{JSTypeOf, ValueType};
 

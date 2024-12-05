@@ -27,7 +27,7 @@ where
     }
 }
 
-impl<'ctx, V> JSValue<'ctx, V>
+impl<V> JSValue<'_, V>
 where
     V: JSValueError,
 {
