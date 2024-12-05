@@ -1,5 +1,5 @@
 use crate::{qjs, QJSContext};
-use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueError, JSValueImpl};
+use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl};
 use std::ffi::CStr;
 
 mod object;
@@ -55,9 +55,6 @@ impl JSValueImpl for QJSValue {
         &self.ctx
     }
 }
-
-// use default implementation
-impl JSValueError for QJSValue {}
 
 impl_js_converter!(
     QJSValue,

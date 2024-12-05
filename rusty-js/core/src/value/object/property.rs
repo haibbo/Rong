@@ -1,30 +1,66 @@
 use crate::{JSContext, JSValueImpl};
 
-pub trait IntoPropertyKey<'ctx, V: JSValueImpl> {
-    fn into_key(self, ctx: &'ctx JSContext<V::Context>) -> V;
+pub enum PropertyKey<'a> {
+    Int32(i32),
+    Uint32(u32),
+    Int64(i64),
+    Uint64(u64),
+    Str(&'a str),
+    // Symbol(Symbol),
 }
 
-macro_rules! impl_into_property_key {
-    ($($type:ty),*) => {
-        $(
-            impl<'ctx, V> IntoPropertyKey<'ctx, V> for $type
-            where
-                V: JSValueImpl,
-                V: for<'a> From<(&'a V::Context, Self)>,
-            {
-                fn into_key(self, ctx: &'ctx JSContext<V::Context>) -> V {
-                    (&ctx.inner, self).into()
-                }
-            }
-        )*
-    };
+impl From<i32> for PropertyKey<'_> {
+    fn from(value: i32) -> Self {
+        PropertyKey::Int32(value)
+    }
 }
 
-//String implement: Deref<Target = str>
-impl_into_property_key!(i32, u32, i64, u64, &str, &String);
+impl From<u32> for PropertyKey<'_> {
+    fn from(value: u32) -> Self {
+        PropertyKey::Uint32(value)
+    }
+}
+
+impl From<i64> for PropertyKey<'_> {
+    fn from(value: i64) -> Self {
+        PropertyKey::Int64(value)
+    }
+}
+
+impl From<u64> for PropertyKey<'_> {
+    fn from(value: u64) -> Self {
+        PropertyKey::Uint64(value)
+    }
+}
+
+impl<'a> From<&'a str> for PropertyKey<'a> {
+    fn from(value: &'a str) -> Self {
+        PropertyKey::Str(value)
+    }
+}
+
+impl<'ctx> PropertyKey<'ctx> {
+    pub fn into_key<V>(self, ctx: &'ctx JSContext<V::Context>) -> V
+    where
+        V: JSValueImpl,
+        V: for<'a> From<(&'a V::Context, i32)>,
+        V: for<'a> From<(&'a V::Context, u32)>,
+        V: for<'a> From<(&'a V::Context, i64)>,
+        V: for<'a> From<(&'a V::Context, u64)>,
+        V: for<'a> From<(&'a V::Context, &'a str)>,
+    {
+        match self {
+            Self::Int32(i) => (&ctx.inner, i).into(),
+            Self::Uint32(i) => (&ctx.inner, i).into(),
+            Self::Int64(i) => (&ctx.inner, i).into(),
+            Self::Uint64(i) => (&ctx.inner, i).into(),
+            Self::Str(s) => (&ctx.inner, s).into(),
+        }
+    }
+}
 
 pub trait IntoPropertyValue<'ctx, V: JSValueImpl> {
-    fn into_value(self, ctx: &'ctx JSContext<V::Context>) -> V;
+    fn into_kv(self, ctx: &'ctx JSContext<V::Context>) -> V;
 }
 
 macro_rules! impl_into_property_value {
@@ -36,7 +72,7 @@ macro_rules! impl_into_property_value {
                 V: for<'a> From<(&'a V::Context, Self)>,
                 V::Context: 'ctx,
             {
-                fn into_value(self, ctx: &'ctx JSContext<V::Context>) -> V {
+                fn into_kv(self, ctx: &'ctx JSContext<V::Context>) -> V {
                     (&ctx.inner, self).into()
                 }
             }
@@ -44,4 +80,4 @@ macro_rules! impl_into_property_value {
     }
 }
 
-impl_into_property_value!(bool, i32, u32, i64, u64, f64, &str, &String);
+impl_into_property_value!(bool, i32, u32, i64, u64, f64, &str);

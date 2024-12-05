@@ -1,41 +1,68 @@
-use crate::{JSContext, JSContextImpl, JSValue, JSValueImpl};
+use crate::{
+    JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf, JSValue, JSValueImpl, PropertyKey,
+};
 use std::fmt;
+use std::ops::Deref;
 
-/// extract exception and error details from JSValue
-/// this trait can only be implemented by JSValue
-pub trait JSValueError: JSValueImpl
-where
-    Self: Sized,
-    Self: TryInto<String, Error = String>,
-{
-    fn get_exception_message(value: &JSValue<Self>) -> Option<String> {
-        let msg: Result<String, String> = value.clone().try_into();
-        match msg {
-            Ok(v) => Some(v),
-            Err(v) => Some(v),
-        }
-    }
+pub struct Exception<'ctx, V: JSValueImpl>(JSObject<'ctx, V>);
 
-    fn get_exception_stack(_value: &JSValue<Self>) -> Option<String> {
-        /* TODO: need object ready
-        value
-            .as_object()
-            .and_then(|obj| obj.get_property("stack"))
-            .and_then(|stack| stack.into_rust())
-        */
-        Some(String::from("TODO get stack"))
+impl<'ctx, V: JSObjectOps<'ctx>> Deref for Exception<'ctx, V> {
+    type Target = JSObject<'ctx, V>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
-impl<V> JSValue<'_, V>
+impl<'ctx, V> Exception<'ctx, V>
 where
-    V: JSValueError,
+    V: JSValueImpl,
+{
+    pub(crate) fn new(v: JSObject<'ctx, V>) -> Self {
+        Self(v)
+    }
+}
+
+impl<'ctx, V: JSObjectOps<'ctx>> fmt::Debug for Exception<'ctx, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Exception")
+            .field("message", &self.message())
+            .field("stack", &self.stack())
+            .finish()
+    }
+}
+
+impl<'ctx, V> Exception<'ctx, V>
+where
+    V: JSObjectOps<'ctx>,
+    V: JSTypeOf,
+    V: TryInto<String, Error = String>,
 {
     pub fn into_error(self) -> JSErrorInfo {
-        JSErrorInfo {
-            message: V::get_exception_message(&self),
-            stack: V::get_exception_stack(&self),
-        }
+        self.is_error().map_or_else(
+            || JSErrorInfo {
+                message: Some(self.clone().try_into().unwrap()),
+                stack: None,
+            },
+            |_| JSErrorInfo {
+                message: self.message(),
+                stack: self.stack(),
+            },
+        )
+    }
+}
+
+impl<'ctx, V> Exception<'ctx, V>
+where
+    V: JSObjectOps<'ctx>,
+{
+    pub fn message(&self) -> Option<String> {
+        // let _v = self.get("message");
+        Some("".into())
+    }
+
+    pub fn stack(&self) -> Option<String> {
+        // let _v = self.0.get("stack");
+        Some("".into())
     }
 }
 
@@ -51,7 +78,7 @@ impl fmt::Display for JSErrorInfo {
             (Some(msg), Some(stack)) => write!(f, "{}\n{}", msg, stack),
             (Some(msg), None) => write!(f, "{}", msg),
             (None, Some(stack)) => write!(f, "{}", stack),
-            (None, None) => write!(f, "No error information!"),
+            (None, None) => Ok(()),
         }
     }
 }

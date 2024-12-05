@@ -2,7 +2,7 @@ use crate::{JSContext, JSValue, JSValueImpl};
 use std::ops::Deref;
 
 mod property;
-pub use property::{IntoPropertyKey, IntoPropertyValue};
+pub use property::{IntoPropertyValue, PropertyKey};
 
 pub struct JSObject<'ctx, V: JSValueImpl>(JSValue<'ctx, V>);
 
@@ -26,7 +26,7 @@ impl<'ctx, V> IntoPropertyValue<'ctx, V> for JSObject<'ctx, V>
 where
     V: JSValueImpl,
 {
-    fn into_value(self, _ctx: &'ctx JSContext<V::Context>) -> V {
+    fn into_kv(self, _ctx: &'ctx JSContext<V::Context>) -> V {
         self.0.inner
     }
 }
@@ -73,46 +73,50 @@ where
 
     /// get private data
     pub fn get_opaque<T>(&self) -> *mut T {
-        self.0.inner.get_opaque()
+        self.as_inner().get_opaque()
     }
 }
 
 impl<'ctx, V> JSObject<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
+    V: for<'a> From<(&'a V::Context, i32)>,
+    V: for<'a> From<(&'a V::Context, u32)>,
+    V: for<'a> From<(&'a V::Context, i64)>,
+    V: for<'a> From<(&'a V::Context, u64)>,
+    V: for<'a> From<(&'a V::Context, &'a str)>,
 {
     pub fn set<K, KV>(&self, k: K, kv: KV) -> bool
     where
-        K: IntoPropertyKey<'ctx, V>,
+        K: Into<PropertyKey<'ctx>>,
         KV: IntoPropertyValue<'ctx, V>,
     {
-        let key = k.into_key(self.0.ctx);
-        self.0.inner.set_property(key, kv.into_value(self.0.ctx))
+        let key = k.into().into_key(self.as_ctx());
+        self.as_inner().set_property(key, kv.into_kv(self.0.ctx))
     }
 
     pub fn del<K>(&self, k: K) -> bool
     where
-        K: IntoPropertyKey<'ctx, V>,
+        K: Into<PropertyKey<'ctx>>,
     {
-        let key = k.into_key(self.0.ctx);
-        self.0.inner.del_property(key)
+        let key = k.into().into_key(self.as_ctx());
+        self.as_inner().del_property(key)
     }
 
     pub fn has<K>(&self, k: K) -> bool
     where
-        K: IntoPropertyKey<'ctx, V>,
+        K: Into<PropertyKey<'ctx>>,
     {
-        let key = k.into_key(self.0.ctx);
-        self.0.inner.has_property(key)
+        let key = k.into().into_key(self.as_ctx());
+        self.as_inner().has_property(key)
     }
 
     pub fn get<K>(&self, k: K) -> Option<JSValue<'ctx, V>>
     where
-        K: IntoPropertyKey<'ctx, V>,
+        K: Into<PropertyKey<'ctx>>,
     {
-        let key = k.into_key(self.0.ctx);
-        self.0
-            .inner
+        let key = k.into().into_key(self.as_ctx());
+        self.as_inner()
             .get_property(key)
             .map(|value| JSValue::new(self.0.ctx, value))
     }

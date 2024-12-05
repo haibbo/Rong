@@ -46,6 +46,14 @@ where
     pub(crate) fn new(ctx: &'ctx JSContext<V::Context>, value: V) -> Self {
         Self { inner: value, ctx }
     }
+
+    pub(crate) fn as_inner(&self) -> &V {
+        &self.inner
+    }
+
+    pub(crate) fn as_ctx(&self) -> &'ctx JSContext<V::Context> {
+        self.ctx
+    }
 }
 
 impl<'ctx, V> JSValue<'ctx, V>
@@ -93,7 +101,7 @@ impl<'ctx, V> IntoPropertyValue<'ctx, V> for JSValue<'ctx, V>
 where
     V: JSValueImpl,
 {
-    fn into_value(self, _ctx: &'ctx JSContext<V::Context>) -> V {
+    fn into_kv(self, _ctx: &'ctx JSContext<V::Context>) -> V {
         self.inner
     }
 }
