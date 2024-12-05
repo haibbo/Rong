@@ -27,10 +27,7 @@ pub struct JSValue<'ctx, V: JSValueImpl> {
     ctx: &'ctx JSContext<V::Context>,
 }
 
-impl<'ctx, V> Clone for JSValue<'ctx, V>
-where
-    V: JSValueImpl,
-{
+impl<V: JSValueImpl> Clone for JSValue<'_, V> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -82,9 +79,9 @@ where
 
 impl<'ctx, V: JSTypeOf> JSValue<'ctx, V> {
     pub fn as_object(&self) -> Option<&JSObject<'ctx, V>> {
-        self.is_object().and_then(|_| {
+        self.is_object().map(|_| {
             // it's safe, because JSObject is just wrapper of JSValue
-            Some(unsafe { std::mem::transmute(self) })
+            unsafe { std::mem::transmute(self) }
         })
     }
 }

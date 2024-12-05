@@ -41,6 +41,7 @@ impl JSContextImpl for QJSContext {
 }
 
 // eval option assiciated with JS_EVAL_*
+#[derive(Clone, Copy)]
 struct EvalOptions {
     global: bool,
     strict: bool,
@@ -111,7 +112,7 @@ impl QJSContext {
         F: FnOnce(*mut qjs::JSContext, *const c_char, *const c_char) -> qjs::JSValue,
     {
         let c_message = CString::new(message).unwrap();
-        let raw = { throw_fn(self.raw, b"%s\0".as_ptr() as _, c_message.as_ptr()) };
+        let raw = { throw_fn(self.raw, c"%s".as_ptr(), c_message.as_ptr()) };
         QJSValue::from_ffi(self.raw, raw)
     }
 }
