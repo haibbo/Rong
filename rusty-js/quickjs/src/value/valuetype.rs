@@ -1,14 +1,21 @@
 use crate::qjs;
 use crate::QJSValue;
-use rusty_js_core::JSTypeOf;
+use rusty_js_core::{JSTypeOf, JSValueImpl};
 
 impl JSTypeOf for QJSValue {
     fn is_boolean(&self) -> bool {
         unsafe { qjs::QJS_IsBool(self.ctx, self.value) != 0 }
     }
 
-    fn is_exception(&self) -> bool {
-        unsafe { qjs::QJS_IsException(self.ctx, self.value) != 0 }
+    fn is_exception(&self) -> Option<Self> {
+        unsafe {
+            if qjs::QJS_IsException(self.ctx, self.value) != 0 {
+                let exception = qjs::JS_GetException(self.ctx);
+                Some(QJSValue::from_ffi(self.ctx, exception))
+            } else {
+                None
+            }
+        }
     }
 
     fn is_error(&self) -> bool {

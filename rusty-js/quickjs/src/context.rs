@@ -124,11 +124,6 @@ impl JSCodeRunner for QJSContext {
         self.eval_raw(source, file_name, EvalOptions::default().to_flags())
     }
 
-    fn get_last_exception(&self) -> Self::Value {
-        let raw = unsafe { qjs::JS_GetException(self.raw) };
-        QJSValue::from_ffi(self.raw, raw)
-    }
-
     fn global_object(&self) -> Self::Value {
         let raw = unsafe { qjs::JS_GetGlobalObject(self.raw) };
         QJSValue::from_ffi(self.raw, raw)

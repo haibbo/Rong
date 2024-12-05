@@ -36,16 +36,13 @@ pub trait JSCodeRunner: JSContextImpl {
     /// eval javascript
     fn eval(&self, source: impl AsRef<str>) -> Self::Value;
 
-    /// get last exception
-    fn get_last_exception(&self) -> Self::Value;
-
     /// get global object
     fn global_object(&self) -> Self::Value;
 }
 
 impl<'ctx, C> JSContext<C>
 where
-    C: JSContextImpl + JSCodeRunner,
+    C: JSCodeRunner,
 {
     /// eval javascript
     pub fn eval<T>(&self, source: impl AsRef<str>) -> Result<T, String>
@@ -58,11 +55,7 @@ where
 
         result
             .is_exception()
-            .map(|_| {
-                let exception = self.inner.get_last_exception();
-                let result = JSValue::new(self, exception);
-                Err(result.into_error().to_string())
-            })
+            .map(|e| Err(e.into_error().to_string()))
             .unwrap_or_else(|| result.try_into())
     }
 

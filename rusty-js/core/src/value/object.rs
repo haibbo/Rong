@@ -112,6 +112,6 @@ where
         self.0
             .inner
             .get_property(key)
-            .and_then(|value| Some(JSValue::new(self.0.ctx, value)))
+            .map(|value| JSValue::new(self.0.ctx, value))
     }
 }
