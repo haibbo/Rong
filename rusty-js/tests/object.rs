@@ -11,7 +11,7 @@ fn test_object() {
         assert!(obj.set(key, v));
         assert!(obj.has(key));
 
-        let val = obj.get(key);
+        let val = obj.get(key).unwrap();
         assert_eq!(val.try_into::<i32>().unwrap(), v);
 
         obj.del(key);
@@ -19,10 +19,16 @@ fn test_object() {
 
         let value = JSValue::from(ctx, v);
         assert!(obj.set(key, value.clone()));
-        assert_eq!(obj.get(key).try_into::<i32>().unwrap(), v);
+        assert_eq!(
+            obj.get(key).and_then(|i| i.try_into::<i32>().ok()).unwrap(),
+            v
+        );
 
         assert!(obj.set(9, value.clone()));
-        assert_eq!(obj.get(9).try_into::<i32>().unwrap(), v);
+        assert_eq!(
+            obj.get(9).and_then(|i| i.try_into::<i32>().ok()).unwrap(),
+            v
+        );
 
         let objv = JSObject::new(ctx);
         assert!(obj.set("obj", objv));

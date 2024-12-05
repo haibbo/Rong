@@ -54,13 +54,17 @@ impl<'ctx> JSObjectOps<'ctx> for QJSValue {
         v != 0
     }
 
-    fn get_property(&self, key: Self) -> Self {
+    fn get_property(&self, key: Self) -> Option<Self> {
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
             let v = qjs::JS_GetProperty(key.ctx, self.value, atom);
             qjs::JS_FreeAtom(self.ctx, atom);
             v
         };
-        QJSValue::from_ffi(key.ctx, v)
+        if unsafe { qjs::QJS_IsException(self.ctx, v) > 0 } {
+            None
+        } else {
+            Some(QJSValue::from_ffi(key.ctx, v))
+        }
     }
 }

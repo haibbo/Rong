@@ -46,7 +46,7 @@ pub trait JSObjectOps<'ctx>: JSValueImpl {
     fn set_property(&self, key: Self, value: Self) -> bool;
 
     /// if failed, it needs to return EXCEPTION
-    fn get_property(&self, key: Self) -> Self;
+    fn get_property(&self, key: Self) -> Option<Self>;
 }
 
 impl<'ctx, V> JSObject<'ctx, V>
@@ -104,12 +104,14 @@ where
         self.0.inner.has_property(key)
     }
 
-    pub fn get<K>(&self, k: K) -> JSValue<'ctx, V>
+    pub fn get<K>(&self, k: K) -> Option<JSValue<'ctx, V>>
     where
         K: IntoPropertyKey<'ctx, V>,
     {
         let key = k.into_key(self.0.ctx);
-        let value = self.0.inner.get_property(key);
-        JSValue::new(self.0.ctx, value)
+        self.0
+            .inner
+            .get_property(key)
+            .and_then(|value| Some(JSValue::new(self.0.ctx, value)))
     }
 }
