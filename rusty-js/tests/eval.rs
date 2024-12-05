@@ -13,6 +13,6 @@ fn test_eval() {
         assert_eq!(String::from("hi"), result);
 
         let obj = ctx.global_object();
-        assert_some!(obj.as_value().is_object());
+        assert_some!(obj.is_object());
     });
 }

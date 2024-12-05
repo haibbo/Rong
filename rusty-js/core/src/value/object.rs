@@ -1,4 +1,5 @@
 use crate::{JSContext, JSValue, JSValueImpl};
+use std::ops::Deref;
 
 mod property;
 pub use property::{IntoPropertyKey, IntoPropertyValue};
@@ -14,8 +15,9 @@ where
     }
 }
 
-impl<'ctx, V: JSValueImpl> JSObject<'ctx, V> {
-    pub fn as_value(&self) -> &JSValue<'ctx, V> {
+impl<'ctx, V: JSValueImpl> Deref for JSObject<'ctx, V> {
+    type Target = JSValue<'ctx, V>;
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
