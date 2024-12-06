@@ -23,7 +23,7 @@ fn test_throw_error() {
     });
 
     run(|ctx| {
-        let e = Exception::from_message(ctx, "hi");
+        let e = JSException::from_message(ctx, "hi");
         assert_eq!(e.message().unwrap(), "hi");
     });
 }

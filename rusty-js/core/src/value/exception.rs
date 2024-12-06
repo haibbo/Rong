@@ -2,16 +2,16 @@ use crate::{JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf, JSValue, 
 use std::fmt;
 use std::ops::Deref;
 
-pub struct Exception<'ctx, V: JSValueImpl>(JSObject<'ctx, V>);
+pub struct JSException<'ctx, V: JSValueImpl>(JSObject<'ctx, V>);
 
-impl<'ctx, V: JSObjectOps<'ctx>> Deref for Exception<'ctx, V> {
+impl<'ctx, V: JSObjectOps<'ctx>> Deref for JSException<'ctx, V> {
     type Target = JSObject<'ctx, V>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<'ctx, V> Exception<'ctx, V>
+impl<'ctx, V> JSException<'ctx, V>
 where
     V: JSValueImpl,
 {
@@ -20,7 +20,7 @@ where
     }
 }
 
-impl<'ctx, V> Exception<'ctx, V>
+impl<'ctx, V> JSException<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
     V::Context: JSExceptionHandler<Value = V>,
@@ -33,7 +33,7 @@ where
     }
 }
 
-impl<'ctx, V: JSObjectOps<'ctx>> fmt::Debug for Exception<'ctx, V> {
+impl<'ctx, V: JSObjectOps<'ctx>> fmt::Debug for JSException<'ctx, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Exception")
             .field("message", &self.message())
@@ -42,7 +42,7 @@ impl<'ctx, V: JSObjectOps<'ctx>> fmt::Debug for Exception<'ctx, V> {
     }
 }
 
-impl<'ctx, V> Exception<'ctx, V>
+impl<'ctx, V> JSException<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
     V: JSTypeOf,
@@ -62,7 +62,7 @@ where
     }
 }
 
-impl<'ctx, V> Exception<'ctx, V>
+impl<'ctx, V> JSException<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
 {

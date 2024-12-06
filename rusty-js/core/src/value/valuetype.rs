@@ -1,4 +1,4 @@
-use crate::{Exception, JSValue, JSValueImpl};
+use crate::{JSException, JSValue, JSValueImpl};
 
 #[derive(Clone, Debug)]
 pub enum ValueType {
@@ -78,10 +78,10 @@ where
         self.inner.type_of()
     }
 
-    pub fn is_exception(&self) -> Option<Exception<'ctx, V>> {
+    pub fn is_exception(&self) -> Option<JSException<'ctx, V>> {
         self.inner
             .is_exception()
-            .map(|e| Exception::from_object(JSValue::new(self.ctx, e).into()))
+            .map(|e| JSException::from_object(JSValue::new(self.ctx, e).into()))
     }
 }
 

@@ -1,5 +1,5 @@
 pub use rusty_js_core::{
-    Exception as CoreJSException, JSContext as CoreJSContext, JSObject as CoreJSObject,
+    JSContext as CoreJSContext, JSException as CoreJSException, JSObject as CoreJSObject,
     JSRuntime as CoreJSRuntime, JSValue as CoreJSValue,
 };
 
@@ -10,7 +10,7 @@ mod engine {
     pub type JSRuntime = super::CoreJSRuntime<QJSRuntime>;
     pub type JSValue<'ctx> = super::CoreJSValue<'ctx, QJSValue>;
     pub type JSObject<'ctx> = super::CoreJSObject<'ctx, QJSValue>;
-    pub type Exception<'ctx> = super::CoreJSException<'ctx, QJSValue>;
+    pub type JSException<'ctx> = super::CoreJSException<'ctx, QJSValue>;
 }
 
 #[cfg(feature = "quickjs")]
