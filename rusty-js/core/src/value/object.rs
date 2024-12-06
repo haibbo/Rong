@@ -1,4 +1,4 @@
-use crate::{JSContext, JSValue, JSValueConversion, JSValueImpl};
+use crate::{JSContext, JSTypeOf, JSValue, JSValueConversion, JSValueImpl};
 use std::ops::Deref;
 
 mod property;
@@ -31,7 +31,7 @@ where
     }
 }
 
-pub trait JSObjectOps<'ctx>: JSValueConversion {
+pub trait JSObjectOps<'ctx>: JSValueConversion + JSTypeOf {
     /// if failed, it needs to return EXCEPTION
     fn new_object(ctx: &'ctx Self::Context) -> Self;
 

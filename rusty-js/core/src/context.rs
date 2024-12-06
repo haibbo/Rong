@@ -1,4 +1,4 @@
-use crate::{JSObject, JSObjectOps, JSRuntime, JSRuntimeImpl, JSTypeOf, JSValue, JSValueImpl};
+use crate::{JSObject, JSObjectOps, JSRuntime, JSRuntimeImpl, JSValue, JSValueImpl};
 
 pub trait JSContextImpl {
     type RawContext: Copy;
@@ -48,7 +48,7 @@ where
     pub fn eval<'a, T>(&'a self, source: impl AsRef<str>) -> Result<T, String>
     where
         T: Default,
-        C::Value: TryInto<T, Error = String> + JSTypeOf,
+        C::Value: TryInto<T, Error = String>,
         C::Value: JSObjectOps<'a>,
     {
         let raw = self.inner.eval(source);

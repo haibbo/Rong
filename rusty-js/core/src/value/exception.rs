@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf, JSValue, JSValueImpl};
+use crate::{JSContext, JSContextImpl, JSObject, JSObjectOps, JSValue, JSValueImpl};
 use std::fmt;
 use std::ops::Deref;
 
@@ -45,7 +45,6 @@ impl<'ctx, V: JSObjectOps<'ctx>> fmt::Debug for JSException<'ctx, V> {
 impl<'ctx, V> JSException<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
-    V: JSTypeOf,
     V: TryInto<String, Error = String>,
 {
     pub fn into_error(self) -> JSErrorInfo {
