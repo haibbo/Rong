@@ -8,7 +8,7 @@ fn test_convert() {
     run(|ctx| {
         let jsvalue = JSValue::from(ctx, false);
         assert_some!(jsvalue.is_boolean());
-        assert_eq!(false, jsvalue.try_into().unwrap());
+        assert!(!jsvalue.try_into::<bool>().unwrap());
 
         let jsvalue = JSValue::from(ctx, i32::MIN);
         assert_some!(jsvalue.is_number());
@@ -27,7 +27,7 @@ fn test_convert() {
         assert_eq!(f64::MIN, jsvalue.try_into().unwrap());
 
         let hello = "Hello";
-        let jsvalue = JSValue::from(ctx, hello.as_ref());
+        let jsvalue = JSValue::from(ctx, hello);
         assert_some!(jsvalue.is_string());
         let output: String = jsvalue.try_into().unwrap();
         assert_eq!(String::from(hello), output);
