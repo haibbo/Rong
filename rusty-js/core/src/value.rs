@@ -1,5 +1,8 @@
 use crate::{JSContext, JSContextImpl};
 
+mod convert;
+pub use convert::*;
+
 mod exception;
 pub use exception::*;
 

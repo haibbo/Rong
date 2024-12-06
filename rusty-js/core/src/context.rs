@@ -49,7 +49,7 @@ where
     where
         T: Default,
         C::Value: TryInto<T, Error = String> + JSTypeOf,
-        C::Value: JSObjectOps<'a> + TryInto<String, Error = String>,
+        C::Value: JSObjectOps<'a>,
     {
         let raw = self.inner.eval(source);
         let result = JSValue::new(self, raw);

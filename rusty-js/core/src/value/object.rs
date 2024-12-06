@@ -1,4 +1,4 @@
-use crate::{JSContext, JSValue, JSValueImpl};
+use crate::{JSContext, JSValue, JSValueConversion, JSValueImpl};
 use std::ops::Deref;
 
 mod property;
@@ -31,7 +31,7 @@ where
     }
 }
 
-pub trait JSObjectOps<'ctx>: JSValueImpl {
+pub trait JSObjectOps<'ctx>: JSValueConversion {
     /// if failed, it needs to return EXCEPTION
     fn new_object(ctx: &'ctx Self::Context) -> Self;
 
@@ -80,11 +80,6 @@ where
 impl<'ctx, V> JSObject<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
-    V: for<'a> From<(&'a V::Context, i32)>,
-    V: for<'a> From<(&'a V::Context, u32)>,
-    V: for<'a> From<(&'a V::Context, i64)>,
-    V: for<'a> From<(&'a V::Context, u64)>,
-    V: for<'a> From<(&'a V::Context, &'a str)>,
 {
     pub fn set<K, KV>(&self, k: K, kv: KV) -> bool
     where

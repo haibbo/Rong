@@ -1,6 +1,4 @@
-use crate::{
-    JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf, JSValue, JSValueImpl, PropertyKey,
-};
+use crate::{JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf, JSValue, JSValueImpl};
 use std::fmt;
 use std::ops::Deref;
 
@@ -56,13 +54,11 @@ where
     V: JSObjectOps<'ctx>,
 {
     pub fn message(&self) -> Option<String> {
-        // let _v = self.get("message");
-        Some("".into())
+        self.get("message")?.try_into().ok()
     }
 
     pub fn stack(&self) -> Option<String> {
-        // let _v = self.0.get("stack");
-        Some("".into())
+        self.get("stack")?.try_into().ok()
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{JSContext, JSValueImpl};
+use crate::{JSContext, JSValueConversion, JSValueImpl};
 
 pub enum PropertyKey<'a> {
     Int32(i32),
@@ -42,12 +42,7 @@ impl<'a> From<&'a str> for PropertyKey<'a> {
 impl<'ctx> PropertyKey<'ctx> {
     pub fn into_key<V>(self, ctx: &'ctx JSContext<V::Context>) -> V
     where
-        V: JSValueImpl,
-        V: for<'a> From<(&'a V::Context, i32)>,
-        V: for<'a> From<(&'a V::Context, u32)>,
-        V: for<'a> From<(&'a V::Context, i64)>,
-        V: for<'a> From<(&'a V::Context, u64)>,
-        V: for<'a> From<(&'a V::Context, &'a str)>,
+        V: JSValueConversion,
     {
         match self {
             Self::Int32(i) => (&ctx.inner, i).into(),
@@ -68,9 +63,7 @@ macro_rules! impl_into_property_value {
         $(
             impl<'ctx, V> IntoPropertyValue<'ctx, V> for $type
             where
-                V: JSValueImpl,
-                V: for<'a> From<(&'a V::Context, Self)>,
-                V::Context: 'ctx,
+                V: JSValueConversion
             {
                 fn into_kv(self, ctx: &'ctx JSContext<V::Context>) -> V {
                     (&ctx.inner, self).into()
