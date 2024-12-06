@@ -15,8 +15,21 @@ impl<'ctx, V> Exception<'ctx, V>
 where
     V: JSValueImpl,
 {
-    pub(crate) fn new(v: JSObject<'ctx, V>) -> Self {
+    pub(crate) fn from_object(v: JSObject<'ctx, V>) -> Self {
         Self(v)
+    }
+}
+
+impl<'ctx, V> Exception<'ctx, V>
+where
+    V: JSObjectOps<'ctx>,
+    V::Context: JSExceptionHandler<Value = V>,
+{
+    pub fn from_message(ctx: &'ctx JSContext<V::Context>, message: impl AsRef<str>) -> Self {
+        let v = ctx.inner.new_error();
+        let obj: JSObject<'ctx, V> = JSValue::new(ctx, v).into();
+        obj.set("message", message.as_ref());
+        Self(obj)
     }
 }
 
@@ -53,10 +66,16 @@ impl<'ctx, V> Exception<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
 {
+    /// Returns the message of the error.
+    ///
+    /// Same as retrieving `error.message` in JavaScript.
     pub fn message(&self) -> Option<String> {
         self.get("message")?.try_into().ok()
     }
 
+    /// Returns the stack of the error.
+    ///
+    /// Same as retrieving `error.stack` in JavaScript.
     pub fn stack(&self) -> Option<String> {
         self.get("stack")?.try_into().ok()
     }
@@ -89,6 +108,7 @@ pub trait JSExceptionHandler: JSContextImpl {
     fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value;
     fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value;
     fn throw_error(&self, message: impl AsRef<str>) -> Self::Value;
+    fn new_error(&self) -> Self::Value;
 }
 
 impl<C> JSContext<C>

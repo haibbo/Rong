@@ -163,4 +163,8 @@ impl JSExceptionHandler for QJSContext {
             qjs::JS_ThrowPlainError(ctx, fmt, msg)
         })
     }
+
+    fn new_error(&self) -> Self::Value {
+        unsafe { QJSValue::from_ffi(self.raw, qjs::JS_NewError(self.raw)) }
+    }
 }
