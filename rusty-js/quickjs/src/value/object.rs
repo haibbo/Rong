@@ -62,7 +62,7 @@ impl<'ctx> JSObjectOps<'ctx> for QJSValue {
             qjs::JS_FreeAtom(self.ctx, atom);
             v
         };
-        if unsafe { qjs::QJS_IsException(self.ctx, v) > 0 } {
+        if unsafe { qjs::QJS_IsUndefined(self.ctx, v) != 0 } {
             None
         } else {
             Some(QJSValue::from_ffi(key.ctx, v))

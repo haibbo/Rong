@@ -128,7 +128,7 @@ where
         let key = k.into().into_key(self.as_ctx());
         self.as_inner()
             .get_property(key)
-            .map(|value| T::from_js(JSValue::new(self.0.ctx, value)))
-            .ok_or_else(|| String::from("Property not found"))? // TODO: use format!
+            .ok_or_else(|| String::from("Property not found")) // check existence firstly
+            .and_then(|value| T::from_js(JSValue::new(self.0.ctx, value)))
     }
 }
