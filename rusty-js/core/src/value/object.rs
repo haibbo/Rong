@@ -16,6 +16,19 @@ where
     }
 }
 
+impl<'ctx, V> FromJSValue<'ctx, V> for JSObject<'ctx, V>
+where
+    V: JSTypeOf,
+{
+    fn from_js(value: JSValue<'ctx, V>) -> Result<Self, String> {
+        if value.is_object().is_some() {
+            Ok(value.into())
+        } else {
+            Err("not an object".to_string())
+        }
+    }
+}
+
 impl<'ctx, V: JSValueImpl> Deref for JSObject<'ctx, V> {
     type Target = JSValue<'ctx, V>;
     fn deref(&self) -> &Self::Target {
