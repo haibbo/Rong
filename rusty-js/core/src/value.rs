@@ -92,21 +92,21 @@ impl<'ctx, V: JSTypeOf> JSValue<'ctx, V> {
     }
 }
 
-impl<V> JSValueInto<()> for JSValue<'_, V>
+impl<'ctx, V> FromJSValue<'ctx, V> for ()
 where
-    V: JSValueImpl,
+    V: JSValueConversion,
 {
-    fn js_into(self) -> Result<(), String> {
+    fn from_js(_v: JSValue<'ctx, V>) -> Result<(), String> {
         Ok(())
     }
 }
 
-impl<'ctx, V> JSValueInto<JSValue<'ctx, V>> for JSValue<'ctx, V>
+impl<'ctx, V> FromJSValue<'ctx, V> for JSValue<'ctx, V>
 where
     V: JSValueImpl,
 {
-    fn js_into(self) -> Result<JSValue<'ctx, V>, String> {
-        Ok(self)
+    fn from_js(value: JSValue<'ctx, V>) -> Result<JSValue<'ctx, V>, String> {
+        Ok(value)
     }
 }
 
@@ -162,19 +162,19 @@ macro_rules! impl_js_converter {
 
 /// help implement JSValueInto for primitive type
 /// it consumes the ownship
-macro_rules! impl_jsvalue_into {
-    ($($ty: ty),*) => {
+macro_rules! impl_from_jsvalue {
+    ($($ty:ty),*) => {
         $(
-            impl<V> JSValueInto<$ty> for JSValue<'_, V>
+            impl<'ctx, V> FromJSValue<'ctx, V> for $ty
             where
                 V: JSValueConversion,
             {
-                fn js_into(self) -> Result<$ty,String> {
-                    self.inner.try_into()
+                fn from_js(value: JSValue<'ctx, V>) -> Result<Self, String> {
+                    value.inner.try_into()
                 }
             }
         )*
     };
 }
 
-impl_jsvalue_into!(bool, i32, u32, i64, u64, f64, String);
+impl_from_jsvalue!(bool, i32, u32, i64, u64, f64, String);

@@ -42,10 +42,8 @@ impl<T> JSValueConversion for T where
 {
 }
 
-pub trait JSValueInto<T> {
-    fn js_into(self) -> Result<T, String>;
-}
-
+/// FromJSValue trait for converting JSValue to native Rust types
+/// Follow Rust's From/Into pattern for consistent type conversion
 pub trait FromJSValue<'ctx, V>: Sized
 where
     V: JSValueImpl,
@@ -53,13 +51,17 @@ where
     fn from_js(value: JSValue<'ctx, V>) -> Result<Self, String>;
 }
 
-impl<'a, V, T> FromJSValue<'a, V> for T
+pub trait JSValueInto<T> {
+    fn js_into(self) -> Result<T, String>;
+}
+
+// Implement automatic JSValueInto derivation from FromJSValue
+impl<'ctx, V, T> JSValueInto<T> for JSValue<'ctx, V>
 where
-    JSValue<'a, V>: JSValueInto<T>,
     V: JSValueImpl,
-    V::Context: 'a,
+    T: FromJSValue<'ctx, V>,
 {
-    fn from_js(value: JSValue<'a, V>) -> Result<Self, String> {
-        value.js_into()
+    fn js_into(self) -> Result<T, String> {
+        T::from_js(self)
     }
 }
