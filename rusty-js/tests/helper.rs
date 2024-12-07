@@ -12,3 +12,10 @@ macro_rules! assert_some {
         assert!($expr.is_some())
     };
 }
+
+#[macro_export]
+macro_rules! assert_none {
+    ($expr:expr) => {
+        assert!($expr.is_none())
+    };
+}

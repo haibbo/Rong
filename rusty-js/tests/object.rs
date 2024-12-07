@@ -2,7 +2,7 @@ mod helper;
 use helper::*;
 
 #[test]
-fn test_object() {
+fn basic() {
     run(|ctx| {
         let v = 3;
         let key = "key";
@@ -30,4 +30,40 @@ fn test_object() {
         assert!(obj.set("obj", objv));
         assert!(obj.has("obj"));
     });
+}
+
+#[test]
+fn from_javascript() {
+    run(|ctx| {
+        let obj: JSObject = ctx
+            .eval(
+                r#"
+                let a3 = [];
+                a3[1] = "foo";
+                ({
+                    a1: [0,,2,,5],
+                    a2: [0,"michael",{},undefined,5],
+                    a3: a3,
+                    func1: () => 1,
+                    func2: function(){ return "bar"},
+                    obj1: {
+                        a: 1,
+                        b: "foo",
+                    },
+                })
+                "#,
+            )
+            .unwrap();
+        assert_some!(obj.get::<_, JSObject>("a1").unwrap().is_array());
+        assert_some!(obj.get::<_, JSObject>("a2").unwrap().is_array());
+        assert_some!(obj.get::<_, JSObject>("a3").unwrap().is_array());
+        assert_some!(obj.get::<_, JSObject>("func1").unwrap().is_function());
+        assert_some!(obj.get::<_, JSObject>("func2").unwrap().is_function());
+        assert_none!(obj.get::<_, JSObject>("obj1").unwrap().is_function());
+        assert_none!(obj.get::<_, JSObject>("obj1").unwrap().is_array());
+
+        let result: Result<String, String> = obj.get("None");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Property not found");
+    })
 }
