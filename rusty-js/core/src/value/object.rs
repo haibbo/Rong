@@ -1,5 +1,6 @@
-use crate::{JSContext, JSTypeOf, JSValue, JSValueConversion, JSValueImpl};
+use crate::{FromJSValue, JSContext, JSTypeOf, JSValue, JSValueConversion, JSValueImpl};
 use std::ops::Deref;
+use std::string::String;
 
 mod property;
 pub use property::{IntoPropertyValue, PropertyKey};
@@ -106,13 +107,15 @@ where
         self.as_inner().has_property(key)
     }
 
-    pub fn get<K>(&self, k: K) -> Option<JSValue<'ctx, V>>
+    pub fn get<K, T>(&self, k: K) -> Result<T, String>
     where
         K: Into<PropertyKey<'ctx>>,
+        T: FromJSValue<'ctx, V>,
     {
         let key = k.into().into_key(self.as_ctx());
         self.as_inner()
             .get_property(key)
-            .map(|value| JSValue::new(self.0.ctx, value))
+            .map(|value| T::from_js(JSValue::new(self.0.ctx, value)))
+            .ok_or_else(|| String::from("Property not found"))? // TODO: use format!
     }
 }

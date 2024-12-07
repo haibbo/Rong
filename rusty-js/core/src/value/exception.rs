@@ -68,14 +68,14 @@ where
     ///
     /// Same as retrieving `error.message` in JavaScript.
     pub fn message(&self) -> Option<String> {
-        self.get("message")?.js_into().ok()
+        self.get("message").ok()
     }
 
     /// Returns the stack of the error.
     ///
     /// Same as retrieving `error.stack` in JavaScript.
     pub fn stack(&self) -> Option<String> {
-        self.get("stack")?.js_into().ok()
+        self.get("stack").ok()
     }
 }
 
