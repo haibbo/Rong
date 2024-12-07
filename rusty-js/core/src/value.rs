@@ -1,4 +1,5 @@
 use crate::{JSContext, JSContextImpl};
+use std::string::String;
 
 mod convert;
 pub use convert::*;
@@ -72,15 +73,6 @@ where
         JSValue::new(ctx, value)
     }
 
-    /// Converts a `JSValue` into a Rust value.
-    pub fn try_into<T>(self) -> Result<T, String>
-    where
-        V: TryInto<T, Error = String>,
-        T: Default,
-    {
-        self.inner.try_into()
-    }
-
     /// create JS UNDEFINED Value
     pub fn undefined(ctx: &'ctx JSContext<V::Context>) -> Self
     where
@@ -97,6 +89,24 @@ impl<'ctx, V: JSTypeOf> JSValue<'ctx, V> {
             // it's safe, because JSObject is just wrapper of JSValue
             unsafe { std::mem::transmute(self) }
         })
+    }
+}
+
+impl<V> JSValueInto<()> for JSValue<'_, V>
+where
+    V: JSValueImpl,
+{
+    fn js_into(self) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+impl<'ctx, V> JSValueInto<JSValue<'ctx, V>> for JSValue<'ctx, V>
+where
+    V: JSValueImpl,
+{
+    fn js_into(self) -> Result<JSValue<'ctx, V>, String> {
+        Ok(self)
     }
 }
 
@@ -149,3 +159,22 @@ macro_rules! impl_js_converter {
         impl_js_converter!($target, $type, $type, $create_fn, $to_fn);
     };
 }
+
+/// help implement JSValueInto for primitive type
+/// it consumes the ownship
+macro_rules! impl_jsvalue_into {
+    ($($ty: ty),*) => {
+        $(
+            impl<V> JSValueInto<$ty> for JSValue<'_, V>
+            where
+                V: JSValueConversion,
+            {
+                fn js_into(self) -> Result<$ty,String> {
+                    self.inner.try_into()
+                }
+            }
+        )*
+    };
+}
+
+impl_jsvalue_into!(bool, i32, u32, i64, u64, f64, String);

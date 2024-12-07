@@ -13,23 +13,17 @@ fn test_object() {
         assert!(obj.has(key));
 
         let val = obj.get(key).unwrap();
-        assert_eq!(val.try_into::<i32>().unwrap(), v);
+        assert_eq!(i32::from_js(val).unwrap(), v);
 
         obj.del(key);
         assert!(!obj.has(key));
 
         let value = JSValue::from(ctx, v);
         assert!(obj.set(key, value.clone()));
-        assert_eq!(
-            obj.get(key).and_then(|i| i.try_into::<i32>().ok()).unwrap(),
-            v
-        );
+        assert_eq!(obj.get(key).and_then(|v| i32::from_js(v).ok()).unwrap(), v);
 
         assert!(obj.set(9, value.clone()));
-        assert_eq!(
-            obj.get(9).and_then(|i| i.try_into::<i32>().ok()).unwrap(),
-            v
-        );
+        assert_eq!(obj.get(9).and_then(|v| i32::from_js(v).ok()).unwrap(), v);
 
         let objv = JSObject::new(ctx);
         assert!(obj.set("obj", objv));

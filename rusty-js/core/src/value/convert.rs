@@ -1,4 +1,4 @@
-use crate::JSValueImpl;
+use super::{JSValue, JSValueImpl};
 
 // help trait contains conversion trait bound
 pub trait JSValueConversion:
@@ -11,7 +11,6 @@ pub trait JSValueConversion:
     + for<'a> From<(&'a Self::Context, u64)>
     + for<'a> From<(&'a Self::Context, f64)>
     + for<'a> From<(&'a Self::Context, &'a str)>
-    + TryInto<(), Error = String>
     + TryInto<bool, Error = String>
     + TryInto<i32, Error = String>
     + TryInto<u32, Error = String>
@@ -33,7 +32,6 @@ impl<T> JSValueConversion for T where
         + for<'a> From<(&'a T::Context, u64)>
         + for<'a> From<(&'a T::Context, f64)>
         + for<'a> From<(&'a T::Context, &'a str)>
-        + TryInto<(), Error = String>
         + TryInto<bool, Error = String>
         + TryInto<i32, Error = String>
         + TryInto<u32, Error = String>
@@ -42,4 +40,26 @@ impl<T> JSValueConversion for T where
         + TryInto<f64, Error = String>
         + TryInto<String, Error = String>
 {
+}
+
+pub trait JSValueInto<T> {
+    fn js_into(self) -> Result<T, String>;
+}
+
+pub trait FromJSValue<'ctx, V>: Sized
+where
+    V: JSValueImpl,
+{
+    fn from_js(value: JSValue<'ctx, V>) -> Result<Self, String>;
+}
+
+impl<'a, V, T> FromJSValue<'a, V> for T
+where
+    JSValue<'a, V>: JSValueInto<T>,
+    V: JSValueImpl,
+    V::Context: 'a,
+{
+    fn from_js(value: JSValue<'a, V>) -> Result<Self, String> {
+        value.js_into()
+    }
 }

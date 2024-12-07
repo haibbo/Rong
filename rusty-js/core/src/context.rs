@@ -1,4 +1,4 @@
-use crate::{JSObject, JSObjectOps, JSRuntime, JSRuntimeImpl, JSValue, JSValueImpl};
+use crate::{JSObject, JSObjectOps, JSRuntime, JSRuntimeImpl, JSValue, JSValueImpl, JSValueInto};
 
 pub trait JSContextImpl {
     type RawContext: Copy;
@@ -47,17 +47,17 @@ where
     /// eval javascript
     pub fn eval<'a, T>(&'a self, source: impl AsRef<str>) -> Result<T, String>
     where
-        T: Default,
-        C::Value: TryInto<T, Error = String>,
         C::Value: JSObjectOps<'a>,
+        JSValue<'a, C::Value>: JSValueInto<T>,
     {
         let raw = self.inner.eval(source);
         let result = JSValue::new(self, raw);
 
-        result
-            .is_exception()
-            .map(|e| Err(e.into_error().to_string()))
-            .unwrap_or_else(|| result.try_into())
+        if let Some(ex) = result.is_exception() {
+            Err(ex.into_error().to_string())
+        } else {
+            result.js_into()
+        }
     }
 
     /// get global object

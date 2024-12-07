@@ -56,15 +56,17 @@ impl JSValueImpl for QJSValue {
     }
 }
 
-impl_js_converter!(
-    QJSValue,
-    (),
-    |ctx, _value| qjs::QJS_NewUndefined(ctx),
-    |_ctx, _value, result: *mut ()| {
-        *result = ();
-        0
+impl<T> From<(&T, ())> for QJSValue
+where
+    T: JSContextImpl<RawContext = <QJSValue as JSRawContext>::RawContext>,
+    QJSValue: JSValueImpl<Context = T>,
+{
+    fn from(t: (&T, ())) -> Self {
+        let ctx = *t.0.as_raw();
+        let raw = unsafe { qjs::QJS_NewUndefined(ctx) };
+        Self::from_ffi(ctx, raw)
     }
-);
+}
 
 impl_js_converter!(
     QJSValue,

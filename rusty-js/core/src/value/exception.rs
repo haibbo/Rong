@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextImpl, JSObject, JSObjectOps, JSValue, JSValueImpl};
+use crate::{JSContext, JSContextImpl, JSObject, JSObjectOps, JSValue, JSValueImpl, JSValueInto};
 use std::fmt;
 use std::ops::Deref;
 
@@ -45,12 +45,11 @@ impl<'ctx, V: JSObjectOps<'ctx>> fmt::Debug for JSException<'ctx, V> {
 impl<'ctx, V> JSException<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
-    V: TryInto<String, Error = String>,
 {
     pub fn into_error(self) -> JSErrorInfo {
         self.is_error().map_or_else(
             || JSErrorInfo {
-                message: Some(self.clone().try_into().unwrap()),
+                message: Some(self.clone().js_into().unwrap()),
                 stack: None,
             },
             |_| JSErrorInfo {
@@ -69,14 +68,14 @@ where
     ///
     /// Same as retrieving `error.message` in JavaScript.
     pub fn message(&self) -> Option<String> {
-        self.get("message")?.try_into().ok()
+        self.get("message")?.js_into().ok()
     }
 
     /// Returns the stack of the error.
     ///
     /// Same as retrieving `error.stack` in JavaScript.
     pub fn stack(&self) -> Option<String> {
-        self.get("stack")?.try_into().ok()
+        self.get("stack")?.js_into().ok()
     }
 }
 
