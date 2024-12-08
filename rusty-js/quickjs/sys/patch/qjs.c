@@ -57,7 +57,6 @@ JSValue QJS_CreateClass(JSContext *ctx, const char *class_name, JSCFunction *con
     // set constructor.prototype
     JS_SetClassProto(ctx, class_id, prototype);
 
-    JS_FreeValue(ctx, prototype);
     return constructor;
 }
 

@@ -173,7 +173,6 @@ int main(int argc, char **argv) {
 
     JSValue global_obj=JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global_obj, "Rectangle", constructor);
-    JS_FreeValue(ctx,constructor);
     JS_FreeValue(ctx,global_obj);
 
     const char *script =
@@ -188,7 +187,7 @@ int main(int argc, char **argv) {
       "console.log('StaticValue: ', Rectangle.staticValue);\n"
       "Rectangle.staticMethod();\n";
 
-    JSValue result=QJS_RunScript(ctx, script, strlen(script));
+    JSValue result=JS_Eval(ctx, script, strlen(script), "eval", 0);
     if (JS_IsException(result)) {
         JSValue exception = JS_GetException(ctx);
         const char *error = JS_ToCString(ctx, exception);
