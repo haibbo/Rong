@@ -33,15 +33,6 @@ where
     }
 }
 
-impl<'ctx, V: JSObjectOps<'ctx>> fmt::Debug for JSException<'ctx, V> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Exception")
-            .field("message", &self.message())
-            .field("stack", &self.stack())
-            .finish()
-    }
-}
-
 impl<'ctx, V> JSException<'ctx, V>
 where
     V: JSObjectOps<'ctx>,
@@ -137,5 +128,29 @@ where
     pub fn throw_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.inner.throw_error(message);
         JSValue::new(self, raw)
+    }
+}
+
+impl<'ctx, V: JSObjectOps<'ctx>> fmt::Debug for JSException<'ctx, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Exception")
+            .field("message", &self.message())
+            .field("stack", &self.stack())
+            .finish()
+    }
+}
+
+impl<'ctx, V: JSObjectOps<'ctx>> fmt::Display for JSException<'ctx, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        "Error:".fmt(f)?;
+        if let Some(message) = &self.message() {
+            ' '.fmt(f)?;
+            message.fmt(f)?;
+        }
+        if let Some(stack) = &self.stack() {
+            '\n'.fmt(f)?;
+            stack.fmt(f)?;
+        }
+        Ok(())
     }
 }
