@@ -6,8 +6,8 @@ mod object;
 mod valuetype;
 
 pub struct QJSValue {
-    pub(crate) value: qjs::JSValue,
-    pub(crate) ctx: *mut qjs::JSContext,
+    value: qjs::JSValue,
+    ctx: *mut qjs::JSContext,
 }
 
 impl Clone for QJSValue {
@@ -45,6 +45,12 @@ impl JSValueImpl for QJSValue {
             value: value_raw,
             ctx: ctx_raw,
         }
+    }
+
+    fn into_raw_value(self) -> Self::RawValue {
+        let value = self.value;
+        std::mem::forget(self); // forbiden triggering drop
+        value
     }
 
     fn as_raw_value(&self) -> &Self::RawValue {

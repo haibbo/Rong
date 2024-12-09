@@ -45,9 +45,9 @@ impl<'ctx> JSObjectOps<'ctx> for QJSValue {
     }
 
     fn set_property(&self, key: Self, value: Self) -> bool {
+        let kv = value.into_raw_value();
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
-            let kv = qjs::JS_DupValue(self.ctx, value.value);
             let v = qjs::JS_SetProperty(self.ctx, self.value, atom, kv);
             qjs::JS_FreeAtom(self.ctx, atom);
             v

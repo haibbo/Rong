@@ -25,6 +25,11 @@ pub trait JSValueImpl: Clone {
         ctx_raw: <Self::Context as JSContextImpl>::RawContext,
         value_raw: Self::RawValue,
     ) -> Self;
+
+    /// Consumes the ownship and returns the raw JSValue without triggering drop.
+    /// It's desigend to transfer ownship to FFI
+    fn into_raw_value(self) -> Self::RawValue;
+
     fn as_raw_value(&self) -> &Self::RawValue;
     fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext;
 }
