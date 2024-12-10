@@ -28,6 +28,10 @@ impl<C: JSContextImpl> JSContext<C> {
     pub fn as_raw(&self) -> &C::RawContext {
         self.inner.as_raw()
     }
+
+    pub fn as_inner(&self) -> &C {
+        &self.inner
+    }
 }
 
 pub trait JSCodeRunner: JSContextImpl {

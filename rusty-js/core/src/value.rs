@@ -60,6 +60,10 @@ where
         &self.inner
     }
 
+    pub(crate) fn into_inner(self) -> V {
+        self.inner
+    }
+
     pub(crate) fn as_ctx(&self) -> &'ctx JSContext<V::Context> {
         self.ctx
     }
@@ -115,12 +119,12 @@ where
     }
 }
 
-impl<'ctx, V> IntoPropertyValue<'ctx, V> for JSValue<'ctx, V>
+impl<V> ToJSValue<V> for JSValue<'_, V>
 where
     V: JSValueImpl,
 {
-    fn into_kv(self, _ctx: &'ctx JSContext<V::Context>) -> V {
-        self.inner
+    fn to_js_value(self, _ctx: &V::Context) -> V {
+        self.into_inner()
     }
 }
 
@@ -183,3 +187,22 @@ macro_rules! impl_from_jsvalue {
 }
 
 impl_from_jsvalue!(bool, i32, u32, i64, u64, f64, String);
+
+/// help implement IntoJSValueInto for primitive type
+/// it consumes the ownship
+macro_rules! impl_to_js_value {
+    ($($ty:ty),*) => {
+        $(
+            impl<V> ToJSValue<V> for $ty
+            where
+                V: JSValueConversion
+            {
+                fn to_js_value(self, ctx: &V::Context) -> V{
+                    V::from((ctx, self))
+                }
+            }
+        )*
+    };
+}
+
+impl_to_js_value!(bool, i32, u32, i64, u64, f64, &str);

@@ -65,3 +65,10 @@ where
         T::from_js(self)
     }
 }
+
+pub trait ToJSValue<V>
+where
+    V: JSValueImpl,
+{
+    fn to_js_value(self, ctx: &V::Context) -> V;
+}

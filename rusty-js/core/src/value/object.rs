@@ -3,7 +3,9 @@ use std::ops::Deref;
 use std::string::String;
 
 mod property;
-pub use property::{IntoPropertyValue, PropertyKey};
+pub use property::PropertyKey;
+
+use super::ToJSValue;
 
 pub struct JSObject<'ctx, V: JSValueImpl>(JSValue<'ctx, V>);
 
@@ -36,12 +38,12 @@ impl<'ctx, V: JSValueImpl> Deref for JSObject<'ctx, V> {
     }
 }
 
-impl<'ctx, V> IntoPropertyValue<'ctx, V> for JSObject<'ctx, V>
+impl<V> ToJSValue<V> for JSObject<'_, V>
 where
     V: JSValueImpl,
 {
-    fn into_kv(self, _ctx: &'ctx JSContext<V::Context>) -> V {
-        self.0.inner
+    fn to_js_value(self, _ctx: &V::Context) -> V {
+        self.0.into_inner()
     }
 }
 
@@ -98,10 +100,11 @@ where
     pub fn set<K, KV>(&self, k: K, kv: KV) -> bool
     where
         K: Into<PropertyKey<'ctx>>,
-        KV: IntoPropertyValue<'ctx, V>,
+        KV: ToJSValue<V>,
     {
         let key = k.into().into_key(self.as_ctx());
-        self.as_inner().set_property(key, kv.into_kv(self.0.ctx))
+        self.as_inner()
+            .set_property(key, kv.to_js_value(self.as_ctx().as_inner()))
     }
 
     pub fn del<K>(&self, k: K) -> bool
