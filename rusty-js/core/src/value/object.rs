@@ -22,7 +22,7 @@ impl<'ctx, V> FromJSValue<'ctx, V> for JSObject<'ctx, V>
 where
     V: JSTypeOf,
 {
-    fn from_js(value: JSValue<'ctx, V>) -> Result<Self, String> {
+    fn from_js_value(value: JSValue<'ctx, V>) -> Result<Self, String> {
         if value.is_object().is_some() {
             Ok(value.into())
         } else {
@@ -132,6 +132,6 @@ where
         self.as_inner()
             .get_property(key)
             .ok_or_else(|| String::from("Property not found")) // check existence firstly
-            .and_then(|value| T::from_js(JSValue::new(self.0.ctx, value)))
+            .and_then(|value| T::from_js_value(JSValue::new(self.0.ctx, value)))
     }
 }

@@ -48,21 +48,21 @@ pub trait FromJSValue<'ctx, V>: Sized
 where
     V: JSValueImpl,
 {
-    fn from_js(value: JSValue<'ctx, V>) -> Result<Self, String>;
+    fn from_js_value(value: JSValue<'ctx, V>) -> Result<Self, String>;
 }
 
-pub trait JSValueInto<T> {
-    fn js_into(self) -> Result<T, String>;
+pub trait JSValueTo<T> {
+    fn to_host(self) -> Result<T, String>;
 }
 
 // Implement automatic JSValueInto derivation from FromJSValue
-impl<'ctx, V, T> JSValueInto<T> for JSValue<'ctx, V>
+impl<'ctx, V, T> JSValueTo<T> for JSValue<'ctx, V>
 where
     V: JSValueImpl,
     T: FromJSValue<'ctx, V>,
 {
-    fn js_into(self) -> Result<T, String> {
-        T::from_js(self)
+    fn to_host(self) -> Result<T, String> {
+        T::from_js_value(self)
     }
 }
 

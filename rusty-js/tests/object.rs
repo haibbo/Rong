@@ -13,7 +13,7 @@ fn basic() {
         assert!(obj.has(key));
 
         let val = obj.get(key).unwrap();
-        assert_eq!(i32::from_js(val).unwrap(), v);
+        assert_eq!(i32::from_js_value(val).unwrap(), v);
 
         obj.del(key);
         assert!(!obj.has(key));

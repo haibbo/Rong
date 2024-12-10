@@ -105,7 +105,7 @@ impl<'ctx, V> FromJSValue<'ctx, V> for ()
 where
     V: JSValueConversion,
 {
-    fn from_js(_v: JSValue<'ctx, V>) -> Result<(), String> {
+    fn from_js_value(_v: JSValue<'ctx, V>) -> Result<(), String> {
         Ok(())
     }
 }
@@ -114,7 +114,7 @@ impl<'ctx, V> FromJSValue<'ctx, V> for JSValue<'ctx, V>
 where
     V: JSValueImpl,
 {
-    fn from_js(value: JSValue<'ctx, V>) -> Result<JSValue<'ctx, V>, String> {
+    fn from_js_value(value: JSValue<'ctx, V>) -> Result<JSValue<'ctx, V>, String> {
         Ok(value)
     }
 }
@@ -178,7 +178,7 @@ macro_rules! impl_from_jsvalue {
             where
                 V: JSValueConversion,
             {
-                fn from_js(value: JSValue<'ctx, V>) -> Result<Self, String> {
+                fn from_js_value(value: JSValue<'ctx, V>) -> Result<Self, String> {
                     value.inner.try_into()
                 }
             }

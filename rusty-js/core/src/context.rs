@@ -60,7 +60,7 @@ where
         if let Some(ex) = result.is_exception() {
             Err(ex.into_error().to_string())
         } else {
-            T::from_js(result)
+            T::from_js_value(result)
         }
     }
 

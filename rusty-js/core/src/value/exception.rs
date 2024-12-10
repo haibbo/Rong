@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextImpl, JSObject, JSObjectOps, JSValue, JSValueImpl, JSValueInto};
+use crate::{JSContext, JSContextImpl, JSObject, JSObjectOps, JSValue, JSValueImpl, JSValueTo};
 use std::fmt;
 use std::ops::Deref;
 
@@ -40,7 +40,7 @@ where
     pub fn into_error(self) -> JSErrorInfo {
         self.is_error().map_or_else(
             || JSErrorInfo {
-                message: Some(self.clone().js_into().unwrap()),
+                message: Some(self.clone().to_host().unwrap()),
                 stack: None,
             },
             |_| JSErrorInfo {
