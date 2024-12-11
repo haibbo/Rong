@@ -1,4 +1,4 @@
-use crate::{FromJSValue, JSContext, JSTypeOf, JSValue, JSValueConversion, JSValueImpl};
+use crate::{FromJSValue, JSContext, JSFunc, JSTypeOf, JSValue, JSValueConversion, JSValueImpl};
 use std::ops::Deref;
 use std::string::String;
 
@@ -53,7 +53,6 @@ pub trait JSObjectOps<'ctx>: JSValueConversion + JSTypeOf {
 
     /// if failed, it needs to return EXCEPTION
     /// constructor represents JS Class
-    /// TODO: change constructor's type TO JSFunc
     fn make_object<T>(ctx: &'ctx Self::Context, constructor: Self, data: *mut T) -> Self;
 
     /// get private data saved in object by make_object
@@ -89,10 +88,10 @@ where
     /// new object instance of Class with private data
     pub fn make<T>(
         ctx: &'ctx JSContext<V::Context>,
-        construct: JSValue<'ctx, V>,
+        construct: JSFunc<'ctx, V>,
         opaque: *mut T,
     ) -> Self {
-        let value = V::make_object(&ctx.inner, construct.inner, opaque);
+        let value = V::make_object(&ctx.inner, construct.into_inner(), opaque);
         Self(JSValue::new(ctx, value))
     }
 
