@@ -1,4 +1,4 @@
-use crate::{JSObject, JSObjectOps, JSValueImpl};
+use crate::{JSObject, JSValueImpl};
 use std::ops::Deref;
 
 pub struct JSFunc<'ctx, V: JSValueImpl>(JSObject<'ctx, V>);
@@ -12,7 +12,7 @@ impl<'ctx, V: JSValueImpl> Deref for JSFunc<'ctx, V> {
 
 impl<'ctx, V> JSFunc<'ctx, V>
 where
-    V: JSObjectOps<'ctx>,
+    V: JSValueImpl,
 {
     pub(crate) fn into_inner(self) -> V {
         self.0.into_inner()
