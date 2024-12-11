@@ -13,6 +13,9 @@ pub use valuetype::{JSTypeOf, ValueType};
 mod object;
 pub use object::*;
 
+mod function;
+pub use function::*;
+
 pub trait JSValueImpl: Clone {
     /// Raw JavaScript value type, e.g. qjs::JSValue
     type RawValue: Copy;

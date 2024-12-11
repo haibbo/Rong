@@ -91,6 +91,11 @@ where
     pub fn get_opaque<T>(&self) -> *mut T {
         self.as_inner().get_opaque()
     }
+
+    /// into inner JS Value implementing JSValueImpl
+    pub(crate) fn into_inner(self) -> V {
+        self.0.into_inner()
+    }
 }
 
 impl<'ctx, V> JSObject<'ctx, V>
