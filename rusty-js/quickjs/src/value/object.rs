@@ -1,6 +1,6 @@
 use crate::qjs;
 use crate::QJSValue;
-use rusty_js_core::{JSContextImpl, JSObjectOps, JSValueImpl};
+use rusty_js_core::{JSContextImpl, JSObjectOps, JSValueImpl, PropertyAttributes};
 
 impl<'ctx> JSObjectOps<'ctx> for QJSValue {
     fn new_object(ctx: &'ctx Self::Context) -> Self {
@@ -68,4 +68,61 @@ impl<'ctx> JSObjectOps<'ctx> for QJSValue {
             Some(QJSValue::from_ffi(key.ctx, v))
         }
     }
+
+    fn define_property(
+        &self,
+        key: Self,
+        value: Self,
+        getter: Self,
+        setter: Self,
+        attributes: PropertyAttributes,
+    ) -> bool {
+        let getter = getter.into_raw_value();
+        let setter = setter.into_raw_value();
+        let value = value.into_raw_value();
+
+        let v = unsafe {
+            let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
+            let v = qjs::JS_DefineProperty(
+                self.ctx,
+                self.value,
+                atom,
+                value,
+                getter,
+                setter,
+                to_flags(attributes),
+            );
+            qjs::JS_FreeAtom(self.ctx, atom);
+            v
+        };
+        v != 0
+    }
+}
+
+fn to_flags(attr: PropertyAttributes) -> i32 {
+    let mut flags = 0;
+
+    if attr.has_value() {
+        flags |= qjs::JS_PROP_HAS_VALUE;
+    }
+
+    if attr.has_get() {
+        flags |= qjs::JS_PROP_HAS_GET;
+    }
+    if attr.has_set() {
+        flags |= qjs::JS_PROP_HAS_SET;
+    }
+
+    if attr.is_writable() {
+        flags |= qjs::JS_PROP_HAS_WRITABLE;
+    }
+
+    if attr.is_enumerable() {
+        flags |= qjs::JS_PROP_ENUMERABLE;
+    }
+
+    if attr.is_configurable() {
+        flags |= qjs::JS_PROP_CONFIGURABLE;
+    }
+    flags as _
 }
