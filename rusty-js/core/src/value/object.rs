@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::string::String;
 
 mod property;
-pub use property::PropertyKey;
+pub use property::{PropertyAttributes, PropertyKey};
 
 use super::ToJSValue;
 
@@ -62,6 +62,15 @@ pub trait JSObjectOps<'ctx>: JSValueConversion + JSTypeOf {
     fn del_property(&self, key: Self) -> bool;
     fn has_property(&self, key: Self) -> bool;
     fn set_property(&self, key: Self, value: Self) -> bool;
+
+    fn define_property(
+        &self,
+        key: Self,
+        value: Self,
+        getter: Self,
+        setter: Self,
+        attributes: PropertyAttributes,
+    ) -> bool;
 
     /// if failed, it needs to return EXCEPTION
     fn get_property(&self, key: Self) -> Option<Self>;
