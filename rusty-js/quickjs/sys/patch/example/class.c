@@ -51,8 +51,8 @@ static JSValue create_rectangle(JSContext *ctx, JSValue new_target, int argc, JS
         return JS_UNDEFINED;
     }
 
-    printf("Rectangle called as constructor!\n");
-        if (argc < 2 || !JS_IsNumber(argv[0]) || !JS_IsNumber(argv[1])) {
+    printf("Rectangle called as constructor!\n"); // type of new_target is constructor
+    if (argc < 2 || !JS_IsNumber(argv[0]) || !JS_IsNumber(argv[1])) {
         return JS_ThrowTypeError(ctx, "Expected two numbers");
     }
 
@@ -160,6 +160,30 @@ static void js_add_console(JSContext *ctx)
     // don't free console here
 }
 
+JSValue call_object_as_func(JSContext *ctx, JSValue func_obj,
+                            JSValue this_val, int argc, JSValue *argv,
+                            int flags) {
+
+        const char *str;
+        printf("rectangle instance called as function!\n");
+
+        if (JS_IsUndefined(this_val)) {
+            printf("This object is undefined!\n");
+        }
+
+        JSValue val=JS_GetPropertyStr(ctx, func_obj, "name");
+        str = JS_ToCString(ctx, val);
+        printf("%s\n", str);
+        JS_FreeCString(ctx, str);
+
+        int class_id=JS_GetClassID(func_obj);
+        printf("Class ID of func obj: %d\n", class_id);
+
+        printf("argc=%d\n", argc);
+        return JS_UNDEFINED;
+}
+
+
 int main(int argc, char **argv) {
     JSRuntime *rt;
     JSContext *ctx;
@@ -168,7 +192,7 @@ int main(int argc, char **argv) {
     ctx = JS_NewContext(rt);
     js_add_console(ctx);
 
-    JSValue constructor=QJS_CreateClass(ctx, "Rectangle", create_rectangle,NULL, generic_finalizer);
+    JSValue constructor=QJS_CreateClass(ctx, "Rectangle", create_rectangle,call_object_as_func, generic_finalizer);
     setupClass(ctx, constructor) ;
 
     JSValue global_obj=JS_GetGlobalObject(ctx);
@@ -183,6 +207,8 @@ int main(int argc, char **argv) {
       "Rectangle();\n"
       "rect.width=16;\n"
       "console.log('Area: ', rect.area());\n"
+      "rect.name='rect', rect(1,2,3,4)\n"
+      "console.log('Type of rect instance: ', typeof rect);\n"
       "rect=null;\n"
       "console.log('StaticValue: ', Rectangle.staticValue);\n"
       "Rectangle.staticMethod();\n";

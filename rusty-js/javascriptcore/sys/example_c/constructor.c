@@ -3,6 +3,15 @@
 
 //#define FORCE_SET_PROTOTYPE_TO_CONSTUCTOR
 
+// Finalizer for cleaning up CustomDate instances
+// static void CustomDateFinalize(JSObjectRef object) {
+//     CustomDate *date = (CustomDate *)JSObjectGetPrivate(object);
+//     if (date) {
+//         free(date);
+//     }
+// }
+
+
 // 定义一个构造函数
 static JSObjectRef RectangleConstructor(JSContextRef ctx, JSObjectRef constructor, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception) {
     // 创建一个空的对象作为实例
@@ -10,7 +19,7 @@ static JSObjectRef RectangleConstructor(JSContextRef ctx, JSObjectRef constructo
 
     JSClassRef rectangleClass = JSObjectGetPrivate(constructor);
     JSObjectRef instance = JSObjectMake(ctx, rectangleClass, NULL);
-    // JSObjectSetPrivate(instance, customDate);
+    // JSObjectSetPrivate(instance, customData);
 
     // Set the prototype for the new object
     #ifdef FORCE_SET_PROTOTYPE_TO_CONSTUCTOR
@@ -92,6 +101,8 @@ int main() {
     classDef.className = "Rectangle";
     classDef.callAsConstructor = RectangleConstructor;  // callAsx must cowork with JSObjectMake not JSObjectMakeConstructor
     classDef.callAsFunction = RectangleCallAsFunction; // typeof Rectangle is function
+    // classDef.finalize =CustomDataFinalizer;
+
     JSClassRef rectangleClass = JSClassCreate(&classDef);
 
 
