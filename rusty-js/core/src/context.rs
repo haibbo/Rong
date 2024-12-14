@@ -25,11 +25,7 @@ impl<C: JSContextImpl> JSContext<C> {
         }
     }
 
-    pub fn as_raw(&self) -> &C::RawContext {
-        self.inner.as_raw()
-    }
-
-    pub fn as_inner(&self) -> &C {
+    pub(crate) fn as_ctx(&self) -> &C {
         &self.inner
     }
 }

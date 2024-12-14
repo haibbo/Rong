@@ -67,8 +67,8 @@ where
         self.inner
     }
 
-    pub(crate) fn as_ctx(&self) -> &'ctx JSContext<V::Context> {
-        self.ctx
+    pub(crate) fn as_ctx(&self) -> &'ctx V::Context {
+        self.ctx.as_ctx()
     }
 }
 
@@ -76,13 +76,22 @@ impl<'ctx, V> JSValue<'ctx, V>
 where
     V: JSValueImpl,
 {
-    /// Converts a Rust value into a `JSValue`.
+    /// Converts  Rust value into a `JSValue`.
     pub fn from<T>(ctx: &'ctx JSContext<V::Context>, val: T) -> Self
     where
         V: From<(&'ctx V::Context, T)>,
     {
         let value = V::from((&ctx.inner, val));
         JSValue::new(ctx, value)
+    }
+
+    /// Try to converts JSValue to Rust value
+    pub fn try_into<T>(self) -> Result<T, String>
+    where
+        V: TryInto<T, Error = String>,
+        T: Default,
+    {
+        self.inner.try_into()
     }
 
     /// create JS UNDEFINED Value
@@ -122,11 +131,11 @@ where
     }
 }
 
-impl<V> ToJSValue<V> for JSValue<'_, V>
+impl<V> IntoJSValue<'_, V> for JSValue<'_, V>
 where
     V: JSValueImpl,
 {
-    fn to_js_value(self, _ctx: &V::Context) -> V {
+    fn into_js_value(self, _ctx: &'_ V::Context) -> V {
         self.into_inner()
     }
 }
@@ -171,41 +180,3 @@ macro_rules! impl_js_converter {
         impl_js_converter!($target, $type, $type, $create_fn, $to_fn);
     };
 }
-
-/// help implement JSValueInto for primitive type
-/// it consumes the ownship
-macro_rules! impl_from_jsvalue {
-    ($($ty:ty),*) => {
-        $(
-            impl<'ctx, V> FromJSValue<'ctx, V> for $ty
-            where
-                V: JSValueConversion,
-            {
-                fn from_js_value(value: JSValue<'ctx, V>) -> Result<Self, String> {
-                    value.inner.try_into()
-                }
-            }
-        )*
-    };
-}
-
-impl_from_jsvalue!(bool, i32, u32, i64, u64, f64, String);
-
-/// help implement IntoJSValueInto for primitive type
-/// it consumes the ownship
-macro_rules! impl_to_js_value {
-    ($($ty:ty),*) => {
-        $(
-            impl<V> ToJSValue<V> for $ty
-            where
-                V: JSValueConversion
-            {
-                fn to_js_value(self, ctx: &V::Context) -> V{
-                    V::from((ctx, self))
-                }
-            }
-        )*
-    };
-}
-
-impl_to_js_value!(bool, i32, u32, i64, u64, f64, &str);

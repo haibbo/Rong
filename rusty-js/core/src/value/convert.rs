@@ -1,6 +1,23 @@
 use super::{JSValue, JSValueImpl};
 
-// help trait contains conversion trait bound
+/// The conversion between Rust primitive types, which implement the `JSCompatible`
+/// marker trait, and `JSValue` is facilitated using the standard `TryInto` and
+/// `From` traits.
+///
+/// The `impl_js_converter` macro simplifies the implementation of these conversions.
+///
+/// Since `TryInto` and `From` are implemented for local types like `QJSValue` in
+/// the `quickjs` crate, the orphan rule does not apply here.
+///
+/// We introduce `FromJSValue` and `IntoJSValue` traits for application-level use
+/// cases:
+/// - `FromJSValue` is particularly useful for returning generic types from operations
+///   such as `eval` and `JSObject.get`.
+/// - `IntoJSValue` allows `JSObject.set` to accept a wider range of types that
+///    can be converted into `JSValue`.
+///
+/// help trait contains conversion trait bound
+/// it help simplify trait boud for upper caller
 pub trait JSValueConversion:
     JSValueImpl
     + for<'a> From<(&'a Self::Context, ())>
@@ -42,8 +59,22 @@ impl<T> JSValueConversion for T where
 {
 }
 
-/// FromJSValue trait for converting JSValue to native Rust types
-/// Follow Rust's From/Into pattern for consistent type conversion
+/// Marker trait for types that are compatible with JavaScript values
+pub trait JSCompatible: Sized {}
+
+// impl JSCompatible for () {}
+impl JSCompatible for i32 {}
+impl JSCompatible for u32 {}
+impl JSCompatible for i64 {}
+impl JSCompatible for u64 {}
+impl JSCompatible for f64 {}
+impl JSCompatible for bool {}
+impl JSCompatible for &str {}
+impl JSCompatible for String {}
+
+/// The trait that supports extract type from JSValue
+/// Why from_js_value don't use V as input type ? Because it needs to
+/// return JSValue, JSObject.
 pub trait FromJSValue<'ctx, V>: Sized
 where
     V: JSValueImpl,
@@ -51,24 +82,35 @@ where
     fn from_js_value(value: JSValue<'ctx, V>) -> Result<Self, String>;
 }
 
-pub trait JSValueTo<T> {
-    fn to_host(self) -> Result<T, String>;
-}
-
-// Implement automatic JSValueInto derivation from FromJSValue
-impl<'ctx, V, T> JSValueTo<T> for JSValue<'ctx, V>
+/// extract rust primitive type from JSValue
+impl<'ctx, V, T> FromJSValue<'ctx, V> for T
 where
     V: JSValueImpl,
-    T: FromJSValue<'ctx, V>,
+    V: TryInto<T, Error = String>,
+    T: JSCompatible,
 {
-    fn to_host(self) -> Result<T, String> {
-        T::from_js_value(self)
+    fn from_js_value(value: JSValue<'ctx, V>) -> Result<T, String> {
+        value.into_inner().try_into()
     }
 }
 
-pub trait ToJSValue<V>
+/// convert to JS Value represented by trait JSValueImpl
+pub trait IntoJSValue<'ctx, V>
 where
     V: JSValueImpl,
 {
-    fn to_js_value(self, ctx: &V::Context) -> V;
+    fn into_js_value(self, ctx: &'ctx V::Context) -> V;
+}
+
+/// convert rust primitive type to JSValue
+impl<'ctx, V, T> IntoJSValue<'ctx, V> for T
+where
+    V: JSValueImpl,
+    V: From<(&'ctx V::Context, T)>,
+    V::Context: 'ctx,
+    T: JSCompatible,
+{
+    fn into_js_value(self, ctx: &'ctx V::Context) -> V {
+        V::from((ctx, self))
+    }
 }

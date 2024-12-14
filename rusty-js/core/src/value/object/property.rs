@@ -1,4 +1,4 @@
-use crate::{JSContext, JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
+use crate::{JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
 
 pub enum PropertyKey<'a> {
     Int32(i32),
@@ -40,16 +40,16 @@ impl<'a> From<&'a str> for PropertyKey<'a> {
 }
 
 impl<'ctx> PropertyKey<'ctx> {
-    pub fn into_key<V>(self, ctx: &'ctx JSContext<V::Context>) -> V
+    pub(crate) fn into_key<V>(self, ctx: &'ctx V::Context) -> V
     where
         V: JSValueConversion,
     {
         match self {
-            Self::Int32(i) => (&ctx.inner, i).into(),
-            Self::Uint32(i) => (&ctx.inner, i).into(),
-            Self::Int64(i) => (&ctx.inner, i).into(),
-            Self::Uint64(i) => (&ctx.inner, i).into(),
-            Self::Str(s) => (&ctx.inner, s).into(),
+            Self::Int32(i) => (ctx, i).into(),
+            Self::Uint32(i) => (ctx, i).into(),
+            Self::Int64(i) => (ctx, i).into(),
+            Self::Uint64(i) => (ctx, i).into(),
+            Self::Str(s) => (ctx, s).into(),
         }
     }
 }
@@ -152,7 +152,7 @@ where
         let value = self
             .value
             .inspect(|_| self.attributes.0 |= PropertyAttributes::HAS_VALUE)
-            .unwrap_or(V::from((obj.as_ctx().as_inner(), ()))); //UNDEFIEND
+            .unwrap_or(V::from((obj.as_ctx(), ()))); //UNDEFIEND
 
         let getter = self
             .getter
@@ -160,7 +160,7 @@ where
                 self.attributes.0 |= PropertyAttributes::HAS_GET;
                 g.into_inner()
             })
-            .unwrap_or(V::from((obj.as_ctx().as_inner(), ()))); //UNDEFIEND
+            .unwrap_or(V::from((obj.as_ctx(), ()))); //UNDEFIEND
 
         let setter = self
             .setter
@@ -168,7 +168,7 @@ where
                 self.attributes.0 |= PropertyAttributes::HAS_SET;
                 s.into_inner()
             })
-            .unwrap_or(V::from((obj.as_ctx().as_inner(), ()))); // UNDEFINED
+            .unwrap_or(V::from((obj.as_ctx(), ()))); // UNDEFINED
 
         let key = k.into().into_key(obj.as_ctx());
 

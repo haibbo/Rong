@@ -1,6 +1,7 @@
-use crate::{JSContext, JSContextImpl, JSObject, JSObjectOps, JSValue, JSValueImpl, JSValueTo};
+use crate::{FromJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSValue, JSValueImpl};
 use std::fmt;
 use std::ops::Deref;
+use std::string::String;
 
 pub struct JSException<'ctx, V: JSValueImpl>(JSObject<'ctx, V>);
 
@@ -25,10 +26,10 @@ where
     V: JSObjectOps<'ctx>,
     V::Context: JSExceptionHandler<Value = V>,
 {
-    pub fn from_message(ctx: &'ctx JSContext<V::Context>, message: impl AsRef<str>) -> Self {
+    pub fn from_message(ctx: &'ctx JSContext<V::Context>, message: &'ctx str) -> Self {
         let v = ctx.inner.new_error();
         let obj: JSObject<'ctx, V> = JSValue::new(ctx, v).into();
-        obj.set("message", message.as_ref());
+        obj.set("message", message);
         Self(obj)
     }
 }
@@ -38,16 +39,17 @@ where
     V: JSObjectOps<'ctx>,
 {
     pub fn into_error(self) -> JSErrorInfo {
-        self.is_error().map_or_else(
-            || JSErrorInfo {
-                message: Some(self.clone().to_host().unwrap()),
-                stack: None,
-            },
-            |_| JSErrorInfo {
+        if self.is_error().is_some() {
+            JSErrorInfo {
                 message: self.message(),
                 stack: self.stack(),
-            },
-        )
+            }
+        } else {
+            JSErrorInfo {
+                stack: None,
+                message: Some(String::from_js_value(self.0.into_value()).unwrap()),
+            }
+        }
     }
 }
 

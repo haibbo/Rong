@@ -5,17 +5,21 @@ use std::string::String;
 mod property;
 pub use property::{PropertyAttributes, PropertyKey};
 
-use super::ToJSValue;
+use super::IntoJSValue;
 
 pub struct JSObject<'ctx, V: JSValueImpl>(JSValue<'ctx, V>);
 
-impl<V> JSObject<'_, V>
+impl<'ctx, V> JSObject<'ctx, V>
 where
     V: JSValueImpl,
 {
     /// into inner JS Value implementing JSValueImpl
     pub(crate) fn into_inner(self) -> V {
         self.0.into_inner()
+    }
+
+    pub(crate) fn into_value(self) -> JSValue<'ctx, V> {
+        self.0
     }
 }
 
@@ -48,11 +52,11 @@ impl<'ctx, V: JSValueImpl> Deref for JSObject<'ctx, V> {
     }
 }
 
-impl<V> ToJSValue<V> for JSObject<'_, V>
+impl<'ctx, V> IntoJSValue<'ctx, V> for JSObject<'ctx, V>
 where
     V: JSValueImpl,
 {
-    fn to_js_value(self, _ctx: &V::Context) -> V {
+    fn into_js_value(self, _ctx: &'ctx V::Context) -> V {
         self.0.into_inner()
     }
 }
@@ -118,11 +122,11 @@ where
     pub fn set<K, KV>(&self, k: K, kv: KV) -> bool
     where
         K: Into<PropertyKey<'ctx>>,
-        KV: ToJSValue<V>,
+        KV: IntoJSValue<'ctx, V>,
     {
         let key = k.into().into_key(self.as_ctx());
         self.as_inner()
-            .set_property(key, kv.to_js_value(self.as_ctx().as_inner()))
+            .set_property(key, kv.into_js_value(self.as_ctx()))
     }
 
     pub fn del<K>(&self, k: K) -> bool
