@@ -38,6 +38,10 @@ impl JSContextImpl for QJSContext {
     fn as_raw(&self) -> &Self::RawContext {
         &self.raw
     }
+
+    fn from_ffi(raw: Self::RawContext) -> Self {
+        Self { raw }
+    }
 }
 
 // eval option assiciated with JS_EVAL_*

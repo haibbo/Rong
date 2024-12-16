@@ -1,6 +1,6 @@
 use crate::{FromJSValue, JSObject, JSObjectOps, JSRuntime, JSRuntimeImpl, JSValue, JSValueImpl};
 
-pub trait JSContextImpl {
+pub trait JSContextImpl: Clone {
     type RawContext: Copy;
     type Runtime: JSRuntimeImpl;
 
@@ -8,6 +8,7 @@ pub trait JSContextImpl {
     where
         Self: Sized;
     fn as_raw(&self) -> &Self::RawContext;
+    fn from_ffi(raw: Self::RawContext) -> Self;
 }
 
 pub trait JSRawContext {
