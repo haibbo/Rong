@@ -10,15 +10,6 @@ impl<'ctx, V: JSValueImpl> Deref for JSFunc<'ctx, V> {
     }
 }
 
-impl<V> JSFunc<'_, V>
-where
-    V: JSValueImpl,
-{
-    pub(crate) fn into_inner(self) -> V {
-        self.0.into_inner()
-    }
-}
-
 impl<V> IntoJSValue<V> for JSFunc<'_, V>
 where
     V: JSValueImpl,

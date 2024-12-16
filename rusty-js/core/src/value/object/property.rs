@@ -1,4 +1,4 @@
-use crate::{JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
+use crate::{IntoJSValue, JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
 
 pub enum PropertyKey<'a> {
     Int32(i32),
@@ -158,7 +158,7 @@ where
             .getter
             .map(|g| {
                 self.attributes.0 |= PropertyAttributes::HAS_GET;
-                g.into_inner()
+                g.into_js_value(obj.as_ctx())
             })
             .unwrap_or(V::from((obj.as_ctx(), ()))); //UNDEFIEND
 
@@ -166,7 +166,7 @@ where
             .setter
             .map(|s| {
                 self.attributes.0 |= PropertyAttributes::HAS_SET;
-                s.into_inner()
+                s.into_js_value(obj.as_ctx())
             })
             .unwrap_or(V::from((obj.as_ctx(), ()))); // UNDEFINED
 

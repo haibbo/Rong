@@ -13,11 +13,6 @@ impl<'ctx, V> JSObject<'ctx, V>
 where
     V: JSValueImpl,
 {
-    /// into inner JS Value implementing JSValueImpl
-    pub(crate) fn into_inner(self) -> V {
-        self.0.into_inner()
-    }
-
     pub(crate) fn into_value(self) -> JSValue<'ctx, V> {
         self.0
     }
@@ -105,7 +100,7 @@ where
         construct: JSFunc<'ctx, V>,
         opaque: *mut T,
     ) -> Self {
-        let value = V::make_object(&ctx.inner, construct.into_inner(), opaque);
+        let value = V::make_object(&ctx.inner, construct.into_js_value(ctx), opaque);
         Self(JSValue::new(ctx, value))
     }
 
