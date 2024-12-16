@@ -1,4 +1,4 @@
-use super::{JSValue, JSValueImpl};
+use super::JSValueImpl;
 
 /// The conversion between Rust primitive types, which implement the `JSCompatible`
 /// marker trait, and `JSValue` is facilitated using the standard `TryInto` and
@@ -74,22 +74,22 @@ impl JSCompatible for String {}
 /// The trait that supports extract type from JSValue
 /// Why from_js_value don't use V as input type ? Because it needs to
 /// return JSValue, JSObject.
-pub trait FromJSValue<'ctx, V>: Sized
+pub trait FromJSValue<V>: Sized
 where
     V: JSValueImpl,
 {
-    fn from_js_value(value: JSValue<'ctx, V>) -> Result<Self, String>;
+    fn from_js_value(ctx: V::Context, value: V) -> Result<Self, String>;
 }
 
 /// extract rust primitive type from JSValue
-impl<'ctx, V, T> FromJSValue<'ctx, V> for T
+impl<V, T> FromJSValue<V> for T
 where
     V: JSValueImpl,
     V: TryInto<T, Error = String>,
     T: JSCompatible,
 {
-    fn from_js_value(value: JSValue<'ctx, V>) -> Result<T, String> {
-        value.into_inner().try_into()
+    fn from_js_value(_ctx: V::Context, value: V) -> Result<Self, String> {
+        value.try_into()
     }
 }
 

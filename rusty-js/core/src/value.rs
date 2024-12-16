@@ -76,17 +76,22 @@ where
         }
     }
 
-    pub fn from_raw_parts(
-        ctx_raw: <V::Context as JSContextImpl>::RawContext,
-        value_raw: V::RawValue,
-    ) -> Self {
-        let ctx = Arc::new(V::Context::from_ffi(ctx_raw));
-        let value = V::from_ffi(ctx_raw, value_raw);
+    pub fn from_raw_parts(ctx: V::Context, value: V) -> Self {
+        let ctx = Arc::new(ctx);
         Self {
             inner: value,
             ctx,
             _phantom: PhantomData,
         }
+    }
+
+    pub fn from_ffi(
+        ctx_raw: <V::Context as JSContextImpl>::RawContext,
+        value_raw: V::RawValue,
+    ) -> Self {
+        let ctx = V::Context::from_ffi(ctx_raw);
+        let value = V::from_ffi(ctx_raw, value_raw);
+        Self::from_raw_parts(ctx, value)
     }
 
     pub(crate) fn as_inner(&self) -> &V {
@@ -143,21 +148,21 @@ impl<'ctx, V: JSTypeOf> JSValue<'ctx, V> {
     }
 }
 
-impl<'ctx, V> FromJSValue<'ctx, V> for ()
+impl<V> FromJSValue<V> for ()
 where
     V: JSValueConversion,
 {
-    fn from_js_value(_v: JSValue<'ctx, V>) -> Result<(), String> {
+    fn from_js_value(_ctx: V::Context, _value: V) -> Result<Self, String> {
         Ok(())
     }
 }
 
-impl<'ctx, V> FromJSValue<'ctx, V> for JSValue<'ctx, V>
+impl<V> FromJSValue<V> for JSValue<'_, V>
 where
     V: JSValueImpl,
 {
-    fn from_js_value(value: JSValue<'ctx, V>) -> Result<JSValue<'ctx, V>, String> {
-        Ok(value)
+    fn from_js_value(ctx: V::Context, value: V) -> Result<Self, String> {
+        Ok(JSValue::from_raw_parts(ctx, value))
     }
 }
 

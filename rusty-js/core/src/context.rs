@@ -54,7 +54,7 @@ where
     pub fn eval<'a, T>(&'a self, source: impl AsRef<str>) -> Result<T, String>
     where
         C::Value: JSObjectOps<'a>,
-        T: FromJSValue<'a, C::Value>,
+        T: FromJSValue<C::Value>,
     {
         let raw = self.inner.eval(source);
         let result = JSValue::new(self, raw);
@@ -62,7 +62,7 @@ where
         if let Some(ex) = result.is_exception() {
             Err(ex.into_error().to_string())
         } else {
-            T::from_js_value(result)
+            T::from_js_value(self.inner.clone(), result.into_inner())
         }
     }
 

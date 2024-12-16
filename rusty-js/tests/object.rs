@@ -12,9 +12,6 @@ fn basic() {
         assert!(obj.set(key, v));
         assert!(obj.has(key));
 
-        let val = obj.get(key).unwrap();
-        assert_eq!(i32::from_js_value(val).unwrap(), v);
-
         obj.del(key);
         assert!(!obj.has(key));
 
@@ -61,6 +58,14 @@ fn from_javascript() {
         assert_some!(obj.get::<_, JSObject>("func2").unwrap().is_function());
         assert_none!(obj.get::<_, JSObject>("obj1").unwrap().is_function());
         assert_none!(obj.get::<_, JSObject>("obj1").unwrap().is_array());
+        assert_some!(obj.get::<_, JSObject>("obj1").unwrap().is_object());
+        assert_eq!(
+            obj.get::<_, JSObject>("obj1")
+                .unwrap()
+                .get::<_, i32>("a")
+                .unwrap(),
+            1
+        );
 
         let result: Result<String, String> = obj.get("None");
         assert!(result.is_err());

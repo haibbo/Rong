@@ -1,4 +1,6 @@
-use crate::{FromJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSValue, JSValueImpl};
+use crate::{
+    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSValue, JSValueImpl,
+};
 use std::fmt;
 use std::ops::Deref;
 use std::string::String;
@@ -9,6 +11,15 @@ impl<'ctx, V: JSObjectOps<'ctx>> Deref for JSException<'ctx, V> {
     type Target = JSObject<'ctx, V>;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<V> IntoJSValue<V> for JSException<'_, V>
+where
+    V: JSValueImpl,
+{
+    fn into_js_value(self, ctx: &V::Context) -> V {
+        self.0.into_js_value(ctx)
     }
 }
 
@@ -39,15 +50,17 @@ where
     V: JSObjectOps<'ctx>,
 {
     pub fn into_error(self) -> JSErrorInfo {
+        let ctx = self.as_ctx().clone();
         if self.is_error().is_some() {
             JSErrorInfo {
                 message: self.message(),
                 stack: self.stack(),
             }
         } else {
+            let js_value = self.into_js_value(&ctx);
             JSErrorInfo {
                 stack: None,
-                message: Some(String::from_js_value(self.0.into_value()).unwrap()),
+                message: Some(String::from_js_value(ctx, js_value).unwrap()),
             }
         }
     }

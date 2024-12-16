@@ -9,15 +9,6 @@ use super::IntoJSValue;
 
 pub struct JSObject<'ctx, V: JSValueImpl>(JSValue<'ctx, V>);
 
-impl<'ctx, V> JSObject<'ctx, V>
-where
-    V: JSValueImpl,
-{
-    pub(crate) fn into_value(self) -> JSValue<'ctx, V> {
-        self.0
-    }
-}
-
 impl<'ctx, V> From<JSValue<'ctx, V>> for JSObject<'ctx, V>
 where
     V: JSValueImpl,
@@ -27,13 +18,13 @@ where
     }
 }
 
-impl<'ctx, V> FromJSValue<'ctx, V> for JSObject<'ctx, V>
+impl<V> FromJSValue<V> for JSObject<'_, V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(value: JSValue<'ctx, V>) -> Result<Self, String> {
-        if value.is_object().is_some() {
-            Ok(value.into())
+    fn from_js_value(ctx: V::Context, value: V) -> Result<Self, String> {
+        if value.is_object() {
+            Ok(JSValue::from_raw_parts(ctx, value).into())
         } else {
             Err("not an object".to_string())
         }
@@ -143,12 +134,12 @@ where
     pub fn get<K, T>(&self, k: K) -> Result<T, String>
     where
         K: Into<PropertyKey<'ctx>>,
-        T: FromJSValue<'ctx, V>,
+        T: FromJSValue<V>,
     {
         let key = k.into().into_key(self.as_ctx());
         self.as_inner()
             .get_property(key)
             .ok_or_else(|| String::from("Property not found")) // check existence firstly
-            .and_then(|value| T::from_js_value(self.with_value(value)))
+            .and_then(|value| T::from_js_value(self.as_ctx().clone(), value))
     }
 }
