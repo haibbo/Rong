@@ -1,7 +1,7 @@
 pub use rusty_js::*;
 
 pub fn run<F: FnOnce(&JSContext)>(f: F) {
-    let rt = JSRuntime::new();
+    let rt = JSRuntime::default();
     let ctx = JSContext::new(&rt);
     f(&ctx);
 }

@@ -12,12 +12,8 @@ pub struct JSRuntime<R: JSRuntimeImpl> {
     pub(crate) inner: R,
 }
 
-impl<R: JSRuntimeImpl> JSRuntime<R> {
-    pub fn new() -> Self {
+impl<R: JSRuntimeImpl> Default for JSRuntime<R> {
+    fn default() -> Self {
         Self { inner: R::new() }
-    }
-
-    pub fn as_raw(&self) -> &R::RawRuntime {
-        &self.inner.as_raw()
     }
 }

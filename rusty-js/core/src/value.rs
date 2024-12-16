@@ -112,7 +112,7 @@ where
         V: From<(&'ctx V::Context, T)>,
     {
         let value = V::from((&ctx.inner, val));
-        JSValue::new(&ctx, value)
+        JSValue::new(ctx, value)
     }
 
     /// Try to converts JSValue to Rust value
@@ -130,7 +130,7 @@ where
         V: From<(&'ctx V::Context, ())>,
     {
         let value = V::from((&ctx.inner, ()));
-        JSValue::new(&ctx, value)
+        JSValue::new(ctx, value)
     }
 }
 

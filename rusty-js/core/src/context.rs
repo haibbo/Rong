@@ -57,7 +57,7 @@ where
         T: FromJSValue<'a, C::Value>,
     {
         let raw = self.inner.eval(source);
-        let result = JSValue::new(&self, raw);
+        let result = JSValue::new(self, raw);
 
         if let Some(ex) = result.is_exception() {
             Err(ex.into_error().to_string())
@@ -69,6 +69,6 @@ where
     /// get global object
     pub fn global_object(&'ctx self) -> JSObject<'ctx, C::Value> {
         let raw = self.inner.global_object();
-        JSValue::new(&self, raw).into()
+        JSValue::new(self, raw).into()
     }
 }
