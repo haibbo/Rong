@@ -1,4 +1,5 @@
 use crate::{FromJSValue, JSObject, JSObjectOps, JSRuntime, JSRuntimeImpl, JSValue, JSValueImpl};
+use std::ops::Deref;
 
 pub trait JSContextImpl: Clone {
     type RawContext: Copy;
@@ -19,15 +20,19 @@ pub struct JSContext<C: JSContextImpl> {
     pub(crate) inner: C,
 }
 
+impl<C: JSContextImpl> Deref for JSContext<C> {
+    type Target = C;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
 impl<C: JSContextImpl> JSContext<C> {
     pub fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
         Self {
             inner: C::new(&runtime.inner),
         }
-    }
-
-    pub(crate) fn as_ctx(&self) -> &C {
-        &self.inner
     }
 }
 
@@ -52,7 +57,7 @@ where
         T: FromJSValue<'a, C::Value>,
     {
         let raw = self.inner.eval(source);
-        let result = JSValue::new(self, raw);
+        let result = JSValue::new(&self, raw);
 
         if let Some(ex) = result.is_exception() {
             Err(ex.into_error().to_string())
@@ -64,6 +69,6 @@ where
     /// get global object
     pub fn global_object(&'ctx self) -> JSObject<'ctx, C::Value> {
         let raw = self.inner.global_object();
-        JSValue::new(self, raw).into()
+        JSValue::new(&self, raw).into()
     }
 }

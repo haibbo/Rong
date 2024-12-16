@@ -26,7 +26,7 @@ where
     V: JSObjectOps<'ctx>,
     V::Context: JSExceptionHandler<Value = V>,
 {
-    pub fn from_message(ctx: &'ctx JSContext<V::Context>, message: &'ctx str) -> Self {
+    pub fn from_message(ctx: &'ctx JSContext<V::Context>, message: &str) -> Self {
         let v = ctx.inner.new_error();
         let obj: JSObject<'ctx, V> = JSValue::new(ctx, v).into();
         obj.set("message", message);

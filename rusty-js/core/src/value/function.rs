@@ -19,11 +19,11 @@ where
     }
 }
 
-impl<'ctx, V> IntoJSValue<'ctx, V> for JSFunc<'ctx, V>
+impl<V> IntoJSValue<V> for JSFunc<'_, V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &'ctx V::Context) -> V {
+    fn into_js_value(self, ctx: &V::Context) -> V {
         self.0.into_js_value(ctx)
     }
 }

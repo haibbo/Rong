@@ -62,14 +62,13 @@ impl<T> JSValueConversion for T where
 /// Marker trait for types that are compatible with JavaScript values
 pub trait JSCompatible: Sized {}
 
-// impl JSCompatible for () {}
 impl JSCompatible for i32 {}
 impl JSCompatible for u32 {}
 impl JSCompatible for i64 {}
 impl JSCompatible for u64 {}
 impl JSCompatible for f64 {}
 impl JSCompatible for bool {}
-impl JSCompatible for &str {}
+// impl JSCompatible for &str {}
 impl JSCompatible for String {}
 
 /// The trait that supports extract type from JSValue
@@ -95,22 +94,31 @@ where
 }
 
 /// convert to JS Value represented by trait JSValueImpl
-pub trait IntoJSValue<'ctx, V>
+pub trait IntoJSValue<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &'ctx V::Context) -> V;
+    fn into_js_value(self, ctx: &V::Context) -> V;
+}
+
+impl<V> IntoJSValue<V> for &str
+where
+    V: JSValueImpl,
+    V: for<'a> From<(&'a V::Context, &'a str)>,
+{
+    fn into_js_value(self, ctx: &V::Context) -> V {
+        V::from((ctx, self))
+    }
 }
 
 /// convert rust primitive type to JSValue
-impl<'ctx, V, T> IntoJSValue<'ctx, V> for T
+impl<V, T> IntoJSValue<V> for T
 where
     V: JSValueImpl,
-    V: From<(&'ctx V::Context, T)>,
-    V::Context: 'ctx,
+    V: for<'a> From<(&'a V::Context, T)>,
     T: JSCompatible,
 {
-    fn into_js_value(self, ctx: &'ctx V::Context) -> V {
+    fn into_js_value(self, ctx: &V::Context) -> V {
         V::from((ctx, self))
     }
 }

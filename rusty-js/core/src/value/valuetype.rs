@@ -81,7 +81,7 @@ where
     pub fn is_exception(&self) -> Option<JSException<'ctx, V>> {
         self.inner
             .is_exception()
-            .map(|e| JSException::from_object(JSValue::new(self.ctx, e).into()))
+            .map(|e| JSException::from_object(self.with_value(e).into()))
     }
 }
 

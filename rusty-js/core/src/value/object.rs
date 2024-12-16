@@ -52,11 +52,11 @@ impl<'ctx, V: JSValueImpl> Deref for JSObject<'ctx, V> {
     }
 }
 
-impl<'ctx, V> IntoJSValue<'ctx, V> for JSObject<'ctx, V>
+impl<V> IntoJSValue<V> for JSObject<'_, V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, _ctx: &'ctx V::Context) -> V {
+    fn into_js_value(self, _ctx: &V::Context) -> V {
         self.0.into_inner()
     }
 }
@@ -122,7 +122,7 @@ where
     pub fn set<K, KV>(&self, k: K, kv: KV) -> bool
     where
         K: Into<PropertyKey<'ctx>>,
-        KV: IntoJSValue<'ctx, V>,
+        KV: IntoJSValue<V>,
     {
         let key = k.into().into_key(self.as_ctx());
         self.as_inner()
@@ -154,6 +154,6 @@ where
         self.as_inner()
             .get_property(key)
             .ok_or_else(|| String::from("Property not found")) // check existence firstly
-            .and_then(|value| T::from_js_value(JSValue::new(self.0.ctx, value)))
+            .and_then(|value| T::from_js_value(self.with_value(value)))
     }
 }

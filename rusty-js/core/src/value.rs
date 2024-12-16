@@ -1,5 +1,8 @@
 use crate::{JSContext, JSContextImpl};
+use std::marker::PhantomData;
+use std::ops::Deref;
 use std::string::String;
+use std::sync::Arc;
 
 mod convert;
 pub use convert::*;
@@ -39,14 +42,16 @@ pub trait JSValueImpl: Clone {
 
 pub struct JSValue<'ctx, V: JSValueImpl> {
     inner: V,
-    ctx: &'ctx JSContext<V::Context>,
+    ctx: Arc<V::Context>,
+    _phantom: PhantomData<&'ctx ()>,
 }
 
 impl<V: JSValueImpl> Clone for JSValue<'_, V> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            ctx: self.ctx,
+            ctx: self.ctx.clone(),
+            _phantom: PhantomData,
         }
     }
 }
@@ -56,7 +61,32 @@ where
     V: JSValueImpl,
 {
     pub(crate) fn new(ctx: &'ctx JSContext<V::Context>, value: V) -> Self {
-        Self { inner: value, ctx }
+        Self {
+            inner: value,
+            ctx: Arc::new(ctx.deref().clone()),
+            _phantom: PhantomData,
+        }
+    }
+
+    pub(crate) fn with_value(&self, value: V) -> Self {
+        Self {
+            inner: value,
+            ctx: Arc::clone(&self.ctx),
+            _phantom: PhantomData,
+        }
+    }
+
+    pub fn from_raw_parts(
+        ctx_raw: <V::Context as JSContextImpl>::RawContext,
+        value_raw: V::RawValue,
+    ) -> Self {
+        let ctx = Arc::new(V::Context::from_ffi(ctx_raw));
+        let value = V::from_ffi(ctx_raw, value_raw);
+        Self {
+            inner: value,
+            ctx,
+            _phantom: PhantomData,
+        }
     }
 
     pub(crate) fn as_inner(&self) -> &V {
@@ -67,8 +97,8 @@ where
         self.inner
     }
 
-    pub(crate) fn as_ctx(&self) -> &'ctx V::Context {
-        self.ctx.as_ctx()
+    pub(crate) fn as_ctx(&self) -> &V::Context {
+        &self.ctx
     }
 }
 
@@ -82,7 +112,7 @@ where
         V: From<(&'ctx V::Context, T)>,
     {
         let value = V::from((&ctx.inner, val));
-        JSValue::new(ctx, value)
+        JSValue::new(&ctx, value)
     }
 
     /// Try to converts JSValue to Rust value
@@ -100,7 +130,7 @@ where
         V: From<(&'ctx V::Context, ())>,
     {
         let value = V::from((&ctx.inner, ()));
-        JSValue::new(ctx, value)
+        JSValue::new(&ctx, value)
     }
 }
 
@@ -131,7 +161,7 @@ where
     }
 }
 
-impl<V> IntoJSValue<'_, V> for JSValue<'_, V>
+impl<V> IntoJSValue<V> for JSValue<'_, V>
 where
     V: JSValueImpl,
 {
