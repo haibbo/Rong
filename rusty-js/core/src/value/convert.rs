@@ -78,7 +78,7 @@ pub trait FromJSValue<V>: Sized
 where
     V: JSValueImpl,
 {
-    fn from_js_value(ctx: V::Context, value: V) -> Result<Self, String>;
+    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, String>;
 }
 
 /// extract rust primitive type from JSValue
@@ -88,7 +88,7 @@ where
     V: TryInto<T, Error = String>,
     T: JSCompatible,
 {
-    fn from_js_value(_ctx: V::Context, value: V) -> Result<Self, String> {
+    fn from_js_value(_ctx: &V::Context, value: V) -> Result<Self, String> {
         value.try_into()
     }
 }

@@ -60,7 +60,7 @@ where
             let js_value = self.into_js_value(&ctx);
             JSErrorInfo {
                 stack: None,
-                message: Some(String::from_js_value(ctx, js_value).unwrap()),
+                message: Some(String::from_js_value(&ctx, js_value).unwrap()),
             }
         }
     }

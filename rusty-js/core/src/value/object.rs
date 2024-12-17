@@ -22,7 +22,7 @@ impl<V> FromJSValue<V> for JSObject<'_, V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: V::Context, value: V) -> Result<Self, String> {
+    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, String> {
         if value.is_object() {
             Ok(JSValue::from_raw_parts(ctx, value).into())
         } else {
@@ -140,6 +140,6 @@ where
         self.as_inner()
             .get_property(key)
             .ok_or_else(|| String::from("Property not found")) // check existence firstly
-            .and_then(|value| T::from_js_value(self.as_ctx().clone(), value))
+            .and_then(|value| T::from_js_value(self.as_ctx(), value))
     }
 }

@@ -76,8 +76,8 @@ where
         }
     }
 
-    pub fn from_raw_parts(ctx: V::Context, value: V) -> Self {
-        let ctx = Arc::new(ctx);
+    pub fn from_raw_parts(ctx: &V::Context, value: V) -> Self {
+        let ctx = Arc::new(ctx.clone());
         Self {
             inner: value,
             ctx,
@@ -91,7 +91,7 @@ where
     ) -> Self {
         let ctx = V::Context::from_ffi(ctx_raw);
         let value = V::from_ffi(ctx_raw, value_raw);
-        Self::from_raw_parts(ctx, value)
+        Self::from_raw_parts(&ctx, value)
     }
 
     pub(crate) fn as_inner(&self) -> &V {
@@ -152,7 +152,7 @@ impl<V> FromJSValue<V> for ()
 where
     V: JSValueConversion,
 {
-    fn from_js_value(_ctx: V::Context, _value: V) -> Result<Self, String> {
+    fn from_js_value(_ctx: &V::Context, _value: V) -> Result<Self, String> {
         Ok(())
     }
 }
@@ -161,7 +161,7 @@ impl<V> FromJSValue<V> for JSValue<'_, V>
 where
     V: JSValueImpl,
 {
-    fn from_js_value(ctx: V::Context, value: V) -> Result<Self, String> {
+    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, String> {
         Ok(JSValue::from_raw_parts(ctx, value))
     }
 }

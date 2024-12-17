@@ -62,7 +62,7 @@ where
         if let Some(ex) = result.is_exception() {
             Err(ex.into_error().to_string())
         } else {
-            T::from_js_value(self.inner.clone(), result.into_inner())
+            T::from_js_value(&self.inner, result.into_inner())
         }
     }
 
