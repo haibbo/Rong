@@ -22,15 +22,16 @@ where
     }
 }
 
-pub trait RustCallable<V, C> {
-    fn call(&self, context: &C, args: &[V]) -> Result<V, String>;
+pub trait RustCallable<V: JSValueImpl> {
+    fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>;
 }
 
-impl<V, C, F> RustCallable<V, C> for F
+impl<V, F> RustCallable<V> for F
 where
-    F: Fn(&C, &[V]) -> Result<V, String>,
+    V: JSValueImpl,
+    F: Fn(&V::Context, &[V]) -> Result<V, String>,
 {
-    fn call(&self, context: &C, args: &[V]) -> Result<V, String> {
+    fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String> {
         (self)(context, args)
     }
 }
@@ -39,10 +40,10 @@ where
 /// example:
 ///
 /// RustFunc::new( |x i32, y: i32, z: i32| x + y + z)
-pub struct RustFunc<V, C>(Box<dyn RustCallable<V, C>>);
+pub struct RustFunc<V: JSValueImpl>(Box<dyn RustCallable<V>>);
 
-impl<V, C> RustCallable<V, C> for RustFunc<V, C> {
-    fn call(&self, context: &C, args: &[V]) -> Result<V, String> {
+impl<V: JSValueImpl> RustCallable<V> for RustFunc<V> {
+    fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String> {
         self.0.call(context, args)
     }
 }
@@ -56,32 +57,32 @@ impl<V, C> RustCallable<V, C> for RustFunc<V, C> {
 /// This allows the compiler to select the correct implementation based on the
 /// function's parameter types, while avoiding implementation conflicts since
 /// each tuple type is distinct.
-pub trait IntoRustCallable<V, C, P> {
-    fn call(&self, context: &C, args: &[V]) -> Result<V, String>;
+pub trait IntoRustCallable<V: JSValueImpl, P> {
+    fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>;
 }
 
-impl<V, C> RustFunc<V, C> {
+impl<V: JSValueImpl> RustFunc<V> {
     pub fn new<F, P>(f: F) -> Self
     where
-        F: IntoRustCallable<V, C, P> + 'static,
+        F: IntoRustCallable<V, P> + 'static,
     {
-        let func = Box::new(move |context: &C, args: &[V]| f.call(context, args))
-            as Box<dyn RustCallable<V, C>>;
+        let func = Box::new(move |context: &V::Context, args: &[V]| f.call(context, args))
+            as Box<dyn RustCallable<V>>;
         Self(func)
     }
 }
 
 macro_rules! impl_rust_callable_func {
     ($($t:ident),*$(,)?) => {
-        impl<V, C, R, Fun $(,$t)*> IntoRustCallable<V, C, ($($t,)*)> for Fun
+        impl<V, R, Fun $(,$t)*> IntoRustCallable<V, ($($t,)*)> for Fun
         where
             Fun: Fn($($t),*) -> R,
-            V: JSValueImpl<Context = C> + JSValueConversion,
-            C: JSContextImpl + JSExceptionHandler<Value=V>,
+            V: JSValueImpl + JSValueConversion,
+            V::Context: JSContextImpl + JSExceptionHandler<Value=V>,
             $($t: FromJSValue<V>,)*
             R: IntoJSValue<V>,
         {
-            fn call(&self, context: &C, args: &[V]) -> Result<V, String>  {
+            fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>  {
                 let expected = count_idents!($($t),*);
                 if args.len() < expected {
                     // TODO: improve error handler
