@@ -35,6 +35,10 @@ where
     }
 }
 
+/// container to hold rust closure/fucntion that's callable from JS
+/// example:
+///
+/// RustFunc::new( |x i32, y: i32, z: i32| x + y + z)
 pub struct RustFunc<V, C>(Box<dyn RustCallable<V, C>>);
 
 impl<V, C> RustCallable<V, C> for RustFunc<V, C> {
@@ -73,7 +77,7 @@ macro_rules! impl_rust_callable_func {
         where
             Fun: Fn() -> R,
             V: JSValueImpl<Context = C>,
-            C: JSContextImpl + JSExceptionHandler,
+            C: JSContextImpl,
             R: IntoJSValue<V>,
         {
             fn call(&self, context: &C, _args: &[V]) ->Result<V, String> {  // _ make lint happy
@@ -95,6 +99,7 @@ macro_rules! impl_rust_callable_func {
             fn call(&self, context: &C, args: &[V]) -> Result<V, String>  {
                 let expected = count_idents!($($t),*);
                 if args.len() < expected {
+                    // TODO: improve error handler
                     return Ok(context.throw_type_error(&format!(
                         "Expected {} arguments, got {}",
                         expected,
