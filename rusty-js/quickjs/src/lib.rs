@@ -1,3 +1,4 @@
+mod class;
 mod context;
 mod runtime;
 mod value;

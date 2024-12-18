@@ -1,5 +1,7 @@
 use crate::{qjs, QJSRuntime, QJSValue};
-use rusty_js_core::{JSCodeRunner, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl};
+use rusty_js_core::{
+    JSClass, JSCodeRunner, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl,
+};
 use std::ffi::CString;
 use std::os::raw::c_char;
 
@@ -131,6 +133,22 @@ impl JSCodeRunner for QJSContext {
 
     fn global_object(&self) -> Self::Value {
         let raw = unsafe { qjs::JS_GetGlobalObject(self.raw) };
+        QJSValue::from_ffi(self.raw, raw)
+    }
+
+    fn register_class<JC>(&self) -> Self::Value
+    where
+        JC: JSClass<QJSValue>,
+    {
+        let raw = unsafe {
+            qjs::QJS_CreateClass(
+                self.raw,
+                JC::NAME.as_ptr() as _,
+                Some(crate::class::generic_constructor::<JC>),
+                Some(crate::class::call),
+                Some(crate::class::finalizer),
+            )
+        };
         QJSValue::from_ffi(self.raw, raw)
     }
 }

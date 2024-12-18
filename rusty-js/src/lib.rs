@@ -1,6 +1,7 @@
 pub use rusty_js_core::{
-    FromJSValue, JSContext as CoreJSContext, JSException as CoreJSException, JSFunc as CoreJSFunc,
-    JSObject as CoreJSObject, JSRuntime as CoreJSRuntime, JSValue as CoreJSValue,
+    FromJSValue, IntoJSValue, JSClass, JSContext as CoreJSContext, JSException as CoreJSException,
+    JSFunc as CoreJSFunc, JSObject as CoreJSObject, JSRuntime as CoreJSRuntime,
+    JSValue as CoreJSValue, RustFunc,
 };
 
 #[cfg(feature = "quickjs")]

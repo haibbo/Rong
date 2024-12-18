@@ -1,4 +1,6 @@
-use crate::{FromJSValue, JSObject, JSObjectOps, JSRuntime, JSRuntimeImpl, JSValue, JSValueImpl};
+use crate::{
+    FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntime, JSRuntimeImpl, JSValue, JSValueImpl,
+};
 use std::ops::Deref;
 
 pub trait JSContextImpl: Clone {
@@ -44,6 +46,11 @@ pub trait JSCodeRunner: JSContextImpl {
 
     /// get global object
     fn global_object(&self) -> Self::Value;
+
+    /// register class for rust type
+    fn register_class<JC>(&self) -> Self::Value
+    where
+        JC: JSClass<Self::Value>;
 }
 
 impl<'ctx, C> JSContext<C>
@@ -70,5 +77,16 @@ where
     pub fn global_object(&'ctx self) -> JSObject<'ctx, C::Value> {
         let raw = self.inner.global_object();
         JSValue::new(self, raw).into()
+    }
+
+    pub fn register_class<JC>(&'ctx self)
+    where
+        JC: JSClass<C::Value>,
+        C::Value: JSObjectOps<'ctx>,
+    {
+        let obj = self.global_object();
+        let constrcutor = self.inner.register_class::<JC>();
+        let constrcutor = JSValue::new(self, constrcutor);
+        obj.set(JC::NAME, constrcutor);
     }
 }
