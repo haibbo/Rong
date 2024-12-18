@@ -72,21 +72,6 @@ impl<V, C> RustFunc<V, C> {
 }
 
 macro_rules! impl_rust_callable_func {
-     () => {
-        impl<V, C, R, Fun> IntoRustCallable<V, C, ()> for Fun
-        where
-            Fun: Fn() -> R,
-            V: JSValueImpl<Context = C>,
-            C: JSContextImpl,
-            R: IntoJSValue<V>,
-        {
-            fn call(&self, context: &C, _args: &[V]) ->Result<V, String> {  // _ make lint happy
-                let result = (self)();
-                Ok(result.into_js_value(context))
-            }
-        }
-    };
-
     ($($t:ident),*$(,)?) => {
         impl<V, C, R, Fun $(,$t)*> IntoRustCallable<V, C, ($($t,)*)> for Fun
         where
