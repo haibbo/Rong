@@ -6,13 +6,16 @@ pub use rusty_js_core::{
 
 #[cfg(feature = "quickjs")]
 mod engine {
-    use rusty_js_quickjs::{QJSContext, QJSRuntime, QJSValue};
+    use rusty_js_quickjs::QJSRuntime;
+    pub use rusty_js_quickjs::{QJSContext, QJSValue};
     pub type JSContext = super::CoreJSContext<QJSContext>;
     pub type JSRuntime = super::CoreJSRuntime<QJSRuntime>;
     pub type JSValue<'ctx> = super::CoreJSValue<'ctx, QJSValue>;
     pub type JSObject<'ctx> = super::CoreJSObject<'ctx, QJSValue>;
     pub type JSException<'ctx> = super::CoreJSException<'ctx, QJSValue>;
     pub type JSFunc<'ctx> = super::CoreJSFunc<'ctx, QJSValue>;
+    pub type EJSValue = QJSValue;
+    pub type EJSContext = QJSContext;
 }
 
 #[cfg(feature = "quickjs")]
