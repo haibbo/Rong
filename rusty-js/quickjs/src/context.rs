@@ -6,14 +6,14 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 
 pub struct QJSContext {
-    pub(crate) raw: *mut qjs::JSContext,
+    pub(crate) ctx: *mut qjs::JSContext,
 }
 
 impl Drop for QJSContext {
     fn drop(&mut self) {
         // println!("free QJS Ctx");
         unsafe {
-            qjs::JS_FreeContext(self.raw);
+            qjs::JS_FreeContext(self.ctx);
         }
     }
 }
@@ -21,28 +21,28 @@ impl Drop for QJSContext {
 impl Clone for QJSContext {
     fn clone(&self) -> Self {
         Self {
-            raw: unsafe { qjs::JS_DupContext(self.raw) },
+            ctx: unsafe { qjs::JS_DupContext(self.ctx) },
         }
     }
 }
 
 impl JSContextImpl for QJSContext {
-    type RawContext = *mut qjs::JSContext;
+    type FfiContext = *mut qjs::JSContext;
     type Runtime = QJSRuntime;
 
     fn new(runtime: &Self::Runtime) -> Self {
         unsafe {
             Self {
-                raw: qjs::JS_NewContext(*runtime.as_raw()),
+                ctx: qjs::JS_NewContext(*runtime.as_ffi()),
             }
         }
     }
-    fn as_raw(&self) -> &Self::RawContext {
-        &self.raw
+    fn as_ffi(&self) -> &Self::FfiContext {
+        &self.ctx
     }
 
-    fn from_ffi(raw: Self::RawContext) -> Self {
-        Self { raw }
+    fn from_ffi(raw: Self::FfiContext) -> Self {
+        Self { ctx: raw }
     }
 }
 
@@ -102,7 +102,7 @@ impl QJSContext {
 
         let qjs_value = unsafe {
             qjs::JS_Eval(
-                self.raw,
+                self.ctx,
                 c_source.as_ptr(),
                 source.len(),
                 c_file_name.as_ptr(),
@@ -110,7 +110,7 @@ impl QJSContext {
             )
         };
 
-        QJSValue::from_ffi(self.raw, qjs_value)
+        QJSValue::from_ffi(self.ctx, qjs_value)
     }
 
     fn throw_error_internal<F>(&self, message: &str, throw_fn: F) -> QJSValue
@@ -118,8 +118,8 @@ impl QJSContext {
         F: FnOnce(*mut qjs::JSContext, *const c_char, *const c_char) -> qjs::JSValue,
     {
         let c_message = CString::new(message).unwrap();
-        let raw = { throw_fn(self.raw, c"%s".as_ptr(), c_message.as_ptr()) };
-        QJSValue::from_ffi(self.raw, raw)
+        let raw = { throw_fn(self.ctx, c"%s".as_ptr(), c_message.as_ptr()) };
+        QJSValue::from_ffi(self.ctx, raw)
     }
 }
 
@@ -132,8 +132,8 @@ impl JSCodeRunner for QJSContext {
     }
 
     fn global_object(&self) -> Self::Value {
-        let raw = unsafe { qjs::JS_GetGlobalObject(self.raw) };
-        QJSValue::from_ffi(self.raw, raw)
+        let raw = unsafe { qjs::JS_GetGlobalObject(self.ctx) };
+        QJSValue::from_ffi(self.ctx, raw)
     }
 
     fn register_class<JC>(&self) -> Self::Value
@@ -142,14 +142,14 @@ impl JSCodeRunner for QJSContext {
     {
         let raw = unsafe {
             qjs::QJS_CreateClass(
-                self.raw,
+                self.ctx,
                 JC::NAME.as_ptr() as _,
                 Some(crate::class::generic_constructor::<JC>),
                 Some(crate::class::call),
                 Some(crate::class::finalizer),
             )
         };
-        QJSValue::from_ffi(self.raw, raw)
+        QJSValue::from_ffi(self.ctx, raw)
     }
 }
 
@@ -187,6 +187,6 @@ impl JSExceptionHandler for QJSContext {
     }
 
     fn new_error(&self) -> Self::Value {
-        unsafe { QJSValue::from_ffi(self.raw, qjs::JS_NewError(self.raw)) }
+        unsafe { QJSValue::from_ffi(self.ctx, qjs::JS_NewError(self.ctx)) }
     }
 }

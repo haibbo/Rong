@@ -1,5 +1,5 @@
 use crate::{qjs, QJSContext};
-use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl};
+use rusty_js_core::{impl_js_converter, JSContextImpl, JSFfiContext, JSValueImpl};
 use std::ffi::CStr;
 
 mod object;
@@ -29,46 +29,40 @@ impl Drop for QJSValue {
     }
 }
 
-impl JSRawContext for QJSValue {
-    type RawContext = *mut qjs::JSContext;
+impl JSFfiContext for QJSValue {
+    type FfiContext = *mut qjs::JSContext;
 }
 
 impl JSValueImpl for QJSValue {
-    type RawValue = qjs::JSValue;
+    type FfiValue = qjs::JSValue;
     type Context = QJSContext;
 
-    fn from_ffi(
-        ctx_raw: <Self::Context as JSContextImpl>::RawContext,
-        value_raw: Self::RawValue,
-    ) -> Self {
-        Self {
-            value: value_raw,
-            ctx: ctx_raw,
-        }
+    fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self {
+        Self { value, ctx }
     }
 
-    fn into_raw_value(self) -> Self::RawValue {
+    fn into_ffi_value(self) -> Self::FfiValue {
         let value = self.value;
         std::mem::forget(self); // forbiden triggering drop
         value
     }
 
-    fn as_raw_value(&self) -> &Self::RawValue {
+    fn as_ffi_value(&self) -> &Self::FfiValue {
         &self.value
     }
 
-    fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext {
+    fn as_ffi_context(&self) -> &<Self::Context as JSContextImpl>::FfiContext {
         &self.ctx
     }
 }
 
 impl<T> From<(&T, ())> for QJSValue
 where
-    T: JSContextImpl<RawContext = <QJSValue as JSRawContext>::RawContext>,
+    T: JSContextImpl<FfiContext = <QJSValue as JSFfiContext>::FfiContext>,
     QJSValue: JSValueImpl<Context = T>,
 {
     fn from(t: (&T, ())) -> Self {
-        let ctx = *t.0.as_raw();
+        let ctx = *t.0.as_ffi();
         let raw = unsafe { qjs::QJS_NewUndefined(ctx) };
         Self::from_ffi(ctx, raw)
     }

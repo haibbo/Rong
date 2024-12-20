@@ -32,7 +32,7 @@ where
     JC: JSClass<QJSValue>,
 {
     let (ctx, args) = prepare_args(ctx, argc, argv);
-    *<JC as JSClassExt<QJSValue>>::constructor(&ctx, args.as_slice()).as_raw_value()
+    *<JC as JSClassExt<QJSValue>>::constructor(&ctx, args.as_slice()).as_ffi_value()
 }
 
 pub(crate) unsafe extern "C" fn finalizer(_rt: *mut qjs::JSRuntime, obj: qjs::JSValue) {

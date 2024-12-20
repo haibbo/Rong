@@ -2,30 +2,30 @@ use crate::{qjs, QJSContext};
 use rusty_js_core::JSRuntimeImpl;
 
 pub struct QJSRuntime {
-    raw: *mut qjs::JSRuntime,
+    rt: *mut qjs::JSRuntime,
 }
 
 impl Drop for QJSRuntime {
     fn drop(&mut self) {
         // println!("free QJS Runtime");
         unsafe {
-            qjs::JS_FreeRuntime(self.raw);
+            qjs::JS_FreeRuntime(self.rt);
         }
     }
 }
 
 impl JSRuntimeImpl for QJSRuntime {
-    type RawRuntime = *mut qjs::JSRuntime;
+    type FfiRuntime = *mut qjs::JSRuntime;
     type Context = QJSContext;
 
-    // new raw JS Runtime
+    // new QuickJS JS Runtime
     fn new() -> Self {
         Self {
-            raw: unsafe { qjs::JS_NewRuntime() },
+            rt: unsafe { qjs::JS_NewRuntime() },
         }
     }
 
-    fn as_raw(&self) -> &Self::RawRuntime {
-        &self.raw
+    fn as_ffi(&self) -> &Self::FfiRuntime {
+        &self.rt
     }
 }

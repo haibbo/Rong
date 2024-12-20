@@ -4,13 +4,13 @@ use rusty_js_core::{JSContextImpl, JSObjectOps, JSValueImpl, PropertyAttributes}
 
 impl<'ctx> JSObjectOps<'ctx> for QJSValue {
     fn new_object(ctx: &'ctx Self::Context) -> Self {
-        let ctx = *ctx.as_raw();
+        let ctx = *ctx.as_ffi();
         let v = unsafe { qjs::JS_NewObject(ctx) };
         QJSValue::from_ffi(ctx, v)
     }
 
     fn make_object<T>(ctx: &'ctx Self::Context, constructor: Self, data: *mut T) -> Self {
-        let ctx = *ctx.as_raw();
+        let ctx = *ctx.as_ffi();
         let v = unsafe { qjs::QJS_ObjectMake(ctx, constructor.value, data.cast()) };
         QJSValue::from_ffi(ctx, v)
     }
@@ -45,7 +45,7 @@ impl<'ctx> JSObjectOps<'ctx> for QJSValue {
     }
 
     fn set_property(&self, key: Self, value: Self) -> bool {
-        let kv = value.into_raw_value();
+        let kv = value.into_ffi_value();
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
             let v = qjs::JS_SetProperty(self.ctx, self.value, atom, kv);
@@ -77,9 +77,9 @@ impl<'ctx> JSObjectOps<'ctx> for QJSValue {
         setter: Self,
         attributes: PropertyAttributes,
     ) -> bool {
-        let getter = getter.into_raw_value();
-        let setter = setter.into_raw_value();
-        let value = value.into_raw_value();
+        let getter = getter.into_ffi_value();
+        let setter = setter.into_ffi_value();
+        let value = value.into_ffi_value();
 
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);

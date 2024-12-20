@@ -4,18 +4,19 @@ use crate::{
 use std::ops::Deref;
 
 pub trait JSContextImpl: Clone {
-    type RawContext: Copy;
+    /// the JS engine specific type of JavaScript Context
+    type FfiContext: Copy;
     type Runtime: JSRuntimeImpl;
 
     fn new(runtime: &Self::Runtime) -> Self
     where
         Self: Sized;
-    fn as_raw(&self) -> &Self::RawContext;
-    fn from_ffi(raw: Self::RawContext) -> Self;
+    fn as_ffi(&self) -> &Self::FfiContext;
+    fn from_ffi(raw: Self::FfiContext) -> Self;
 }
 
-pub trait JSRawContext {
-    type RawContext;
+pub trait JSFfiContext {
+    type FfiContext;
 }
 
 pub struct JSContext<C: JSContextImpl> {

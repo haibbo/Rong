@@ -1,11 +1,13 @@
 use crate::JSContextImpl;
 
 pub trait JSRuntimeImpl {
-    type RawRuntime: Copy;
+    /// the JS engine specific type of JavaScript Runtime
+    type FfiRuntime: Copy;
+
     type Context: JSContextImpl;
 
     fn new() -> Self;
-    fn as_raw(&self) -> &Self::RawRuntime;
+    fn as_ffi(&self) -> &Self::FfiRuntime;
 }
 
 pub struct JSRuntime<R: JSRuntimeImpl> {

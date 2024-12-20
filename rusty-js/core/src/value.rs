@@ -20,24 +20,21 @@ mod function;
 pub use function::*;
 
 pub trait JSValueImpl: Clone {
-    /// Raw JavaScript value type, e.g. qjs::JSValue
-    type RawValue: Copy;
+    /// the JS engine specific type of JavaScript Value
+    type FfiValue: Copy;
 
     /// Associates with a type that implements JSContextImpl
     /// This represents the context wrapper type (e.g. QJSContext)
     type Context: JSContextImpl;
 
-    fn from_ffi(
-        ctx_raw: <Self::Context as JSContextImpl>::RawContext,
-        value_raw: Self::RawValue,
-    ) -> Self;
+    fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self;
 
-    /// Consumes the ownship and returns the raw JSValue without triggering drop.
+    /// Consumes the ownship and returns the FFI level of JSValue without triggering drop.
     /// It's desigend to transfer ownship to FFI
-    fn into_raw_value(self) -> Self::RawValue;
+    fn into_ffi_value(self) -> Self::FfiValue;
 
-    fn as_raw_value(&self) -> &Self::RawValue;
-    fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext;
+    fn as_ffi_value(&self) -> &Self::FfiValue;
+    fn as_ffi_context(&self) -> &<Self::Context as JSContextImpl>::FfiContext;
 }
 
 pub struct JSValue<'ctx, V: JSValueImpl> {
@@ -86,8 +83,8 @@ where
     }
 
     pub fn from_ffi(
-        ctx_raw: <V::Context as JSContextImpl>::RawContext,
-        value_raw: V::RawValue,
+        ctx_raw: <V::Context as JSContextImpl>::FfiContext,
+        value_raw: V::FfiValue,
     ) -> Self {
         let ctx = V::Context::from_ffi(ctx_raw);
         let value = V::from_ffi(ctx_raw, value_raw);
@@ -185,7 +182,7 @@ macro_rules! impl_js_converter {
             type Error = String;
             fn try_into(self) -> Result<$out_type, Self::Error> {
                 let mut result: $out_type = Default::default();
-                if unsafe { $to_fn(*self.as_raw_context(), *self.as_raw_value(), &mut result) } < 0
+                if unsafe { $to_fn(*self.as_ffi_context(), *self.as_ffi_value(), &mut result) } < 0
                 {
                     let err = format!(
                         "Failed to convert JS Value into Rust type: {}",
@@ -200,11 +197,11 @@ macro_rules! impl_js_converter {
 
         impl<T> From<(&T, $in_type)> for $target
         where
-            T: JSContextImpl<RawContext = <$target as JSRawContext>::RawContext>,
+            T: JSContextImpl<FfiContext = <$target as JSFfiContext>::FfiContext>,
             $target: JSValueImpl<Context = T>,
         {
             fn from(t: (&T, $in_type)) -> Self {
-                let ctx = *t.0.as_raw();
+                let ctx = *t.0.as_ffi();
                 let raw = unsafe { $create_fn(ctx, t.1) };
                 Self::from_ffi(ctx, raw)
             }
