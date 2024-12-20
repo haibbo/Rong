@@ -1,4 +1,4 @@
-use crate::{JSValueImpl, RustCallable, RustFunc};
+use crate::{JSValueImpl, RustFunc};
 
 /// JSClass trait for rust type
 pub trait JSClass<V: JSValueImpl>: Sized {

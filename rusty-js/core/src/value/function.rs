@@ -22,11 +22,11 @@ where
     }
 }
 
-pub trait RustCallable<V: JSValueImpl> {
+pub trait JSCallable<V: JSValueImpl> {
     fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>;
 }
 
-impl<V, F> RustCallable<V> for F
+impl<V, F> JSCallable<V> for F
 where
     V: JSValueImpl,
     F: Fn(&V::Context, &[V]) -> Result<V, String>,
@@ -40,41 +40,39 @@ where
 /// example:
 ///
 /// RustFunc::new( |x i32, y: i32, z: i32| x + y + z)
-pub struct RustFunc<V: JSValueImpl>(Box<dyn RustCallable<V>>);
-
-impl<V: JSValueImpl> RustCallable<V> for RustFunc<V> {
-    fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String> {
-        self.0.call(context, args)
-    }
-}
+pub struct RustFunc<V: JSValueImpl>(Box<dyn JSCallable<V>>);
 
 /// Type parameter P is used to differentiate between function signatures with
 /// different arities. It represents the parameter types as a tuple, e.g:
 /// - () for no parameters
-/// - (T1,) for one parameter
+/// - (T1) for one parameter
 /// - (T1,T2) for two parameters
 ///
 /// This allows the compiler to select the correct implementation based on the
 /// function's parameter types, while avoiding implementation conflicts since
 /// each tuple type is distinct.
-pub trait IntoRustCallable<V: JSValueImpl, P> {
+pub trait IntoJSCallable<V: JSValueImpl, P> {
     fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>;
 }
 
 impl<V: JSValueImpl> RustFunc<V> {
     pub fn new<F, P>(f: F) -> Self
     where
-        F: IntoRustCallable<V, P> + 'static,
+        F: IntoJSCallable<V, P> + 'static,
     {
         let func = Box::new(move |context: &V::Context, args: &[V]| f.call(context, args))
-            as Box<dyn RustCallable<V>>;
+            as Box<dyn JSCallable<V>>;
         Self(func)
+    }
+
+    pub(crate) fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String> {
+        self.0.call(context, args)
     }
 }
 
 macro_rules! impl_rust_callable_func {
     ($($t:ident),*$(,)?) => {
-        impl<V, R, Fun $(,$t)*> IntoRustCallable<V, ($($t,)*)> for Fun
+        impl<V, R, Fun $(,$t)*> IntoJSCallable<V, ($($t,)*)> for Fun
         where
             Fun: Fn($($t),*) -> R,
             V: JSValueImpl + JSValueConversion,
