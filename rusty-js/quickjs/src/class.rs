@@ -7,9 +7,6 @@ unsafe fn prepare_args(
     argc: ::std::os::raw::c_int,
     argv: *mut qjs::JSValue,
 ) -> (QJSContext, Vec<QJSValue>) {
-    // clone ctx, rust will be responsibe for managing lifetime
-    let ctx = qjs::JS_DupContext(ctx);
-
     let args = if argc == 0 {
         Vec::new()
     } else {

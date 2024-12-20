@@ -27,6 +27,8 @@ pub trait JSValueImpl: Clone {
     /// This represents the context wrapper type (e.g. QJSContext)
     type Context: JSContextImpl;
 
+    /// the implementation need to make sure it has the ownship, like as new method
+    /// generally, it should increase referen count of FFI Context
     fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self;
 
     /// Consumes the ownship and returns the FFI level of JSValue without triggering drop.
@@ -39,7 +41,7 @@ pub trait JSValueImpl: Clone {
 
 pub struct JSValue<'ctx, V: JSValueImpl> {
     inner: V,
-    ctx: Arc<V::Context>,
+    ctx: V::Context,
     _phantom: PhantomData<&'ctx ()>,
 }
 
@@ -60,7 +62,7 @@ where
     pub(crate) fn new(ctx: &'ctx JSContext<V::Context>, value: V) -> Self {
         Self {
             inner: value,
-            ctx: Arc::new(ctx.deref().clone()),
+            ctx: ctx.deref().clone(),
             _phantom: PhantomData,
         }
     }
@@ -68,13 +70,12 @@ where
     pub(crate) fn with_value(&self, value: V) -> Self {
         Self {
             inner: value,
-            ctx: Arc::clone(&self.ctx),
+            ctx: self.ctx.clone(),
             _phantom: PhantomData,
         }
     }
 
-    pub fn from_raw_parts(ctx: &V::Context, value: V) -> Self {
-        let ctx = Arc::new(ctx.clone());
+    pub fn from_raw_parts(ctx: V::Context, value: V) -> Self {
         Self {
             inner: value,
             ctx,
@@ -82,13 +83,10 @@ where
         }
     }
 
-    pub fn from_ffi(
-        ctx_raw: <V::Context as JSContextImpl>::FfiContext,
-        value_raw: V::FfiValue,
-    ) -> Self {
-        let ctx = V::Context::from_ffi(ctx_raw);
-        let value = V::from_ffi(ctx_raw, value_raw);
-        Self::from_raw_parts(&ctx, value)
+    pub fn from_ffi(ctx: <V::Context as JSContextImpl>::FfiContext, value: V::FfiValue) -> Self {
+        let context = V::Context::from_ffi(ctx);
+        let value = V::from_ffi(ctx, value);
+        Self::from_raw_parts(context, value)
     }
 
     pub(crate) fn as_inner(&self) -> &V {
@@ -159,7 +157,7 @@ where
     V: JSValueImpl,
 {
     fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, String> {
-        Ok(JSValue::from_raw_parts(ctx, value))
+        Ok(JSValue::from_raw_parts(ctx.clone(), value))
     }
 }
 

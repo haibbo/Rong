@@ -41,8 +41,15 @@ impl JSContextImpl for QJSContext {
         &self.ctx
     }
 
-    fn from_ffi(raw: Self::FfiContext) -> Self {
-        Self { ctx: raw }
+    fn from_ffi(ctx: Self::FfiContext) -> Self {
+        Self::_from_ffi(ctx)
+    }
+}
+
+impl QJSContext {
+    fn _from_ffi(ctx: *mut qjs::JSContext) -> Self {
+        let ctx = unsafe { qjs::JS_DupContext(ctx) };
+        Self { ctx }
     }
 }
 

@@ -24,7 +24,7 @@ where
 {
     fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, String> {
         if value.is_object() {
-            Ok(JSValue::from_raw_parts(ctx, value).into())
+            Ok(JSValue::from_raw_parts(ctx.clone(), value).into())
         } else {
             Err("not an object".to_string())
         }

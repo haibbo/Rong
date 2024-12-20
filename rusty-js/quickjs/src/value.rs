@@ -38,7 +38,11 @@ impl JSValueImpl for QJSValue {
     type Context = QJSContext;
 
     fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self {
-        Self { value, ctx }
+        Self {
+            value, // here we don't clone, since into_ffi_value don't drop
+            ctx,   // here we don't clone, since QJSContext increase reference count to hold, and
+                   // at higher lay, QJSContext and QJSValue are bundled togethere
+        }
     }
 
     fn into_ffi_value(self) -> Self::FfiValue {
