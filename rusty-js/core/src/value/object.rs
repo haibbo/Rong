@@ -7,18 +7,18 @@ pub use property::{PropertyAttributes, PropertyKey};
 
 use super::IntoJSValue;
 
-pub struct JSObject<'ctx, V: JSValueImpl>(JSValue<'ctx, V>);
+pub struct JSObject<V: JSValueImpl>(JSValue<V>);
 
-impl<'ctx, V> From<JSValue<'ctx, V>> for JSObject<'ctx, V>
+impl<V> From<JSValue<V>> for JSObject<V>
 where
     V: JSValueImpl,
 {
-    fn from(v: JSValue<'ctx, V>) -> Self {
+    fn from(v: JSValue<V>) -> Self {
         JSObject(v)
     }
 }
 
-impl<V> FromJSValue<V> for JSObject<'_, V>
+impl<V> FromJSValue<V> for JSObject<V>
 where
     V: JSTypeOf,
 {
@@ -31,14 +31,14 @@ where
     }
 }
 
-impl<'ctx, V: JSValueImpl> Deref for JSObject<'ctx, V> {
-    type Target = JSValue<'ctx, V>;
+impl<V: JSValueImpl> Deref for JSObject<V> {
+    type Target = JSValue<V>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<V> IntoJSValue<V> for JSObject<'_, V>
+impl<V> IntoJSValue<V> for JSObject<V>
 where
     V: JSValueImpl,
 {
@@ -47,13 +47,13 @@ where
     }
 }
 
-pub trait JSObjectOps<'ctx>: JSValueConversion + JSTypeOf {
+pub trait JSObjectOps: JSValueConversion + JSTypeOf {
     /// if failed, it needs to return EXCEPTION
-    fn new_object(ctx: &'ctx Self::Context) -> Self;
+    fn new_object(ctx: &Self::Context) -> Self;
 
     /// if failed, it needs to return EXCEPTION
     /// constructor represents JS Class
-    fn make_object<T>(ctx: &'ctx Self::Context, constructor: Self, data: *mut T) -> Self;
+    fn make_object<T>(ctx: &Self::Context, constructor: Self, data: *mut T) -> Self;
 
     /// get private data saved in object by make_object
     fn get_opaque<T>(&self) -> *mut T;
@@ -75,22 +75,18 @@ pub trait JSObjectOps<'ctx>: JSValueConversion + JSTypeOf {
     fn get_property(&self, key: Self) -> Option<Self>;
 }
 
-impl<'ctx, V> JSObject<'ctx, V>
+impl<V> JSObject<V>
 where
-    V: JSObjectOps<'ctx>,
+    V: JSObjectOps,
 {
     /// new a general object
-    pub fn new(ctx: &'ctx JSContext<V::Context>) -> Self {
+    pub fn new(ctx: &JSContext<V::Context>) -> Self {
         let value = V::new_object(&ctx.inner);
         JSValue::new(ctx, value).into()
     }
 
     /// new object instance of Class with private data
-    pub fn make<T>(
-        ctx: &'ctx JSContext<V::Context>,
-        construct: JSFunc<'ctx, V>,
-        opaque: *mut T,
-    ) -> Self {
+    pub fn make<T>(ctx: &JSContext<V::Context>, construct: JSFunc<V>, opaque: *mut T) -> Self {
         let value = V::make_object(&ctx.inner, construct.into_js_value(ctx), opaque);
         Self(JSValue::new(ctx, value))
     }
@@ -101,13 +97,13 @@ where
     }
 }
 
-impl<'ctx, V> JSObject<'ctx, V>
+impl<V> JSObject<V>
 where
-    V: JSObjectOps<'ctx>,
+    V: JSObjectOps,
 {
-    pub fn set<K, KV>(&self, k: K, kv: KV) -> bool
+    pub fn set<'a, K, KV>(&'a self, k: K, kv: KV) -> bool
     where
-        K: Into<PropertyKey<'ctx>>,
+        K: Into<PropertyKey<'a>>,
         KV: IntoJSValue<V>,
     {
         let key = k.into().into_key(self.as_ctx());
@@ -115,25 +111,25 @@ where
             .set_property(key, kv.into_js_value(self.as_ctx()))
     }
 
-    pub fn del<K>(&self, k: K) -> bool
+    pub fn del<'a, K>(&'a self, k: K) -> bool
     where
-        K: Into<PropertyKey<'ctx>>,
+        K: Into<PropertyKey<'a>>,
     {
         let key = k.into().into_key(self.as_ctx());
         self.as_inner().del_property(key)
     }
 
-    pub fn has<K>(&self, k: K) -> bool
+    pub fn has<'a, K>(&self, k: K) -> bool
     where
-        K: Into<PropertyKey<'ctx>>,
+        K: Into<PropertyKey<'a>>,
     {
         let key = k.into().into_key(self.as_ctx());
         self.as_inner().has_property(key)
     }
 
-    pub fn get<K, T>(&self, k: K) -> Result<T, String>
+    pub fn get<'a, K, T>(&'a self, k: K) -> Result<T, String>
     where
-        K: Into<PropertyKey<'ctx>>,
+        K: Into<PropertyKey<'a>>,
         T: FromJSValue<V>,
     {
         let key = k.into().into_key(self.as_ctx());

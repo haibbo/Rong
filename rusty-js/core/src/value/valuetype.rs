@@ -70,7 +70,7 @@ pub trait JSTypeOf: JSValueImpl {
     }
 }
 
-impl<'ctx, V> JSValue<'ctx, V>
+impl<V> JSValue<V>
 where
     V: JSTypeOf,
 {
@@ -78,7 +78,7 @@ where
         self.inner.type_of()
     }
 
-    pub fn is_exception(&self) -> Option<JSException<'ctx, V>> {
+    pub fn is_exception(&self) -> Option<JSException<V>> {
         self.inner
             .is_exception()
             .map(|e| JSException::from_object(self.with_value(e).into()))
@@ -87,7 +87,7 @@ where
 
 macro_rules! generate_is_type {
     ($($method: ident),*) => {
-        impl<'ctx, V> JSValue<'ctx, V>
+        impl<V> JSValue<V>
         where
             V: JSTypeOf,
         {

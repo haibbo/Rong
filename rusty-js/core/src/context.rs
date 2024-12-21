@@ -11,11 +11,13 @@ pub trait JSContextImpl: Clone {
     fn new(runtime: &Self::Runtime) -> Self
     where
         Self: Sized;
-    fn as_ffi(&self) -> &Self::FfiContext;
+
+    /// FfiContext implements Copy
+    fn to_ffi(&self) -> Self::FfiContext;
 
     /// the implementation need to make sure it has the ownship, like as new method
     /// generally, it should increase referen count of FFI Context
-    fn from_ffi(raw: Self::FfiContext) -> Self;
+    fn from_ffi(ctx: Self::FfiContext) -> Self;
 }
 
 pub trait JSFfiContext {
@@ -57,14 +59,14 @@ pub trait JSCodeRunner: JSContextImpl {
         JC: JSClass<Self::Value>;
 }
 
-impl<'ctx, C> JSContext<C>
+impl<C> JSContext<C>
 where
     C: JSCodeRunner,
 {
     /// eval javascript
-    pub fn eval<'a, T>(&'a self, source: impl AsRef<str>) -> Result<T, String>
+    pub fn eval<T>(&self, source: impl AsRef<str>) -> Result<T, String>
     where
-        C::Value: JSObjectOps<'a>,
+        C::Value: JSObjectOps,
         T: FromJSValue<C::Value>,
     {
         let raw = self.inner.eval(source);
@@ -78,15 +80,15 @@ where
     }
 
     /// get global object
-    pub fn global_object(&'ctx self) -> JSObject<'ctx, C::Value> {
+    pub fn global_object(&self) -> JSObject<C::Value> {
         let raw = self.inner.global_object();
         JSValue::new(self, raw).into()
     }
 
-    pub fn register_class<JC>(&'ctx self)
+    pub fn register_class<JC>(&self)
     where
         JC: JSClass<C::Value>,
-        C::Value: JSObjectOps<'ctx>,
+        C::Value: JSObjectOps,
     {
         let obj = self.global_object();
         let constrcutor = self.inner.register_class::<JC>();

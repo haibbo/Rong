@@ -2,15 +2,15 @@ use crate::qjs;
 use crate::QJSValue;
 use rusty_js_core::{JSContextImpl, JSObjectOps, JSValueImpl, PropertyAttributes};
 
-impl<'ctx> JSObjectOps<'ctx> for QJSValue {
-    fn new_object(ctx: &'ctx Self::Context) -> Self {
-        let ctx = *ctx.as_ffi();
+impl JSObjectOps for QJSValue {
+    fn new_object(ctx: &Self::Context) -> Self {
+        let ctx = ctx.to_ffi();
         let v = unsafe { qjs::JS_NewObject(ctx) };
         QJSValue::from_ffi(ctx, v)
     }
 
-    fn make_object<T>(ctx: &'ctx Self::Context, constructor: Self, data: *mut T) -> Self {
-        let ctx = *ctx.as_ffi();
+    fn make_object<T>(ctx: &Self::Context, constructor: Self, data: *mut T) -> Self {
+        let ctx = ctx.to_ffi();
         let v = unsafe { qjs::QJS_ObjectMake(ctx, constructor.value, data.cast()) };
         QJSValue::from_ffi(ctx, v)
     }

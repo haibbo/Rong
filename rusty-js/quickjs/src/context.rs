@@ -20,6 +20,7 @@ impl Drop for QJSContext {
 
 impl Clone for QJSContext {
     fn clone(&self) -> Self {
+        // println!("clone QJS Ctx");
         Self {
             ctx: unsafe { qjs::JS_DupContext(self.ctx) },
         }
@@ -37,8 +38,8 @@ impl JSContextImpl for QJSContext {
             }
         }
     }
-    fn as_ffi(&self) -> &Self::FfiContext {
-        &self.ctx
+    fn to_ffi(&self) -> Self::FfiContext {
+        self.ctx
     }
 
     fn from_ffi(ctx: Self::FfiContext) -> Self {

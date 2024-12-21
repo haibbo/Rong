@@ -4,16 +4,16 @@ use crate::{
 };
 use std::ops::Deref;
 
-pub struct JSFunc<'ctx, V: JSValueImpl>(JSObject<'ctx, V>);
+pub struct JSFunc<V: JSValueImpl>(JSObject<V>);
 
-impl<'ctx, V: JSValueImpl> Deref for JSFunc<'ctx, V> {
-    type Target = JSObject<'ctx, V>;
+impl<V: JSValueImpl> Deref for JSFunc<V> {
+    type Target = JSObject<V>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<V> IntoJSValue<V> for JSFunc<'_, V>
+impl<V> IntoJSValue<V> for JSFunc<V>
 where
     V: JSValueImpl,
 {

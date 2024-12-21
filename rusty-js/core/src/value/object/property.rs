@@ -39,10 +39,11 @@ impl<'a> From<&'a str> for PropertyKey<'a> {
     }
 }
 
-impl<'ctx> PropertyKey<'ctx> {
-    pub(crate) fn into_key<V>(self, ctx: &'ctx V::Context) -> V
+impl<'a> PropertyKey<'a> {
+    pub(crate) fn into_key<'c, V>(self, ctx: &'c V::Context) -> V
     where
         V: JSValueConversion,
+        'c: 'a, // make sure lifetime of ctx is not less than &str
     {
         match self {
             Self::Int32(i) => (ctx, i).into(),
@@ -90,17 +91,17 @@ impl PropertyAttributes {
     }
 }
 
-pub struct PropertyDescriptor<'ctx, V: JSValueImpl> {
+pub struct PropertyDescriptor<V: JSValueImpl> {
     name: String,
     value: Option<V>,
-    getter: Option<JSFunc<'ctx, V>>,
-    setter: Option<JSFunc<'ctx, V>>,
+    getter: Option<JSFunc<V>>,
+    setter: Option<JSFunc<V>>,
     attributes: PropertyAttributes,
 }
 
-impl<'ctx, V> PropertyDescriptor<'ctx, V>
+impl<V> PropertyDescriptor<V>
 where
-    V: JSObjectOps<'ctx>,
+    V: JSObjectOps,
 {
     #[must_use]
     pub fn builder(name: &str) -> Self {
@@ -114,13 +115,13 @@ where
     }
 
     #[must_use]
-    pub fn getter(mut self, getter: JSFunc<'ctx, V>) -> Self {
+    pub fn getter(mut self, getter: JSFunc<V>) -> Self {
         self.getter = Some(getter);
         self
     }
 
     #[must_use]
-    pub fn setter(mut self, setter: JSFunc<'ctx, V>) -> Self {
+    pub fn setter(mut self, setter: JSFunc<V>) -> Self {
         self.setter = Some(setter);
         self
     }
@@ -144,10 +145,10 @@ where
     }
 
     // apply PropertyDescriptor to JS Object with key
-    pub fn apply_to<K>(mut self, obj: &JSObject<'ctx, V>, k: K)
+    pub fn apply_to<K>(mut self, obj: &JSObject<V>, k: K)
     where
-        K: Into<PropertyKey<'ctx>>,
-        V: JSObjectOps<'ctx>,
+        K: for<'a> Into<PropertyKey<'a>>,
+        V: JSObjectOps,
     {
         let value = self
             .value

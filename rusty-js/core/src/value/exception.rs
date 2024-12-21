@@ -5,16 +5,16 @@ use std::fmt;
 use std::ops::Deref;
 use std::string::String;
 
-pub struct JSException<'ctx, V: JSValueImpl>(JSObject<'ctx, V>);
+pub struct JSException<V: JSValueImpl>(JSObject<V>);
 
-impl<'ctx, V: JSObjectOps<'ctx>> Deref for JSException<'ctx, V> {
-    type Target = JSObject<'ctx, V>;
+impl<V: JSObjectOps> Deref for JSException<V> {
+    type Target = JSObject<V>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<V> IntoJSValue<V> for JSException<'_, V>
+impl<V> IntoJSValue<V> for JSException<V>
 where
     V: JSValueImpl,
 {
@@ -23,31 +23,31 @@ where
     }
 }
 
-impl<'ctx, V> JSException<'ctx, V>
+impl<V> JSException<V>
 where
     V: JSValueImpl,
 {
-    pub(crate) fn from_object(v: JSObject<'ctx, V>) -> Self {
+    pub(crate) fn from_object(v: JSObject<V>) -> Self {
         Self(v)
     }
 }
 
-impl<'ctx, V> JSException<'ctx, V>
+impl<V> JSException<V>
 where
-    V: JSObjectOps<'ctx>,
+    V: JSObjectOps,
     V::Context: JSExceptionHandler<Value = V>,
 {
-    pub fn from_message(ctx: &'ctx JSContext<V::Context>, message: &str) -> Self {
+    pub fn from_message(ctx: &JSContext<V::Context>, message: &str) -> Self {
         let v = ctx.inner.new_error();
-        let obj: JSObject<'ctx, V> = JSValue::new(ctx, v).into();
+        let obj: JSObject<V> = JSValue::new(ctx, v).into();
         obj.set("message", message);
         Self(obj)
     }
 }
 
-impl<'ctx, V> JSException<'ctx, V>
+impl<V> JSException<V>
 where
-    V: JSObjectOps<'ctx>,
+    V: JSObjectOps,
 {
     pub fn into_error(self) -> JSErrorInfo {
         let ctx = self.as_ctx().clone();
@@ -66,9 +66,9 @@ where
     }
 }
 
-impl<'ctx, V> JSException<'ctx, V>
+impl<V> JSException<V>
 where
-    V: JSObjectOps<'ctx>,
+    V: JSObjectOps,
 {
     /// Returns the message of the error.
     ///
@@ -146,7 +146,7 @@ where
     }
 }
 
-impl<'ctx, V: JSObjectOps<'ctx>> fmt::Debug for JSException<'ctx, V> {
+impl<V: JSObjectOps> fmt::Debug for JSException<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Exception")
             .field("message", &self.message())
@@ -155,7 +155,7 @@ impl<'ctx, V: JSObjectOps<'ctx>> fmt::Debug for JSException<'ctx, V> {
     }
 }
 
-impl<'ctx, V: JSObjectOps<'ctx>> fmt::Display for JSException<'ctx, V> {
+impl<V: JSObjectOps> fmt::Display for JSException<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         "Error:".fmt(f)?;
         if let Some(message) = &self.message() {

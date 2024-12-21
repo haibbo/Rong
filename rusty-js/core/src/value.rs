@@ -1,8 +1,6 @@
 use crate::{JSContext, JSContextImpl};
-use std::marker::PhantomData;
 use std::ops::Deref;
 use std::string::String;
-use std::sync::Arc;
 
 mod convert;
 pub use convert::*;
@@ -39,31 +37,28 @@ pub trait JSValueImpl: Clone {
     fn as_ffi_context(&self) -> &<Self::Context as JSContextImpl>::FfiContext;
 }
 
-pub struct JSValue<'ctx, V: JSValueImpl> {
+pub struct JSValue<V: JSValueImpl> {
     inner: V,
     ctx: V::Context,
-    _phantom: PhantomData<&'ctx ()>,
 }
 
-impl<V: JSValueImpl> Clone for JSValue<'_, V> {
+impl<V: JSValueImpl> Clone for JSValue<V> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
             ctx: self.ctx.clone(),
-            _phantom: PhantomData,
         }
     }
 }
 
-impl<'ctx, V> JSValue<'ctx, V>
+impl<V> JSValue<V>
 where
     V: JSValueImpl,
 {
-    pub(crate) fn new(ctx: &'ctx JSContext<V::Context>, value: V) -> Self {
+    pub(crate) fn new(ctx: &JSContext<V::Context>, value: V) -> Self {
         Self {
             inner: value,
             ctx: ctx.deref().clone(),
-            _phantom: PhantomData,
         }
     }
 
@@ -71,16 +66,11 @@ where
         Self {
             inner: value,
             ctx: self.ctx.clone(),
-            _phantom: PhantomData,
         }
     }
 
     pub fn from_raw_parts(ctx: V::Context, value: V) -> Self {
-        Self {
-            inner: value,
-            ctx,
-            _phantom: PhantomData,
-        }
+        Self { inner: value, ctx }
     }
 
     pub fn from_ffi(ctx: <V::Context as JSContextImpl>::FfiContext, value: V::FfiValue) -> Self {
@@ -102,14 +92,14 @@ where
     }
 }
 
-impl<'ctx, V> JSValue<'ctx, V>
+impl<V> JSValue<V>
 where
     V: JSValueImpl,
 {
     /// Converts  Rust value into a `JSValue`.
-    pub fn from<T>(ctx: &'ctx JSContext<V::Context>, val: T) -> Self
+    pub fn from<T>(ctx: &JSContext<V::Context>, val: T) -> Self
     where
-        V: From<(&'ctx V::Context, T)>,
+        V: for<'a> From<(&'a V::Context, T)>,
     {
         let value = V::from((&ctx.inner, val));
         JSValue::new(ctx, value)
@@ -125,17 +115,17 @@ where
     }
 
     /// create JS UNDEFINED Value
-    pub fn undefined(ctx: &'ctx JSContext<V::Context>) -> Self
+    pub fn undefined(ctx: &JSContext<V::Context>) -> Self
     where
-        V: From<(&'ctx V::Context, ())>,
+        V: for<'a> From<(&'a V::Context, ())>,
     {
         let value = V::from((&ctx.inner, ()));
         JSValue::new(ctx, value)
     }
 }
 
-impl<'ctx, V: JSTypeOf> JSValue<'ctx, V> {
-    pub fn as_object(&self) -> Option<&JSObject<'ctx, V>> {
+impl<V: JSTypeOf> JSValue<V> {
+    pub fn as_object(&self) -> Option<&JSObject<V>> {
         self.is_object().map(|_| {
             // it's safe, because JSObject is just wrapper of JSValue
             unsafe { std::mem::transmute(self) }
@@ -152,7 +142,7 @@ where
     }
 }
 
-impl<V> FromJSValue<V> for JSValue<'_, V>
+impl<V> FromJSValue<V> for JSValue<V>
 where
     V: JSValueImpl,
 {
@@ -161,11 +151,11 @@ where
     }
 }
 
-impl<V> IntoJSValue<V> for JSValue<'_, V>
+impl<V> IntoJSValue<V> for JSValue<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, _ctx: &'_ V::Context) -> V {
+    fn into_js_value(self, _ctx: &V::Context) -> V {
         self.into_inner()
     }
 }
@@ -199,7 +189,7 @@ macro_rules! impl_js_converter {
             $target: JSValueImpl<Context = T>,
         {
             fn from(t: (&T, $in_type)) -> Self {
-                let ctx = *t.0.as_ffi();
+                let ctx = t.0.to_ffi();
                 let raw = unsafe { $create_fn(ctx, t.1) };
                 Self::from_ffi(ctx, raw)
             }

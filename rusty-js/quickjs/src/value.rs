@@ -66,7 +66,7 @@ where
     QJSValue: JSValueImpl<Context = T>,
 {
     fn from(t: (&T, ())) -> Self {
-        let ctx = *t.0.as_ffi();
+        let ctx = t.0.to_ffi();
         let raw = unsafe { qjs::QJS_NewUndefined(ctx) };
         Self::from_ffi(ctx, raw)
     }
