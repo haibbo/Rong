@@ -51,6 +51,12 @@ impl<V: JSValueImpl> Clone for JSValue<V> {
     }
 }
 
+impl<V: JSValueImpl> From<(V::Context, V)> for JSValue<V> {
+    fn from(parts: (V::Context, V)) -> Self {
+        Self::from_raw_parts(parts.0, parts.1)
+    }
+}
+
 impl<V> JSValue<V>
 where
     V: JSValueImpl,
