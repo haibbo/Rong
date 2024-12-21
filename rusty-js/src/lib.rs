@@ -1,22 +1,27 @@
 pub use rusty_js_core::{
-    FromJSValue, IntoJSValue, JSClass, JSContext as CoreJSContext, JSException as CoreJSException,
-    JSFunc as CoreJSFunc, JSObject as CoreJSObject, JSRuntime as CoreJSRuntime,
-    JSValue as CoreJSValue, RustFunc,
+    FromJSValue, IntoJSValue, JSClass, JSContext as CoreJSContext, JSEngine,
+    JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject,
+    JSRuntime as CoreJSRuntime, JSValue as CoreJSValue, RustFunc as CoreRustFunc,
 };
 
 #[cfg(feature = "quickjs")]
 mod engine {
-    use rusty_js_quickjs::QJSRuntime;
-    pub use rusty_js_quickjs::{QJSContext, QJSValue};
-    pub type JSContext = super::CoreJSContext<QJSContext>;
-    pub type JSRuntime = super::CoreJSRuntime<QJSRuntime>;
-    pub type JSValue = super::CoreJSValue<QJSValue>;
-    pub type JSObject = super::CoreJSObject<QJSValue>;
-    pub type JSException = super::CoreJSException<QJSValue>;
-    pub type JSFunc = super::CoreJSFunc<QJSValue>;
-    pub type EJSValue = QJSValue;
-    pub type EJSContext = QJSContext;
+    use rusty_js_quickjs::QuickJS;
+    pub type ActiveJSEngine = QuickJS;
 }
 
 #[cfg(feature = "quickjs")]
 pub use engine::*;
+
+pub type JSEngineValue = <ActiveJSEngine as JSEngine>::Value;
+pub type JSEngineContext = <ActiveJSEngine as JSEngine>::Context;
+
+pub type JSContext = CoreJSContext<<ActiveJSEngine as JSEngine>::Context>;
+pub type JSRuntime = CoreJSRuntime<<ActiveJSEngine as JSEngine>::Runtime>;
+
+pub type JSValue = CoreJSValue<JSEngineValue>;
+pub type JSObject = CoreJSObject<JSEngineValue>;
+pub type JSException = CoreJSException<JSEngineValue>;
+
+pub type JSFunc = CoreJSFunc<JSEngineValue>;
+pub type RustFunc = CoreRustFunc<JSEngineValue>;

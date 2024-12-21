@@ -6,16 +6,16 @@ struct Point {
     y: i32,
 }
 
-impl IntoJSValue<EJSValue> for Point {
-    fn into_js_value(self, context: &EJSContext) -> EJSValue {
-        EJSValue::from((context, 1))
+impl IntoJSValue<JSEngineValue> for Point {
+    fn into_js_value(self, context: &JSEngineContext) -> JSEngineValue {
+        JSEngineValue::from((context, 1))
     }
 }
 
-impl JSClass<EJSValue> for Point {
+impl JSClass<JSEngineValue> for Point {
     const NAME: &'static str = "Point";
 
-    fn data_constructor() -> RustFunc<EJSValue> {
+    fn data_constructor() -> RustFunc {
         RustFunc::new(|x, y| Point { x, y })
     }
 }

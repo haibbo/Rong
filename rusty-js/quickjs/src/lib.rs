@@ -9,5 +9,5 @@ mod qjs {
 }
 
 pub use context::QJSContext;
-pub use runtime::QJSRuntime;
+pub use runtime::{QJSRuntime, QuickJS};
 pub use value::QJSValue;

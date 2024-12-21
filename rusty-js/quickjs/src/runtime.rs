@@ -1,5 +1,5 @@
-use crate::{qjs, QJSContext};
-use rusty_js_core::JSRuntimeImpl;
+use crate::{qjs, QJSContext, QJSValue};
+use rusty_js_core::{JSContextImpl, JSEngine, JSRuntimeImpl};
 
 pub struct QJSRuntime {
     rt: *mut qjs::JSRuntime,
@@ -27,5 +27,20 @@ impl JSRuntimeImpl for QJSRuntime {
 
     fn to_ffi(&self) -> Self::FfiRuntime {
         self.rt
+    }
+}
+
+pub struct QuickJS;
+
+impl JSEngine for QuickJS {
+    type Value = QJSValue;
+    type Context = QJSContext;
+    type Runtime = QJSRuntime;
+
+    fn _runtime() -> Self::Runtime {
+        QJSRuntime::new()
+    }
+    fn _context(rt: &Self::Runtime) -> Self::Context {
+        QJSContext::new(rt)
     }
 }
