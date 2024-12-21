@@ -25,7 +25,7 @@ impl JSRuntimeImpl for QJSRuntime {
         }
     }
 
-    fn as_ffi(&self) -> &Self::FfiRuntime {
-        &self.rt
+    fn to_ffi(&self) -> Self::FfiRuntime {
+        self.rt
     }
 }

@@ -7,7 +7,7 @@ pub trait JSRuntimeImpl {
     type Context: JSContextImpl;
 
     fn new() -> Self;
-    fn as_ffi(&self) -> &Self::FfiRuntime;
+    fn to_ffi(&self) -> Self::FfiRuntime;
 }
 
 pub struct JSRuntime<R: JSRuntimeImpl> {

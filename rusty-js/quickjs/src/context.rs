@@ -34,7 +34,7 @@ impl JSContextImpl for QJSContext {
     fn new(runtime: &Self::Runtime) -> Self {
         unsafe {
             Self {
-                ctx: qjs::JS_NewContext(*runtime.as_ffi()),
+                ctx: qjs::JS_NewContext(runtime.to_ffi()),
             }
         }
     }
