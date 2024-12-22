@@ -30,6 +30,7 @@ impl Clone for QJSContext {
 impl JSContextImpl for QJSContext {
     type FfiContext = *mut qjs::JSContext;
     type Runtime = QJSRuntime;
+    type Value = QJSValue;
 
     fn new(runtime: &Self::Runtime) -> Self {
         unsafe {
@@ -132,8 +133,6 @@ impl QJSContext {
 }
 
 impl JSCodeRunner for QJSContext {
-    type Value = QJSValue;
-
     fn eval(&self, source: impl AsRef<str>) -> Self::Value {
         let file_name = "eval";
         self.eval_raw(source, file_name, EvalOptions::default().to_flags())
@@ -162,8 +161,6 @@ impl JSCodeRunner for QJSContext {
 }
 
 impl JSExceptionHandler for QJSContext {
-    type Value = QJSValue;
-
     fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value {
         self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
             qjs::JS_ThrowSyntaxError(ctx, fmt, msg)

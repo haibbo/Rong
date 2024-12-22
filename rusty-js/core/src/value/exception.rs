@@ -7,7 +7,7 @@ use std::string::String;
 
 pub struct JSException<V: JSValueImpl>(JSObject<V>);
 
-impl<V: JSObjectOps> Deref for JSException<V> {
+impl<V: JSValueImpl> Deref for JSException<V> {
     type Target = JSObject<V>;
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -35,7 +35,7 @@ where
 impl<V> JSException<V>
 where
     V: JSObjectOps,
-    V::Context: JSExceptionHandler<Value = V>,
+    V::Context: JSExceptionHandler,
 {
     pub fn from_message(ctx: &JSContext<V::Context>, message: &str) -> Self {
         let v = ctx.inner.new_error();
@@ -105,8 +105,6 @@ impl fmt::Display for JSErrorInfo {
 impl std::error::Error for JSErrorInfo {}
 
 pub trait JSExceptionHandler: JSContextImpl {
-    type Value: JSValueImpl<Context = Self>;
-
     fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value;
     fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value;
     fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value;

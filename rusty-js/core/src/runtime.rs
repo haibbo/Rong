@@ -4,7 +4,7 @@ pub trait JSRuntimeImpl {
     /// the JS engine specific type of JavaScript Runtime
     type FfiRuntime: Copy;
 
-    type Context: JSContextImpl;
+    type Context: JSContextImpl<Runtime = Self>;
 
     fn new() -> Self;
     fn to_ffi(&self) -> Self::FfiRuntime;
@@ -15,9 +15,9 @@ pub struct JSRuntime<R: JSRuntimeImpl> {
 }
 
 pub trait JSEngine: Sized {
-    type Value: JSValueImpl<Context = Self::Context>;
+    type Value: JSValueImpl;
     type Context: JSContextImpl;
-    type Runtime: JSRuntimeImpl<Context = Self::Context>;
+    type Runtime: JSRuntimeImpl;
 
     /// JS engine is responsible for implementing
     fn _runtime() -> Self::Runtime;

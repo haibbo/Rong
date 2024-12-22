@@ -4,7 +4,8 @@ use std::ops::Deref;
 pub trait JSContextImpl: Clone {
     /// the JS engine specific type of JavaScript Context
     type FfiContext: Copy;
-    type Runtime: JSRuntimeImpl;
+    type Runtime: JSRuntimeImpl<Context = Self>;
+    type Value: JSValueImpl<Context = Self>;
 
     fn new(runtime: &Self::Runtime) -> Self
     where
@@ -41,8 +42,6 @@ impl<C: JSContextImpl> From<C> for JSContext<C> {
 }
 
 pub trait JSCodeRunner: JSContextImpl {
-    type Value: JSValueImpl<Context = Self>;
-
     /// eval javascript
     fn eval(&self, source: impl AsRef<str>) -> Self::Value;
 

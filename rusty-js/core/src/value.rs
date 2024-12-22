@@ -23,7 +23,7 @@ pub trait JSValueImpl: Clone {
 
     /// Associates with a type that implements JSContextImpl
     /// This represents the context wrapper type (e.g. QJSContext)
-    type Context: JSContextImpl;
+    type Context: JSContextImpl<Value = Self>;
 
     /// the implementation need to make sure it has the ownship, like as new method
     /// generally, it should increase referen count of FFI Context
