@@ -1,8 +1,8 @@
 pub use rusty_js::*;
 
 pub fn run<F: FnOnce(&JSContext)>(f: F) {
-    let rt = JSRuntime::default();
-    let ctx = JSContext::new(&rt);
+    let rt = ActiveJSEngine::runtime();
+    let ctx = ActiveJSEngine::context(&rt);
     f(&ctx);
 }
 

@@ -1,6 +1,4 @@
-use crate::{
-    FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntime, JSRuntimeImpl, JSValue, JSValueImpl,
-};
+use crate::{FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntimeImpl, JSValue, JSValueImpl};
 use std::ops::Deref;
 
 pub trait JSContextImpl: Clone {
@@ -39,14 +37,6 @@ impl<C: JSContextImpl> Deref for JSContext<C> {
 impl<C: JSContextImpl> From<C> for JSContext<C> {
     fn from(c: C) -> Self {
         Self { inner: c }
-    }
-}
-
-impl<C: JSContextImpl> JSContext<C> {
-    pub fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
-        Self {
-            inner: C::new(&runtime.inner),
-        }
     }
 }
 

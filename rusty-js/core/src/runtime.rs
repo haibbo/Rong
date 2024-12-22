@@ -14,16 +14,10 @@ pub struct JSRuntime<R: JSRuntimeImpl> {
     pub(crate) inner: R,
 }
 
-impl<R: JSRuntimeImpl> Default for JSRuntime<R> {
-    fn default() -> Self {
-        Self { inner: R::new() }
-    }
-}
-
 pub trait JSEngine: Sized {
-    type Value: JSValueImpl;
+    type Value: JSValueImpl<Context = Self::Context>;
     type Context: JSContextImpl;
-    type Runtime: JSRuntimeImpl;
+    type Runtime: JSRuntimeImpl<Context = Self::Context>;
 
     /// JS engine is responsible for implementing
     fn _runtime() -> Self::Runtime;
@@ -35,7 +29,7 @@ pub trait JSEngine: Sized {
         }
     }
 
-    fn context(rt: &Self::Runtime) -> JSContext<Self::Context> {
-        JSContext::from(Self::_context(rt))
+    fn context(rt: &JSRuntime<Self::Runtime>) -> JSContext<Self::Context> {
+        JSContext::from(Self::_context(&rt.inner))
     }
 }
