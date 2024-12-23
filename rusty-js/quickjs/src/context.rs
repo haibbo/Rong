@@ -46,6 +46,16 @@ impl JSContextImpl for QJSContext {
     fn from_ffi(ctx: Self::FfiContext) -> Self {
         Self::_from_ffi(ctx)
     }
+
+    /// Set opaque data for the context
+    fn set_opaque<T>(&self, data: *mut T) {
+        unsafe { qjs::JS_SetContextOpaque(self.ctx, data as *mut c_void) };
+    }
+
+    /// Get opaque data from the context
+    fn get_opaque<T>(&self) -> *mut T {
+        unsafe { qjs::JS_GetContextOpaque(self.ctx) as *mut T }
+    }
 }
 
 impl QJSContext {

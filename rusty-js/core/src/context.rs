@@ -17,6 +17,12 @@ pub trait JSContextImpl: Clone {
     /// the implementation need to make sure it has the ownship, like as new method
     /// generally, it should increase referen count of FFI Context
     fn from_ffi(ctx: Self::FfiContext) -> Self;
+
+    /// Set opaque data for the context
+    fn set_opaque<T>(&self, data: *mut T);
+
+    /// Get opaque data from the context
+    fn get_opaque<T>(&self) -> *mut T;
 }
 
 pub trait JSFfiContext {
