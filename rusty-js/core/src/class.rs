@@ -1,4 +1,6 @@
-use crate::{FromJSValue, JSContextImpl, JSObject, JSObjectOps, JSValueImpl, RustFunc};
+use crate::{
+    FromJSValue, JSContextImpl, JSExceptionHandler, JSObject, JSObjectOps, JSValueImpl, RustFunc,
+};
 use std::any::TypeId;
 use std::cell::{Ref, RefCell, RefMut};
 
@@ -12,10 +14,14 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
 }
 
 pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
-    fn constructor(context: &V::Context, args: &[V]) -> V {
+    fn constructor(context: &V::Context, args: &[V]) -> V
+    where
+        V::Context: JSExceptionHandler<Value = V>,
+    {
         Self::data_constructor().call(context, args).unwrap()
     }
 
+    /// Free resources of a class instance by finalizer
     fn free(value: V)
     where
         V: JSObjectOps,

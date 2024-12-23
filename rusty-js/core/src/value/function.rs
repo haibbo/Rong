@@ -1,7 +1,4 @@
-use crate::{
-    FromJSValue, IntoJSValue, JSContextImpl, JSExceptionHandler, JSObject, JSValueConversion,
-    JSValueImpl,
-};
+use crate::{FromJSValue, IntoJSValue, JSExceptionHandler, JSObject, JSValueImpl};
 use std::ops::Deref;
 
 pub struct JSFunc<V: JSValueImpl>(JSObject<V>);
@@ -40,7 +37,10 @@ where
 /// example:
 ///
 /// RustFunc::new( |x i32, y: i32, z: i32| x + y + z)
-pub struct RustFunc<V: JSValueImpl>(Box<dyn JSCallable<V>>);
+pub struct RustFunc<V: JSValueImpl> {
+    func: Box<dyn JSCallable<V>>,
+    parameter_count: usize,
+}
 
 /// Type parameter P is used to differentiate between function signatures with
 /// different arities. It represents the parameter types as a tuple, e.g:
@@ -53,6 +53,8 @@ pub struct RustFunc<V: JSValueImpl>(Box<dyn JSCallable<V>>);
 /// each tuple type is distinct.
 pub trait IntoJSCallable<V: JSValueImpl, P> {
     fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>;
+
+    fn parameter_count() -> usize;
 }
 
 impl<V: JSValueImpl> RustFunc<V> {
@@ -62,11 +64,28 @@ impl<V: JSValueImpl> RustFunc<V> {
     {
         let func = Box::new(move |context: &V::Context, args: &[V]| f.call(context, args))
             as Box<dyn JSCallable<V>>;
-        Self(func)
+        Self {
+            func,
+            parameter_count: F::parameter_count(),
+        }
     }
 
-    pub(crate) fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String> {
-        self.0.call(context, args)
+    pub(crate) fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>
+    where
+        V::Context: JSExceptionHandler<Value = V>,
+    {
+        if args.len() < self.parameter_count {
+            return Ok(context.throw_type_error(format!(
+                "Expected {} arguments, got {}",
+                self.parameter_count,
+                args.len()
+            )));
+        }
+        self.func.call(context, args)
+    }
+
+    pub(crate) fn parameter_count(&self) -> usize {
+        self.parameter_count
     }
 }
 
@@ -75,22 +94,12 @@ macro_rules! impl_js_callable_func {
         impl<V, R, Fun $(,$t)*> IntoJSCallable<V, ($($t,)*)> for Fun
         where
             Fun: Fn($($t),*) -> R,
-            V: JSValueImpl + JSValueConversion,
-            V::Context: JSContextImpl + JSExceptionHandler<Value=V>,
+            V: JSValueImpl,
             $($t: FromJSValue<V>,)*
             R: IntoJSValue<V>,
         {
+            #[allow(unused_variables)]
             fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>  {
-                let expected = count_idents!($($t),*);
-                if args.len() < expected {
-                    // TODO: improve error handler
-                    return Ok(context.throw_type_error(&format!(
-                        "Expected {} arguments, got {}",
-                        expected,
-                        args.len())
-                    ));
-                }
-
                 #[allow(unused_variables)]
                 let mut __arg_index = 0;
                 let result = (self)($(
@@ -101,6 +110,10 @@ macro_rules! impl_js_callable_func {
                     }
                 ),*);
                 Ok(result.into_js_value(context))
+            }
+
+            fn parameter_count() -> usize {
+                count_idents!($($t),*)
             }
         }
     };
