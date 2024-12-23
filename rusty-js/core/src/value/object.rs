@@ -1,4 +1,4 @@
-use crate::{FromJSValue, JSContext, JSFunc, JSTypeOf, JSValue, JSValueConversion, JSValueImpl};
+use crate::{FromJSValue, JSContext, JSTypeOf, JSValue, JSValueConversion, JSValueImpl};
 use std::ops::Deref;
 use std::string::String;
 
@@ -83,17 +83,6 @@ where
     pub fn new(ctx: &JSContext<V::Context>) -> Self {
         let value = V::new_object(&ctx.inner);
         JSValue::new(ctx, value).into()
-    }
-
-    /// new object instance of Class with private data
-    pub fn make<T>(ctx: &JSContext<V::Context>, construct: JSFunc<V>, opaque: *mut T) -> Self {
-        let value = V::make_object(&ctx.inner, construct.into_js_value(ctx), opaque);
-        Self(JSValue::new(ctx, value))
-    }
-
-    /// get private data
-    pub fn get_opaque<T>(&self) -> *mut T {
-        self.as_inner().get_opaque()
     }
 }
 

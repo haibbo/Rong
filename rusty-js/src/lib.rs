@@ -1,5 +1,5 @@
 pub use rusty_js_core::{
-    FromJSValue, IntoJSValue, JSClass, JSContext as CoreJSContext, JSEngine,
+    Class as CoreClass, FromJSValue, IntoJSValue, JSClass, JSContext as CoreJSContext, JSEngine,
     JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject,
     JSRuntime as CoreJSRuntime, JSValue as CoreJSValue, RustFunc as CoreRustFunc,
 };
@@ -24,3 +24,4 @@ pub type JSFunc = CoreJSFunc<JSEngineValue>;
 pub type JSException = CoreJSException<JSEngineValue>;
 
 pub type RustFunc = CoreRustFunc<JSEngineValue>;
+pub type Class = CoreClass<JSEngineValue>;

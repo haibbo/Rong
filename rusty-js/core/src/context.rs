@@ -1,6 +1,14 @@
 use crate::{FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntimeImpl, JSValue, JSValueImpl};
+use std::any::TypeId;
+use std::collections::HashMap;
 use std::ops::Deref;
 
+/// JSContextImpl represents a JavaScript context
+///
+/// # Safety
+/// The implementation must ensure that:
+/// 1. Value type implements Drop to properly clean up resources
+/// 2. Context type implements Drop if it holds any resources that need cleanup
 pub trait JSContextImpl: Clone {
     /// the JS engine specific type of JavaScript Context
     type FfiContext: Copy;
@@ -23,6 +31,30 @@ pub trait JSContextImpl: Clone {
 
     /// Get opaque data from the context
     fn get_opaque<T>(&self) -> *mut T;
+
+    fn init_class_registry(&self) {
+        let registry: HashMap<TypeId, Self::Value> = HashMap::new();
+        let boxed_registry = Box::new(registry);
+        self.set_opaque(Box::into_raw(boxed_registry));
+    }
+
+    fn get_class_registry(&self) -> Option<&HashMap<TypeId, Self::Value>> {
+        let ptr = self.get_opaque::<HashMap<TypeId, Self::Value>>();
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { &*ptr })
+        }
+    }
+
+    fn get_class_registry_mut(&self) -> Option<&mut HashMap<TypeId, Self::Value>> {
+        let ptr = self.get_opaque::<HashMap<TypeId, Self::Value>>();
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { &mut *ptr })
+        }
+    }
 }
 
 pub trait JSFfiContext {
@@ -41,8 +73,23 @@ impl<C: JSContextImpl> Deref for JSContext<C> {
     }
 }
 
+impl<C: JSContextImpl> Drop for JSContext<C> {
+    fn drop(&mut self) {
+        // Clear all constructors in the registry
+        // HashMap::clear() will call drop on each Value
+        self.inner
+            .get_class_registry_mut()
+            .map(|registry| registry.clear());
+
+        //The inner field will be cleaned up by its own Drop implementation
+    }
+}
+
 impl<C: JSContextImpl> From<C> for JSContext<C> {
     fn from(c: C) -> Self {
+        if c.get_class_registry().is_none() {
+            c.init_class_registry();
+        }
         Self { inner: c }
     }
 }
@@ -91,9 +138,23 @@ where
         JC: JSClass<C::Value>,
         C::Value: JSObjectOps,
     {
+        let constructor = self.inner.register_class::<JC>();
+
+        if let Some(registry) = self.inner.get_class_registry_mut() {
+            registry.insert(TypeId::of::<JC>(), constructor.clone());
+        }
+
         let obj = self.global_object();
-        let constrcutor = self.inner.register_class::<JC>();
-        let constrcutor = JSValue::new(self, constrcutor);
-        obj.set(JC::NAME, constrcutor);
+        let constructor = JSValue::new(self, constructor);
+        obj.set(JC::NAME, constructor);
+    }
+
+    pub fn get_class_constructor<JC>(&self) -> Option<&C::Value>
+    where
+        JC: JSClass<C::Value>,
+    {
+        self.inner
+            .get_class_registry()
+            .and_then(|registry| registry.get(&TypeId::of::<JC>()))
     }
 }
