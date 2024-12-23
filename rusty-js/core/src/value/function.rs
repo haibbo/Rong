@@ -70,7 +70,7 @@ impl<V: JSValueImpl> RustFunc<V> {
     }
 }
 
-macro_rules! impl_rust_callable_func {
+macro_rules! impl_js_callable_func {
     ($($t:ident),*$(,)?) => {
         impl<V, R, Fun $(,$t)*> IntoJSCallable<V, ($($t,)*)> for Fun
         where
@@ -91,9 +91,14 @@ macro_rules! impl_rust_callable_func {
                     ));
                 }
 
+                #[allow(unused_variables)]
+                let mut __arg_index = 0;
                 let result = (self)($(
-                    $t::from_js_value(context, args.get(count_idents!($t))
-                        .ok_or("Missing argument")?.clone())?
+                    {
+                        let arg = $t::from_js_value(context, args[__arg_index].clone())?;
+                        __arg_index += 1;
+                        arg
+                    }
                 ),*);
                 Ok(result.into_js_value(context))
             }
@@ -106,12 +111,12 @@ macro_rules! count_idents {
     ($t:ident $(,$rest:ident)*) => (1 + count_idents!($($rest),*));
 }
 
-impl_rust_callable_func!();
-impl_rust_callable_func!(P1);
-impl_rust_callable_func!(P1, P2);
-impl_rust_callable_func!(P1, P2, P3);
-impl_rust_callable_func!(P1, P2, P3, P4);
-impl_rust_callable_func!(P1, P2, P3, P4, P5);
-impl_rust_callable_func!(P1, P2, P3, P4, P5, P6);
-impl_rust_callable_func!(P1, P2, P3, P4, P5, P6, P7);
-impl_rust_callable_func!(P1, P2, P3, P4, P5, P6, P7, P8);
+impl_js_callable_func!();
+impl_js_callable_func!(P1);
+impl_js_callable_func!(P1, P2);
+impl_js_callable_func!(P1, P2, P3);
+impl_js_callable_func!(P1, P2, P3, P4);
+impl_js_callable_func!(P1, P2, P3, P4, P5);
+impl_js_callable_func!(P1, P2, P3, P4, P5, P6);
+impl_js_callable_func!(P1, P2, P3, P4, P5, P6, P7);
+impl_js_callable_func!(P1, P2, P3, P4, P5, P6, P7, P8);
