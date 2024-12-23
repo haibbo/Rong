@@ -28,6 +28,17 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     {
         Class::free::<Self>(value);
     }
+
+    /// call object as function
+    fn call(context: &V::Context, function: V, args: &[V]) -> V
+    where
+        V: JSObjectOps,
+        V::Context: JSExceptionHandler<Value = V>,
+    {
+        let obj = JSObject::from_js_value(context, function).unwrap();
+        let func = obj.borrow::<RustFunc<_>>().unwrap();
+        func.call(context, args).unwrap()
+    }
 }
 
 // Blanket implementation

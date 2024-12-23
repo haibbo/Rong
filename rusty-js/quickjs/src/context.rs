@@ -162,7 +162,7 @@ impl JSCodeRunner for QJSContext {
                 self.ctx,
                 JC::NAME.as_ptr() as _,
                 Some(crate::class::generic_constructor::<JC>),
-                Some(crate::class::call),
+                Some(crate::class::call::<JC>),
                 Some(crate::class::finalizer::<JC>),
             )
         };

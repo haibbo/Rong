@@ -42,14 +42,18 @@ where
 }
 
 /// FFI calling function.
-pub(crate) unsafe extern "C" fn call(
+pub(crate) unsafe extern "C" fn call<JC>(
     ctx: *mut qjs::JSContext,
     function: qjs::JSValue,
     _this: qjs::JSValue,
     argc: ::std::os::raw::c_int,
     argv: *mut qjs::JSValue,
     _flags: ::std::os::raw::c_int,
-) -> qjs::JSValue {
-    let (_ctx, _args) = prepare_args(ctx, argc, argv);
-    function
+) -> qjs::JSValue
+where
+    JC: JSClass<QJSValue>,
+{
+    let function = QJSValue::from_ffi(ctx, function);
+    let (ctx, args) = prepare_args(ctx, argc, argv);
+    <JC as JSClassExt<QJSValue>>::call(&ctx, function, args.as_slice()).into_ffi_value()
 }
