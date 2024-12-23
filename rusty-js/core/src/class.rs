@@ -15,6 +15,13 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     fn constructor(context: &V::Context, args: &[V]) -> V {
         Self::data_constructor().call(context, args).unwrap()
     }
+
+    fn free(value: V)
+    where
+        V: JSObjectOps,
+    {
+        Class::free::<Self>(value);
+    }
 }
 
 // Blanket implementation
@@ -31,6 +38,18 @@ where
         let context = self.0.as_ctx();
         let ptr = Box::into_raw(Box::new(RefCell::new(value)));
         V::make_object(context, self.0.clone().into_inner(), ptr)
+    }
+
+    /// Free resources of a class instance
+    pub fn free<JC: JSClass<V>>(instance: V) {
+        let value = instance.clone();
+        let ptr = value.get_opaque::<RefCell<JC>>();
+        if !ptr.is_null() {
+            // SAFETY: ptr was created by Box::into_raw in instance()
+            unsafe {
+                let _ = Box::from_raw(ptr);
+            };
+        }
     }
 
     /// Get class constructor by type
