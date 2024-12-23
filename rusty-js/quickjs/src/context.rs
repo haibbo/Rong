@@ -3,7 +3,7 @@ use rusty_js_core::{
     JSClass, JSCodeRunner, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl,
 };
 use std::ffi::CString;
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_void};
 
 pub struct QJSContext {
     pub(crate) ctx: *mut qjs::JSContext,
@@ -163,7 +163,7 @@ impl JSCodeRunner for QJSContext {
                 JC::NAME.as_ptr() as _,
                 Some(crate::class::generic_constructor::<JC>),
                 Some(crate::class::call),
-                Some(crate::class::finalizer),
+                Some(crate::class::finalizer::<JC>),
             )
         };
         QJSValue::from_ffi(self.ctx, raw)

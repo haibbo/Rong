@@ -29,11 +29,16 @@ where
     JC: JSClass<QJSValue>,
 {
     let (ctx, args) = prepare_args(ctx, argc, argv);
-    *<JC as JSClassExt<QJSValue>>::constructor(&ctx, args.as_slice()).as_ffi_value()
+    <JC as JSClassExt<QJSValue>>::constructor(&ctx, args.as_slice()).into_ffi_value()
 }
 
-pub(crate) unsafe extern "C" fn finalizer(_rt: *mut qjs::JSRuntime, obj: qjs::JSValue) {
-    let _d = qjs::QJS_ObjectGetPrivate(obj);
+pub(crate) unsafe extern "C" fn finalizer<JC>(_rt: *mut qjs::JSRuntime, obj: qjs::JSValue)
+where
+    JC: JSClass<QJSValue>,
+{
+    let ctx: *mut qjs::JSContext = std::ptr::null_mut();
+    let value = QJSValue::from_ffi(ctx, obj);
+    <JC as JSClassExt<QJSValue>>::free(value);
 }
 
 /// FFI calling function.

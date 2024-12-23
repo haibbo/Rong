@@ -23,8 +23,10 @@ impl Clone for QJSValue {
 impl Drop for QJSValue {
     fn drop(&mut self) {
         unsafe {
-            // println!("Free Value");
-            qjs::JS_FreeValue(self.ctx, self.value);
+            // Finalizer callback, ctx is set to NULL
+            if !self.ctx.is_null() {
+                qjs::JS_FreeValue(self.ctx, self.value);
+            }
         }
     }
 }
@@ -38,11 +40,11 @@ impl JSValueImpl for QJSValue {
     type Context = QJSContext;
 
     fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self {
-        Self {
-            value, // here we don't clone, since into_ffi_value don't drop
-            ctx,   // here we don't clone, since QJSContext increase reference count to hold, and
-                   // at higher lay, QJSContext and QJSValue are bundled togethere
-        }
+        // Here we don't clone value, since method into_ffi_value don't triger drop
+        //
+        // Here we don't clone ctx, since QJSContext increase reference count to hold, and
+        // at higher lay, QJSContext and QJSValue are bundled togethere
+        Self { value, ctx }
     }
 
     fn into_ffi_value(self) -> Self::FfiValue {
