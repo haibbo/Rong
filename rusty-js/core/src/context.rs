@@ -77,9 +77,9 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
     fn drop(&mut self) {
         // Clear all constructors in the registry
         // HashMap::clear() will call drop on each Value
-        self.inner
-            .get_class_registry_mut()
-            .map(|registry| registry.clear());
+        if let Some(registry) = self.inner.get_class_registry_mut() {
+            registry.clear()
+        }
 
         //The inner field will be cleaned up by its own Drop implementation
     }
