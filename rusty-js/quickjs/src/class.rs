@@ -1,35 +1,24 @@
 use crate::{qjs, QJSContext, QJSValue};
 use rusty_js_core::{JSClass, JSClassExt, JSContextImpl, JSValueImpl};
-use std::slice;
-
-unsafe fn prepare_args(
-    ctx: *mut qjs::JSContext,
-    argc: ::std::os::raw::c_int,
-    argv: *mut qjs::JSValue,
-) -> (QJSContext, Vec<QJSValue>) {
-    let args = if argc == 0 {
-        Vec::new()
-    } else {
-        let raw_args = slice::from_raw_parts(argv, argc as usize);
-        raw_args
-            .iter()
-            .map(|&arg| QJSValue::from_ffi(ctx, arg))
-            .collect::<Vec<QJSValue>>()
-    };
-    (QJSContext::from_ffi(ctx), args)
-}
 
 pub(crate) unsafe extern "C" fn generic_constructor<JC>(
     ctx: *mut qjs::JSContext,
-    _this: qjs::JSValue,
+    this: qjs::JSValue,
     argc: ::std::os::raw::c_int,
     argv: *mut qjs::JSValue,
 ) -> qjs::JSValue
 where
     JC: JSClass<QJSValue>,
 {
-    let (ctx, args) = prepare_args(ctx, argc, argv);
-    <JC as JSClassExt<QJSValue>>::constructor(&ctx, args.as_slice()).into_ffi_value()
+    qjs::JS_DupValue(ctx, this);
+    let this = QJSValue::from_ffi(ctx, this);
+
+    let args: Vec<_> = (0..argc as usize)
+        .map(move |i| QJSValue::from_ffi(ctx, *argv.add(i)))
+        .collect();
+
+    let ctx = QJSContext::from_ffi(ctx);
+    <JC as JSClassExt<QJSValue>>::constructor(&ctx, this, args).into_ffi_value()
 }
 
 pub(crate) unsafe extern "C" fn finalizer<JC>(_rt: *mut qjs::JSRuntime, obj: qjs::JSValue)
@@ -45,7 +34,7 @@ where
 pub(crate) unsafe extern "C" fn call<JC>(
     ctx: *mut qjs::JSContext,
     function: qjs::JSValue,
-    _this: qjs::JSValue,
+    this: qjs::JSValue,
     argc: ::std::os::raw::c_int,
     argv: *mut qjs::JSValue,
     _flags: ::std::os::raw::c_int,
@@ -53,11 +42,17 @@ pub(crate) unsafe extern "C" fn call<JC>(
 where
     JC: JSClass<QJSValue>,
 {
-    // rust side will drop function, and it does not use into_ffi_value to transfer back,
+    // rust side will drop function/this, and it does not use into_ffi_value to transfer back,
     // we have to clone it for later use, like access property of function object
     qjs::JS_DupValue(ctx, function);
+    qjs::JS_DupValue(ctx, this);
 
+    let this = QJSValue::from_ffi(ctx, this);
     let function = QJSValue::from_ffi(ctx, function);
-    let (ctx, args) = prepare_args(ctx, argc, argv);
-    <JC as JSClassExt<QJSValue>>::call(&ctx, function, args.as_slice()).into_ffi_value()
+    let args: Vec<_> = (0..argc as usize)
+        .map(move |i| QJSValue::from_ffi(ctx, *argv.add(i)))
+        .collect();
+
+    let ctx = QJSContext::from_ffi(ctx);
+    <JC as JSClassExt<QJSValue>>::call(&ctx, function, this, args).into_ffi_value()
 }
