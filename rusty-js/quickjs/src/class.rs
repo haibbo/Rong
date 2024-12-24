@@ -53,6 +53,10 @@ pub(crate) unsafe extern "C" fn call<JC>(
 where
     JC: JSClass<QJSValue>,
 {
+    // rust side will drop function, and it does not use into_ffi_value to transfer back,
+    // we have to clone it for later use, like access property of function object
+    qjs::JS_DupValue(ctx, function);
+
     let function = QJSValue::from_ffi(ctx, function);
     let (ctx, args) = prepare_args(ctx, argc, argv);
     <JC as JSClassExt<QJSValue>>::call(&ctx, function, args.as_slice()).into_ffi_value()
