@@ -52,16 +52,16 @@ where
 }
 
 trait JSCallable<V: JSValueImpl> {
-    fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>;
+    fn call(&self, context: &V::Context, this: V, args: Vec<V>) -> Result<V, String>;
 }
 
 impl<V, F> JSCallable<V> for F
 where
     V: JSValueImpl,
-    F: Fn(&V::Context, &[V]) -> Result<V, String>,
+    F: Fn(&V::Context, V, Vec<V>) -> Result<V, String>,
 {
-    fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String> {
-        (self)(context, args)
+    fn call(&self, context: &V::Context, this: V, args: Vec<V>) -> Result<V, String> {
+        (self)(context, this, args)
     }
 }
 
@@ -84,7 +84,7 @@ pub struct RustFunc<V: JSValueImpl> {
 /// function's parameter types, while avoiding implementation conflicts since
 /// each tuple type is distinct.
 pub trait IntoJSCallable<V: JSValueImpl, P> {
-    fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>;
+    fn call(&self, context: &V::Context, this: V, args: Vec<V>) -> Result<V, String>;
 
     fn parameter_count() -> u32;
 }
@@ -94,15 +94,16 @@ impl<V: JSValueImpl> RustFunc<V> {
     where
         F: IntoJSCallable<V, P> + 'static,
     {
-        let func = Box::new(move |context: &V::Context, args: &[V]| f.call(context, args))
-            as Box<dyn JSCallable<V>>;
+        let func = Box::new(move |context: &V::Context, this: V, args: Vec<V>| {
+            f.call(context, this, args)
+        }) as Box<dyn JSCallable<V>>;
         Self {
             func,
             parameter_count: F::parameter_count(),
         }
     }
 
-    pub(crate) fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>
+    pub(crate) fn call(&self, context: &V::Context, this: V, args: Vec<V>) -> Result<V, String>
     where
         V::Context: JSExceptionHandler<Value = V>,
     {
@@ -113,7 +114,7 @@ impl<V: JSValueImpl> RustFunc<V> {
                 self.parameter_count, num
             )));
         }
-        self.func.call(context, args)
+        self.func.call(context, this, args)
     }
 
     pub(crate) fn parameter_count(&self) -> u32 {
@@ -143,7 +144,7 @@ macro_rules! impl_js_callable_func {
             R: IntoJSValue<V>,
         {
             #[allow(unused_variables)]
-            fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>  {
+            fn call(&self, context: &V::Context, this:V, args: Vec<V>) -> Result<V, String>  {
                 #[allow(unused_variables)]
                 let mut __arg_index = 0;
                 let result = (self)($(

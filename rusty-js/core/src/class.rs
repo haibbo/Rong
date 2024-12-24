@@ -15,11 +15,11 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
 }
 
 pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
-    fn constructor(context: &V::Context, args: &[V]) -> V
+    fn constructor(ctx: &V::Context, this: V, args: Vec<V>) -> V
     where
         V::Context: JSExceptionHandler<Value = V>,
     {
-        Self::data_constructor().call(context, args).unwrap()
+        Self::data_constructor().call(ctx, this, args).unwrap()
     }
 
     /// Free resources of a class instance by finalizer
@@ -31,14 +31,14 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     }
 
     /// call object as function
-    fn call(context: &V::Context, function: V, args: &[V]) -> V
+    fn call(ctx: &V::Context, function: V, this: V, args: Vec<V>) -> V
     where
         V: JSObjectOps,
         V::Context: JSExceptionHandler<Value = V>,
     {
-        let obj = JSObject::from_js_value(context, function).unwrap();
+        let obj = JSObject::from_js_value(ctx, function).unwrap();
         let func = obj.borrow::<RustFunc<_>>().unwrap();
-        func.call(context, args).unwrap()
+        func.call(ctx, this, args).unwrap()
     }
 }
 
