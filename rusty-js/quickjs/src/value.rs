@@ -65,7 +65,6 @@ impl JSValueImpl for QJSValue {
 impl<T> From<(&T, ())> for QJSValue
 where
     T: JSContextImpl<FfiContext = <QJSValue as JSFfiContext>::FfiContext>,
-    QJSValue: JSValueImpl<Context = T>,
 {
     fn from(t: (&T, ())) -> Self {
         let ctx = t.0.to_ffi();
