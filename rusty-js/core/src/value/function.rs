@@ -39,7 +39,7 @@ where
 /// RustFunc::new( |x i32, y: i32, z: i32| x + y + z)
 pub struct RustFunc<V: JSValueImpl> {
     func: Box<dyn JSCallable<V>>,
-    parameter_count: usize,
+    parameter_count: u32,
 }
 
 /// Type parameter P is used to differentiate between function signatures with
@@ -54,7 +54,7 @@ pub struct RustFunc<V: JSValueImpl> {
 pub trait IntoJSCallable<V: JSValueImpl, P> {
     fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>;
 
-    fn parameter_count() -> usize;
+    fn parameter_count() -> u32;
 }
 
 impl<V: JSValueImpl> RustFunc<V> {
@@ -74,17 +74,17 @@ impl<V: JSValueImpl> RustFunc<V> {
     where
         V::Context: JSExceptionHandler<Value = V>,
     {
-        if args.len() < self.parameter_count {
+        let num = args.len() as u32;
+        if num < self.parameter_count {
             return Ok(context.throw_type_error(format!(
                 "Expected {} arguments, got {}",
-                self.parameter_count,
-                args.len()
+                self.parameter_count, num
             )));
         }
         self.func.call(context, args)
     }
 
-    pub(crate) fn parameter_count(&self) -> usize {
+    pub(crate) fn parameter_count(&self) -> u32 {
         self.parameter_count
     }
 }
@@ -112,7 +112,7 @@ macro_rules! impl_js_callable_func {
                 Ok(result.into_js_value(context))
             }
 
-            fn parameter_count() -> usize {
+            fn parameter_count() -> u32 {
                 count_idents!($($t),*)
             }
         }
