@@ -1,4 +1,7 @@
-use crate::{FromJSValue, IntoJSValue, JSExceptionHandler, JSObject, JSValueImpl};
+use crate::{
+    Class, FromJSValue, IntoJSValue, JSClass, JSContext, JSContextImpl, JSExceptionHandler,
+    JSObject, JSObjectOps, JSValueConversion, JSValueImpl,
+};
 use std::ops::Deref;
 
 pub struct JSFunc<V: JSValueImpl>(JSObject<V>);
@@ -19,7 +22,32 @@ where
     }
 }
 
-pub trait JSCallable<V: JSValueImpl> {
+impl<V: JSObjectOps> JSFunc<V> {
+    pub fn name(self, name: &str) -> Self {
+        self.0.set("name", name);
+        self
+    }
+}
+
+impl<C: JSContextImpl> JSContext<C>
+where
+    C::Value: JSObjectOps + 'static,
+{
+    pub fn register_function<F, P>(&self, f: F) -> JSFunc<C::Value>
+    where
+        F: IntoJSCallable<C::Value, P> + 'static,
+    {
+        let func = RustFunc::new(f);
+        let length = func.parameter_count();
+        let value = Class::get::<RustFunc<C::Value>>(&self.inner)
+            .map(|class| class.instance::<RustFunc<C::Value>>(func));
+        let obj = JSObject::from_js_value(&self.inner, value.unwrap()).unwrap();
+        obj.set("length", length);
+        JSFunc(obj)
+    }
+}
+
+trait JSCallable<V: JSValueImpl> {
     fn call(&self, context: &V::Context, args: &[V]) -> Result<V, String>;
 }
 
@@ -86,6 +114,18 @@ impl<V: JSValueImpl> RustFunc<V> {
 
     pub(crate) fn parameter_count(&self) -> u32 {
         self.parameter_count
+    }
+}
+
+impl<V> JSClass<V> for RustFunc<V>
+where
+    V: JSValueConversion + 'static,
+{
+    const NAME: &'static str = "RustFunc";
+
+    fn data_constructor() -> RustFunc<V> {
+        // RustFunction class don't need data constructor
+        panic!("Never 'new RustFunc()' in JS");
     }
 }
 

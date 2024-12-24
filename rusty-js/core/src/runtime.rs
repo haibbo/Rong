@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextImpl, JSValueImpl};
+use crate::{JSCodeRunner, JSContext, JSContextImpl, JSObjectOps, JSValueImpl, RustFunc};
 
 pub trait JSRuntimeImpl {
     /// the JS engine specific type of JavaScript Runtime
@@ -14,10 +14,21 @@ pub struct JSRuntime<R: JSRuntimeImpl> {
     pub(crate) inner: R,
 }
 
+impl<C: JSContextImpl> JSContext<C> {
+    /// used to create object instance as function
+    pub(crate) fn register_rustfunc_class(&self)
+    where
+        C: JSCodeRunner,
+        C::Value: JSObjectOps + 'static,
+    {
+        self.register_class::<RustFunc<C::Value>>();
+    }
+}
+
 pub trait JSEngine: Sized {
-    type Value: JSValueImpl;
-    type Context: JSContextImpl;
-    type Runtime: JSRuntimeImpl;
+    type Value: JSValueImpl + JSObjectOps;
+    type Context: JSContextImpl<Value = Self::Value> + JSCodeRunner;
+    type Runtime: JSRuntimeImpl<Context = Self::Context>;
 
     /// JS engine is responsible for implementing
     fn _runtime() -> Self::Runtime;
@@ -29,7 +40,12 @@ pub trait JSEngine: Sized {
         }
     }
 
-    fn context(rt: &JSRuntime<Self::Runtime>) -> JSContext<Self::Context> {
-        JSContext::from(Self::_context(&rt.inner))
+    fn context(rt: &JSRuntime<Self::Runtime>) -> JSContext<Self::Context>
+    where
+        Self::Value: 'static,
+    {
+        let ctx = JSContext::from(Self::_context(&rt.inner));
+        ctx.register_rustfunc_class();
+        ctx
     }
 }
