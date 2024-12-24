@@ -18,6 +18,14 @@ where
     }
 }
 
+/// caller should make sure V is object
+impl<V: JSValueImpl> From<(V::Context, V)> for JSObject<V> {
+    fn from(parts: (V::Context, V)) -> Self {
+        let jsvalue: JSValue<V> = parts.into();
+        jsvalue.into()
+    }
+}
+
 impl<V> FromJSValue<V> for JSObject<V>
 where
     V: JSTypeOf,

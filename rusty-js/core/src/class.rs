@@ -1,5 +1,6 @@
 use crate::{
-    FromJSValue, JSContextImpl, JSExceptionHandler, JSObject, JSObjectOps, JSValueImpl, RustFunc,
+    FromJSValue, JSContextImpl, JSExceptionHandler, JSObject, JSObjectOps, JSValue, JSValueImpl,
+    RustFunc,
 };
 use std::any::TypeId;
 use std::cell::{Ref, RefCell, RefMut};
@@ -45,6 +46,14 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
 impl<T, V: JSValueImpl> JSClassExt<V> for T where T: JSClass<V> {}
 
 pub struct Class<V: JSValueImpl>(pub(crate) JSObject<V>);
+
+/// caller should make sure V is class constructor
+impl<V: JSValueImpl> From<(V::Context, V)> for Class<V> {
+    fn from(parts: (V::Context, V)) -> Self {
+        let jsvalue: JSValue<V> = parts.into();
+        Self(jsvalue.into())
+    }
+}
 
 impl<V> Class<V>
 where
