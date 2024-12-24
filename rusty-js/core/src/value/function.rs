@@ -27,6 +27,10 @@ impl<V: JSObjectOps> JSFunc<V> {
         self.0.set("name", name);
         self
     }
+
+    pub fn into_inner(self) -> V {
+        self.0.into_inner()
+    }
 }
 
 impl<C: JSContextImpl> JSContext<C>

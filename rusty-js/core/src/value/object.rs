@@ -92,6 +92,10 @@ where
         let value = V::new_object(&ctx.inner);
         JSValue::new(ctx, value).into()
     }
+
+    pub fn into_inner(self) -> V {
+        self.0.into_inner()
+    }
 }
 
 impl<V> JSObject<V>

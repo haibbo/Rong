@@ -159,7 +159,7 @@ where
             .getter
             .map(|g| {
                 self.attributes.0 |= PropertyAttributes::HAS_GET;
-                g.into_js_value(obj.as_ctx())
+                g.into_inner()
             })
             .unwrap_or(V::from((obj.as_ctx(), ()))); //UNDEFIEND
 
@@ -167,7 +167,7 @@ where
             .setter
             .map(|s| {
                 self.attributes.0 |= PropertyAttributes::HAS_SET;
-                s.into_js_value(obj.as_ctx())
+                s.into_inner()
             })
             .unwrap_or(V::from((obj.as_ctx(), ()))); // UNDEFINED
 
