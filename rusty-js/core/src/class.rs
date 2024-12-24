@@ -18,8 +18,13 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     fn constructor(ctx: &V::Context, this: V, args: Vec<V>) -> V
     where
         V::Context: JSExceptionHandler<Value = V>,
+        V: JSObjectOps,
     {
-        Self::data_constructor().call(ctx, this, args).unwrap()
+        let proto = Class::from((ctx.clone(), this.clone())).get_prototype();
+        let instance = Self::data_constructor().call(ctx, this, args).unwrap();
+        let instance = JSObject::from_js_value(ctx, instance).unwrap();
+        instance.prototype(proto);
+        instance.into_inner()
     }
 
     /// Free resources of a class instance by finalizer
