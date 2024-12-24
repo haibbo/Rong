@@ -93,6 +93,15 @@ where
     }
 }
 
+impl<V> FromJSValue<V> for ()
+where
+    V: JSValueConversion,
+{
+    fn from_js_value(_ctx: &V::Context, _value: V) -> Result<Self, String> {
+        Ok(())
+    }
+}
+
 /// convert to JS Value represented by trait JSValueImpl
 pub trait IntoJSValue<V>
 where
@@ -105,6 +114,15 @@ impl<V> IntoJSValue<V> for &str
 where
     V: JSValueImpl,
     V: for<'a> From<(&'a V::Context, &'a str)>,
+{
+    fn into_js_value(self, ctx: &V::Context) -> V {
+        V::from((ctx, self))
+    }
+}
+
+impl<V> IntoJSValue<V> for ()
+where
+    V: JSValueConversion,
 {
     fn into_js_value(self, ctx: &V::Context) -> V {
         V::from((ctx, self))

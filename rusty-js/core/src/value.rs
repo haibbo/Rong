@@ -139,15 +139,6 @@ impl<V: JSTypeOf> JSValue<V> {
     }
 }
 
-impl<V> FromJSValue<V> for ()
-where
-    V: JSValueConversion,
-{
-    fn from_js_value(_ctx: &V::Context, _value: V) -> Result<Self, String> {
-        Ok(())
-    }
-}
-
 impl<V> FromJSValue<V> for JSValue<V>
 where
     V: JSValueImpl,
