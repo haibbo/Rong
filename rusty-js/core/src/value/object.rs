@@ -70,6 +70,8 @@ pub trait JSObjectOps: JSValueConversion + JSTypeOf {
     fn has_property(&self, key: Self) -> bool;
     fn set_property(&self, key: Self, value: Self) -> bool;
 
+    fn set_prototype(&self, prototype: Self) -> bool;
+
     fn define_property(
         &self,
         key: Self,

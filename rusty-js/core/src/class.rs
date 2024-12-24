@@ -86,6 +86,11 @@ where
             .cloned()?;
         Some(Self(JSObject::from_js_value(context, constructor).unwrap()))
     }
+
+    pub fn get_prototype(&self) -> JSObject<V> {
+        let obj: JSObject<V> = self.0.get("prototype").unwrap();
+        obj
+    }
 }
 
 impl<V> JSObject<V>
@@ -111,5 +116,9 @@ where
             // SAFETY: ptr was created by Box::into_raw in instance()
             Some(unsafe { &*ptr }.borrow_mut())
         }
+    }
+
+    pub fn prototype(&self, proto: JSObject<V>) -> bool {
+        self.as_inner().set_prototype(proto.into_inner())
     }
 }
