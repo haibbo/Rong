@@ -98,6 +98,13 @@ impl JSObjectOps for QJSValue {
         };
         v != 0
     }
+
+    fn set_prototype(&self, prototype: Self) -> bool {
+        let p = prototype.into_ffi_value();
+
+        let v = unsafe { qjs::JS_SetPrototype(self.ctx, self.value, p) };
+        v != 0
+    }
 }
 
 fn to_flags(attr: PropertyAttributes) -> i32 {
