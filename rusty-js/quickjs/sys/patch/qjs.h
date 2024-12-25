@@ -24,6 +24,8 @@ JS_BOOL QJS_IsSymbol(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsObject(JSContext *ctx, JSValue v);
 JS_BOOL QJS_IsPromise(JSContext *ctx, JSValue v);
 
+/* Debug Only */
+int QJS_GetRefCount(JSValue v);
 
 /*
  * Run internal micro tasks

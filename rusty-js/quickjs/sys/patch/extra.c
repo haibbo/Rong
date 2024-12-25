@@ -16,3 +16,13 @@ int _QJS_GetCFuncMagic(JSValue func_obj){
     p = JS_VALUE_GET_OBJ(func_obj);
     return p->u.cfunc.magic;
 }
+
+int QJS_GetRefCount(JSValue v)
+{
+    int count=-1;
+    if (JS_VALUE_HAS_REF_COUNT(v)) {
+        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
+        count=p->ref_count;
+    }
+    return count;
+}

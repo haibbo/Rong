@@ -73,6 +73,14 @@ where
     }
 }
 
+impl QJSValue {
+    // it's for debug only
+    #![allow(unused)]
+    pub fn get_ref_count(value: qjs::JSValue) -> i32 {
+        unsafe { qjs::QJS_GetRefCount(value) }
+    }
+}
+
 impl_js_converter!(
     QJSValue,
     bool,
