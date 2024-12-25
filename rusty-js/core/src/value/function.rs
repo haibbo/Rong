@@ -1,6 +1,7 @@
+use crate::parameter::FromParams;
 use crate::{
-    Class, FromJSValue, IntoJSCallable, IntoJSValue, JSContext, JSContextImpl, JSObject,
-    JSObjectOps, JSValueImpl, RustFunc,
+    Class, FromJSValue, IntoJSCallable, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler,
+    JSObject, JSObjectOps, JSValueImpl, RustFunc,
 };
 use std::ops::Deref;
 
@@ -36,13 +37,15 @@ impl<V: JSObjectOps> JSFunc<V> {
 impl<C: JSContextImpl> JSContext<C>
 where
     C::Value: JSObjectOps + 'static,
+    C: JSExceptionHandler,
 {
     pub fn register_function<F, P>(&self, f: F) -> JSFunc<C::Value>
     where
         F: IntoJSCallable<C::Value, P> + 'static,
+        P: FromParams<C::Value>,
     {
         let func = RustFunc::new(f);
-        let length = func.parameter_count();
+        let length = func.parameter_required_count();
         let value = Class::get::<RustFunc<C::Value>>(&self.inner)
             .map(|class| class.instance::<RustFunc<C::Value>>(func));
         let obj = JSObject::from_js_value(&self.inner, value.unwrap()).unwrap();

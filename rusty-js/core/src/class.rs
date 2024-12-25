@@ -1,7 +1,9 @@
+use crate::parameter::ParamsAccessor;
 use crate::{
     FromJSValue, JSContextImpl, JSExceptionHandler, JSObject, JSObjectOps, JSValue, JSValueImpl,
     RustFunc,
 };
+
 use std::any::TypeId;
 use std::cell::{Ref, RefCell, RefMut};
 
@@ -21,7 +23,10 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         V: JSObjectOps,
     {
         let proto = Class::from((ctx.clone(), this.clone())).get_prototype();
-        let instance = Self::data_constructor().call(ctx, this, args).unwrap();
+
+        let mut accessor = ParamsAccessor::new(ctx, this, args);
+        let instance = Self::data_constructor().call(&mut accessor).unwrap();
+
         let instance = JSObject::from_js_value(ctx, instance).unwrap();
         instance.prototype(proto);
         instance.into_inner()
@@ -43,7 +48,9 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     {
         let obj = JSObject::from_js_value(ctx, function).unwrap();
         let func = obj.borrow::<RustFunc<_>>().unwrap();
-        func.call(ctx, this, args).unwrap()
+
+        let mut accessor = ParamsAccessor::new(ctx, this, args);
+        func.call(&mut accessor).unwrap()
     }
 }
 

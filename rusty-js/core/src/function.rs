@@ -1,28 +1,44 @@
-use crate::{
-    FromJSValue, IntoJSValue, JSClass, JSExceptionHandler, JSValueConversion, JSValueImpl,
-};
+use self::parameter::{FromParams, ParamsAccessor};
+use crate::{IntoJSValue, JSClass, JSExceptionHandler, JSValueConversion, JSValueImpl};
+
+pub mod parameter;
 
 trait JSCallable<V: JSValueImpl> {
-    fn call(&self, context: &V::Context, this: V, args: Vec<V>) -> Result<V, String>;
+    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>;
 }
 
 impl<V, F> JSCallable<V> for F
 where
     V: JSValueImpl,
-    F: Fn(&V::Context, V, Vec<V>) -> Result<V, String>,
+    F: Fn(&mut ParamsAccessor<V>) -> Result<V, String>,
 {
-    fn call(&self, context: &V::Context, this: V, args: Vec<V>) -> Result<V, String> {
-        (self)(context, this, args)
+    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String> {
+        (self)(accessor)
     }
 }
 
-/// container to hold rust closure/fucntion that's callable from JS
-/// example:
+/// Container to hold rust closure/function that's callable from JS.
+/// Supports various parameter types:
+/// - Regular parameters (i32, String, etc.)
+/// - This<T> for capturing JS `this` context
+/// - Optional<T> for optional parameters
+/// - Rest<T> for rest parameters
 ///
-/// RustFunc::new( |x i32, y: i32, z: i32| x + y + z)
+/// Example:
+/// ```ignore
+/// // Function with this context and optional parameter
+/// RustFunc::new(|this: This<MyClass>, x: i32, opt: Optional<String>| {
+///     // ...
+/// })
+///
+/// // Function with rest parameters
+/// RustFunc::new(|x: i32, rest: Rest<String>| {
+///     // ...
+/// })
+/// ```
 pub struct RustFunc<V: JSValueImpl> {
     func: Box<dyn JSCallable<V>>,
-    parameter_count: u32,
+    required_params: u32,
 }
 
 /// Type parameter P is used to differentiate between function signatures with
@@ -34,42 +50,43 @@ pub struct RustFunc<V: JSValueImpl> {
 /// This allows the compiler to select the correct implementation based on the
 /// function's parameter types, while avoiding implementation conflicts since
 /// each tuple type is distinct.
-pub trait IntoJSCallable<V: JSValueImpl, P> {
-    fn call(&self, context: &V::Context, this: V, args: Vec<V>) -> Result<V, String>;
-
-    fn parameter_count() -> u32;
+pub trait IntoJSCallable<V: JSValueImpl, P>
+where
+    P: FromParams<V>,
+{
+    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>;
 }
 
 impl<V: JSValueImpl> RustFunc<V> {
     pub fn new<F, P>(f: F) -> Self
     where
         F: IntoJSCallable<V, P> + 'static,
+        P: FromParams<V>,
+        V::Context: JSExceptionHandler<Value = V>,
     {
-        let func = Box::new(move |context: &V::Context, this: V, args: Vec<V>| {
-            f.call(context, this, args)
+        let required_params = P::param_requirements().required_count() as u32;
+        let func = Box::new(move |accessor: &mut ParamsAccessor<V>| {
+            let num_args = accessor.args_len() as u32;
+            if num_args < required_params {
+                return Ok(accessor.context().throw_type_error(format!(
+                    "Expected {} arguments, got {}",
+                    required_params, num_args
+                )));
+            }
+            f.call(accessor)
         }) as Box<dyn JSCallable<V>>;
         Self {
             func,
-            parameter_count: F::parameter_count(),
+            required_params,
         }
     }
 
-    pub(crate) fn call(&self, context: &V::Context, this: V, args: Vec<V>) -> Result<V, String>
-    where
-        V::Context: JSExceptionHandler<Value = V>,
-    {
-        let num = args.len() as u32;
-        if num < self.parameter_count {
-            return Ok(context.throw_type_error(format!(
-                "Expected {} arguments, got {}",
-                self.parameter_count, num
-            )));
-        }
-        self.func.call(context, this, args)
+    pub(crate) fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String> {
+        self.func.call(accessor)
     }
 
-    pub(crate) fn parameter_count(&self) -> u32 {
-        self.parameter_count
+    pub fn parameter_required_count(&self) -> u32 {
+        self.required_params
     }
 }
 
@@ -86,38 +103,23 @@ where
 }
 
 macro_rules! impl_js_callable_func {
-    ($($t:ident),*$(,)?) => {
+    ($($t:ident),* $(,)?) => {
         impl<V, R, Fun $(,$t)*> IntoJSCallable<V, ($($t,)*)> for Fun
         where
             Fun: Fn($($t),*) -> R,
             V: JSValueImpl,
-            $($t: FromJSValue<V>,)*
+            ($($t,)*): FromParams<V>,
             R: IntoJSValue<V>,
         {
-            #[allow(unused_variables)]
-            fn call(&self, context: &V::Context, this:V, args: Vec<V>) -> Result<V, String>  {
-                #[allow(unused_variables)]
-                let mut __arg_index = 0;
-                let result = (self)($(
-                    {
-                        let arg = $t::from_js_value(context, args[__arg_index].clone())?;
-                        __arg_index += 1;
-                        arg
-                    }
-                ),*);
-                Ok(result.into_js_value(context))
-            }
-
-            fn parameter_count() -> u32 {
-                count_idents!($($t),*)
+            fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>  {
+                let params = <($($t,)*)>::from_params(accessor)?;
+                #[allow(non_snake_case)]
+                let ($($t,)*) = params;
+                let result = (self)($($t),*);
+                Ok(result.into_js_value(accessor.context()))
             }
         }
     };
-}
-
-macro_rules! count_idents {
-    () => (0);
-    ($t:ident $(,$rest:ident)*) => (1 + count_idents!($($rest),*));
 }
 
 impl_js_callable_func!();
