@@ -1,4 +1,4 @@
-use crate::{IntoJSValue, JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
+use crate::{JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
 
 pub enum PropertyKey<'a> {
     Int32(i32),
