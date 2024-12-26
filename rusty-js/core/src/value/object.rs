@@ -3,7 +3,7 @@ use std::ops::Deref;
 use std::string::String;
 
 mod property;
-pub use property::{PropertyAttributes, PropertyKey};
+pub use property::{PropertyAttributes, PropertyDescriptor, PropertyKey};
 
 use super::IntoJSValue;
 

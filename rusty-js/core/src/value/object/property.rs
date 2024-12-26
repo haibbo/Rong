@@ -92,7 +92,6 @@ impl PropertyAttributes {
 }
 
 pub struct PropertyDescriptor<V: JSValueImpl> {
-    name: String,
     value: Option<V>,
     getter: Option<JSFunc<V>>,
     setter: Option<JSFunc<V>>,
@@ -104,9 +103,8 @@ where
     V: JSObjectOps,
 {
     #[must_use]
-    pub fn builder(name: &str) -> Self {
+    pub(crate) fn builder() -> Self {
         Self {
-            name: name.to_string(),
             value: None,
             getter: None,
             setter: None,
@@ -127,33 +125,35 @@ where
     }
 
     #[must_use]
-    fn writable(mut self) -> Self {
+    pub fn writable(mut self) -> Self {
         self.attributes.0 |= PropertyAttributes::WRITABLE;
         self
     }
 
     #[must_use]
-    fn enumerable(mut self) -> Self {
+    pub fn enumerable(mut self) -> Self {
         self.attributes.0 |= PropertyAttributes::ENUMERABLE;
         self
     }
 
     #[must_use]
-    fn configurable(mut self) -> Self {
+    pub fn configurable(mut self) -> Self {
         self.attributes.0 |= PropertyAttributes::CONFIGURABLE;
         self
     }
 
     // apply PropertyDescriptor to JS Object with key
-    pub fn apply_to<K>(mut self, obj: &JSObject<V>, k: K)
+    pub(crate) fn apply_to<K>(mut self, obj: &JSObject<V>, k: K)
     where
         K: for<'a> Into<PropertyKey<'a>>,
         V: JSObjectOps,
     {
+        let undefined = V::from((obj.as_ctx(), ())); // UNDEFINED
+
         let value = self
             .value
             .inspect(|_| self.attributes.0 |= PropertyAttributes::HAS_VALUE)
-            .unwrap_or(V::from((obj.as_ctx(), ()))); //UNDEFIEND
+            .unwrap_or(undefined.clone());
 
         let getter = self
             .getter
@@ -161,7 +161,7 @@ where
                 self.attributes.0 |= PropertyAttributes::HAS_GET;
                 g.into_inner()
             })
-            .unwrap_or(V::from((obj.as_ctx(), ()))); //UNDEFIEND
+            .unwrap_or(undefined.clone());
 
         let setter = self
             .setter
@@ -169,7 +169,7 @@ where
                 self.attributes.0 |= PropertyAttributes::HAS_SET;
                 s.into_inner()
             })
-            .unwrap_or(V::from((obj.as_ctx(), ()))); // UNDEFINED
+            .unwrap_or(undefined.clone());
 
         let key = k.into().into_key(obj.as_ctx());
 
