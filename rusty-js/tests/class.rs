@@ -60,6 +60,7 @@ fn function() {
             .name("add");
         ctx.global_object().set("add", func);
 
+        assert!(ctx.eval::<JSFunc>("add").is_ok());
         assert_eq!(ctx.eval::<i32>("add(7, 9,1)").unwrap(), 17);
         assert_eq!(ctx.eval::<i32>("add.length").unwrap(), 3);
         assert_eq!(ctx.eval::<String>("add.name").unwrap(), "add");
