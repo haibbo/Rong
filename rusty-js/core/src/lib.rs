@@ -1,6 +1,6 @@
 mod class;
 mod context;
-mod function;
+pub mod function;
 mod runtime;
 mod value;
 

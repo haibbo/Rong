@@ -1,7 +1,7 @@
-use self::parameter::{FromParams, ParamsAccessor};
 use crate::{IntoJSValue, JSClass, JSExceptionHandler, JSValueConversion, JSValueImpl};
 
-pub mod parameter;
+mod parameter;
+pub use parameter::{FromParams, Optional, ParamsAccessor, Rest, This};
 
 trait JSCallable<V: JSValueImpl> {
     fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>;

@@ -1,4 +1,4 @@
-use crate::parameter::ParamsAccessor;
+use crate::function::ParamsAccessor;
 use crate::{
     FromJSValue, JSContextImpl, JSExceptionHandler, JSObject, JSObjectOps, JSValue, JSValueImpl,
     RustFunc,

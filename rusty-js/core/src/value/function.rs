@@ -1,4 +1,4 @@
-use crate::parameter::FromParams;
+use crate::function::FromParams;
 use crate::{
     Class, FromJSValue, IntoJSCallable, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler,
     JSObject, JSObjectOps, JSValueImpl, RustFunc,
