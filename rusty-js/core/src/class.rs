@@ -1,7 +1,7 @@
 use crate::function::ParamsAccessor;
 use crate::{
-    FromJSValue, JSContextImpl, JSExceptionHandler, JSObject, JSObjectOps, JSValue, JSValueImpl,
-    RustFunc,
+    FromJSValue, FromParams, IntoJSCallable, JSContext, JSContextImpl, JSExceptionHandler, JSFunc,
+    JSObject, JSObjectOps, JSValue, JSValueImpl, PropertyDescriptor, PropertyKey, RustFunc,
 };
 
 use std::any::TypeId;
@@ -14,6 +14,7 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
     const NAME: &'static str;
 
     fn data_constructor() -> RustFunc<V>;
+    fn class_setup(class: &ClassSetup<V>);
 }
 
 pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
@@ -79,7 +80,7 @@ where
     }
 
     /// Free resources of a class instance
-    pub fn free<JC: JSClass<V>>(instance: V) {
+    pub(crate) fn free<JC: JSClass<V>>(instance: V) {
         let value = instance.clone();
         let ptr = value.get_opaque::<RefCell<JC>>();
         if !ptr.is_null() {
@@ -132,5 +133,75 @@ where
 
     pub fn prototype(&self, proto: JSObject<V>) -> bool {
         self.as_inner().set_prototype(proto.into_inner())
+    }
+}
+
+pub struct ClassSetup<'a, V: JSValueImpl> {
+    constructor: JSObject<V>,
+    prototype: JSObject<V>,
+    context: &'a JSContext<V::Context>,
+}
+
+impl<'a, V> ClassSetup<'a, V>
+where
+    V: JSObjectOps,
+{
+    pub(crate) fn new(constructor: JSObject<V>, context: &'a JSContext<V::Context>) -> Self {
+        let constructor = Class(constructor);
+        let prototype = constructor.get_prototype();
+        Self {
+            constructor: constructor.0,
+            prototype,
+            context,
+        }
+    }
+
+    pub fn method<F, P>(&self, name: &str, f: F)
+    where
+        F: IntoJSCallable<V, P> + 'static,
+        P: FromParams<V>,
+        V: JSObjectOps + 'static,
+        V::Context: JSExceptionHandler,
+    {
+        let func = self.context.register_function(f);
+        println!("name is {}", name);
+        self.prototype.set(name, func.name(name));
+    }
+
+    pub fn static_method<F, P>(&self, name: &str, f: F)
+    where
+        F: IntoJSCallable<V, P> + 'static,
+        P: FromParams<V>,
+        V: JSObjectOps + 'static,
+        V::Context: JSExceptionHandler,
+    {
+        let func = self.context.register_function(f);
+        self.constructor.set(name, func.name(name));
+    }
+
+    pub fn property<Fun, Key>(&self, k: Key, f: Fun)
+    where
+        Fun: Fn(PropertyDescriptor<V>) -> PropertyDescriptor<V>,
+        Key: for<'b> Into<PropertyKey<'b>>,
+    {
+        f(PropertyDescriptor::builder()).apply_to(&self.prototype, k);
+    }
+
+    pub fn static_property<Fun, Key>(&self, k: Key, f: Fun)
+    where
+        Fun: Fn(PropertyDescriptor<V>) -> PropertyDescriptor<V>,
+        Key: for<'b> Into<PropertyKey<'b>>,
+    {
+        f(PropertyDescriptor::builder()).apply_to(&self.constructor, k);
+    }
+
+    pub fn new_func<F, P>(&self, f: F) -> JSFunc<V>
+    where
+        F: IntoJSCallable<V, P> + 'static,
+        P: FromParams<V>,
+        V: JSObjectOps + 'static,
+        V::Context: JSExceptionHandler,
+    {
+        self.context.register_function(f)
     }
 }

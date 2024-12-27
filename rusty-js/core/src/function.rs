@@ -1,7 +1,7 @@
 use crate::{IntoJSValue, JSClass, JSExceptionHandler, JSValueConversion, JSValueImpl};
 
 mod parameter;
-pub use parameter::{FromParams, Optional, ParamsAccessor, Rest, This};
+pub use parameter::{sealed::RegularTypeSealed, FromParams, Optional, ParamsAccessor, Rest, This};
 
 trait JSCallable<V: JSValueImpl> {
     fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>;
@@ -100,6 +100,8 @@ where
         // RustFunction class don't need data constructor
         panic!("Never 'new RustFunc()' in JS");
     }
+
+    fn class_setup(_class: &crate::ClassSetup<V>) {}
 }
 
 macro_rules! impl_js_callable_func {

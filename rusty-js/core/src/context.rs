@@ -1,4 +1,6 @@
-use crate::{FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntimeImpl, JSValue, JSValueImpl};
+use crate::{
+    ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntimeImpl, JSValue, JSValueImpl,
+};
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -146,6 +148,7 @@ where
 
         let obj = self.global_object();
         let constructor = JSValue::new(self, constructor);
+        JC::class_setup(&ClassSetup::new(constructor.clone().into(), self));
         obj.set(JC::NAME, constructor);
     }
 
