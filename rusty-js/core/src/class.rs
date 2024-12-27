@@ -1,7 +1,7 @@
-use crate::function::ParamsAccessor;
+use crate::function::{FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
-    FromJSValue, FromParams, IntoJSCallable, JSContext, JSContextImpl, JSExceptionHandler, JSFunc,
-    JSObject, JSObjectOps, JSValue, JSValueImpl, PropertyDescriptor, PropertyKey, RustFunc,
+    FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
+    JSValue, JSValueImpl, PropertyDescriptor, PropertyKey,
 };
 
 use std::any::TypeId;

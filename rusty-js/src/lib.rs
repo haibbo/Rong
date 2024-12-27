@@ -1,7 +1,8 @@
 pub use rusty_js_core::{
-    Class as CoreClass, ClassSetup, FromJSValue, IntoJSValue, JSClass, JSContext as CoreJSContext,
-    JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject,
-    JSRuntime as CoreJSRuntime, JSValue as CoreJSValue, RustFunc as CoreRustFunc,
+    function::RustFunc as CoreRustFunc, Class as CoreClass, ClassSetup, FromJSValue, IntoJSValue,
+    JSClass, JSContext as CoreJSContext, JSEngine, JSException as CoreJSException,
+    JSFunc as CoreJSFunc, JSObject as CoreJSObject, JSRuntime as CoreJSRuntime,
+    JSValue as CoreJSValue,
 };
 
 #[cfg(feature = "quickjs")]
@@ -25,3 +26,5 @@ pub type JSException = CoreJSException<JSEngineValue>;
 
 pub type RustFunc = CoreRustFunc<JSEngineValue>;
 pub type Class = CoreClass<JSEngineValue>;
+
+pub use rusty_js_core::function;

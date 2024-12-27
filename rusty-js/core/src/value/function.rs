@@ -1,7 +1,7 @@
-use crate::function::FromParams;
+use crate::function::{FromParams, IntoJSCallable, RustFunc};
 use crate::{
-    Class, FromJSValue, IntoJSCallable, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler,
-    JSObject, JSObjectOps, JSTypeOf, JSValueImpl, RustFunc,
+    Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSObject,
+    JSObjectOps, JSTypeOf, JSValueImpl,
 };
 use std::ops::Deref;
 

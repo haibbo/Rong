@@ -130,7 +130,7 @@ impl<T> Deref for Rest<T> {
     }
 }
 
-mod sealed {
+pub mod sealed {
     pub trait RegularTypeSealed {}
 
     impl RegularTypeSealed for i32 {}

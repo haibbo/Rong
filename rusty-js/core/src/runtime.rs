@@ -1,4 +1,5 @@
-use crate::{JSCodeRunner, JSContext, JSContextImpl, JSObjectOps, JSValueImpl, RustFunc};
+use crate::function::RustFunc;
+use crate::{JSCodeRunner, JSContext, JSContextImpl, JSObjectOps, JSValueImpl};
 
 pub trait JSRuntimeImpl {
     /// the JS engine specific type of JavaScript Runtime
