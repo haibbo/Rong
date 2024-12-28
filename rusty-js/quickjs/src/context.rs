@@ -158,10 +158,11 @@ impl JSCodeRunner for QJSContext {
     where
         JC: JSClass<QJSValue>,
     {
+        let name = CString::new(JC::NAME).unwrap();
         let raw = unsafe {
             qjs::QJS_CreateClass(
                 self.ctx,
-                JC::NAME.as_ptr() as _,
+                name.as_ptr(),
                 Some(crate::class::generic_constructor::<JC>),
                 Some(crate::class::call::<JC>),
                 Some(crate::class::finalizer::<JC>),

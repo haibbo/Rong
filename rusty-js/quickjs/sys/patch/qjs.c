@@ -32,6 +32,7 @@ JSValue QJS_CreateClass(JSContext *ctx, const char *class_name, JSCFunction *con
 
     JSClassID class_id=0; // it's important
     JS_NewClassID(rt, &class_id);
+    // printf("Class name is %s, ID is %d\n", class_name, class_id);
 
     JSClassDef class_def = {
         class_name,
