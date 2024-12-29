@@ -142,6 +142,20 @@ where
         self
     }
 
+    #[must_use]
+    pub fn with_default_method_attr(mut self) -> Self {
+        self.attributes.0 = PropertyAttributes::WRITABLE | PropertyAttributes::CONFIGURABLE;
+        self
+    }
+
+    #[must_use]
+    pub fn wth_default_property_attr(mut self) -> Self {
+        self.attributes.0 = PropertyAttributes::WRITABLE
+            | PropertyAttributes::CONFIGURABLE
+            | PropertyAttributes::ENUMERABLE;
+        self
+    }
+
     // apply PropertyDescriptor to JS Object with key
     pub(crate) fn apply_to<K>(mut self, obj: &JSObject<V>, k: K)
     where
