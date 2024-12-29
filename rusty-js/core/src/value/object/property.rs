@@ -1,5 +1,7 @@
 use crate::{JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
 
+// PropertyKey represents a key in a JavaScript object property
+// It can be a number (i32, u32, i64, u64) or a string reference
 pub enum PropertyKey<'a> {
     Int32(i32),
     Uint32(u32),
@@ -33,17 +35,21 @@ impl From<u64> for PropertyKey<'_> {
     }
 }
 
-impl<'a> From<&'a str> for PropertyKey<'a> {
-    fn from(value: &'a str) -> Self {
+// The key implementation for handling string property keys
+// 'b: 'a means the input string's lifetime ('b) must outlive or equal the PropertyKey's lifetime ('a)
+// This ensures the string reference stored in PropertyKey remains valid throughout PropertyKey's lifetime
+impl<'a, 'b: 'a> From<&'b str> for PropertyKey<'a> {
+    fn from(value: &'b str) -> Self {
         PropertyKey::Str(value)
     }
 }
 
+// Convert PropertyKey into the actual JavaScript value type
+// No lifetime bound needed here as we're consuming self
 impl<'a> PropertyKey<'a> {
-    pub(crate) fn into_key<'c, V>(self, ctx: &'c V::Context) -> V
+    pub(crate) fn into_key<V>(self, ctx: &V::Context) -> V
     where
         V: JSValueConversion,
-        'c: 'a, // make sure lifetime of ctx is not less than &str
     {
         match self {
             Self::Int32(i) => (ctx, i).into(),
