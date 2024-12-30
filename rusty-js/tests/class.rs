@@ -1,6 +1,6 @@
 mod helper;
 use helper::*;
-use rusty_js_core::function::{Optional, RegularTypeSealed, Rest, This, ThisMut};
+use rusty_js_core::function::{Optional, Rest, This, ThisMut, ArgThis};
 
 #[derive(Clone, Copy)]
 struct Point {
@@ -26,8 +26,6 @@ impl FromJSValue<JSEngineValue> for Point {
         Ok(*point)
     }
 }
-
-impl RegularTypeSealed for Point {}
 
 impl Point {
     fn add(&self, p: Point) -> Self {
@@ -63,14 +61,14 @@ impl JSClass<JSEngineValue> for Point {
         // Define static property with getter and setter
         class.static_property("origin", |builder| {
             let getter = class.new_func(|| Point { x: 0, y: 0 });
-            let setter = class.new_func(|_p: Point| {
+            let setter = class.new_func(|| {
                 // Read-only property, setter does nothing
             });
             builder.getter(getter).setter(setter).configurable()
         });
 
-        // Define instance method
-        class.method("add", |this: This<Point>, p: Point| this.add(p));
+        // Use ArgThis for the second parameter
+        class.method("add", |this: This<Point>, p: ArgThis<Point>| this.add(*p));
 
         // Define static method
         class.static_method("sadd", |x: i32, y: i32| Self::sadd(x, y));

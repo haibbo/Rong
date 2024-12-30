@@ -59,11 +59,32 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
 /// use rusty_js_core::function::parameter::This;
 ///
 /// fn method(this: This<MyStruct>, x: i32) {
-///     // Access the this context via deref
 ///     let my_struct: &MyStruct = &this;
 /// }
 /// ```
 pub struct This<T: 'static>(pub(crate) Ref<'static, T>);
+
+/// Represents a borrowed class instance from JavaScript function arguments.
+///
+/// # Usage
+/// - Used to receive class instances as parameters
+/// - Creates a borrowed reference to the instance
+/// - Can be used anywhere in the parameter list
+/// - Counts towards required parameter count
+///
+/// # Example
+/// ```ignore
+/// use rusty_js_core::function::parameter::{This, ArgThis};
+///
+/// fn add(this: This<Point>, other: ArgThis<Point>) {
+///     // this is the context, other is a borrowed instance
+///     let sum = Point {
+///         x: this.x + other.x,
+///         y: this.y + other.y,
+///     };
+/// }
+/// ```
+pub struct ArgThis<T: 'static>(pub(crate) Ref<'static, T>);
 
 /// Represents the `this` context in JavaScript function calls with mutable access
 pub struct ThisMut<T: 'static>(pub(crate) RefMut<'static, T>);
@@ -146,19 +167,11 @@ impl<T> Deref for Rest<T> {
     }
 }
 
-pub mod sealed {
-    pub trait RegularTypeSealed {}
-
-    impl RegularTypeSealed for i32 {}
-    impl RegularTypeSealed for u32 {}
-    impl RegularTypeSealed for i64 {}
-    impl RegularTypeSealed for u64 {}
-    impl RegularTypeSealed for f32 {}
-    impl RegularTypeSealed for f64 {}
-    impl RegularTypeSealed for bool {}
-    impl RegularTypeSealed for String {}
-    impl<T> RegularTypeSealed for Vec<T> {}
-    impl<T> RegularTypeSealed for Option<T> {}
+impl<T> Deref for ArgThis<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 /// Represents parameter requirements for a function
@@ -243,6 +256,14 @@ impl<T> ParamKind for RestKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
+    }
+}
+
+pub struct ArgThisKind<T>(PhantomData<T>);
+impl<T> ParamKind for ArgThisKind<T> {
+    type Inner = T;
+    fn param_requirement() -> ParamRequirement {
+        ParamRequirement::single()
     }
 }
 
@@ -351,6 +372,47 @@ where
     }
 }
 
+impl<T, V> GetParam<V> for ArgThis<T>
+where
+    V: JSObjectOps,
+    T: 'static,
+{
+    type Kind = ArgThisKind<T>;
+
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, String> {
+        let value = accessor
+            .next_arg()
+            .ok_or_else(|| "Missing argument value".to_string())?;
+
+        let obj = JSObject::from_js_value(accessor.context(), value)?;
+        let borrowed = obj.borrow::<T>().ok_or_else(|| {
+            format!(
+                "Failed to borrow {} from argument",
+                std::any::type_name::<T>()
+            )
+        })?;
+
+        // Safety: because JSObject ensures the object's lifecycle.
+        let static_ref: Ref<'static, T> = unsafe { std::mem::transmute(borrowed) };
+        Ok(ArgThis(static_ref))
+    }
+}
+
+mod sealed {
+    pub trait RegularTypeSealed {}
+
+    impl RegularTypeSealed for i32 {}
+    impl RegularTypeSealed for u32 {}
+    impl RegularTypeSealed for i64 {}
+    impl RegularTypeSealed for u64 {}
+    impl RegularTypeSealed for f32 {}
+    impl RegularTypeSealed for f64 {}
+    impl RegularTypeSealed for bool {}
+    impl RegularTypeSealed for String {}
+    impl<T> RegularTypeSealed for Vec<T> {}
+    impl<T> RegularTypeSealed for Option<T> {}
+}
+
 macro_rules! impl_from_params {
     ($($T:ident),*) => {
         impl<V: JSValueImpl, $($T,)*> FromParams<V> for ($($T,)*)
@@ -360,7 +422,6 @@ macro_rules! impl_from_params {
             #[allow(unused_variables)]
             fn from_params(accessor: &mut ParamsAccessor<V>) -> Result<Self, String> {
                 let param_count = count_idents!($($T),*);
-
                 #[allow(unused_mut)]
                 let mut current_param = 0;
 
