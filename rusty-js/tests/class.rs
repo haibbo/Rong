@@ -1,6 +1,6 @@
 mod helper;
 use helper::*;
-use rusty_js_core::function::{Optional, RegularTypeSealed, Rest, This};
+use rusty_js_core::function::{Optional, RegularTypeSealed, Rest, This, ThisMut};
 
 #[derive(Clone, Copy)]
 struct Point {
@@ -53,8 +53,7 @@ impl JSClass<JSEngineValue> for Point {
         // Define instance property with getter and setter
         class.property("x", |builder| {
             let getter = class.new_func(|this: This<Point>| this.x);
-            let setter = class
-                .new_func(|this: This<JSObject>, x: i32| this.borrow_mut::<Self>().unwrap().x = x);
+            let setter = class.new_func(|mut this: ThisMut<Point>, x: i32| this.x = x);
             builder
                 .getter(getter)
                 .setter(setter)
