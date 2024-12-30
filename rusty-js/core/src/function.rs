@@ -1,7 +1,9 @@
 use crate::{IntoJSValue, JSClass, JSExceptionHandler, JSValueConversion, JSValueImpl};
 
 mod parameter;
-pub use parameter::{sealed::RegularTypeSealed, FromParams, Optional, ParamsAccessor, Rest, This};
+pub use parameter::{
+    sealed::RegularTypeSealed, FromParams, Optional, ParamsAccessor, Rest, This, ThisMut,
+};
 
 trait JSCallable<V: JSValueImpl> {
     fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>;

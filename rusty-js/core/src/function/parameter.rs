@@ -1,6 +1,7 @@
-use crate::{FromJSValue, JSValueImpl};
+use crate::{FromJSValue, JSObject, JSObjectOps, JSValueImpl};
+use std::cell::{Ref, RefMut};
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 /// Arguments retrieved from the JavaScript side for calling Rust functions.
 pub struct ParamsAccessor<'a, V: JSValueImpl> {
@@ -62,7 +63,10 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
 ///     let my_struct: &MyStruct = &this;
 /// }
 /// ```
-pub struct This<T>(pub T);
+pub struct This<T: 'static>(pub(crate) Ref<'static, T>);
+
+/// Represents the `this` context in JavaScript function calls with mutable access
+pub struct ThisMut<T: 'static>(pub(crate) RefMut<'static, T>);
 
 /// Represents an optional parameter in JavaScript function calls.
 ///
@@ -108,9 +112,21 @@ pub struct Rest<T>(pub Vec<T>);
 
 impl<T> Deref for This<T> {
     type Target = T;
-
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<T> Deref for ThisMut<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for ThisMut<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -206,6 +222,14 @@ impl<T> ParamKind for ThisKind<T> {
     }
 }
 
+pub struct ThisMutKind<T>(PhantomData<T>);
+impl<T> ParamKind for ThisMutKind<T> {
+    type Inner = T;
+    fn param_requirement() -> ParamRequirement {
+        ParamRequirement::any()
+    }
+}
+
 pub struct OptionalKind<T>(PhantomData<T>);
 impl<T> ParamKind for OptionalKind<T> {
     type Inner = T;
@@ -247,8 +271,8 @@ where
 
 impl<T, V> GetParam<V> for This<T>
 where
-    V: JSValueImpl,
-    T: FromJSValue<V>,
+    V: JSObjectOps,
+    T: 'static,
 {
     type Kind = ThisKind<T>;
 
@@ -256,7 +280,41 @@ where
         let value = accessor
             .take_this()
             .ok_or_else(|| "Missing this value".to_string())?;
-        T::from_js_value(accessor.ctx, value).map(|v| This(v))
+
+        let obj = JSObject::from_js_value(accessor.context(), value)?;
+        let borrowed = obj
+            .borrow::<T>()
+            .ok_or_else(|| format!("Failed to borrow {} from this", std::any::type_name::<T>()))?;
+
+        // Safety: because JSObject ensures the object's lifecycle.
+        let static_ref: Ref<'static, T> = unsafe { std::mem::transmute(borrowed) };
+        Ok(This(static_ref))
+    }
+}
+
+impl<T, V> GetParam<V> for ThisMut<T>
+where
+    V: JSObjectOps,
+    T: 'static,
+{
+    type Kind = ThisMutKind<T>;
+
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, String> {
+        let value = accessor
+            .take_this()
+            .ok_or_else(|| "Missing this value".to_string())?;
+
+        let obj = JSObject::from_js_value(accessor.context(), value)?;
+        let borrowed = obj.borrow_mut::<T>().ok_or_else(|| {
+            format!(
+                "Failed to mutably borrow {} from this",
+                std::any::type_name::<T>()
+            )
+        })?;
+
+        // Safety: because JSObject ensures the object's lifecycle.
+        let static_ref: RefMut<'static, T> = unsafe { std::mem::transmute(borrowed) };
+        Ok(ThisMut(static_ref))
     }
 }
 

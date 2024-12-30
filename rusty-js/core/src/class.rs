@@ -156,7 +156,6 @@ where
         V::Context: JSExceptionHandler,
     {
         let func = self.context.register_function(f);
-        println!("name is {}", name);
         self.prototype.set(name, func.name(name));
     }
 
