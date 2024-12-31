@@ -1,4 +1,4 @@
-use crate::function::{FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
+use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
     FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
     JSValueImpl, PropertyDescriptor, PropertyKey,
@@ -13,7 +13,7 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
     // the name of class constructor
     const NAME: &'static str;
 
-    fn data_constructor() -> RustFunc<V>;
+    fn data_constructor() -> Constructor<V>;
     fn class_setup(class: &ClassSetup<V>);
 }
 
@@ -26,7 +26,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         let proto = Class::get::<Self>(ctx).unwrap().get_prototype();
 
         let mut accessor = ParamsAccessor::new(ctx, this, args);
-        let instance = Self::data_constructor().call(&mut accessor).unwrap();
+        let instance = Self::data_constructor().0.call(&mut accessor).unwrap();
 
         let instance = JSObject::from_js_value(ctx, instance).unwrap();
         instance.prototype(proto);

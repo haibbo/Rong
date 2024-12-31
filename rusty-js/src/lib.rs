@@ -1,9 +1,10 @@
 pub use rusty_js_core::{
-    function::RustFunc as CoreRustFunc, Class as CoreClass, ClassSetup, FromJSValue, IntoJSValue,
-    JSClass, JSContext as CoreJSContext, JSEngine, JSException as CoreJSException,
-    JSFunc as CoreJSFunc, JSObject as CoreJSObject, JSRuntime as CoreJSRuntime,
-    JSValue as CoreJSValue,
+    Class, ClassSetup, FromJSValue, IntoJSValue, JSClass, JSContext as CoreJSContext, JSEngine,
+    JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject,
+    JSRuntime as CoreJSRuntime, JSValue as CoreJSValue,
 };
+
+pub use rusty_js_core::function;
 
 #[cfg(feature = "quickjs")]
 mod engine {
@@ -23,8 +24,3 @@ pub type JSValue = CoreJSValue<JSEngineValue>;
 pub type JSObject = CoreJSObject<JSEngineValue>;
 pub type JSFunc = CoreJSFunc<JSEngineValue>;
 pub type JSException = CoreJSException<JSEngineValue>;
-
-pub type RustFunc = CoreRustFunc<JSEngineValue>;
-pub type Class = CoreClass<JSEngineValue>;
-
-pub use rusty_js_core::function;

@@ -36,7 +36,7 @@ where
 ///     // ...
 /// })
 /// ```
-pub struct RustFunc<V: JSValueImpl> {
+pub(crate) struct RustFunc<V: JSValueImpl> {
     func: Box<dyn JSCallable<V>>,
     required_params: u32,
 }
@@ -72,7 +72,7 @@ impl<V: JSValueImpl> RustFunc<V> {
         }
     }
 
-    pub(crate) fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>
+    pub fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>
     where
         V::Context: JSExceptionHandler<Value = V>,
     {
@@ -91,13 +91,25 @@ impl<V: JSValueImpl> RustFunc<V> {
     }
 }
 
+pub struct Constructor<V: JSValueImpl>(pub(crate) RustFunc<V>);
+
+impl<V: JSValueImpl> Constructor<V> {
+    pub fn new<F, P>(f: F) -> Self
+    where
+        F: IntoJSCallable<V, P> + 'static,
+        P: FromParams<V>,
+    {
+        Self(RustFunc::new(f))
+    }
+}
+
 impl<V> JSClass<V> for RustFunc<V>
 where
     V: JSValueConversion + 'static,
 {
     const NAME: &'static str = "RustFunc";
 
-    fn data_constructor() -> RustFunc<V> {
+    fn data_constructor() -> Constructor<V> {
         // RustFunction class don't need data constructor
         panic!("Never 'new RustFunc()' in JS");
     }
