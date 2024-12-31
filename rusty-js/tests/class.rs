@@ -1,6 +1,6 @@
 mod helper;
 use helper::*;
-use rusty_js_core::function::{Optional, Rest, This, ThisMut, ArgThis};
+use rusty_js_core::function::{ArgThis, Constructor, Optional, Rest, This, ThisMut};
 
 #[derive(Clone, Copy)]
 struct Point {
@@ -43,8 +43,8 @@ impl Point {
 impl JSClass<JSEngineValue> for Point {
     const NAME: &'static str = "Point";
 
-    fn data_constructor() -> RustFunc {
-        RustFunc::new(|x, y| Point { x, y })
+    fn data_constructor() -> Constructor<JSEngineValue> {
+        Constructor::new(|x, y| Point { x, y })
     }
 
     fn class_setup(class: &ClassSetup<JSEngineValue>) {
