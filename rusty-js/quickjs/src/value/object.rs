@@ -46,7 +46,7 @@ impl JSObjectOps for QJSValue {
     }
 
     fn set_property(&self, key: Self, value: Self) -> bool {
-        let kv = value.into_ffi_value();
+        let kv = value.into_ffi_value(); //necessary
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
             let v = qjs::JS_SetProperty(self.ctx, self.value, atom, kv);
@@ -78,12 +78,13 @@ impl JSObjectOps for QJSValue {
         setter: Self,
         attributes: PropertyAttributes,
     ) -> bool {
-        let getter = getter.into_ffi_value();
-        let setter = setter.into_ffi_value();
-        let value = value.into_ffi_value();
+        let getter = getter.value;
+        let setter = setter.value;
+        let value = value.value;
 
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
+            // JS_DefineProperty clone value,getter,setter
             let v = qjs::JS_DefineProperty(
                 self.ctx,
                 self.value,
@@ -100,8 +101,9 @@ impl JSObjectOps for QJSValue {
     }
 
     fn set_prototype(&self, prototype: Self) -> bool {
-        let p = prototype.into_ffi_value();
+        let p = prototype.value;
 
+        // JS_SetPrototype clone input prototype
         let v = unsafe { qjs::JS_SetPrototype(self.ctx, self.value, p) };
         v != 0
     }
