@@ -153,7 +153,6 @@ where
         F: IntoJSCallable<V, P> + 'static,
         P: FromParams<V>,
         V: JSObjectOps + 'static,
-        V::Context: JSExceptionHandler,
     {
         let func = self.context.register_function(f);
         self.prototype.set(name, func.name(name));
@@ -164,7 +163,6 @@ where
         F: IntoJSCallable<V, P> + 'static,
         P: FromParams<V>,
         V: JSObjectOps + 'static,
-        V::Context: JSExceptionHandler,
     {
         let func = self.context.register_function(f);
         self.constructor.set(name, func.name(name));
@@ -191,7 +189,6 @@ where
         F: IntoJSCallable<V, P> + 'static,
         P: FromParams<V>,
         V: JSObjectOps + 'static,
-        V::Context: JSExceptionHandler,
     {
         self.context.register_function(f)
     }

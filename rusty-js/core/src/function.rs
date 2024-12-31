@@ -62,26 +62,27 @@ impl<V: JSValueImpl> RustFunc<V> {
     where
         F: IntoJSCallable<V, P> + 'static,
         P: FromParams<V>,
-        V::Context: JSExceptionHandler<Value = V>,
     {
         let required_params = P::param_requirements().required_count() as u32;
-        let func = Box::new(move |accessor: &mut ParamsAccessor<V>| {
-            let num_args = accessor.args_len() as u32;
-            if num_args < required_params {
-                return Ok(accessor.context().throw_type_error(format!(
-                    "Expected {} arguments, got {}",
-                    required_params, num_args
-                )));
-            }
-            f.call(accessor)
-        }) as Box<dyn JSCallable<V>>;
+        let func = Box::new(move |accessor: &mut ParamsAccessor<V>| f.call(accessor))
+            as Box<dyn JSCallable<V>>;
         Self {
             func,
             required_params,
         }
     }
 
-    pub(crate) fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String> {
+    pub(crate) fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>
+    where
+        V::Context: JSExceptionHandler<Value = V>,
+    {
+        let num_args = accessor.args_len() as u32;
+        if num_args < self.required_params {
+            return Ok(accessor.context().throw_type_error(format!(
+                "Expected {} arguments, got {}",
+                self.required_params, num_args
+            )));
+        }
         self.func.call(accessor)
     }
 

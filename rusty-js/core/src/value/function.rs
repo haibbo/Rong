@@ -1,7 +1,7 @@
 use crate::function::{FromParams, IntoJSCallable, RustFunc};
 use crate::{
-    Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSObject,
-    JSObjectOps, JSTypeOf, JSValueImpl,
+    Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf,
+    JSValueImpl,
 };
 use std::ops::Deref;
 
@@ -50,7 +50,6 @@ impl<V: JSObjectOps> JSFunc<V> {
 impl<C: JSContextImpl> JSContext<C>
 where
     C::Value: JSObjectOps + 'static,
-    C: JSExceptionHandler,
 {
     pub fn register_function<F, P>(&self, f: F) -> JSFunc<C::Value>
     where
