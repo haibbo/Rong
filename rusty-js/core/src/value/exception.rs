@@ -155,14 +155,20 @@ impl<V: JSObjectOps> fmt::Debug for JSException<V> {
 
 impl<V: JSObjectOps> fmt::Display for JSException<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        "Error:".fmt(f)?;
-        if let Some(message) = &self.message() {
-            ' '.fmt(f)?;
-            message.fmt(f)?;
-        }
-        if let Some(stack) = &self.stack() {
-            '\n'.fmt(f)?;
-            stack.fmt(f)?;
+        if self.is_error().is_some() {
+            "Error:".fmt(f)?;
+            if let Some(message) = &self.message() {
+                ' '.fmt(f)?;
+                message.fmt(f)?;
+            }
+            if let Some(stack) = &self.stack() {
+                '\n'.fmt(f)?;
+                stack.fmt(f)?;
+            }
+        } else {
+            let ctx = self.as_ctx();
+            let js_value = self.as_inner().clone();
+            String::from_js_value(ctx, js_value).unwrap().fmt(f)?;
         }
         Ok(())
     }
