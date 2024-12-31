@@ -1,5 +1,6 @@
 use crate::{
-    ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntimeImpl, JSValue, JSValueImpl,
+    source::Source, ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntimeImpl,
+    JSValue, JSValueImpl,
 };
 use std::any::TypeId;
 use std::collections::HashMap;
@@ -97,13 +98,13 @@ impl<C: JSContextImpl> From<C> for JSContext<C> {
 }
 
 pub trait JSCodeRunner: JSContextImpl {
-    /// eval javascript
-    fn eval(&self, source: impl AsRef<str>) -> Self::Value;
+    /// Evaluate JavaScript code
+    fn eval(&self, source: Source) -> Self::Value;
 
-    /// get global object
+    /// Get global object
     fn global_object(&self) -> Self::Value;
 
-    /// register class for rust type
+    /// Register class for rust type
     fn register_class<JC>(&self) -> Self::Value
     where
         JC: JSClass<Self::Value>;
@@ -114,7 +115,7 @@ where
     C: JSCodeRunner,
 {
     /// eval javascript
-    pub fn eval<T>(&self, source: impl AsRef<str>) -> Result<T, String>
+    pub fn eval<T>(&self, source: Source) -> Result<T, String>
     where
         C::Value: JSObjectOps,
         T: FromJSValue<C::Value>,
