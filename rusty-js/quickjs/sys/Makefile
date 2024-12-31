@@ -4,8 +4,18 @@
 CC ?= clang
 AR ?= ar
 
+# it's from build.rs
+PROFILE ?= debug
+
 # Compilation flags
-CFLAGS ?= -fPIC -O2 -Wall
+CFLAGS ?= -fPIC  -Wall
+
+ifeq ($(PROFILE), release)
+    CFLAGS += -O2 -DNDEBUG
+else
+    CFLAGS += -g -O0
+endif
+
 
 # Directories
 SRC_DIR_QJS = quickjs-ng

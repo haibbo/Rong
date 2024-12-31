@@ -92,8 +92,11 @@ fn build_static_archive() {
         _ => {}
     }
 
+    // PROFILE(debug or release) is set automatically by cargo
+    let profile = env::var("PROFILE").unwrap();
+
     let output = Command::new("make")
-        .args(["-j4"])
+        .args(["-j4", &format!("PROFILE={}", profile)])
         .output()
         .expect("Failed to execute make");
 
