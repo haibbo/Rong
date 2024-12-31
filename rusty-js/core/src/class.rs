@@ -23,12 +23,13 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         V::Context: JSExceptionHandler<Value = V>,
         V: JSObjectOps,
     {
-        let proto = Class::get::<Self>(ctx).unwrap().get_prototype();
-
-        let mut accessor = ParamsAccessor::new(ctx, this, args);
+        let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
         let instance = Self::data_constructor().0.call(&mut accessor).unwrap();
-
         let instance = JSObject::from_js_value(ctx, instance).unwrap();
+
+        let constructor = JSObject::from_js_value(ctx, this).unwrap();
+        let proto = constructor.get("prototype").unwrap();
+
         instance.prototype(proto);
         instance.into_inner()
     }
