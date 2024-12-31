@@ -258,3 +258,27 @@ fn test_static_property() {
         assert!(!ctx.eval::<bool>("'origin' in (new Point(0, 0))").unwrap());
     });
 }
+
+#[test]
+fn test_extend_class() {
+    run(|ctx| {
+        ctx.register_class::<Point>();
+
+        let color = ctx
+            .eval::<u32>(
+                "class ColorPoint extends Point {
+                    constructor(x, y, color) {
+                        super(x, y);
+                        this.color = color;
+                    }
+                    get_color() {
+                        return this.color;
+                    }
+                }
+                let p = new ColorPoint(2, 3, 0x5fa5); p.get_color()
+                ",
+            )
+            .unwrap();
+        assert_eq!(color, 0x5fa5);
+    });
+}
