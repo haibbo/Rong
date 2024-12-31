@@ -13,7 +13,9 @@ fn test_throw_error() {
         let error = ctx.throw_reference_error("Undefined variable");
         assert_some!(error.is_exception());
 
-        let error = ctx.eval::<()>("throw 'throw-error'").unwrap_err();
+        let error = ctx
+            .eval::<()>(Source::from_bytes(b"throw 'throw-error'"))
+            .unwrap_err();
         let error = error.to_string();
         assert!(
             error.contains("throw-error"),

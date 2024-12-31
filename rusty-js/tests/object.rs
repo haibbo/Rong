@@ -33,8 +33,8 @@ fn basic() {
 fn from_javascript() {
     run(|ctx| {
         let obj: JSObject = ctx
-            .eval(
-                r#"
+            .eval(Source::from_bytes(
+                br#"
                 let a3 = [];
                 a3[1] = "foo";
                 ({
@@ -49,7 +49,7 @@ fn from_javascript() {
                     },
                 })
                 "#,
-            )
+            ))
             .unwrap();
         assert_some!(obj.get::<_, JSObject>("a1").unwrap().is_array());
         assert_some!(obj.get::<_, JSObject>("a2").unwrap().is_array());
