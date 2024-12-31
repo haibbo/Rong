@@ -1,6 +1,6 @@
 use crate::{qjs, QJSRuntime, QJSValue};
 use rusty_js_core::{
-    JSClass, JSCodeRunner, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl,
+    JSClass, JSCodeRunner, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, Source,
 };
 use std::ffi::CString;
 use std::os::raw::{c_char, c_void};
@@ -108,28 +108,21 @@ impl EvalOptions {
 }
 
 impl QJSContext {
-    fn eval_raw(
-        &self,
-        source: impl AsRef<str>,
-        file_name: impl AsRef<str>,
-        flags: i32,
-    ) -> QJSValue {
-        let source = source.as_ref();
-        let c_source = CString::new(source).unwrap();
-        let file_name = file_name.as_ref();
-        let c_file_name = CString::new(file_name).unwrap();
+    fn eval_raw(&self, source: &Source, flags: i32) -> QJSValue {
+        let filename = source.name().unwrap_or("eval");
+        let c_code = CString::new(source.code()).unwrap();
+        let c_filename = CString::new(filename).unwrap();
 
-        let qjs_value = unsafe {
-            qjs::JS_Eval(
+        unsafe {
+            let val = qjs::JS_Eval(
                 self.ctx,
-                c_source.as_ptr(),
-                source.len(),
-                c_file_name.as_ptr(),
+                c_code.as_ptr(),
+                c_code.as_bytes().len(),
+                c_filename.as_ptr(),
                 flags,
-            )
-        };
-
-        QJSValue::from_ffi(self.ctx, qjs_value)
+            );
+            QJSValue::from_ffi(self.ctx, val)
+        }
     }
 
     fn throw_error_internal<F>(&self, message: &str, throw_fn: F) -> QJSValue
@@ -144,9 +137,9 @@ impl QJSContext {
 }
 
 impl JSCodeRunner for QJSContext {
-    fn eval(&self, source: impl AsRef<str>) -> Self::Value {
-        let file_name = "eval";
-        self.eval_raw(source, file_name, EvalOptions::default().to_flags())
+    fn eval(&self, source: Source) -> Self::Value {
+        let options = EvalOptions::default();
+        self.eval_raw(&source, options.to_flags())
     }
 
     fn global_object(&self) -> Self::Value {
