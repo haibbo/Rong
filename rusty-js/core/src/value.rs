@@ -1,6 +1,5 @@
-use crate::{JSContext, JSContextImpl};
+use crate::{JSContext, JSContextImpl, RustyJSError};
 use std::ops::Deref;
-use std::string::String;
 
 mod convert;
 pub use convert::*;
@@ -112,9 +111,9 @@ where
     }
 
     /// Try to converts JSValue to Rust value
-    pub fn try_into<T>(self) -> Result<T, String>
+    pub fn try_into<T>(self) -> Result<T, RustyJSError>
     where
-        V: TryInto<T, Error = String>,
+        V: TryInto<T, Error = RustyJSError>,
         T: Default,
     {
         self.inner.try_into()
@@ -143,7 +142,7 @@ impl<V> FromJSValue<V> for JSValue<V>
 where
     V: JSValueImpl,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, String> {
+    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
         Ok(JSValue::from_raw_parts(ctx.clone(), value))
     }
 }
@@ -164,16 +163,14 @@ macro_rules! impl_js_converter {
         where
             $target: JSValueImpl,
         {
-            type Error = String;
+            type Error = RustyJSError;
             fn try_into(self) -> Result<$out_type, Self::Error> {
                 let mut result: $out_type = Default::default();
                 if unsafe { $to_fn(*self.as_ffi_context(), *self.as_ffi_value(), &mut result) } < 0
                 {
-                    let err = format!(
-                        "Failed to convert JS Value into Rust type: {}",
-                        std::any::type_name::<$out_type>()
-                    );
-                    Err(err)
+                    Err(RustyJSError::ConvertError(
+                        std::any::type_name::<$out_type>(),
+                    ))
                 } else {
                     Ok(result)
                 }

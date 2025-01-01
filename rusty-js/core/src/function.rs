@@ -1,18 +1,20 @@
-use crate::{IntoJSValue, JSClass, JSExceptionHandler, JSValueConversion, JSValueImpl};
+use crate::{
+    IntoJSValue, JSClass, JSExceptionHandler, JSValueConversion, JSValueImpl, RustyJSError,
+};
 
 mod parameter;
 pub use parameter::{ArgThis, FromParams, Optional, ParamsAccessor, Rest, This, ThisMut};
 
 trait JSCallable<V: JSValueImpl> {
-    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>;
+    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError>;
 }
 
 impl<V, F> JSCallable<V> for F
 where
     V: JSValueImpl,
-    F: Fn(&mut ParamsAccessor<V>) -> Result<V, String>,
+    F: Fn(&mut ParamsAccessor<V>) -> Result<V, RustyJSError>,
 {
-    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String> {
+    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError> {
         (self)(accessor)
     }
 }
@@ -54,7 +56,7 @@ pub trait IntoJSCallable<V: JSValueImpl, P>
 where
     P: FromParams<V>,
 {
-    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>;
+    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError>;
 }
 
 impl<V: JSValueImpl> RustFunc<V> {
@@ -72,7 +74,7 @@ impl<V: JSValueImpl> RustFunc<V> {
         }
     }
 
-    pub fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>
+    pub fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError>
     where
         V::Context: JSExceptionHandler<Value = V>,
     {
@@ -126,7 +128,7 @@ macro_rules! impl_js_callable_func {
             ($($t,)*): FromParams<V>,
             R: IntoJSValue<V>,
         {
-            fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, String>  {
+            fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError>  {
                 let params = <($($t,)*)>::from_params(accessor)?;
                 #[allow(non_snake_case)]
                 let ($($t,)*) = params;

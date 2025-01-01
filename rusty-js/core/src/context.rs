@@ -1,6 +1,6 @@
 use crate::{
     source::Source, ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntimeImpl,
-    JSValue, JSValueImpl,
+    JSValue, JSValueImpl, RustyJSError,
 };
 use std::any::TypeId;
 use std::collections::HashMap;
@@ -115,7 +115,7 @@ where
     C: JSCodeRunner,
 {
     /// eval javascript
-    pub fn eval<T>(&self, source: Source) -> Result<T, String>
+    pub fn eval<T>(&self, source: Source) -> Result<T, RustyJSError>
     where
         C::Value: JSObjectOps,
         T: FromJSValue<C::Value>,
@@ -124,7 +124,7 @@ where
         let result = JSValue::new(self, raw);
 
         if let Some(ex) = result.is_exception() {
-            Err(format!("{}", ex))
+            Err(RustyJSError::Eval(format!("{}", ex)))
         } else {
             T::from_js_value(&self.inner, result.into_inner())
         }

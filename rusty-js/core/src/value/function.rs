@@ -1,7 +1,7 @@
 use crate::function::{FromParams, IntoJSCallable, RustFunc};
 use crate::{
     Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf,
-    JSValueImpl,
+    JSValueImpl, RustyJSError,
 };
 use std::ops::Deref;
 
@@ -27,11 +27,11 @@ impl<V> FromJSValue<V> for JSFunc<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, String> {
+    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
         if value.is_function() {
             JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
         } else {
-            Err("not an JS function".to_string())
+            Err(RustyJSError::NotJSFunc)
         }
     }
 }

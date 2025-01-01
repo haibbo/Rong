@@ -1,6 +1,7 @@
-use crate::{FromJSValue, JSContext, JSTypeOf, JSValue, JSValueConversion, JSValueImpl};
+use crate::{
+    FromJSValue, JSContext, JSTypeOf, JSValue, JSValueConversion, JSValueImpl, RustyJSError,
+};
 use std::ops::Deref;
-use std::string::String;
 
 mod property;
 pub use property::{PropertyAttributes, PropertyDescriptor, PropertyKey};
@@ -30,11 +31,11 @@ impl<V> FromJSValue<V> for JSObject<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, String> {
+    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
         if value.is_object() {
             Ok(JSValue::from_raw_parts(ctx.clone(), value).into())
         } else {
-            Err("not an object".to_string())
+            Err(RustyJSError::NotObject)
         }
     }
 }
@@ -130,7 +131,7 @@ where
         self.as_inner().has_property(key)
     }
 
-    pub fn get<'a, K, T>(&'a self, k: K) -> Result<T, String>
+    pub fn get<'a, K, T>(&'a self, k: K) -> Result<T, RustyJSError>
     where
         K: Into<PropertyKey<'a>>,
         T: FromJSValue<V>,
@@ -138,7 +139,7 @@ where
         let key = k.into().into_key(self.as_ctx());
         self.as_inner()
             .get_property(key)
-            .ok_or_else(|| String::from("Property not found")) // check existence firstly
+            .ok_or_else(|| RustyJSError::PropertyNotFound) // check existence firstly
             .and_then(|value| T::from_js_value(self.as_ctx(), value))
     }
 }
