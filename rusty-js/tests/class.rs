@@ -17,11 +17,11 @@ impl IntoJSValue<JSEngineValue> for Point {
 }
 
 impl FromJSValue<JSEngineValue> for Point {
-    fn from_js_value(ctx: &JSEngineContext, value: JSEngineValue) -> Result<Self, String> {
+    fn from_js_value(ctx: &JSEngineContext, value: JSEngineValue) -> Result<Self, RustyJSError> {
         let obj = JSObject::from_js_value(ctx, value)?;
         let point = obj
             .borrow::<Point>()
-            .ok_or_else(|| "Failed to borrow Point data".to_string())?;
+            .ok_or(RustyJSError::Borrow(std::any::type_name::<Self>()))?;
 
         Ok(*point)
     }

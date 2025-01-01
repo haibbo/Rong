@@ -67,8 +67,8 @@ fn from_javascript() {
             1
         );
 
-        let result: Result<String, String> = obj.get("None");
+        let result: Result<String, RustyJSError> = obj.get("None");
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Property not found");
+        assert_eq!(result, Err(RustyJSError::PropertyNotFound));
     })
 }
