@@ -1,3 +1,4 @@
+use crate::{JSExceptionHandler, JSValueImpl};
 use thiserror::Error;
 
 #[derive(Error, PartialEq, Debug)]
@@ -25,4 +26,25 @@ pub enum RustyJSError {
 
     #[error("{0}")]
     Error(String),
+}
+
+impl RustyJSError {
+    pub fn into_js_exception<V>(self, ctx: &V::Context) -> V
+    where
+        V: JSValueImpl,
+        V::Context: JSExceptionHandler,
+    {
+        match self {
+            RustyJSError::ConvertError(_)
+            | RustyJSError::NotJSFunc
+            | RustyJSError::NotObject
+            | RustyJSError::InvalidParameter { .. } => ctx.throw_type_error(self.to_string()),
+
+            RustyJSError::PropertyNotFound => ctx.throw_reference_error(self.to_string()),
+
+            RustyJSError::Borrow(_) | RustyJSError::AlreadyTaken | RustyJSError::Error(_) => {
+                ctx.throw_error(self.to_string())
+            }
+        }
+    }
 }

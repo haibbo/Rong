@@ -1,7 +1,7 @@
 use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
-    FromJSValue, JSContext, JSContextImpl, JSFunc, JSObject, JSObjectOps, JSValueImpl,
-    PropertyDescriptor, PropertyKey,
+    FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
+    JSValueImpl, PropertyDescriptor, PropertyKey, RustyJSError,
 };
 
 use std::any::TypeId;
@@ -20,14 +20,27 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
 pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     fn constructor(ctx: &V::Context, this: V, args: Vec<V>) -> V
     where
+        V::Context: JSExceptionHandler,
         V: JSObjectOps,
     {
         let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
-        let instance = Self::data_constructor().0.call(&mut accessor).unwrap();
-        let instance = JSObject::from_js_value(ctx, instance).unwrap();
 
-        let constructor = JSObject::from_js_value(ctx, this).unwrap();
-        let proto = constructor.get("prototype").unwrap();
+        let instance = match Self::data_constructor().0.call(&mut accessor) {
+            Ok(v) => v,
+            Err(e) => return e.into_js_exception(ctx),
+        };
+
+        let instance = match JSObject::from_js_value(ctx, instance) {
+            Ok(obj) => obj,
+            Err(e) => return e.into_js_exception(ctx),
+        };
+
+        let proto = match JSObject::from_js_value(ctx, this)
+            .and_then(|constructor| constructor.get("prototype"))
+        {
+            Ok(proto) => proto,
+            Err(e) => return e.into_js_exception(ctx),
+        };
 
         instance.prototype(proto);
         instance.into_inner()
@@ -45,12 +58,24 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     fn call(ctx: &V::Context, function: V, this: V, args: Vec<V>) -> V
     where
         V: JSObjectOps,
+        V::Context: JSExceptionHandler,
     {
-        let obj = JSObject::from_js_value(ctx, function).unwrap();
-        let func = obj.borrow::<RustFunc<_>>().unwrap();
-
         let mut accessor = ParamsAccessor::new(ctx, this, args);
-        func.call(&mut accessor).unwrap()
+
+        let obj = match JSObject::from_js_value(ctx, function) {
+            Ok(obj) => obj,
+            Err(e) => return e.into_js_exception(ctx),
+        };
+
+        let func = match obj.borrow::<RustFunc<_>>() {
+            Some(f) => f,
+            None => return RustyJSError::NotJSFunc.into_js_exception(ctx),
+        };
+
+        match func.call(&mut accessor) {
+            Ok(v) => v,
+            Err(e) => e.into_js_exception(ctx),
+        }
     }
 }
 
@@ -141,7 +166,9 @@ where
 {
     pub(crate) fn new(constructor: JSObject<V>, context: &'a JSContext<V::Context>) -> Self {
         let constructor = Class(constructor);
-        let prototype = constructor.get_prototype().unwrap();
+        let prototype = constructor
+            .get_prototype()
+            .expect("Class prototype not found");
         Self {
             constructor: constructor.0,
             prototype,

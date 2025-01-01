@@ -49,27 +49,6 @@ impl<V> JSException<V>
 where
     V: JSObjectOps,
 {
-    pub fn into_error(self) -> JSErrorInfo {
-        let ctx = self.as_ctx().clone();
-        if self.is_error().is_some() {
-            JSErrorInfo {
-                message: self.message(),
-                stack: self.stack(),
-            }
-        } else {
-            let js_value = self.into_js_value(&ctx);
-            JSErrorInfo {
-                stack: None,
-                message: Some(String::from_js_value(&ctx, js_value).unwrap()),
-            }
-        }
-    }
-}
-
-impl<V> JSException<V>
-where
-    V: JSObjectOps,
-{
     /// Returns the message of the error.
     ///
     /// Same as retrieving `error.message` in JavaScript.
