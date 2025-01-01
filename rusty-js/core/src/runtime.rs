@@ -31,9 +31,23 @@ pub trait JSEngine: Sized {
     type Context: JSContextImpl<Value = Self::Value> + JSCodeRunner;
     type Runtime: JSRuntimeImpl<Context = Self::Context>;
 
+    /// # Warning
+    ///
     /// JS engine is responsible for implementing
+    #[doc(hidden)]
     fn _runtime() -> Self::Runtime;
+
+    /// # Warning
+    ///
+    /// JS engine is responsible for implementing
+    #[doc(hidden)]
     fn _context(rt: &Self::Runtime) -> Self::Context;
+
+    /// JS engine name
+    fn name() -> &'static str;
+
+    /// JS engine version
+    fn version() -> &'static str;
 
     fn runtime() -> JSRuntime<Self::Runtime> {
         JSRuntime {

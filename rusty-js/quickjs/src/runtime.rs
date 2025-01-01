@@ -51,4 +51,12 @@ impl JSEngine for QuickJS {
     fn _context(rt: &Self::Runtime) -> Self::Context {
         QJSContext::new(rt)
     }
+
+    fn name() -> &'static str {
+        "QuickJS-NG"
+    }
+
+    fn version() -> &'static str {
+        "0.7"
+    }
 }
