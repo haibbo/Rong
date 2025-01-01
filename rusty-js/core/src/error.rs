@@ -9,7 +9,7 @@ pub enum RustyJSError {
     Borrow(&'static str),
 
     #[error("invalid parameters, expected {expected} arguments, got {got}")]
-    InvalidParamter { expected: u32, got: u32 },
+    InvalidParameter { expected: u32, got: u32 },
 
     #[error("Property Not Found")]
     PropertyNotFound,

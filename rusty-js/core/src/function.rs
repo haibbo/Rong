@@ -75,7 +75,7 @@ impl<V: JSValueImpl> RustFunc<V> {
     pub fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError> {
         let num_args = accessor.args_len() as u32;
         if num_args < self.required_params {
-            return Err(RustyJSError::InvalidParamter {
+            return Err(RustyJSError::InvalidParameter {
                 expected: self.required_params,
                 got: num_args,
             });
