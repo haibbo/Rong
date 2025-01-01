@@ -8,10 +8,13 @@ pub enum RustyJSError {
     #[error("Failed to borrow for type {0}")]
     Borrow(&'static str),
 
+    #[error("invalid parameters, expected {expected} arguments, got {got}")]
+    InvalidParamter { expected: u32, got: u32 },
+
     #[error("Property Not Found")]
     PropertyNotFound,
 
-    #[error("Not an Object")]
+    #[error("Not an JS Object")]
     NotObject,
 
     #[error("Not JS Function")]
@@ -21,5 +24,5 @@ pub enum RustyJSError {
     AlreadyTaken,
 
     #[error("{0}")]
-    Eval(String),
+    Error(String),
 }

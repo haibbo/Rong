@@ -139,7 +139,7 @@ where
         let key = k.into().into_key(self.as_ctx());
         self.as_inner()
             .get_property(key)
-            .ok_or_else(|| RustyJSError::PropertyNotFound) // check existence firstly
+            .ok_or(RustyJSError::PropertyNotFound) // check existence firstly
             .and_then(|value| T::from_js_value(self.as_ctx(), value))
     }
 }

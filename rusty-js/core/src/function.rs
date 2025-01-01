@@ -1,6 +1,4 @@
-use crate::{
-    IntoJSValue, JSClass, JSExceptionHandler, JSValueConversion, JSValueImpl, RustyJSError,
-};
+use crate::{IntoJSValue, JSClass, JSValueConversion, JSValueImpl, RustyJSError};
 
 mod parameter;
 pub use parameter::{ArgThis, FromParams, Optional, ParamsAccessor, Rest, This, ThisMut};
@@ -74,16 +72,13 @@ impl<V: JSValueImpl> RustFunc<V> {
         }
     }
 
-    pub fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError>
-    where
-        V::Context: JSExceptionHandler<Value = V>,
-    {
+    pub fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError> {
         let num_args = accessor.args_len() as u32;
         if num_args < self.required_params {
-            return Ok(accessor.context().throw_type_error(format!(
-                "Expected {} arguments, got {}",
-                self.required_params, num_args
-            )));
+            return Err(RustyJSError::InvalidParamter {
+                expected: self.required_params,
+                got: num_args,
+            });
         }
         self.func.call(accessor)
     }

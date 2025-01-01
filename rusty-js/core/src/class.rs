@@ -1,7 +1,7 @@
 use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
-    FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
-    JSValueImpl, PropertyDescriptor, PropertyKey,
+    FromJSValue, JSContext, JSContextImpl, JSFunc, JSObject, JSObjectOps, JSValueImpl,
+    PropertyDescriptor, PropertyKey,
 };
 
 use std::any::TypeId;
@@ -20,7 +20,6 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
 pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     fn constructor(ctx: &V::Context, this: V, args: Vec<V>) -> V
     where
-        V::Context: JSExceptionHandler<Value = V>,
         V: JSObjectOps,
     {
         let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
@@ -46,7 +45,6 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     fn call(ctx: &V::Context, function: V, this: V, args: Vec<V>) -> V
     where
         V: JSObjectOps,
-        V::Context: JSExceptionHandler<Value = V>,
     {
         let obj = JSObject::from_js_value(ctx, function).unwrap();
         let func = obj.borrow::<RustFunc<_>>().unwrap();
@@ -90,12 +88,14 @@ where
             .get_class_registry_mut()
             .and_then(|registry| registry.get(&TypeId::of::<JC>()))
             .cloned()?;
-        Some(Self(JSObject::from_js_value(context, constructor).unwrap()))
+        match JSObject::from_js_value(context, constructor) {
+            Ok(obj) => Some(Self(obj)),
+            Err(_) => None,
+        }
     }
 
-    pub fn get_prototype(&self) -> JSObject<V> {
-        let obj: JSObject<V> = self.0.get("prototype").unwrap();
-        obj
+    pub fn get_prototype(&self) -> Option<JSObject<V>> {
+        self.0.get("prototype").ok()
     }
 }
 
@@ -141,7 +141,7 @@ where
 {
     pub(crate) fn new(constructor: JSObject<V>, context: &'a JSContext<V::Context>) -> Self {
         let constructor = Class(constructor);
-        let prototype = constructor.get_prototype();
+        let prototype = constructor.get_prototype().unwrap();
         Self {
             constructor: constructor.0,
             prototype,
