@@ -299,9 +299,7 @@ where
         let value = accessor.take_this().ok_or(RustyJSError::AlreadyTaken)?;
 
         let obj = JSObject::from_js_value(accessor.context(), value)?;
-        let borrowed = obj
-            .borrow::<T>()
-            .ok_or_else(|| RustyJSError::Borrow(std::any::type_name::<T>()))?;
+        let borrowed = obj.borrow::<T>()?;
 
         // Safety: because JSObject ensures the object's lifecycle.
         let static_ref: Ref<'static, T> = unsafe { std::mem::transmute(borrowed) };
@@ -320,9 +318,7 @@ where
         let value = accessor.take_this().ok_or(RustyJSError::AlreadyTaken)?;
 
         let obj = JSObject::from_js_value(accessor.context(), value)?;
-        let borrowed = obj
-            .borrow_mut::<T>()
-            .ok_or_else(|| RustyJSError::Borrow(std::any::type_name::<T>()))?;
+        let borrowed = obj.borrow_mut::<T>()?;
 
         // Safety: because JSObject ensures the object's lifecycle.
         let static_ref: RefMut<'static, T> = unsafe { std::mem::transmute(borrowed) };
@@ -374,9 +370,7 @@ where
         let value = accessor.next_arg().unwrap(); // it's safe
 
         let obj = JSObject::from_js_value(accessor.context(), value)?;
-        let borrowed = obj
-            .borrow::<T>()
-            .ok_or_else(|| RustyJSError::Borrow(std::any::type_name::<T>()))?;
+        let borrowed = obj.borrow::<T>()?;
 
         // Safety: because JSObject ensures the object's lifecycle.
         let static_ref: Ref<'static, T> = unsafe { std::mem::transmute(borrowed) };

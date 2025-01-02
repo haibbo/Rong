@@ -68,8 +68,8 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         };
 
         let func = match obj.borrow::<RustFunc<_>>() {
-            Some(f) => f,
-            None => return RustyJSError::NotJSFunc.into_js_exception(ctx),
+            Ok(f) => f,
+            Err(_) => return RustyJSError::NotJSFunc.into_js_exception(ctx),
         };
 
         match func.call(&mut accessor) {
@@ -129,23 +129,24 @@ where
     V: JSValueImpl + JSObjectOps,
 {
     /// Borrow the underlying data from an instance
-    pub fn borrow<T>(&self) -> Option<Ref<'_, T>> {
+    pub fn borrow<T>(&self) -> Result<Ref<'_, T>, RustyJSError> {
         let ptr = self.as_inner().get_opaque::<RefCell<T>>();
         if ptr.is_null() {
-            None
+            Err(RustyJSError::Borrow(std::any::type_name::<T>()))
         } else {
-            Some(unsafe { &*ptr }.borrow())
+            // SAFETY: ptr was created by Box::into_raw in instance()
+            Ok(unsafe { &*ptr }.borrow())
         }
     }
 
     /// Mutably borrow the underlying data from an instance
-    pub fn borrow_mut<T>(&self) -> Option<RefMut<'_, T>> {
+    pub fn borrow_mut<T>(&self) -> Result<RefMut<'_, T>, RustyJSError> {
         let ptr = self.as_inner().get_opaque::<RefCell<T>>();
         if ptr.is_null() {
-            None
+            Err(RustyJSError::Borrow(std::any::type_name::<T>()))
         } else {
             // SAFETY: ptr was created by Box::into_raw in instance()
-            Some(unsafe { &*ptr }.borrow_mut())
+            Ok(unsafe { &*ptr }.borrow_mut())
         }
     }
 
