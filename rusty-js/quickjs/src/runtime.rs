@@ -57,6 +57,6 @@ impl JSEngine for QuickJS {
     }
 
     fn version() -> &'static str {
-        "0.7"
+        "0.8.0"
     }
 }
