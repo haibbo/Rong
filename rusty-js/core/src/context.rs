@@ -123,11 +123,10 @@ where
         let raw = self.inner.eval(source);
         let result = JSValue::new(self, raw);
 
-        if let Some(ex) = result.is_exception() {
-            Err(RustyJSError::Error(format!("{}", ex)))
-        } else {
-            T::from_js_value(&self.inner, result.into_inner())
-        }
+        result.is_exception().map_or_else(
+            || T::from_js_value(&self.inner, result.into_inner()),
+            |exception| Err(RustyJSError::Exception(exception.into_error())),
+        )
     }
 
     /// get global object

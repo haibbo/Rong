@@ -1,7 +1,7 @@
-use crate::{JSExceptionHandler, JSValueImpl};
+use crate::{JSError, JSExceptionHandler, JSValueImpl};
 use thiserror::Error;
 
-#[derive(Error, PartialEq, Debug)]
+#[derive(Error, Debug)]
 pub enum RustyJSError {
     #[error("Failed to convert into type: {0}")]
     ConvertError(&'static str),
@@ -21,11 +21,17 @@ pub enum RustyJSError {
     #[error("Not JS Function")]
     NotJSFunc,
 
+    #[error("Not JS Exception Object")]
+    NotJSExcep,
+
     #[error("This has already been taken")]
     AlreadyTaken,
 
     #[error("{0}")]
     Error(String),
+
+    #[error("{0}")]
+    Exception(#[from] JSError),
 }
 
 impl RustyJSError {
@@ -38,13 +44,15 @@ impl RustyJSError {
             RustyJSError::ConvertError(_)
             | RustyJSError::NotJSFunc
             | RustyJSError::NotObject
+            | RustyJSError::NotJSExcep
             | RustyJSError::InvalidParameter { .. } => ctx.throw_type_error(self.to_string()),
 
             RustyJSError::PropertyNotFound => ctx.throw_reference_error(self.to_string()),
 
-            RustyJSError::Borrow(_) | RustyJSError::AlreadyTaken | RustyJSError::Error(_) => {
-                ctx.throw_error(self.to_string())
-            }
+            RustyJSError::Exception(_)
+            | RustyJSError::Error(_)
+            | RustyJSError::Borrow(_)
+            | RustyJSError::AlreadyTaken => ctx.throw_error(self.to_string()),
         }
     }
 }

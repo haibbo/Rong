@@ -1,10 +1,12 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSValue, JSValueImpl,
+    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf, JSValue,
+    JSValueImpl, RustyJSError,
 };
 use std::fmt;
 use std::ops::Deref;
 use std::string::String;
 
+/// Represents a JavaScript exception object wrapper
 pub struct JSException<V: JSValueImpl>(JSObject<V>);
 
 impl<V: JSValueImpl> Deref for JSException<V> {
@@ -29,6 +31,18 @@ where
 {
     pub(crate) fn from_object(v: JSObject<V>) -> Self {
         Self(v)
+    }
+}
+
+impl<V> FromJSValue<V> for JSException<V>
+where
+    V: JSTypeOf,
+{
+    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
+        value
+            .is_exception()
+            .map(|v| Self(JSValue::from_raw_parts(ctx.clone(), v).into()))
+            .ok_or(RustyJSError::NotObject)
     }
 }
 
@@ -62,26 +76,44 @@ where
     pub fn stack(&self) -> Option<String> {
         self.get("stack").ok()
     }
+
+    /// Convert the exception into JSError
+    pub fn into_error(self) -> JSError {
+        let ctx = self.as_ctx().clone();
+        if self.is_error().is_some() {
+            JSError {
+                message: self.message(),
+                stack: self.stack(),
+            }
+        } else {
+            let js_value = self.into_js_value(&ctx);
+            JSError {
+                message: String::from_js_value(&ctx, js_value).ok(),
+                stack: None,
+            }
+        }
+    }
 }
 
+/// Represents a JavaScript error with message and stack trace
 #[derive(Debug)]
-pub struct JSErrorInfo {
-    message: Option<String>,
-    stack: Option<String>,
+pub struct JSError {
+    pub message: Option<String>,
+    pub stack: Option<String>,
 }
 
-impl fmt::Display for JSErrorInfo {
+impl fmt::Display for JSError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
         match (&self.message, &self.stack) {
             (Some(msg), Some(stack)) => write!(f, "{}\n{}", msg, stack),
             (Some(msg), None) => write!(f, "{}", msg),
             (None, Some(stack)) => write!(f, "{}", stack),
-            (None, None) => Ok(()),
+            (None, None) => write!(f, "Unknown JavaScript Error"),
         }
     }
 }
 
-impl std::error::Error for JSErrorInfo {}
+impl std::error::Error for JSError {}
 
 pub trait JSExceptionHandler: JSContextImpl {
     fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value;
