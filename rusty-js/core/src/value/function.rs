@@ -42,7 +42,7 @@ impl<V: JSObjectOps> JSFunc<V> {
         self
     }
 
-    pub fn into_inner(self) -> V {
+    pub(crate) fn into_inner(self) -> V {
         self.0.into_inner()
     }
 }

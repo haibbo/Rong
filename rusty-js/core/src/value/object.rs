@@ -96,7 +96,7 @@ where
         JSValue::new(ctx, value).into()
     }
 
-    pub fn into_inner(self) -> V {
+    pub(crate) fn into_inner(self) -> V {
         self.0.into_inner()
     }
 }
