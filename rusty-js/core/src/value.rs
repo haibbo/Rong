@@ -24,12 +24,18 @@ pub trait JSValueImpl: Clone {
     /// This represents the context wrapper type (e.g. QJSContext)
     type Context: JSContextImpl<Value = Self>;
 
-    /// the implementation need to make sure it has the ownship, like as new method
-    /// generally, it should increase referen count of FFI Context
+    /// In callback context, generally, all JSValue variables are from JS engine,
+    /// in order to make Rust lifetime and ownship works, these variables should
+    /// be increased referece count first, and then Rust side can drop JSValue safely.
     fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self;
 
-    /// Consumes the ownship and returns the FFI level of JSValue without triggering drop.
-    /// It's desigend to transfer ownship to FFI
+    /// almost the same as from_ffi, but without referece count increased, it's used when varialbe
+    /// are returned from New JS variable function, such as eval, JS_NewObject
+    fn from_parts(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue)
+        -> Self;
+
+    /// Consumes the ownship and returns the FFI level of JSValue but stop triggering drop.
+    /// This API should be used when engine API needs the ownshipe of JS variable
     fn into_ffi_value(self) -> Self::FfiValue;
 
     fn as_ffi_value(&self) -> &Self::FfiValue;
@@ -80,7 +86,7 @@ where
 
     pub fn from_ffi(ctx: <V::Context as JSContextImpl>::FfiContext, value: V::FfiValue) -> Self {
         let context = V::Context::from_ffi(ctx);
-        let value = V::from_ffi(ctx, value);
+        let value = V::from_parts(ctx, value);
         Self::from_raw_parts(context, value)
     }
 
@@ -185,7 +191,7 @@ macro_rules! impl_js_converter {
             fn from(t: (&T, $in_type)) -> Self {
                 let ctx = t.0.to_ffi();
                 let raw = unsafe { $create_fn(ctx, t.1) };
-                Self::from_ffi(ctx, raw)
+                Self::from_parts(ctx, raw)
             }
         }
     };
