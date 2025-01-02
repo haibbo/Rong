@@ -38,10 +38,13 @@ LIB_TARGET = $(OUT_DIR)/libquickjs.a
 
 # Default target
 all: $(LIB_TARGET)
+example: async class
+
 
 # Create output directory if it doesn't exist
 $(OUT_DIR):
 	@mkdir -p $(OUT_DIR)
+	@mkdir -p $(OUT_DIR)/example
 
 # Copy necessary source files from quickjs-ng to out directory
 $(foreach file, $(QJS_FILENAMES), $(eval $(OUT_DIR)/$(file): $(SRC_DIR_QJS)/$(file) | $(OUT_DIR) ; cp $$< $$@))
@@ -65,8 +68,11 @@ $(LIB_TARGET): $(addprefix $(OUT_DIR)/, $(patsubst %.c, %.o, $(QJS_FILENAMES) $(
 clean:
 	@rm -rf $(OUT_DIR)
 
-$(OUT_DIR)/class.o: $(SRC_DIR_PATCH)/example/class.c
+$(OUT_DIR)/example/%.o: $(SRC_DIR_PATCH)/example/%.c
 	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -c $< -o $@
 
-class: $(LIB_TARGET) $(OUT_DIR)/class.o
+class: $(LIB_TARGET) $(OUT_DIR)/example/class.o
 	$(CC) $^ -o $(OUT_DIR)/$@
+
+async: $(LIB_TARGET) $(OUT_DIR)/example/async.o
+	$(CC) $^ -luv -o $(OUT_DIR)/$@
