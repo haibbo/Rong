@@ -11,7 +11,7 @@ impl JSObjectOps for QJSValue {
 
     fn make_object<T>(ctx: &Self::Context, constructor: Self, data: *mut T) -> Self {
         let ctx = ctx.to_ffi();
-        let constructor = constructor.into_ffi_value();
+        let constructor = constructor.value;
         let v = unsafe { qjs::QJS_ObjectMake(ctx, constructor, data.cast()) };
         QJSValue::from_parts(ctx, v)
     }

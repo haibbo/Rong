@@ -68,7 +68,6 @@ JSValue QJS_CreateClass(JSContext *ctx, const char *class_name, JSCFunction *con
 JSValue QJS_ObjectMake(JSContext *ctx, JSValue constructor, void *privateDate){
 
     int class_id = _QJS_GetCFuncMagic(constructor);
-    JS_FreeValue(ctx, constructor);
 
     JSValue obj = JS_NewObjectClass(ctx, class_id);
     JS_SetOpaque(obj, privateDate);
