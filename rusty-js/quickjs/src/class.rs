@@ -10,14 +10,10 @@ pub(crate) unsafe extern "C" fn generic_constructor<JC>(
 where
     JC: JSClass<QJSValue>,
 {
-    qjs::JS_DupValue(ctx, this);
     let this = QJSValue::from_ffi(ctx, this);
 
     let args: Vec<_> = (0..argc as usize)
-        .map(move |i| {
-            qjs::JS_DupValue(ctx, *argv.add(i));
-            QJSValue::from_ffi(ctx, *argv.add(i))
-        })
+        .map(move |i| QJSValue::from_ffi(ctx, *argv.add(i)))
         .collect();
 
     let ctx = QJSContext::from_ffi(ctx);
@@ -29,8 +25,6 @@ where
     JC: JSClass<QJSValue>,
 {
     let ctx: *mut qjs::JSContext = std::ptr::null_mut();
-    qjs::JS_DupValue(ctx, obj);
-
     let value = QJSValue::from_ffi(ctx, obj);
     <JC as JSClassExt<QJSValue>>::free(value);
 }
@@ -47,18 +41,10 @@ pub(crate) unsafe extern "C" fn call<JC>(
 where
     JC: JSClass<QJSValue>,
 {
-    // in FFI context, JS engine has ownship for function, argv etc. Since QJSValue has drop,
-    // we have to increase reference count firstly to make rust has its ownship.
-    qjs::JS_DupValue(ctx, function);
-    qjs::JS_DupValue(ctx, this);
-
     let this = QJSValue::from_ffi(ctx, this);
     let function = QJSValue::from_ffi(ctx, function);
     let args: Vec<_> = (0..argc as usize)
-        .map(move |i| {
-            qjs::JS_DupValue(ctx, *argv.add(i));
-            QJSValue::from_ffi(ctx, *argv.add(i))
-        })
+        .map(move |i| QJSValue::from_ffi(ctx, *argv.add(i)))
         .collect();
 
     let ctx = QJSContext::from_ffi(ctx);

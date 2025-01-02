@@ -40,10 +40,18 @@ impl JSValueImpl for QJSValue {
     type Context = QJSContext;
 
     fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self {
-        // Here we don't clone value, since method into_ffi_value don't triger drop
-        //
-        // Here we don't clone ctx, since QJSContext increase reference count to hold, and
-        // at higher lay, QJSContext and QJSValue are bundled togethere
+        // In callback context, generally, all JS variables are from JS engine, in order to make Rust lifetime
+        // and ownship works, these variables should be increased referece count first, and then Rust side can
+        // drop QJSValue safely
+        let value = unsafe { qjs::JS_DupValue(ctx, value) };
+
+        Self { value, ctx }
+    }
+
+    fn from_parts(
+        ctx: <Self::Context as JSContextImpl>::FfiContext,
+        value: Self::FfiValue,
+    ) -> Self {
         Self { value, ctx }
     }
 
@@ -69,7 +77,7 @@ where
     fn from(t: (&T, ())) -> Self {
         let ctx = t.0.to_ffi();
         let raw = unsafe { qjs::QJS_NewUndefined(ctx) };
-        Self::from_ffi(ctx, raw)
+        Self::from_parts(ctx, raw)
     }
 }
 

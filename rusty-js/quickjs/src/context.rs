@@ -121,7 +121,7 @@ impl QJSContext {
                 c_filename.as_ptr(),
                 flags,
             );
-            QJSValue::from_ffi(self.ctx, val)
+            QJSValue::from_parts(self.ctx, val)
         }
     }
 
@@ -132,7 +132,7 @@ impl QJSContext {
         let message = message.replace("\\n", "\n");
         let c_message = CString::new(message).unwrap();
         let raw = { throw_fn(self.ctx, c"%s".as_ptr(), c_message.as_ptr()) };
-        QJSValue::from_ffi(self.ctx, raw)
+        QJSValue::from_parts(self.ctx, raw)
     }
 }
 
@@ -144,7 +144,7 @@ impl JSCodeRunner for QJSContext {
 
     fn global_object(&self) -> Self::Value {
         let raw = unsafe { qjs::JS_GetGlobalObject(self.ctx) };
-        QJSValue::from_ffi(self.ctx, raw)
+        QJSValue::from_parts(self.ctx, raw)
     }
 
     fn register_class<JC>(&self) -> Self::Value
@@ -161,7 +161,7 @@ impl JSCodeRunner for QJSContext {
                 Some(crate::class::finalizer::<JC>),
             )
         };
-        QJSValue::from_ffi(self.ctx, raw)
+        QJSValue::from_parts(self.ctx, raw)
     }
 }
 
@@ -197,6 +197,6 @@ impl JSExceptionHandler for QJSContext {
     }
 
     fn new_error(&self) -> Self::Value {
-        unsafe { QJSValue::from_ffi(self.ctx, qjs::JS_NewError(self.ctx)) }
+        unsafe { QJSValue::from_parts(self.ctx, qjs::JS_NewError(self.ctx)) }
     }
 }

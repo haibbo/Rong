@@ -6,14 +6,14 @@ impl JSObjectOps for QJSValue {
     fn new_object(ctx: &Self::Context) -> Self {
         let ctx = ctx.to_ffi();
         let v = unsafe { qjs::JS_NewObject(ctx) };
-        QJSValue::from_ffi(ctx, v)
+        QJSValue::from_parts(ctx, v)
     }
 
     fn make_object<T>(ctx: &Self::Context, constructor: Self, data: *mut T) -> Self {
         let ctx = ctx.to_ffi();
         let constructor = constructor.into_ffi_value();
         let v = unsafe { qjs::QJS_ObjectMake(ctx, constructor, data.cast()) };
-        QJSValue::from_ffi(ctx, v)
+        QJSValue::from_parts(ctx, v)
     }
 
     fn get_opaque<T>(&self) -> *mut T {
@@ -66,7 +66,7 @@ impl JSObjectOps for QJSValue {
         if unsafe { qjs::QJS_IsUndefined(self.ctx, v) != 0 } {
             None
         } else {
-            Some(QJSValue::from_ffi(key.ctx, v))
+            Some(QJSValue::from_parts(key.ctx, v))
         }
     }
 

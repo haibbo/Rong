@@ -11,7 +11,7 @@ impl JSTypeOf for QJSValue {
         unsafe {
             if qjs::QJS_IsException(self.ctx, self.value) != 0 {
                 let exception = qjs::JS_GetException(self.ctx);
-                Some(QJSValue::from_ffi(self.ctx, exception))
+                Some(QJSValue::from_parts(self.ctx, exception))
             } else {
                 None
             }
