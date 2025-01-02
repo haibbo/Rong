@@ -129,7 +129,6 @@ impl QJSContext {
     where
         F: FnOnce(*mut qjs::JSContext, *const c_char, *const c_char) -> qjs::JSValue,
     {
-        let message = message.replace("\\n", "\n");
         let c_message = CString::new(message).unwrap();
         let raw = { throw_fn(self.ctx, c"%s".as_ptr(), c_message.as_ptr()) };
         QJSValue::from_parts(self.ctx, raw)
