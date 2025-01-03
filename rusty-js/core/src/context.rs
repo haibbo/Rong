@@ -151,13 +151,4 @@ where
         JC::class_setup(&ClassSetup::new(constructor.clone().into(), self));
         obj.set(JC::NAME, constructor);
     }
-
-    pub fn get_class_constructor<JC>(&self) -> Option<&C::Value>
-    where
-        JC: JSClass<C::Value>,
-    {
-        self.inner
-            .get_class_registry()
-            .and_then(|registry| registry.get(&TypeId::of::<JC>()))
-    }
 }
