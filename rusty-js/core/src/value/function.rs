@@ -51,6 +51,24 @@ impl<V: JSObjectOps> JSFunc<V> {
         ctx.register_function(f)
     }
 
+    #[inline]
+    fn call_internal<Args, R>(&self, this: Option<V>, args: Args) -> Result<R, RustyJSError>
+    where
+        Args: IntoJSArgs<V>,
+        R: FromJSValue<V>,
+        V: JSObjectOps,
+    {
+        let ctx = self.as_ctx();
+        let argv = args.into_js_args(ctx);
+        let r = ctx.call(self.as_inner(), this, argv);
+        let result = JSValue::from_js_value(ctx, r)?;
+
+        result.is_exception().map_or_else(
+            || R::from_js_value(ctx, result.into_inner()),
+            |exception| Err(RustyJSError::Exception(exception.into_error())),
+        )
+    }
+
     /// Calls the JavaScript function with the given arguments.
     ///
     /// # Arguments
@@ -76,15 +94,17 @@ impl<V: JSObjectOps> JSFunc<V> {
         R: FromJSValue<V>,
         V: JSObjectOps,
     {
-        let ctx = self.as_ctx();
-        let argv = args.into_js_args(ctx);
-        let r = ctx.call(self.as_inner(), None, argv);
-        let result = JSValue::from_js_value(ctx, r)?;
+        self.call_internal(None, args)
+    }
 
-        result.is_exception().map_or_else(
-            || R::from_js_value(ctx, result.into_inner()),
-            |exception| Err(RustyJSError::Exception(exception.into_error())),
-        )
+    /// same as `call`, but with JS this object
+    pub fn call_with_this<Args, R>(&self, this: V, args: Args) -> Result<R, RustyJSError>
+    where
+        Args: IntoJSArgs<V>,
+        R: FromJSValue<V>,
+        V: JSObjectOps,
+    {
+        self.call_internal(Some(this), args)
     }
 
     /// set name of JS Function
