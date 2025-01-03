@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+pub use rusty_js::function::{ArgThis, Constructor, Optional, Rest, This, ThisMut};
+
 pub use rusty_js::*;
 
 pub fn run<F: FnOnce(&JSContext)>(f: F) {

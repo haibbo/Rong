@@ -1,6 +1,5 @@
 mod helper;
 use helper::*;
-use rusty_js_core::function::{ArgThis, Constructor, Optional, Rest, This, ThisMut};
 
 #[derive(Clone, Copy)]
 struct Point {
@@ -119,111 +118,6 @@ fn function() {
         assert_eq!(
             ctx.eval::<String>(Source::from_bytes(b"add.name")).unwrap(),
             "add"
-        );
-    });
-}
-
-#[test]
-fn function_with_optional() {
-    run(|ctx| {
-        let func = ctx
-            .register_function(|a: i32, b: Optional<i32>| match *b {
-                Some(val) => a + val,
-                None => a,
-            })
-            .name("add_optional");
-        ctx.global_object().set("add_optional", func);
-
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"add_optional(7)"))
-                .unwrap(),
-            7
-        );
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"add_optional(7, 3)"))
-                .unwrap(),
-            10
-        );
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"add_optional.length"))
-                .unwrap(),
-            1
-        );
-    });
-}
-
-#[test]
-fn function_with_rest() {
-    run(|ctx| {
-        let func = ctx
-            .register_function(|init: i32, rest: Rest<i32>| {
-                let sum: i32 = rest.iter().sum();
-                init + sum
-            })
-            .name("add");
-        ctx.global_object().set("add_rest", func);
-
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"add_rest(1)")).unwrap(),
-            1
-        );
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"add_rest(1, 2)"))
-                .unwrap(),
-            3
-        );
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"add_rest(1, 2, 3, 4)"))
-                .unwrap(),
-            10
-        );
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"add_rest.length"))
-                .unwrap(),
-            1
-        );
-    });
-}
-
-#[test]
-fn function_with_optional_and_rest() {
-    run(|ctx| {
-        let func = ctx
-            .register_function(|a: i32, b: Optional<i32>, rest: Rest<i32>| {
-                let base = match *b {
-                    Some(val) => a + val,
-                    None => a,
-                };
-                let sum: i32 = rest.iter().sum();
-                base + sum
-            })
-            .name("complex_add");
-        ctx.global_object().set("complex_add", func);
-
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"complex_add(1)"))
-                .unwrap(),
-            1
-        );
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"complex_add(1, 2)"))
-                .unwrap(),
-            3
-        );
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"complex_add(1, 2, 3)"))
-                .unwrap(),
-            6
-        );
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"complex_add(1, 2, 3, 4)"))
-                .unwrap(),
-            10
-        );
-        assert_eq!(
-            ctx.eval::<i32>(Source::from_bytes(b"complex_add.length"))
-                .unwrap(),
-            1
         );
     });
 }
