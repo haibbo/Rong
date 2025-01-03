@@ -56,6 +56,33 @@ impl JSContextImpl for QJSContext {
     fn get_opaque<T>(&self) -> *mut T {
         unsafe { qjs::JS_GetContextOpaque(self.ctx) as *mut T }
     }
+
+    fn call(
+        &self,
+        function: &Self::Value,
+        this: Option<Self::Value>,
+        argv: Vec<Self::Value>,
+    ) -> Self::Value {
+        // Convert this to JSValue or undefined
+        let this_val = this.map_or_else(
+            || unsafe { qjs::QJS_NewUndefined(self.ctx) },
+            |v| *v.as_ffi_value(),
+        );
+
+        // Convert argv to raw JSValues
+        let mut args: Vec<qjs::JSValue> = argv.iter().map(|v| *v.as_ffi_value()).collect();
+
+        let v = unsafe {
+            qjs::JS_Call(
+                self.ctx,
+                *function.as_ffi_value(),
+                this_val,
+                args.len() as std::ffi::c_int,
+                args.as_mut_ptr(),
+            )
+        };
+        QJSValue::from_parts(self.ctx, v)
+    }
 }
 
 impl QJSContext {

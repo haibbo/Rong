@@ -32,6 +32,13 @@ pub trait JSContextImpl: Clone {
     /// Set opaque data for the context
     fn set_opaque<T>(&self, data: *mut T);
 
+    fn call(
+        &self,
+        function: &Self::Value,
+        this: Option<Self::Value>,
+        argv: Vec<Self::Value>,
+    ) -> Self::Value;
+
     /// Get opaque data from the context
     fn get_opaque<T>(&self) -> *mut T;
 

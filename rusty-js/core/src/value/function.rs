@@ -1,9 +1,12 @@
 use crate::function::{FromParams, IntoJSCallable, RustFunc};
 use crate::{
     Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf,
-    JSValueImpl, RustyJSError,
+    JSValue, JSValueImpl, RustyJSError,
 };
 use std::ops::Deref;
+
+mod args;
+pub use args::IntoJSArgs;
 
 pub struct JSFunc<V: JSValueImpl>(JSObject<V>);
 
@@ -37,6 +40,54 @@ where
 }
 
 impl<V: JSObjectOps> JSFunc<V> {
+    /// Create a new JS function from a Rust function or closure
+    pub fn new<C, F, P>(ctx: &JSContext<C>, f: F) -> Self
+    where
+        C: JSContextImpl<Value = V>,
+        F: IntoJSCallable<V, P> + 'static,
+        P: FromParams<V>,
+        V: 'static,
+    {
+        ctx.register_function(f)
+    }
+
+    /// Calls the JavaScript function with the given arguments.
+    ///
+    /// # Arguments
+    /// * `args` - Arguments to pass to the function. Can be:
+    ///   - A single value implementing `IntoJSArg`
+    ///   - A tuple of values implementing `IntoJSArg` (up to 12 arguments)
+    ///
+    /// # Returns
+    /// Returns `Ok(R)` if the call succeeds, where `R` is the return type.
+    /// Returns `Err(RustyJSError)` if the call fails or throws an exception.
+    ///
+    /// # Examples
+    /// ```rust
+    /// // Call with single argument
+    /// let result: i32 = func.call(42)?;
+    ///
+    /// // Call with multiple arguments
+    /// let result: String = func.call((1, "two", 3.0))?;
+    /// ```
+    pub fn call<Args, R>(&self, args: Args) -> Result<R, RustyJSError>
+    where
+        Args: IntoJSArgs<V>,
+        R: FromJSValue<V>,
+        V: JSObjectOps,
+    {
+        let ctx = self.as_ctx();
+        let argv = args.into_js_args(ctx);
+        let r = ctx.call(self.as_inner(), None, argv);
+        let result = JSValue::from_js_value(ctx, r)?;
+
+        result.is_exception().map_or_else(
+            || R::from_js_value(ctx, result.into_inner()),
+            |exception| Err(RustyJSError::Exception(exception.into_error())),
+        )
+    }
+
+    /// set name of JS Function
     pub fn name(self, name: &str) -> Self {
         self.0.set("name", name);
         self
