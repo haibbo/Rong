@@ -56,7 +56,13 @@ impl JSEngine for QuickJS {
         "QuickJS-NG"
     }
 
-    fn version() -> &'static str {
-        "0.8.0"
+    fn version() -> String {
+        unsafe {
+            let c_str = qjs::JS_GetVersion();
+            std::ffi::CStr::from_ptr(c_str)
+                .to_str()
+                .map(|s| s.to_string())
+                .unwrap()
+        }
     }
 }

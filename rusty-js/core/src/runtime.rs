@@ -47,7 +47,7 @@ pub trait JSEngine: Sized {
     fn name() -> &'static str;
 
     /// JS engine version
-    fn version() -> &'static str;
+    fn version() -> String;
 
     fn runtime() -> JSRuntime<Self::Runtime> {
         JSRuntime {
