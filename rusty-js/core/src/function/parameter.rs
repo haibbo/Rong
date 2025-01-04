@@ -379,6 +379,7 @@ where
 }
 
 mod sealed {
+    use crate::{JSFunc, JSValueImpl};
     pub trait RegularTypeSealed {}
 
     impl RegularTypeSealed for i32 {}
@@ -391,6 +392,7 @@ mod sealed {
     impl RegularTypeSealed for String {}
     impl<T> RegularTypeSealed for Vec<T> {}
     impl<T> RegularTypeSealed for Option<T> {}
+    impl<V: JSValueImpl> RegularTypeSealed for JSFunc<V> {}
 }
 
 macro_rules! impl_from_params {

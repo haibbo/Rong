@@ -126,3 +126,35 @@ fn test_jsfunc_call() {
         assert!(result.is_err());
     });
 }
+
+#[test]
+fn test_jsfunc_as_argument() {
+    run(|ctx| {
+        // Register a function that takes a JS function as argument
+        let func = ctx
+            .register_function(|callback: JSFunc| {
+                // Call the JS function with some arguments
+                let result: i32 = callback.call((2, 3)).unwrap();
+                result * 2
+            })
+            .name("call_and_double");
+
+        ctx.global_object().set("call_and_double", func);
+
+        // Test with a simple addition function
+        let result: i32 = ctx
+            .eval(Source::from_bytes(
+                b"call_and_double(function(a, b) { return a + b; })",
+            ))
+            .unwrap();
+        assert_eq!(result, 10); // (2 + 3) * 2
+
+        // Test with a multiplication function
+        let result: i32 = ctx
+            .eval(Source::from_bytes(
+                b"call_and_double(function(a, b) { return a * b; })",
+            ))
+            .unwrap();
+        assert_eq!(result, 12); // (2 * 3) * 2
+    });
+}
