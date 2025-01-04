@@ -32,12 +32,29 @@ pub trait JSContextImpl: Clone {
     /// Set opaque data for the context
     fn set_opaque<T>(&self, data: *mut T);
 
+    /// Calls a JavaScript function with the specified `this` value and arguments.
+    ///
+    /// # Arguments
+    ///
+    /// * `function` - The JavaScript function to call
+    /// * `this` - Optional `this` value to use when calling the function
+    /// * `argv` - Vector of arguments to pass to the function
+    ///
+    /// # Returns
+    ///
+    /// Returns the result of the function call as a JavaScript value
     fn call(
         &self,
         function: &Self::Value,
         this: Option<Self::Value>,
         argv: Vec<Self::Value>,
     ) -> Self::Value;
+
+    /// Creates a new JavaScript Promise and returns a tuple containing:
+    /// - The Promise object
+    /// - The resolve function to fulfill the promise
+    /// - The reject function to reject the promise
+    fn promise(&self) -> (Self::Value, Self::Value, Self::Value);
 
     /// Get opaque data from the context
     fn get_opaque<T>(&self) -> *mut T;
