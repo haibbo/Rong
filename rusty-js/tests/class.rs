@@ -104,7 +104,7 @@ fn function() {
         let func = ctx
             .register_function(|a: i32, b: i32, c: i32| a + b + c)
             .name("add");
-        ctx.global_object().set("add", func);
+        ctx.global().set("add", func);
 
         assert!(ctx.eval::<JSFunc>(Source::from_bytes(b"add")).is_ok());
         assert_eq!(

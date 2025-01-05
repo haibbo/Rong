@@ -109,7 +109,7 @@ pub trait JSCodeRunner: JSContextImpl {
     fn eval(&self, source: Source) -> Self::Value;
 
     /// Get global object
-    fn global_object(&self) -> Self::Value;
+    fn global(&self) -> Self::Value;
 
     /// Register class for rust type
     fn register_class<JC>(&self) -> Self::Value
@@ -137,8 +137,8 @@ where
     }
 
     /// get global object
-    pub fn global_object(&self) -> JSObject<C::Value> {
-        let raw = self.inner.global_object();
+    pub fn global(&self) -> JSObject<C::Value> {
+        let raw = self.inner.global();
         JSValue::new(self, raw).into()
     }
 
@@ -153,7 +153,7 @@ where
             registry.insert(TypeId::of::<JC>(), constructor.clone());
         }
 
-        let obj = self.global_object();
+        let obj = self.global();
         let constructor = JSValue::new(self, constructor);
         JC::class_setup(&ClassSetup::new(constructor.clone().into(), self));
         obj.set(JC::NAME, constructor);

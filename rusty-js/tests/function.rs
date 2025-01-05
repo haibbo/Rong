@@ -10,7 +10,7 @@ fn function_with_optional() {
                 None => a,
             })
             .name("add_optional");
-        ctx.global_object().set("add_optional", func);
+        ctx.global().set("add_optional", func);
 
         assert_eq!(
             ctx.eval::<i32>(Source::from_bytes(b"add_optional(7)"))
@@ -39,7 +39,7 @@ fn function_with_rest() {
                 init + sum
             })
             .name("add");
-        ctx.global_object().set("add_rest", func);
+        ctx.global().set("add_rest", func);
 
         assert_eq!(
             ctx.eval::<i32>(Source::from_bytes(b"add_rest(1)")).unwrap(),
@@ -76,7 +76,7 @@ fn function_with_optional_and_rest() {
                 base + sum
             })
             .name("complex_add");
-        ctx.global_object().set("complex_add", func);
+        ctx.global().set("complex_add", func);
 
         assert_eq!(
             ctx.eval::<i32>(Source::from_bytes(b"complex_add(1)"))
@@ -139,7 +139,7 @@ fn test_jsfunc_as_argument() {
             })
             .name("call_and_double");
 
-        ctx.global_object().set("call_and_double", func);
+        ctx.global().set("call_and_double", func);
 
         // Test with a simple addition function
         let result: i32 = ctx

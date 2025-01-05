@@ -168,7 +168,7 @@ impl JSCodeRunner for QJSContext {
         self.eval_raw(&source, options.to_flags())
     }
 
-    fn global_object(&self) -> Self::Value {
+    fn global(&self) -> Self::Value {
         let raw = unsafe { qjs::JS_GetGlobalObject(self.ctx) };
         QJSValue::from_parts(self.ctx, raw)
     }
