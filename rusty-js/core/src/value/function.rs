@@ -102,13 +102,13 @@ impl<V: JSObjectOps> JSFunc<V> {
     }
 
     /// same as `call`, but with JS this object
-    pub fn call_with_this<Args, R>(&self, this: V, args: Args) -> Result<R, RustyJSError>
+    pub fn call_with_this<Args, R>(&self, this: JSObject<V>, args: Args) -> Result<R, RustyJSError>
     where
         Args: IntoJSArgs<V>,
         R: FromJSValue<V>,
         V: JSObjectOps,
     {
-        self.call_internal(Some(this), args)
+        self.call_internal(Some(this.into_js_value(self.as_ctx())), args)
     }
 
     /// set name of JS Function

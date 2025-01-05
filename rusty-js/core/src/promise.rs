@@ -76,4 +76,8 @@ where
     pub fn catch(&self) -> JSFunc<V> {
         self.0.get("catch").unwrap()
     }
+
+    pub fn into_object(self) -> JSObject<V> {
+        self.0
+    }
 }
