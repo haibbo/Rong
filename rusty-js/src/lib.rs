@@ -19,6 +19,7 @@ pub type JSEngineValue = <ActiveJSEngine as JSEngine>::Value;
 pub type JSEngineContext = <ActiveJSEngine as JSEngine>::Context;
 
 pub type JSContext = CoreJSContext<<ActiveJSEngine as JSEngine>::Context>;
+pub type JSRuntime = CoreJSRuntime<<ActiveJSEngine as JSEngine>::Runtime>;
 
 pub type JSValue = CoreJSValue<JSEngineValue>;
 pub type JSObject = CoreJSObject<JSEngineValue>;

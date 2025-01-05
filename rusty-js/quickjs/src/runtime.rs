@@ -36,6 +36,12 @@ impl JSRuntimeImpl for QJSRuntime {
     fn to_ffi(&self) -> Self::FfiRuntime {
         self.rt
     }
+
+    fn run_pending_jobs(&self) {
+        unsafe {
+            qjs::QJS_RunJobs(self.rt);
+        }
+    }
 }
 
 pub struct QuickJS;
