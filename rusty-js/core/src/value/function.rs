@@ -83,10 +83,14 @@ impl<V: JSObjectOps> JSFunc<V> {
     /// # Examples
     /// ```rust
     /// // Call with single argument
-    /// let result: i32 = func.call(42)?;
+    /// let result: i32 = func.call((42,))?;
     ///
     /// // Call with multiple arguments
     /// let result: String = func.call((1, "two", 3.0))?;
+    ///
+    /// // Alternatively, use the call! macro for more ergonomic syntax:
+    /// let result: i32 = call!(func, 42)?;
+    /// let result: String = call!(func, 1, "two", 3.0)?;
     /// ```
     pub fn call<Args, R>(&self, args: Args) -> Result<R, RustyJSError>
     where
@@ -116,6 +120,26 @@ impl<V: JSObjectOps> JSFunc<V> {
     pub(crate) fn into_inner(self) -> V {
         self.0.into_inner()
     }
+}
+
+/// Macro for more ergonomic function calls
+/// Examples:
+/// ```ignore
+/// call!(func);  // for no args
+/// call!(func, arg1);  // for single arg
+/// call!(func, arg1, arg2);  // for multiple args
+/// ```
+#[macro_export]
+macro_rules! call {
+    ($func:expr) => {
+        $func.call(())
+    };
+    ($func:expr, $arg:expr) => {
+        $func.call(($arg,))
+    };
+    ($func:expr, $($arg:expr),+ $(,)?) => {
+        $func.call(($($arg,)+))
+    };
 }
 
 impl<C: JSContextImpl> JSContext<C>
