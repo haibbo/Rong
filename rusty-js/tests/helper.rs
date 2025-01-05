@@ -3,10 +3,20 @@ pub use rusty_js::function::{ArgThis, Constructor, Optional, Rest, This, ThisMut
 
 pub use rusty_js::*;
 
+// Helper function to run tests with JS context
+#[allow(dead_code)]
 pub fn run<F: FnOnce(&JSContext)>(f: F) {
     let rt = ActiveJSEngine::runtime();
     let ctx = ActiveJSEngine::context(&rt);
     f(&ctx);
+}
+
+// Helper function to run tests with both JS context and runtime
+#[allow(dead_code)]
+pub fn run2<F: FnOnce(&JSContext, &JSRuntime)>(f: F) {
+    let rt = ActiveJSEngine::runtime();
+    let ctx = ActiveJSEngine::context(&rt);
+    f(&ctx, &rt);
 }
 
 #[macro_export]
