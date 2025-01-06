@@ -69,8 +69,6 @@ impl JSCompatible for i64 {}
 impl JSCompatible for u64 {}
 impl JSCompatible for f64 {}
 impl JSCompatible for bool {}
-// impl JSCompatible for &str {}
-impl JSCompatible for String {}
 
 /// The trait that supports extract type from JSValue
 /// Why from_js_value don't use V as input type ? Because it needs to
@@ -103,6 +101,16 @@ where
     }
 }
 
+impl<V> FromJSValue<V> for String
+where
+    V: JSValueImpl,
+    V: TryInto<String, Error = RustyJSError>,
+{
+    fn from_js_value(_ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
+        value.try_into()
+    }
+}
+
 /// convert to JS Value represented by trait JSValueImpl
 pub trait IntoJSValue<V>
 where
@@ -118,6 +126,16 @@ where
 {
     fn into_js_value(self, ctx: &V::Context) -> V {
         V::from((ctx, self))
+    }
+}
+
+impl<V> IntoJSValue<V> for String
+where
+    V: JSValueImpl,
+    V: for<'a> From<(&'a V::Context, &'a str)>,
+{
+    fn into_js_value(self, ctx: &V::Context) -> V {
+        V::from((ctx, self.as_str()))
     }
 }
 
