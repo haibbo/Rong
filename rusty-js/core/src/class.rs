@@ -27,19 +27,19 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
 
         let instance = match Self::data_constructor().0.call(&mut accessor) {
             Ok(v) => v,
-            Err(e) => return e.into_js_exception(ctx),
+            Err(e) => return e.throw_js_exception(ctx),
         };
 
         let instance = match JSObject::from_js_value(ctx, instance) {
             Ok(obj) => obj,
-            Err(e) => return e.into_js_exception(ctx),
+            Err(e) => return e.throw_js_exception(ctx),
         };
 
         let proto = match JSObject::from_js_value(ctx, this)
             .and_then(|constructor| constructor.get("prototype"))
         {
             Ok(proto) => proto,
-            Err(e) => return e.into_js_exception(ctx),
+            Err(e) => return e.throw_js_exception(ctx),
         };
 
         instance.prototype(proto);
@@ -64,17 +64,17 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
 
         let obj = match JSObject::from_js_value(ctx, function) {
             Ok(obj) => obj,
-            Err(e) => return e.into_js_exception(ctx),
+            Err(e) => return e.throw_js_exception(ctx),
         };
 
         let func = match obj.borrow::<RustFunc<_>>() {
             Ok(f) => f,
-            Err(_) => return RustyJSError::NotJSFunc.into_js_exception(ctx),
+            Err(_) => return RustyJSError::NotJSFunc.throw_js_exception(ctx),
         };
 
         match func.call(&mut accessor) {
             Ok(v) => v,
-            Err(e) => e.into_js_exception(ctx),
+            Err(e) => e.throw_js_exception(ctx),
         }
     }
 }

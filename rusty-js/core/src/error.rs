@@ -35,7 +35,7 @@ pub enum RustyJSError {
 }
 
 impl RustyJSError {
-    pub fn into_js_exception<V>(self, ctx: &V::Context) -> V
+    pub fn throw_js_exception<V>(self, ctx: &V::Context) -> V
     where
         V: JSValueImpl,
         V::Context: JSExceptionHandler,
