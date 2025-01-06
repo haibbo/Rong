@@ -112,6 +112,15 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
     }
 }
 
+// JSContext implement Deref, it's necessary to implement Drop
+impl<C: JSContextImpl> Clone for JSContext<C> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 impl<C: JSContextImpl> From<C> for JSContext<C> {
     fn from(c: C) -> Self {
         if c.get_class_registry().is_none() {
