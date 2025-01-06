@@ -2,7 +2,42 @@ mod helper;
 use helper::*;
 
 #[test]
-fn test_promise_resolution_with_callback() {
+fn test_rust_promise_with_callback() {
+    run2(|ctx, rt| {
+        let ctx_clone = ctx.clone();
+        // Register a Rust function that returns a promise
+        let timeout_fn = ctx.register_function(move |millis: i32| {
+            let (promise, resolve, _reject) = ctx_clone.promise().unwrap();
+
+            // Directly resolve the promise with the input value
+            resolve.call::<_, ()>((millis,)).unwrap();
+            promise
+        });
+
+        // Create a JS context to test the promise
+        let js_code = r#"
+                let result=10;
+                rustTimeout(101).then((timeout)=>result=timeout);
+                result
+        "#;
+
+        // Register the Rust function in JS context
+        ctx.global_object().set("rustTimeout", timeout_fn);
+
+        // Execute the JS code
+        ctx.eval::<()>(Source::from_bytes(js_code.as_bytes()))
+            .unwrap();
+
+        // Run pending jobs until the promise resolves
+        rt.run_pending_jobs();
+        let result: i32 = ctx.eval(Source::from_bytes("result")).unwrap();
+
+        assert_eq!(result, 101);
+    });
+}
+
+#[test]
+fn test_rust_promise_with_resolve() {
     run2(|ctx, rt| {
         let (promise, resolve, _reject) = ctx.promise().unwrap();
 
