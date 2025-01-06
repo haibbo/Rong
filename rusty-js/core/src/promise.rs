@@ -1,7 +1,8 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSFunc, JSObject, JSObjectOps, JSTypeOf,
-    JSValueImpl, RustyJSError,
+    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject,
+    JSObjectOps, JSResult, JSTypeOf, JSValueImpl, RustyJSError,
 };
+use std::future::Future;
 
 /// Type alias for the return value of `promise()` function
 type PromiseResult<V> = Result<(Promise<V>, JSFunc<V>, JSFunc<V>), RustyJSError>;
@@ -50,10 +51,11 @@ impl<C: JSContextImpl> JSContext<C> {
     }
 }
 
-impl<V: JSValueImpl> Promise<V>
+impl<V: JSValueImpl + 'static> Promise<V>
 where
     V: JSTypeOf,
     V: JSObjectOps,
+    V::Context: 'static,
 {
     /// Creates a new JavaScript Promise using the provided context.
     ///
@@ -70,6 +72,40 @@ where
     /// Returns a `RustyJSError` if the Promise creation fails.
     pub fn new(ctx: &JSContext<V::Context>) -> PromiseResult<V> {
         ctx.promise()
+    }
+
+    /// Converts a Rust Future into a JavaScript Promise.
+    ///
+    /// # Returns
+    /// A `Result` containing the Promise object
+    ///
+    /// # Errors
+    /// Returns a `RustyJSError` if the Promise creation fails.
+    pub fn from_future<F, R>(ctx: &JSContext<V::Context>, future: F) -> JSResult<Promise<V>>
+    where
+        F: Future<Output = JSResult<R>> + 'static,
+        R: IntoJSValue<V> + 'static,
+        V::Context: JSExceptionHandler,
+    {
+        let (promise, resolve, reject) = ctx.promise()?;
+
+        // Clone context for the async task
+        let task_ctx = ctx.clone();
+
+        // Spawn a new async task to handle the future
+        tokio::task::spawn_local(async move {
+            match future.await {
+                Ok(value) => {
+                    let _ = resolve.call::<_, ()>((value,));
+                }
+                Err(err) => {
+                    let js_error = err.into_js_error(&task_ctx);
+                    let _ = reject.call::<_, ()>((js_error,));
+                }
+            }
+        });
+
+        Ok(promise)
     }
 
     /// Returns the `then` method of the Promise.
