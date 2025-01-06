@@ -1,6 +1,8 @@
 use crate::{JSError, JSExceptionHandler, JSValueImpl};
 use thiserror::Error;
 
+pub type JSResult<T> = Result<T, RustyJSError>;
+
 #[derive(Error, Debug)]
 pub enum RustyJSError {
     #[error("Failed to convert into type: {0}")]
