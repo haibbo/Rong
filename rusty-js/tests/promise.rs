@@ -1,5 +1,6 @@
 mod helper;
 use helper::*;
+use std::time::Duration;
 
 #[test]
 fn test_rust_promise_with_callback() {
@@ -64,4 +65,102 @@ fn test_rust_promise_with_resolve() {
         let final_result = result.borrow().clone().expect("Callback was not called");
         assert_eq!(final_result, "success!");
     });
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_rust_future_in_js() {
+    run_local(|ctx, rt| async move {
+        let ctx_for_future = ctx.clone();
+        // Register a Rust async function that returns a promise
+        let async_fn = ctx.register_function(move |delay: i32| {
+            let ctx = ctx_for_future.clone();
+            let future = async move {
+                tokio::time::sleep(Duration::from_millis(delay as u64)).await;
+                Ok(format!("completed after {}ms", delay))
+            };
+            Promise::from_future(&ctx, future).unwrap()
+        });
+
+        // Register the function in JS context
+        ctx.global_object().set("rustAsync", async_fn);
+
+        // Create JS code that uses the async function
+        let js_code = r#"
+            let result = 'pending';
+            rustAsync(50)
+                .then(msg => { result = msg; })
+                .catch(err => { result = err; });
+            result
+        "#;
+
+        // Execute the JS code
+        ctx.eval::<()>(Source::from_bytes(js_code.as_bytes()))
+            .unwrap();
+
+        // Initial result should be 'pending'
+        let initial: String = ctx.eval(Source::from_bytes("result")).unwrap();
+        assert_eq!(initial, "pending");
+
+        // Wait a bit longer than the sleep duration
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        rt.run_pending_jobs();
+
+        // Check the final result
+        let current: String = ctx.eval(Source::from_bytes("result")).unwrap();
+        assert_eq!(current, "completed after 50ms");
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_rust_future_error_in_js() {
+    run_local(|ctx, rt| async move {
+        let ctx_for_future = ctx.clone();
+        // Register a Rust async function that returns a rejected promise
+        let async_fn = ctx.register_function(move |_: i32| {
+            let ctx = ctx_for_future.clone();
+            let future = async {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                Err::<String, _>(RustyJSError::Error("async operation failed".to_string()))
+            };
+            Promise::from_future(&ctx, future).unwrap()
+        });
+
+        // Register the function in JS context
+        ctx.global_object().set("rustAsyncError", async_fn);
+
+        // Create JS code that uses the async function with more debug info
+        let js_code = br#"
+            let result = 'pending';
+            let errorMessage = '';
+            rustAsyncError(0)
+                .then((msg) => {
+                    result = 'resolved';
+                })
+                .catch((err) => {
+                    result = 'rejected';
+                    errorMessage = err.message;
+                });
+            result
+        "#;
+
+        // Execute the JS code
+        ctx.eval::<()>(Source::from_bytes(js_code)).unwrap();
+
+        // Initial result should be 'pending'
+        let initial: String = ctx.eval(Source::from_bytes("result")).unwrap();
+        assert_eq!(initial, "pending");
+
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        rt.run_pending_jobs();
+
+        // Check the final result
+        let result: String = ctx.eval(Source::from_bytes("result")).unwrap();
+        assert_eq!(result, "rejected");
+
+        // Verify the error message
+        let error_message: String = ctx.eval(Source::from_bytes("errorMessage")).unwrap();
+        assert_eq!(error_message, "async operation failed");
+    })
+    .await;
 }
