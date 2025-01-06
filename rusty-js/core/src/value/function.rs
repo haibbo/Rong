@@ -17,6 +17,12 @@ impl<V: JSValueImpl> Deref for JSFunc<V> {
     }
 }
 
+impl<V: JSValueImpl> Clone for JSFunc<V> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 impl<V> IntoJSValue<V> for JSFunc<V>
 where
     V: JSValueImpl,

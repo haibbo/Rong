@@ -10,6 +10,12 @@ use super::IntoJSValue;
 
 pub struct JSObject<V: JSValueImpl>(JSValue<V>);
 
+impl<V: JSValueImpl> Clone for JSObject<V> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 impl<V> From<JSValue<V>> for JSObject<V>
 where
     V: JSValueImpl,

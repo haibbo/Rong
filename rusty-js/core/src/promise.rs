@@ -11,6 +11,12 @@ type PromiseResult<V> = Result<(Promise<V>, JSFunc<V>, JSFunc<V>), RustyJSError>
 /// This struct wraps a JavaScript Promise and provides methods to interact with it.
 pub struct Promise<V: JSValueImpl>(JSObject<V>);
 
+impl<V: JSValueImpl> Clone for Promise<V> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 impl<V> IntoJSValue<V> for Promise<V>
 where
     V: JSValueImpl,
