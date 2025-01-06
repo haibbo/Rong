@@ -1,7 +1,7 @@
 pub use rusty_js_core::{
     call, Class, ClassSetup, FromJSValue, IntoJSValue, JSClass, JSContext as CoreJSContext,
     JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject,
-    JSRuntime as CoreJSRuntime, JSValue as CoreJSValue, RustyJSError, Source,
+    JSRuntime as CoreJSRuntime, JSValue as CoreJSValue, Promise, RustyJSError, Source,
 };
 
 pub use rusty_js_core::function;

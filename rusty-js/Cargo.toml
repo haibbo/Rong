@@ -9,6 +9,7 @@ rusty-js-core = { path = "./core" }
 # Conditional dependencies based on features
 rusty-js-quickjs = { path = "./quickjs", optional = true }
 rusty-js-jscore = { path = "./javascriptcore", optional = true }
+tokio = { version = "1.42.0", features = ["full"] }
 
 [features]
 quickjs=["rusty-js-quickjs"]
