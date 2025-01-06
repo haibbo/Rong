@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf, JSValue,
-    JSValueImpl, RustyJSError,
+    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult, JSTypeOf,
+    JSValue, JSValueImpl, RustyJSError,
 };
 use std::fmt;
 use std::ops::Deref;
@@ -38,7 +38,7 @@ impl<V> FromJSValue<V> for JSException<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
+    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
         value
             .is_exception()
             .map(|v| Self(JSValue::from_raw_parts(ctx.clone(), v).into()))

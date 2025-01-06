@@ -1,4 +1,4 @@
-use crate::{FromJSValue, JSObject, JSObjectOps, JSValueImpl, RustyJSError};
+use crate::{FromJSValue, JSObject, JSObjectOps, JSResult, JSValueImpl, RustyJSError};
 use std::cell::{Ref, RefMut};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -178,7 +178,7 @@ impl<T> Deref for ArgThis<T> {
 /// - required_count: number of mandatory parameters
 /// - exhaustive: if true, no extra parameters are allowed beyond the required ones
 pub trait FromParams<V: JSValueImpl>: Sized {
-    fn from_params(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError>;
+    fn from_params(accessor: &mut ParamsAccessor<V>) -> JSResult<Self>;
     fn param_requirements() -> ParamRequirement;
 }
 
@@ -269,7 +269,7 @@ impl<T> ParamKind for ArgThisKind<T> {
 
 pub trait GetParam<V: JSValueImpl> {
     type Kind: ParamKind;
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError>
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self>
     where
         Self: Sized;
 }
@@ -282,7 +282,7 @@ where
 {
     type Kind = Regular<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.next_arg().unwrap(); // it's safe, since RustFunc::call ensures
         T::from_js_value(accessor.ctx, value)
     }
@@ -295,7 +295,7 @@ where
 {
     type Kind = ThisKind<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.take_this().ok_or(RustyJSError::AlreadyTaken)?;
 
         let obj = JSObject::from_js_value(accessor.context(), value)?;
@@ -314,7 +314,7 @@ where
 {
     type Kind = ThisMutKind<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.take_this().ok_or(RustyJSError::AlreadyTaken)?;
 
         let obj = JSObject::from_js_value(accessor.context(), value)?;
@@ -333,7 +333,7 @@ where
 {
     type Kind = OptionalKind<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         match accessor.next_arg() {
             Some(v) => T::from_js_value(accessor.ctx, v).map(|t| Optional(Some(t))),
             None => Ok(Optional(None)),
@@ -348,7 +348,7 @@ where
 {
     type Kind = RestKind<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let mut values = Vec::new();
         if accessor.is_last_param {
             while let Some(value) = accessor.next_arg() {
@@ -366,7 +366,7 @@ where
 {
     type Kind = ArgThisKind<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.next_arg().unwrap(); // it's safe
 
         let obj = JSObject::from_js_value(accessor.context(), value)?;
@@ -402,7 +402,7 @@ macro_rules! impl_from_params {
             $($T: GetParam<V>,)*
         {
             #[allow(unused_variables)]
-            fn from_params(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+            fn from_params(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
                 let param_count = count_idents!($($T),*);
                 #[allow(unused_mut)]
                 let mut current_param = 0;

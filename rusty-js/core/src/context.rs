@@ -1,6 +1,6 @@
 use crate::{
-    source::Source, ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntimeImpl,
-    JSValue, JSValueImpl, RustyJSError,
+    source::Source, ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSResult,
+    JSRuntimeImpl, JSValue, JSValueImpl, RustyJSError,
 };
 use std::any::TypeId;
 use std::collections::HashMap;
@@ -148,7 +148,7 @@ where
     C: JSCodeRunner,
 {
     /// eval javascript
-    pub fn eval<T>(&self, source: Source) -> Result<T, RustyJSError>
+    pub fn eval<T>(&self, source: Source) -> JSResult<T>
     where
         C::Value: JSObjectOps,
         T: FromJSValue<C::Value>,

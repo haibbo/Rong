@@ -1,7 +1,7 @@
 use crate::function::{FromParams, IntoJSCallable, RustFunc};
 use crate::{
-    Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf,
-    JSValue, JSValueImpl, RustyJSError,
+    Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
+    JSTypeOf, JSValue, JSValueImpl, RustyJSError,
 };
 use std::ops::Deref;
 
@@ -36,7 +36,7 @@ impl<V> FromJSValue<V> for JSFunc<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
+    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
         if value.is_function() {
             JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
         } else {
@@ -58,7 +58,7 @@ impl<V: JSObjectOps> JSFunc<V> {
     }
 
     #[inline]
-    fn call_internal<Args, R>(&self, this: Option<V>, args: Args) -> Result<R, RustyJSError>
+    fn call_internal<Args, R>(&self, this: Option<V>, args: Args) -> JSResult<R>
     where
         Args: IntoJSArgs<V>,
         R: FromJSValue<V>,
@@ -98,7 +98,7 @@ impl<V: JSObjectOps> JSFunc<V> {
     /// let result: i32 = call!(func, 42)?;
     /// let result: String = call!(func, 1, "two", 3.0)?;
     /// ```
-    pub fn call<Args, R>(&self, args: Args) -> Result<R, RustyJSError>
+    pub fn call<Args, R>(&self, args: Args) -> JSResult<R>
     where
         Args: IntoJSArgs<V>,
         R: FromJSValue<V>,
@@ -108,7 +108,7 @@ impl<V: JSObjectOps> JSFunc<V> {
     }
 
     /// same as `call`, but with JS this object
-    pub fn call_with_this<Args, R>(&self, this: JSObject<V>, args: Args) -> Result<R, RustyJSError>
+    pub fn call_with_this<Args, R>(&self, this: JSObject<V>, args: Args) -> JSResult<R>
     where
         Args: IntoJSArgs<V>,
         R: FromJSValue<V>,

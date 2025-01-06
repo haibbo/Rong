@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextImpl, RustyJSError};
+use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
 use std::ops::Deref;
 
 mod convert;
@@ -111,7 +111,7 @@ where
     }
 
     /// Try to converts JSValue to Rust value
-    pub fn try_into<T>(self) -> Result<T, RustyJSError>
+    pub fn try_into<T>(self) -> JSResult<T>
     where
         V: TryInto<T, Error = RustyJSError>,
         T: Default,
@@ -142,7 +142,7 @@ impl<V> FromJSValue<V> for JSValue<V>
 where
     V: JSValueImpl,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
+    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
         Ok(JSValue::from_raw_parts(ctx.clone(), value))
     }
 }

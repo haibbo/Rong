@@ -1,7 +1,7 @@
 use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
     FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
-    JSValueImpl, PropertyDescriptor, PropertyKey, RustyJSError,
+    JSResult, JSValueImpl, PropertyDescriptor, PropertyKey, RustyJSError,
 };
 
 use std::any::TypeId;
@@ -129,7 +129,7 @@ where
     V: JSValueImpl + JSObjectOps,
 {
     /// Borrow the underlying data from an instance
-    pub fn borrow<T>(&self) -> Result<Ref<'_, T>, RustyJSError> {
+    pub fn borrow<T>(&self) -> JSResult<Ref<'_, T>> {
         let ptr = self.as_inner().get_opaque::<RefCell<T>>();
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
@@ -140,7 +140,7 @@ where
     }
 
     /// Mutably borrow the underlying data from an instance
-    pub fn borrow_mut<T>(&self) -> Result<RefMut<'_, T>, RustyJSError> {
+    pub fn borrow_mut<T>(&self) -> JSResult<RefMut<'_, T>> {
         let ptr = self.as_inner().get_opaque::<RefCell<T>>();
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
