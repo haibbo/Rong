@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, JSContext, JSContextImpl, JSFunc, JSObject, JSObjectOps, JSTypeOf, JSValueImpl,
-    RustyJSError,
+    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSFunc, JSObject, JSObjectOps, JSTypeOf,
+    JSValueImpl, RustyJSError,
 };
 
 /// Type alias for the return value of `promise()` function
@@ -10,6 +10,15 @@ type PromiseResult<V> = Result<(Promise<V>, JSFunc<V>, JSFunc<V>), RustyJSError>
 ///
 /// This struct wraps a JavaScript Promise and provides methods to interact with it.
 pub struct Promise<V: JSValueImpl>(JSObject<V>);
+
+impl<V> IntoJSValue<V> for Promise<V>
+where
+    V: JSValueImpl,
+{
+    fn into_js_value(self, ctx: &V::Context) -> V {
+        self.0.into_js_value(ctx)
+    }
+}
 
 impl<C: JSContextImpl> JSContext<C> {
     /// Creates a new JavaScript Promise and returns the Promise along with its resolve and reject functions.
