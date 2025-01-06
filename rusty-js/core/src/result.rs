@@ -1,4 +1,4 @@
-use crate::{JSError, JSExceptionHandler, JSValueImpl};
+use crate::{JSContext, JSError, JSException, JSExceptionHandler, JSObjectOps, JSValueImpl};
 use thiserror::Error;
 
 pub type JSResult<T> = Result<T, RustyJSError>;
@@ -56,5 +56,13 @@ impl RustyJSError {
             | RustyJSError::Borrow(_)
             | RustyJSError::AlreadyTaken => ctx.throw_error(self.to_string()),
         }
+    }
+
+    pub fn into_js_error<V>(self, ctx: &JSContext<V::Context>) -> JSException<V>
+    where
+        V: JSValueImpl + JSObjectOps,
+        V::Context: JSExceptionHandler,
+    {
+        ctx.new_js_error(&self.to_string())
     }
 }

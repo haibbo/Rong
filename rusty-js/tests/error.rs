@@ -25,7 +25,7 @@ fn test_throw_error() {
     });
 
     run(|ctx| {
-        let e = JSException::from_message(ctx, "hi");
+        let e = ctx.new_js_error("hi");
         assert_eq!(e.message().unwrap(), "hi");
     });
 }

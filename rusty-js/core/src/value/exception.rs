@@ -46,16 +46,16 @@ where
     }
 }
 
-impl<V> JSException<V>
-where
-    V: JSObjectOps,
-    V::Context: JSExceptionHandler,
-{
-    pub fn from_message(ctx: &JSContext<V::Context>, message: &str) -> Self {
-        let v = ctx.inner.new_error();
-        let obj: JSObject<V> = JSValue::new(ctx, v).into();
+impl<C: JSContextImpl> JSContext<C> {
+    pub fn new_js_error(&self, message: &str) -> JSException<C::Value>
+    where
+        C: JSExceptionHandler,
+        C::Value: JSObjectOps,
+    {
+        let v = self.inner.new_error();
+        let obj = JSObject::from_js_value(&self.inner, v).unwrap();
         obj.set("message", message);
-        Self(obj)
+        JSException::from_object(obj)
     }
 }
 
