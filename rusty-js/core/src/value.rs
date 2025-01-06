@@ -84,12 +84,6 @@ where
         Self { inner: value, ctx }
     }
 
-    pub fn from_ffi(ctx: <V::Context as JSContextImpl>::FfiContext, value: V::FfiValue) -> Self {
-        let context = V::Context::from_ffi(ctx);
-        let value = V::from_parts(ctx, value);
-        Self::from_raw_parts(context, value)
-    }
-
     pub(crate) fn as_inner(&self) -> &V {
         &self.inner
     }
