@@ -131,6 +131,25 @@ pub struct Optional<T>(pub Option<T>);
 /// ```
 pub struct Rest<T>(pub Vec<T>);
 
+/// Represents a regular function parameter in JavaScript function calls.
+///
+/// # Usage
+/// - Used for standard function parameters
+/// - Wraps the parameter type directly
+/// - Counts towards required parameter count
+/// - Can appear anywhere in the parameter list
+///
+/// # Example
+/// ```ignore
+/// use rusty_js_core::function::parameter::Param;
+///
+/// fn add(a: Param<i32>, b: Param<i32>) -> i32 {
+///     // Access the parameter values via deref
+///     *a + *b
+/// }
+/// ```
+pub struct Param<T>(pub T);
+
 impl<T> Deref for This<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
@@ -168,6 +187,13 @@ impl<T> Deref for Rest<T> {
 }
 
 impl<T> Deref for ArgThis<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> Deref for Param<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -214,13 +240,13 @@ impl ParamRequirement {
     }
 }
 
-pub trait ParamKind {
+pub trait ParameterKind {
     type Inner;
     fn param_requirement() -> ParamRequirement;
 }
 
 pub struct Regular<T>(PhantomData<T>);
-impl<T> ParamKind for Regular<T> {
+impl<T> ParameterKind for Regular<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::single()
@@ -228,7 +254,7 @@ impl<T> ParamKind for Regular<T> {
 }
 
 pub struct ThisKind<T>(PhantomData<T>);
-impl<T> ParamKind for ThisKind<T> {
+impl<T> ParameterKind for ThisKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
@@ -236,7 +262,7 @@ impl<T> ParamKind for ThisKind<T> {
 }
 
 pub struct ThisMutKind<T>(PhantomData<T>);
-impl<T> ParamKind for ThisMutKind<T> {
+impl<T> ParameterKind for ThisMutKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
@@ -244,7 +270,7 @@ impl<T> ParamKind for ThisMutKind<T> {
 }
 
 pub struct OptionalKind<T>(PhantomData<T>);
-impl<T> ParamKind for OptionalKind<T> {
+impl<T> ParameterKind for OptionalKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::optional()
@@ -252,7 +278,7 @@ impl<T> ParamKind for OptionalKind<T> {
 }
 
 pub struct RestKind<T>(PhantomData<T>);
-impl<T> ParamKind for RestKind<T> {
+impl<T> ParameterKind for RestKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
@@ -260,7 +286,15 @@ impl<T> ParamKind for RestKind<T> {
 }
 
 pub struct ArgThisKind<T>(PhantomData<T>);
-impl<T> ParamKind for ArgThisKind<T> {
+impl<T> ParameterKind for ArgThisKind<T> {
+    type Inner = T;
+    fn param_requirement() -> ParamRequirement {
+        ParamRequirement::single()
+    }
+}
+
+pub struct ParamKind<T>(PhantomData<T>);
+impl<T> ParameterKind for ParamKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::single()
@@ -268,7 +302,7 @@ impl<T> ParamKind for ArgThisKind<T> {
 }
 
 pub trait GetParam<V: JSValueImpl> {
-    type Kind: ParamKind;
+    type Kind: ParameterKind;
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self>
     where
         Self: Sized;
@@ -285,6 +319,19 @@ where
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.next_arg().unwrap(); // it's safe, since RustFunc::call ensures
         T::from_js_value(accessor.ctx, value)
+    }
+}
+
+impl<T, V> GetParam<V> for Param<T>
+where
+    V: JSValueImpl,
+    T: FromJSValue<V> + Sized,
+{
+    type Kind = ParamKind<T>;
+
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
+        let value = accessor.next_arg().unwrap(); // it's safe, since RustFunc::call ensures
+        T::from_js_value(accessor.ctx, value).map(Param)
     }
 }
 
