@@ -26,7 +26,7 @@ fn test_rust_promise_with_callback() {
         "#;
 
         // Register the Rust function in JS context
-        ctx.global_object().set("rustTimeout", timeout_fn);
+        ctx.global().set("rustTimeout", timeout_fn);
 
         // Execute the JS code
         ctx.eval::<()>(Source::from_bytes(js_code.as_bytes()))
@@ -85,7 +85,7 @@ async fn test_rust_future_in_js() {
         });
 
         // Register the function in JS context
-        ctx.global_object().set("rustAsync", async_fn);
+        ctx.global().set("rustAsync", async_fn);
 
         // Create JS code that uses the async function
         let js_code = r#"
@@ -130,7 +130,7 @@ async fn test_rust_future_error_in_js() {
         });
 
         // Register the function in JS context
-        ctx.global_object().set("rustAsyncError", async_fn);
+        ctx.global().set("rustAsyncError", async_fn);
 
         // Create JS code that uses the async function with more debug info
         let js_code = br#"
@@ -178,7 +178,7 @@ async fn test_promise_into_future_resolve() {
             };
             tokio::task::spawn_local(future);
         });
-        ctx.global_object().set("setTimeout", set_timeout);
+        ctx.global().set("setTimeout", set_timeout);
 
         // Create Promise in JavaScript
         let js_code = r#"
@@ -237,7 +237,7 @@ async fn test_promise_into_future_reject() {
             };
             tokio::task::spawn_local(future);
         });
-        ctx.global_object().set("setTimeout", set_timeout);
+        ctx.global().set("setTimeout", set_timeout);
 
         // Create Promise in JavaScript
         let js_code = r#"
