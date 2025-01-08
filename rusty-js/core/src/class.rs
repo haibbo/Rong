@@ -1,7 +1,7 @@
 use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
     FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
-    JSValueImpl, PropertyDescriptor, PropertyKey, RustyJSError,
+    JSResult, JSValueImpl, PropertyDescriptor, PropertyKey, RustyJSError,
 };
 
 use std::any::TypeId;
@@ -27,19 +27,19 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
 
         let instance = match Self::data_constructor().0.call(&mut accessor) {
             Ok(v) => v,
-            Err(e) => return e.into_js_exception(ctx),
+            Err(e) => return e.throw_js_exception(ctx),
         };
 
         let instance = match JSObject::from_js_value(ctx, instance) {
             Ok(obj) => obj,
-            Err(e) => return e.into_js_exception(ctx),
+            Err(e) => return e.throw_js_exception(ctx),
         };
 
         let proto = match JSObject::from_js_value(ctx, this)
             .and_then(|constructor| constructor.get("prototype"))
         {
             Ok(proto) => proto,
-            Err(e) => return e.into_js_exception(ctx),
+            Err(e) => return e.throw_js_exception(ctx),
         };
 
         instance.prototype(proto);
@@ -64,17 +64,17 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
 
         let obj = match JSObject::from_js_value(ctx, function) {
             Ok(obj) => obj,
-            Err(e) => return e.into_js_exception(ctx),
+            Err(e) => return e.throw_js_exception(ctx),
         };
 
         let func = match obj.borrow::<RustFunc<_>>() {
             Ok(f) => f,
-            Err(_) => return RustyJSError::NotJSFunc.into_js_exception(ctx),
+            Err(_) => return RustyJSError::NotJSFunc.throw_js_exception(ctx),
         };
 
         match func.call(&mut accessor) {
             Ok(v) => v,
-            Err(e) => e.into_js_exception(ctx),
+            Err(e) => e.throw_js_exception(ctx),
         }
     }
 }
@@ -129,7 +129,7 @@ where
     V: JSValueImpl + JSObjectOps,
 {
     /// Borrow the underlying data from an instance
-    pub fn borrow<T>(&self) -> Result<Ref<'_, T>, RustyJSError> {
+    pub fn borrow<T>(&self) -> JSResult<Ref<'_, T>> {
         let ptr = self.as_inner().get_opaque::<RefCell<T>>();
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
@@ -140,7 +140,7 @@ where
     }
 
     /// Mutably borrow the underlying data from an instance
-    pub fn borrow_mut<T>(&self) -> Result<RefMut<'_, T>, RustyJSError> {
+    pub fn borrow_mut<T>(&self) -> JSResult<RefMut<'_, T>> {
         let ptr = self.as_inner().get_opaque::<RefCell<T>>();
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))

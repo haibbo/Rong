@@ -36,6 +36,15 @@ impl JSRuntimeImpl for QJSRuntime {
     fn to_ffi(&self) -> Self::FfiRuntime {
         self.rt
     }
+
+    fn run_pending_jobs(&self) {
+        unsafe {
+            let mut ctx = std::ptr::null_mut();
+            while qjs::JS_IsJobPending(self.rt) != 0 {
+                qjs::JS_ExecutePendingJob(self.rt, &mut ctx);
+            }
+        }
+    }
 }
 
 pub struct QuickJS;

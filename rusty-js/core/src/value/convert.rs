@@ -1,5 +1,5 @@
 use super::JSValueImpl;
-use crate::RustyJSError;
+use crate::{JSResult, RustyJSError};
 
 /// The conversion between Rust primitive types, which implement the `JSCompatible`
 /// marker trait, and `JSValue` is facilitated using the standard `TryInto` and
@@ -69,8 +69,6 @@ impl JSCompatible for i64 {}
 impl JSCompatible for u64 {}
 impl JSCompatible for f64 {}
 impl JSCompatible for bool {}
-// impl JSCompatible for &str {}
-impl JSCompatible for String {}
 
 /// The trait that supports extract type from JSValue
 /// Why from_js_value don't use V as input type ? Because it needs to
@@ -79,7 +77,7 @@ pub trait FromJSValue<V>: Sized
 where
     V: JSValueImpl,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, RustyJSError>;
+    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self>;
 }
 
 /// extract rust primitive type from JSValue
@@ -89,7 +87,7 @@ where
     V: TryInto<T, Error = RustyJSError>,
     T: JSCompatible,
 {
-    fn from_js_value(_ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
+    fn from_js_value(_ctx: &V::Context, value: V) -> JSResult<Self> {
         value.try_into()
     }
 }
@@ -98,8 +96,18 @@ impl<V> FromJSValue<V> for ()
 where
     V: JSValueConversion,
 {
-    fn from_js_value(_ctx: &V::Context, _value: V) -> Result<Self, RustyJSError> {
+    fn from_js_value(_ctx: &V::Context, _value: V) -> JSResult<Self> {
         Ok(())
+    }
+}
+
+impl<V> FromJSValue<V> for String
+where
+    V: JSValueImpl,
+    V: TryInto<String, Error = RustyJSError>,
+{
+    fn from_js_value(_ctx: &V::Context, value: V) -> JSResult<Self> {
+        value.try_into()
     }
 }
 
@@ -118,6 +126,16 @@ where
 {
     fn into_js_value(self, ctx: &V::Context) -> V {
         V::from((ctx, self))
+    }
+}
+
+impl<V> IntoJSValue<V> for String
+where
+    V: JSValueImpl,
+    V: for<'a> From<(&'a V::Context, &'a str)>,
+{
+    fn into_js_value(self, ctx: &V::Context) -> V {
+        V::from((ctx, self.as_str()))
     }
 }
 

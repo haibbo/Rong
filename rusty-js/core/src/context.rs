@@ -1,6 +1,6 @@
 use crate::{
-    source::Source, ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSRuntimeImpl,
-    JSValue, JSValueImpl, RustyJSError,
+    source::Source, ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSResult,
+    JSRuntimeImpl, JSValue, JSValueImpl, RustyJSError,
 };
 use std::any::TypeId;
 use std::collections::HashMap;
@@ -32,12 +32,29 @@ pub trait JSContextImpl: Clone {
     /// Set opaque data for the context
     fn set_opaque<T>(&self, data: *mut T);
 
+    /// Calls a JavaScript function with the specified `this` value and arguments.
+    ///
+    /// # Arguments
+    ///
+    /// * `function` - The JavaScript function to call
+    /// * `this` - Optional `this` value to use when calling the function
+    /// * `argv` - Vector of arguments to pass to the function
+    ///
+    /// # Returns
+    ///
+    /// Returns the result of the function call as a JavaScript value
     fn call(
         &self,
         function: &Self::Value,
         this: Option<Self::Value>,
         argv: Vec<Self::Value>,
     ) -> Self::Value;
+
+    /// Creates a new JavaScript Promise and returns a tuple containing:
+    /// - The Promise object
+    /// - The resolve function to fulfill the promise
+    /// - The reject function to reject the promise
+    fn promise(&self) -> (Self::Value, Self::Value, Self::Value);
 
     /// Get opaque data from the context
     fn get_opaque<T>(&self) -> *mut T;
@@ -95,6 +112,15 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
     }
 }
 
+// JSContext implement Deref, it's necessary to implement Drop
+impl<C: JSContextImpl> Clone for JSContext<C> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 impl<C: JSContextImpl> From<C> for JSContext<C> {
     fn from(c: C) -> Self {
         if c.get_class_registry().is_none() {
@@ -122,7 +148,7 @@ where
     C: JSCodeRunner,
 {
     /// eval javascript
-    pub fn eval<T>(&self, source: Source) -> Result<T, RustyJSError>
+    pub fn eval<T>(&self, source: Source) -> JSResult<T>
     where
         C::Value: JSObjectOps,
         T: FromJSValue<C::Value>,

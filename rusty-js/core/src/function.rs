@@ -1,18 +1,18 @@
-use crate::{IntoJSValue, JSClass, JSValueConversion, JSValueImpl, RustyJSError};
+use crate::{IntoJSValue, JSClass, JSResult, JSValueConversion, JSValueImpl, RustyJSError};
 
 mod parameter;
-pub use parameter::{ArgThis, FromParams, Optional, ParamsAccessor, Rest, This, ThisMut};
+pub use parameter::{ArgThis, FromParams, Optional, Param, ParamsAccessor, Rest, This, ThisMut};
 
 trait JSCallable<V: JSValueImpl> {
-    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError>;
+    fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>;
 }
 
 impl<V, F> JSCallable<V> for F
 where
     V: JSValueImpl,
-    F: Fn(&mut ParamsAccessor<V>) -> Result<V, RustyJSError>,
+    F: Fn(&mut ParamsAccessor<V>) -> JSResult<V>,
 {
-    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError> {
+    fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V> {
         (self)(accessor)
     }
 }
@@ -54,7 +54,7 @@ pub trait IntoJSCallable<V: JSValueImpl, P>
 where
     P: FromParams<V>,
 {
-    fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError>;
+    fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>;
 }
 
 impl<V: JSValueImpl> RustFunc<V> {
@@ -72,7 +72,7 @@ impl<V: JSValueImpl> RustFunc<V> {
         }
     }
 
-    pub fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError> {
+    pub fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V> {
         let num_args = accessor.args_len() as u32;
         if num_args < self.required_params {
             return Err(RustyJSError::InvalidParameter {
@@ -123,7 +123,7 @@ macro_rules! impl_js_callable_func {
             ($($t,)*): FromParams<V>,
             R: IntoJSValue<V>,
         {
-            fn call(&self, accessor: &mut ParamsAccessor<V>) -> Result<V, RustyJSError>  {
+            fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>  {
                 let params = <($($t,)*)>::from_params(accessor)?;
                 #[allow(non_snake_case)]
                 let ($($t,)*) = params;

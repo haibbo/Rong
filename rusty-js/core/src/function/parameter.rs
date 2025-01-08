@@ -1,4 +1,4 @@
-use crate::{FromJSValue, JSObject, JSObjectOps, JSValueImpl, RustyJSError};
+use crate::{FromJSValue, JSObject, JSObjectOps, JSResult, JSValueImpl, RustyJSError};
 use std::cell::{Ref, RefMut};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -131,6 +131,25 @@ pub struct Optional<T>(pub Option<T>);
 /// ```
 pub struct Rest<T>(pub Vec<T>);
 
+/// Represents a regular function parameter in JavaScript function calls.
+///
+/// # Usage
+/// - Used for standard function parameters
+/// - Wraps the parameter type directly
+/// - Counts towards required parameter count
+/// - Can appear anywhere in the parameter list
+///
+/// # Example
+/// ```ignore
+/// use rusty_js_core::function::parameter::Param;
+///
+/// fn add(a: Param<i32>, b: Param<i32>) -> i32 {
+///     // Access the parameter values via deref
+///     *a + *b
+/// }
+/// ```
+pub struct Param<T>(pub T);
+
 impl<T> Deref for This<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
@@ -174,11 +193,18 @@ impl<T> Deref for ArgThis<T> {
     }
 }
 
+impl<T> Deref for Param<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Represents parameter requirements for a function
 /// - required_count: number of mandatory parameters
 /// - exhaustive: if true, no extra parameters are allowed beyond the required ones
 pub trait FromParams<V: JSValueImpl>: Sized {
-    fn from_params(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError>;
+    fn from_params(accessor: &mut ParamsAccessor<V>) -> JSResult<Self>;
     fn param_requirements() -> ParamRequirement;
 }
 
@@ -214,13 +240,13 @@ impl ParamRequirement {
     }
 }
 
-pub trait ParamKind {
+pub trait ParameterKind {
     type Inner;
     fn param_requirement() -> ParamRequirement;
 }
 
 pub struct Regular<T>(PhantomData<T>);
-impl<T> ParamKind for Regular<T> {
+impl<T> ParameterKind for Regular<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::single()
@@ -228,7 +254,7 @@ impl<T> ParamKind for Regular<T> {
 }
 
 pub struct ThisKind<T>(PhantomData<T>);
-impl<T> ParamKind for ThisKind<T> {
+impl<T> ParameterKind for ThisKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
@@ -236,7 +262,7 @@ impl<T> ParamKind for ThisKind<T> {
 }
 
 pub struct ThisMutKind<T>(PhantomData<T>);
-impl<T> ParamKind for ThisMutKind<T> {
+impl<T> ParameterKind for ThisMutKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
@@ -244,7 +270,7 @@ impl<T> ParamKind for ThisMutKind<T> {
 }
 
 pub struct OptionalKind<T>(PhantomData<T>);
-impl<T> ParamKind for OptionalKind<T> {
+impl<T> ParameterKind for OptionalKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::optional()
@@ -252,7 +278,7 @@ impl<T> ParamKind for OptionalKind<T> {
 }
 
 pub struct RestKind<T>(PhantomData<T>);
-impl<T> ParamKind for RestKind<T> {
+impl<T> ParameterKind for RestKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
@@ -260,7 +286,15 @@ impl<T> ParamKind for RestKind<T> {
 }
 
 pub struct ArgThisKind<T>(PhantomData<T>);
-impl<T> ParamKind for ArgThisKind<T> {
+impl<T> ParameterKind for ArgThisKind<T> {
+    type Inner = T;
+    fn param_requirement() -> ParamRequirement {
+        ParamRequirement::single()
+    }
+}
+
+pub struct ParamKind<T>(PhantomData<T>);
+impl<T> ParameterKind for ParamKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::single()
@@ -268,8 +302,8 @@ impl<T> ParamKind for ArgThisKind<T> {
 }
 
 pub trait GetParam<V: JSValueImpl> {
-    type Kind: ParamKind;
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError>
+    type Kind: ParameterKind;
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self>
     where
         Self: Sized;
 }
@@ -282,9 +316,22 @@ where
 {
     type Kind = Regular<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.next_arg().unwrap(); // it's safe, since RustFunc::call ensures
         T::from_js_value(accessor.ctx, value)
+    }
+}
+
+impl<T, V> GetParam<V> for Param<T>
+where
+    V: JSValueImpl,
+    T: FromJSValue<V> + Sized,
+{
+    type Kind = ParamKind<T>;
+
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
+        let value = accessor.next_arg().unwrap(); // it's safe, since RustFunc::call ensures
+        T::from_js_value(accessor.ctx, value).map(Param)
     }
 }
 
@@ -295,7 +342,7 @@ where
 {
     type Kind = ThisKind<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.take_this().ok_or(RustyJSError::AlreadyTaken)?;
 
         let obj = JSObject::from_js_value(accessor.context(), value)?;
@@ -314,7 +361,7 @@ where
 {
     type Kind = ThisMutKind<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.take_this().ok_or(RustyJSError::AlreadyTaken)?;
 
         let obj = JSObject::from_js_value(accessor.context(), value)?;
@@ -333,7 +380,7 @@ where
 {
     type Kind = OptionalKind<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         match accessor.next_arg() {
             Some(v) => T::from_js_value(accessor.ctx, v).map(|t| Optional(Some(t))),
             None => Ok(Optional(None)),
@@ -348,7 +395,7 @@ where
 {
     type Kind = RestKind<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let mut values = Vec::new();
         if accessor.is_last_param {
             while let Some(value) = accessor.next_arg() {
@@ -366,7 +413,7 @@ where
 {
     type Kind = ArgThisKind<T>;
 
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.next_arg().unwrap(); // it's safe
 
         let obj = JSObject::from_js_value(accessor.context(), value)?;
@@ -402,7 +449,7 @@ macro_rules! impl_from_params {
             $($T: GetParam<V>,)*
         {
             #[allow(unused_variables)]
-            fn from_params(accessor: &mut ParamsAccessor<V>) -> Result<Self, RustyJSError> {
+            fn from_params(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
                 let param_count = count_idents!($($T),*);
                 #[allow(unused_mut)]
                 let mut current_param = 0;

@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSTypeOf, JSValue,
-    JSValueImpl, RustyJSError,
+    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult, JSTypeOf,
+    JSValue, JSValueImpl, RustyJSError,
 };
 use std::fmt;
 use std::ops::Deref;
@@ -38,7 +38,7 @@ impl<V> FromJSValue<V> for JSException<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
+    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
         value
             .is_exception()
             .map(|v| Self(JSValue::from_raw_parts(ctx.clone(), v).into()))
@@ -46,16 +46,16 @@ where
     }
 }
 
-impl<V> JSException<V>
-where
-    V: JSObjectOps,
-    V::Context: JSExceptionHandler,
-{
-    pub fn from_message(ctx: &JSContext<V::Context>, message: &str) -> Self {
-        let v = ctx.inner.new_error();
-        let obj: JSObject<V> = JSValue::new(ctx, v).into();
+impl<C: JSContextImpl> JSContext<C> {
+    pub fn new_js_error(&self, message: &str) -> JSException<C::Value>
+    where
+        C: JSExceptionHandler,
+        C::Value: JSObjectOps,
+    {
+        let v = self.inner.new_error();
+        let obj = JSObject::from_js_value(&self.inner, v).unwrap();
         obj.set("message", message);
-        Self(obj)
+        JSException::from_object(obj)
     }
 }
 

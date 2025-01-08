@@ -28,23 +28,6 @@ JS_BOOL QJS_IsPromise(JSContext *ctx, JSValue v);
 int QJS_GetRefCount(JSValue v);
 
 /*
- * Run internal micro tasks
- *
- * How to handle Exception/Error ?
- * 1. use QJS_IsException to check whether it's Exception, if true, then
- * 2. use API JS_GetException to get last exception and dump it by JS_ToCStringLen2
- * 3. use JS_IsError to check whether exception is an error also, if true, then
- * 4. get "stack"/"message" error
- *   val = JS_GetPropertyStr(ctx, exception, "stack");
- *   if (!JS_IsUndefined(val)) {
- *         dump w/ JS_ToCStringLen2
- *   }
- *   JS_FreeValue(ctx, val);
- */
-JSValue QJS_RunJobs(JSRuntime *rt);
-
-
-/*
 * create class
 *
 * @param name: Name of the JavaScript constructor function

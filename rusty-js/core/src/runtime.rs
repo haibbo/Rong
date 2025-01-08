@@ -5,14 +5,28 @@ pub trait JSRuntimeImpl {
     /// the JS engine specific type of JavaScript Runtime
     type FfiRuntime: Copy;
 
+    /// The JavaScript context type associated with this runtime
     type Context: JSContextImpl<Runtime = Self>;
 
+    /// Creates JavaScript runtime.
     fn new() -> Self;
+
+    /// Converts the runtime to its FFI (Foreign Function Interface) representation.
     fn to_ffi(&self) -> Self::FfiRuntime;
+
+    /// Runs all pending jobs in the JavaScript runtime.
+    /// This includes executing any queued promise callbacks, microtasks, and other pending operations.
+    fn run_pending_jobs(&self);
 }
 
 pub struct JSRuntime<R: JSRuntimeImpl> {
     pub(crate) inner: R,
+}
+
+impl<R: JSRuntimeImpl> JSRuntime<R> {
+    pub fn run_pending_jobs(&self) {
+        self.inner.run_pending_jobs()
+    }
 }
 
 impl<C: JSContextImpl> JSContext<C> {

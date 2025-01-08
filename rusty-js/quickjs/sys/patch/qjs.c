@@ -6,25 +6,6 @@ extern JS_BOOL _QJS_SetCFuncMagic(JSValue func_obj, int magic);
 // used for get class ID from constructor
 extern int _QJS_GetCFuncMagic(JSValue func_obj);
 
-JSValue QJS_RunJobs(JSRuntime *rt){
-    int ret;
-    JSContext *ctx;
-
-    for(;;) {
-
-        ret=JS_ExecutePendingJob(rt, &ctx);
-        if (ret==0) {
-            return JS_UNDEFINED; // no job pending
-        }
-
-        if (ret<0){
-            return JS_EXCEPTION;
-        }
-    }
-
-    return JS_UNDEFINED;
-}
-
 JSValue QJS_CreateClass(JSContext *ctx, const char *class_name, JSCFunction *constructorCb,
                         JSClassCall *callAsFuncCb, JSClassFinalizer *finalizer) {
 
@@ -80,10 +61,12 @@ void *QJS_ObjectGetPrivate(JSValue object) {
     return JS_GetOpaque(object, class_id);
 }
 
-JS_BOOL QJS_IsPromise(JSContext *ctx, JSValue v)
+JS_BOOL QJS_IsPromise(JSContext *ctx, JSValue promise)
 {
-    // JS_CLASS_PROMISE == 47
-    void *p = JS_GetOpaque(v, 47);
+    // JSValue resolving_funcs[2];
+    // JSValue promise = JS_NewPromiseCapability(ctx, resolving_funcs);
+    // JSClassID class_id = JS_GetClassID(promise);
+    // printf("Promise's Class ID: %d\n", class_id);
 
-    return p != NULL;
+    return JS_GetClassID(promise)==49;
 }

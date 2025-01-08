@@ -128,6 +128,21 @@ fn test_jsfunc_call() {
 }
 
 #[test]
+fn test_jsfunc_call_macro() {
+    run(|ctx| {
+        // Test 1: 2 arguments
+        let rust_func = JSFunc::new(ctx, |a: i32, b: i32| a + b);
+        let result: i32 = call!(rust_func, 2, 3).unwrap();
+        assert_eq!(result, 5);
+
+        // Test 2: 0 argument
+        let rust_func = JSFunc::new(ctx, || 8);
+        let result: i32 = call!(rust_func).unwrap();
+        assert_eq!(result, 8);
+    });
+}
+
+#[test]
 fn test_jsfunc_as_argument() {
     run(|ctx| {
         // Register a function that takes a JS function as argument

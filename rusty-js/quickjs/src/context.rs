@@ -3,6 +3,7 @@ use rusty_js_core::{
     JSClass, JSCodeRunner, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, Source,
 };
 use std::ffi::CString;
+use std::mem::MaybeUninit;
 use std::os::raw::{c_char, c_void};
 
 pub struct QJSContext {
@@ -82,6 +83,25 @@ impl JSContextImpl for QJSContext {
             )
         };
         QJSValue::from_parts(self.ctx, v)
+    }
+
+    fn promise(&self) -> (Self::Value, Self::Value, Self::Value) {
+        // Create uninitialized array
+        let mut resolving_funcs = MaybeUninit::<[qjs::JSValue; 2]>::uninit();
+
+        // Get raw pointer to the array
+        let resolving_funcs_ptr = resolving_funcs.as_mut_ptr() as *mut qjs::JSValue;
+
+        // Create promise
+        let promise = unsafe { qjs::JS_NewPromiseCapability(self.ctx, resolving_funcs_ptr) };
+
+        // Safety: JS_NewPromiseCapability initializes the array
+        let resolving_funcs = unsafe { resolving_funcs.assume_init() };
+
+        let resolve = QJSValue::from_parts(self.ctx, resolving_funcs[0]);
+        let reject = QJSValue::from_parts(self.ctx, resolving_funcs[1]);
+
+        (QJSValue::from_parts(self.ctx, promise), resolve, reject)
     }
 }
 

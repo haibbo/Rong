@@ -1,5 +1,10 @@
-use crate::{JSError, JSExceptionHandler, JSValueImpl};
+use crate::{
+    FromJSValue, JSContext, JSError, JSException, JSExceptionHandler, JSObject, JSObjectOps,
+    JSValueImpl,
+};
 use thiserror::Error;
+
+pub type JSResult<T> = Result<T, RustyJSError>;
 
 #[derive(Error, Debug)]
 pub enum RustyJSError {
@@ -35,7 +40,7 @@ pub enum RustyJSError {
 }
 
 impl RustyJSError {
-    pub fn into_js_exception<V>(self, ctx: &V::Context) -> V
+    pub fn throw_js_exception<V>(self, ctx: &V::Context) -> V
     where
         V: JSValueImpl,
         V::Context: JSExceptionHandler,
@@ -54,5 +59,25 @@ impl RustyJSError {
             | RustyJSError::Borrow(_)
             | RustyJSError::AlreadyTaken => ctx.throw_error(self.to_string()),
         }
+    }
+
+    pub fn into_js_error<V>(self, ctx: &JSContext<V::Context>) -> JSException<V>
+    where
+        V: JSValueImpl + JSObjectOps,
+        V::Context: JSExceptionHandler,
+    {
+        ctx.new_js_error(&self.to_string())
+    }
+}
+
+impl<V: JSValueImpl> FromJSValue<V> for RustyJSError
+where
+    V: JSObjectOps,
+{
+    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
+        let obj = JSObject::from_js_value(ctx, value)?;
+        Ok(RustyJSError::Exception(
+            JSException::from_object(obj).into_error(),
+        ))
     }
 }

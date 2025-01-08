@@ -1,5 +1,6 @@
 use crate::{
-    FromJSValue, JSContext, JSTypeOf, JSValue, JSValueConversion, JSValueImpl, RustyJSError,
+    FromJSValue, JSContext, JSResult, JSTypeOf, JSValue, JSValueConversion, JSValueImpl,
+    RustyJSError,
 };
 use std::ops::Deref;
 
@@ -9,6 +10,12 @@ pub use property::{PropertyAttributes, PropertyDescriptor, PropertyKey};
 use super::IntoJSValue;
 
 pub struct JSObject<V: JSValueImpl>(JSValue<V>);
+
+impl<V: JSValueImpl> Clone for JSObject<V> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 impl<V> From<JSValue<V>> for JSObject<V>
 where
@@ -31,7 +38,7 @@ impl<V> FromJSValue<V> for JSObject<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> Result<Self, RustyJSError> {
+    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
         if value.is_object() {
             Ok(JSValue::from_raw_parts(ctx.clone(), value).into())
         } else {
@@ -131,7 +138,7 @@ where
         self.as_inner().has_property(key)
     }
 
-    pub fn get<'a, K, T>(&'a self, k: K) -> Result<T, RustyJSError>
+    pub fn get<'a, K, T>(&'a self, k: K) -> JSResult<T>
     where
         K: Into<PropertyKey<'a>>,
         T: FromJSValue<V>,
