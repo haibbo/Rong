@@ -6,6 +6,7 @@ pub use rusty_js_core::{
 };
 
 pub use rusty_js_core::function;
+pub use rusty_js_core::scheduler;
 
 #[cfg(feature = "quickjs")]
 mod engine {
