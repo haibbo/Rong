@@ -75,8 +75,8 @@ where
     V: JSObjectOps,
 {
     fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
-        let obj = JSObject::from_js_value(ctx, value).unwrap();
-        Err(RustyJSError::Exception(
+        let obj = JSObject::from_js_value(ctx, value)?;
+        Ok(RustyJSError::Exception(
             JSException::from_object(obj).into_error(),
         ))
     }
