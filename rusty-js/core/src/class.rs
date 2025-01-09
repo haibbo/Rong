@@ -13,7 +13,10 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
     // the name of class constructor
     const NAME: &'static str;
 
+    /// Returns the data constructor function for this class
     fn data_constructor() -> Constructor<V>;
+
+    /// Configures the class prototype and constructor with methods and properties
     fn class_setup(class: &ClassSetup<V>);
 }
 

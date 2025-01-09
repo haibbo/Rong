@@ -244,7 +244,7 @@ where
                 }
             });
 
-            // Register both resolve and reject handlers
+            // Register resolve handlers
             this.promise
                 .then()
                 .call_with_this::<_, ()>(this.promise.obj.clone(), (resolve,))?;

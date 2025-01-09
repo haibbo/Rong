@@ -169,6 +169,15 @@ where
         JSValue::new(self, raw).into()
     }
 
+    /// Register a JavaScript class for a Rust type.
+    ///
+    /// This function registers a JavaScript class constructor in the global object
+    /// and stores it in the context's class registry. The class can then be used
+    /// to create instances in JavaScript.
+    ///
+    /// ```rust
+    /// context.register_class::<MyClass>();
+    /// ```
     pub fn register_class<JC>(&self)
     where
         JC: JSClass<C::Value>,
