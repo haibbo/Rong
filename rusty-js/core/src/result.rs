@@ -3,6 +3,7 @@ use crate::{
     JSObject, JSObjectOps, JSValueImpl,
 };
 use thiserror::Error;
+use tokio::sync::oneshot;
 
 pub type JSResult<T> = Result<T, RustyJSError>;
 
@@ -84,3 +85,9 @@ where
 
 // blanket implementing.
 impl JSParameterType for RustyJSError {}
+
+impl From<oneshot::error::RecvError> for RustyJSError {
+    fn from(err: oneshot::error::RecvError) -> Self {
+        RustyJSError::Error(format!("Tokio oneshot error: {}", err))
+    }
+}

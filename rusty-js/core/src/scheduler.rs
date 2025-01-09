@@ -77,15 +77,26 @@ impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
         let js_micro_tasks = async move {
             loop {
                 runtime.run_pending_jobs();
-                tokio::task::yield_now().await;
+                // Sleep for a short duration instead of yielding
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
             }
         };
-        self.local_set.spawn_local(js_micro_tasks);
 
         // Run the local set until we get the result
         let result = self.tokio_rt.block_on(async {
             self.local_set
-                .run_until(async { receiver.await.expect("Failed to receive result") })
+                .run_until(async {
+                    // Spawn the microtasks
+                    let microtask_handle = self.local_set.spawn_local(js_micro_tasks);
+
+                    // Wait for the main future
+                    let result = receiver.await?;
+
+                    // Abort the microtask loop
+                    microtask_handle.abort();
+
+                    result
+                })
                 .await
         });
 
