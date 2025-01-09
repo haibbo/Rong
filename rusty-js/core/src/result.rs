@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, JSContext, JSError, JSException, JSExceptionHandler, JSObject, JSObjectOps,
-    JSValueImpl,
+    function::JSParameterType, FromJSValue, JSContext, JSError, JSException, JSExceptionHandler,
+    JSObject, JSObjectOps, JSValueImpl,
 };
 use thiserror::Error;
 
@@ -81,3 +81,6 @@ where
         ))
     }
 }
+
+// blanket implementing.
+impl JSParameterType for RustyJSError {}

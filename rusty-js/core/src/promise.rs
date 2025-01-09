@@ -1,6 +1,7 @@
 use crate::{
-    function::Param, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler,
-    JSFunc, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValueImpl, RustyJSError,
+    function::JSParameterType, FromJSValue, IntoJSValue, JSContext, JSContextImpl,
+    JSExceptionHandler, JSFunc, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValueImpl,
+    RustyJSError,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -199,7 +200,7 @@ impl<V: JSValueImpl + 'static> Promise<V> {
 impl<V: JSValueImpl + 'static, T> Future for PromiseFuture<V, T>
 where
     V::Context: 'static,
-    T: FromJSValue<V> + 'static,
+    T: FromJSValue<V> + JSParameterType + 'static,
     V: JSObjectOps,
 {
     type Output = JSResult<T>;
@@ -222,11 +223,11 @@ where
 
             // resolved callback used to wake up future and save resolved value
             let resolve_state = state.clone();
-            let resolve = JSFunc::new(&ctx, move |success: Param<T>| {
+            let resolve = JSFunc::new(&ctx, move |success: T| {
                 // println!("resolve callback called");
                 let mut state = resolve_state.borrow_mut();
                 if let PromiseState::Pending(waker) =
-                    std::mem::replace(&mut *state, PromiseState::Resolved(Ok(success.0)))
+                    std::mem::replace(&mut *state, PromiseState::Resolved(Ok(success)))
                 {
                     waker.wake_by_ref();
                 }
@@ -234,11 +235,11 @@ where
 
             // rejected callback used to wake up future and save rejected value
             let reject_state = state.clone();
-            let reject = JSFunc::new(&ctx, move |err: Param<RustyJSError>| {
+            let reject = JSFunc::new(&ctx, move |err: RustyJSError| {
                 // println!("reject callback called");
                 let mut state = reject_state.borrow_mut();
                 if let PromiseState::Pending(waker) =
-                    std::mem::replace(&mut *state, PromiseState::Resolved(Err(err.0)))
+                    std::mem::replace(&mut *state, PromiseState::Resolved(Err(err)))
                 {
                     waker.wake_by_ref();
                 }

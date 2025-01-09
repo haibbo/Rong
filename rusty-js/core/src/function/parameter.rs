@@ -131,25 +131,6 @@ pub struct Optional<T>(pub Option<T>);
 /// ```
 pub struct Rest<T>(pub Vec<T>);
 
-/// Represents a regular function parameter in JavaScript function calls.
-///
-/// # Usage
-/// - Used for standard function parameters
-/// - Wraps the parameter type directly
-/// - Counts towards required parameter count
-/// - Can appear anywhere in the parameter list
-///
-/// # Example
-/// ```ignore
-/// use rusty_js_core::function::parameter::Param;
-///
-/// fn add(a: Param<i32>, b: Param<i32>) -> i32 {
-///     // Access the parameter values via deref
-///     *a + *b
-/// }
-/// ```
-pub struct Param<T>(pub T);
-
 impl<T> Deref for This<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
@@ -187,13 +168,6 @@ impl<T> Deref for Rest<T> {
 }
 
 impl<T> Deref for ArgThis<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> Deref for Param<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -312,26 +286,13 @@ impl<T, V> GetParam<V> for T
 where
     V: JSValueImpl,
     T: FromJSValue<V> + Sized,
-    T: sealed::RegularTypeSealed,
+    T: JSParameterType,
 {
     type Kind = Regular<T>;
 
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.next_arg().unwrap(); // it's safe, since RustFunc::call ensures
         T::from_js_value(accessor.ctx, value)
-    }
-}
-
-impl<T, V> GetParam<V> for Param<T>
-where
-    V: JSValueImpl,
-    T: FromJSValue<V> + Sized,
-{
-    type Kind = ParamKind<T>;
-
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
-        let value = accessor.next_arg().unwrap(); // it's safe, since RustFunc::call ensures
-        T::from_js_value(accessor.ctx, value).map(Param)
     }
 }
 
@@ -425,22 +386,19 @@ where
     }
 }
 
-mod sealed {
-    use crate::{JSFunc, JSValueImpl};
-    pub trait RegularTypeSealed {}
+/// Marker trait for types that can be used as JSFunc function parameters.
+/// When used with JSFunc::new, the parameter types will be automatically
+/// converted from JSValue to their Rust equivalents.
+pub trait JSParameterType {}
 
-    impl RegularTypeSealed for i32 {}
-    impl RegularTypeSealed for u32 {}
-    impl RegularTypeSealed for i64 {}
-    impl RegularTypeSealed for u64 {}
-    impl RegularTypeSealed for f32 {}
-    impl RegularTypeSealed for f64 {}
-    impl RegularTypeSealed for bool {}
-    impl RegularTypeSealed for String {}
-    impl<T> RegularTypeSealed for Vec<T> {}
-    impl<T> RegularTypeSealed for Option<T> {}
-    impl<V: JSValueImpl> RegularTypeSealed for JSFunc<V> {}
-}
+impl JSParameterType for i32 {}
+impl JSParameterType for u32 {}
+impl JSParameterType for i64 {}
+impl JSParameterType for u64 {}
+impl JSParameterType for f32 {}
+impl JSParameterType for f64 {}
+impl JSParameterType for bool {}
+impl JSParameterType for String {}
 
 macro_rules! impl_from_params {
     ($($T:ident),*) => {

@@ -1,4 +1,4 @@
-use crate::function::{FromParams, IntoJSCallable, RustFunc};
+use crate::function::{FromParams, IntoJSCallable, JSParameterType, RustFunc};
 use crate::{
     Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
     JSTypeOf, JSValue, JSValueImpl, RustyJSError,
@@ -166,3 +166,7 @@ where
         JSFunc(obj)
     }
 }
+
+// blanket implementing.
+// Type JSFunc can be as parameter of JS callback of rust function
+impl<V: JSValueImpl> JSParameterType for JSFunc<V> {}
