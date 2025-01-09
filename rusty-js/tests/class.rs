@@ -1,29 +1,11 @@
 mod helper;
 use helper::*;
+use rusty_js_macro::JSType;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, JSType)]
 struct Point {
     x: i32,
     y: i32,
-}
-
-impl function::JSParameterType for Point {}
-
-impl IntoJSValue<JSEngineValue> for Point {
-    fn into_js_value(self, context: &JSEngineContext) -> JSEngineValue {
-        Class::get::<Point>(context)
-            .map(|class| class.instance(self))
-            .unwrap_or_else(|| JSEngineValue::from((context, ())))
-    }
-}
-
-impl FromJSValue<JSEngineValue> for Point {
-    fn from_js_value(ctx: &JSEngineContext, value: JSEngineValue) -> Result<Self, RustyJSError> {
-        let obj = JSObject::from_js_value(ctx, value)?;
-        let point = obj.borrow::<Point>()?;
-
-        Ok(*point)
-    }
 }
 
 impl Point {
