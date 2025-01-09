@@ -1,18 +1,26 @@
+[workspace]
+members = [
+    "core",
+    "quickjs",
+    "macro",
+]
+
 [package]
 name = "rusty-js"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rusty-js-core = { path = "./core" }
-
-# Conditional dependencies based on features
-rusty-js-quickjs = { path = "./quickjs", optional = true }
-rusty-js-jscore = { path = "./javascriptcore", optional = true }
-tokio = { version = "1.42.0", features = ["full"] }
+rusty-js-core = { path = "core" }
+rusty-js-quickjs = { path = "quickjs", optional = true }
+rusty-js-jscore = { path = "javascriptcore", optional = true }
+rusty-js-macro = { path = "macro" }
+tokio = { version = "1.0", features = ["rt", "time", "macros"] }
 
 [features]
-quickjs=["rusty-js-quickjs"]
-jscore=["rusty-js-jscore"]
+quickjs = ["rusty-js-quickjs"]
+jscore = ["rusty-js-jscore"]
+default = ["quickjs"]
 
-default=["quickjs"]
+[dev-dependencies]
+tokio = { version = "1.0", features = ["rt", "time", "macros", "test-util"] }
