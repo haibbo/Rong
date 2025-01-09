@@ -1,8 +1,5 @@
 mod helper;
 use helper::*;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
 use std::time::Duration;
 
 #[test]
@@ -70,18 +67,17 @@ fn test_rust_promise_with_resolve() {
     });
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn test_rust_future_in_js() {
-    run_local(|ctx, rt| async move {
-        let ctx_for_future = ctx.clone();
+#[test]
+fn test_rust_future_in_js() {
+    async_run!(|ctx: JSContext| async move {
+        let ctx2 = ctx.clone();
         // Register a Rust async function that returns a promise
         let async_fn = ctx.register_function(move |delay: i32| {
-            let ctx = ctx_for_future.clone();
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
                 Ok(format!("completed after {}ms", delay))
             };
-            Promise::from_future(&ctx, future).unwrap()
+            Promise::from_future(&ctx2, future).unwrap()
         });
 
         // Register the function in JS context
@@ -97,36 +93,33 @@ async fn test_rust_future_in_js() {
         "#;
 
         // Execute the JS code
-        ctx.eval::<()>(Source::from_bytes(js_code.as_bytes()))
-            .unwrap();
+        ctx.eval::<()>(Source::from_bytes(js_code.as_bytes()))?;
 
         // Initial result should be 'pending'
-        let initial: String = ctx.eval(Source::from_bytes("result")).unwrap();
+        let initial: String = ctx.eval(Source::from_bytes("result"))?;
         assert_eq!(initial, "pending");
 
-        // Wait a bit longer than the sleep duration
+        // wait rustAsync finished
         tokio::time::sleep(Duration::from_millis(60)).await;
-        rt.run_pending_jobs();
 
         // Check the final result
-        let current: String = ctx.eval(Source::from_bytes("result")).unwrap();
+        let current: String = ctx.eval(Source::from_bytes("result"))?;
         assert_eq!(current, "completed after 50ms");
+        Ok(())
     })
-    .await;
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn test_rust_future_error_in_js() {
-    run_local(|ctx, rt| async move {
-        let ctx_for_future = ctx.clone();
+#[test]
+fn test_rust_future_error_in_js() {
+    async_run!(|ctx: JSContext| async move {
+        let ctx2 = ctx.clone();
         // Register a Rust async function that returns a rejected promise
         let async_fn = ctx.register_function(move |_: i32| {
-            let ctx = ctx_for_future.clone();
             let future = async {
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 Err::<String, _>(RustyJSError::Error("async operation failed".to_string()))
             };
-            Promise::from_future(&ctx, future).unwrap()
+            Promise::from_future(&ctx2, future).unwrap()
         });
 
         // Register the function in JS context
@@ -148,29 +141,29 @@ async fn test_rust_future_error_in_js() {
         "#;
 
         // Execute the JS code
-        ctx.eval::<()>(Source::from_bytes(js_code)).unwrap();
+        ctx.eval::<()>(Source::from_bytes(js_code))?;
 
         // Initial result should be 'pending'
-        let initial: String = ctx.eval(Source::from_bytes("result")).unwrap();
+        let initial: String = ctx.eval(Source::from_bytes("result"))?;
         assert_eq!(initial, "pending");
 
+        // wait rustAsyncError finished
         tokio::time::sleep(Duration::from_millis(60)).await;
-        rt.run_pending_jobs();
 
         // Check the final result
-        let result: String = ctx.eval(Source::from_bytes("result")).unwrap();
+        let result: String = ctx.eval(Source::from_bytes("result"))?;
         assert_eq!(result, "rejected");
 
         // Verify the error message
-        let error_message: String = ctx.eval(Source::from_bytes("errorMessage")).unwrap();
+        let error_message: String = ctx.eval(Source::from_bytes("errorMessage"))?;
         assert_eq!(error_message, "async operation failed");
+        Ok(())
     })
-    .await;
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn test_promise_into_future_resolve() {
-    run_local(|ctx, rt| async move {
+#[test]
+fn test_promise_into_future_resolve() {
+    async_run!(|ctx: JSContext| async move {
         let set_timeout = ctx.register_function(|callback: JSFunc, delay: u32| {
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
@@ -192,44 +185,16 @@ async fn test_promise_into_future_resolve() {
         let promise = ctx
             .eval::<Promise>(Source::from_bytes(js_code.as_bytes()))
             .unwrap();
-        println!("Promise created");
 
-        // Convert Promise to Future
-        let mut future = promise.into_future();
-
-        let result = loop {
-            // Check if the future is ready
-            let mut future_pin = Pin::new(&mut future);
-            // Create a simple no-op waker
-            struct NoopWaker;
-            impl std::task::Wake for NoopWaker {
-                fn wake(self: Arc<Self>) {}
-            }
-
-            let waker = std::task::Waker::from(Arc::new(NoopWaker));
-            if let std::task::Poll::Ready(result) = future_pin
-                .as_mut()
-                .poll(&mut std::task::Context::from_waker(&waker))
-            {
-                break result;
-            }
-
-            // Run pending jobs
-            rt.run_pending_jobs();
-
-            // Sleep for a short time before checking again
-            tokio::time::sleep(Duration::from_millis(1)).await;
-        };
-
-        let result: i32 = result.unwrap();
+        let result: i32 = promise.into_future().await.unwrap();
         assert_eq!(result, 42);
+        Ok(())
     })
-    .await;
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn test_promise_into_future_reject() {
-    run_local(|ctx, rt| async move {
+#[test]
+fn test_promise_into_future_reject() {
+    async_run!(|ctx: JSContext| async move {
         let set_timeout = ctx.register_function(|callback: JSFunc, delay: u32| {
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
@@ -239,7 +204,6 @@ async fn test_promise_into_future_reject() {
         });
         ctx.global().set("setTimeout", set_timeout);
 
-        // Create Promise in JavaScript
         let js_code = r#"
             new Promise((resolve, reject) => {
                 setTimeout(() => {
@@ -248,40 +212,10 @@ async fn test_promise_into_future_reject() {
             })
         "#;
 
-        let promise = ctx
-            .eval::<Promise>(Source::from_bytes(js_code.as_bytes()))
-            .unwrap();
-        println!("Promise created");
+        let promise = ctx.eval::<Promise>(Source::from_bytes(js_code.as_bytes()))?;
 
-        // Convert Promise to Future
-        let mut future = promise.into_future::<i32>();
-
-        let result = loop {
-            // Check if the future is ready
-            let mut future_pin = Pin::new(&mut future);
-            // Create a simple no-op waker
-            struct NoopWaker;
-            impl std::task::Wake for NoopWaker {
-                fn wake(self: Arc<Self>) {}
-            }
-
-            let waker = std::task::Waker::from(Arc::new(NoopWaker));
-            if let std::task::Poll::Ready(result) = future_pin
-                .as_mut()
-                .poll(&mut std::task::Context::from_waker(&waker))
-            {
-                break result;
-            }
-
-            // Run pending jobs
-            rt.run_pending_jobs();
-
-            // Sleep for a short time before checking again
-            tokio::time::sleep(Duration::from_millis(1)).await;
-        };
-
-        let error = result.unwrap_err();
+        let error = promise.into_future::<i32>().await.unwrap_err();
         assert!(error.to_string().contains("reject error"));
+        Ok(())
     })
-    .await;
 }
