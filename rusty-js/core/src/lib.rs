@@ -4,7 +4,7 @@ pub mod function;
 mod promise;
 mod result;
 mod runtime;
-pub mod scheduler;
+mod scheduler;
 mod source;
 mod value;
 

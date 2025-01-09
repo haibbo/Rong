@@ -1,5 +1,8 @@
 use crate::function::RustFunc;
-use crate::{JSCodeRunner, JSContext, JSContextImpl, JSObjectOps, JSValueImpl};
+use crate::scheduler::Scheduler;
+use crate::{JSCodeRunner, JSContext, JSContextImpl, JSObjectOps, JSResult, JSValueImpl};
+use std::future::Future;
+use std::rc::Rc;
 
 pub trait JSRuntimeImpl {
     /// the JS engine specific type of JavaScript Runtime
@@ -20,12 +23,24 @@ pub trait JSRuntimeImpl {
 }
 
 pub struct JSRuntime<R: JSRuntimeImpl> {
-    pub(crate) inner: R,
+    inner: Rc<R>,
+    scheduler: Rc<Scheduler<R>>,
 }
 
-impl<R: JSRuntimeImpl> JSRuntime<R> {
+impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
+    pub fn block_on<F, T>(self, future: F) -> JSResult<T>
+    where
+        F: Future<Output = JSResult<T>> + 'static,
+        T: 'static,
+    {
+        self.scheduler.block_on(future)
+    }
+
+    /// # Warning
+    /// testing purposes only and don't use it in production code.
+    #[doc(hidden)]
     pub fn run_pending_jobs(&self) {
-        self.inner.run_pending_jobs()
+        self.inner.run_pending_jobs();
     }
 }
 
@@ -43,7 +58,7 @@ impl<C: JSContextImpl> JSContext<C> {
 pub trait JSEngine: Sized {
     type Value: JSValueImpl + JSObjectOps;
     type Context: JSContextImpl<Value = Self::Value> + JSCodeRunner;
-    type Runtime: JSRuntimeImpl<Context = Self::Context>;
+    type Runtime: JSRuntimeImpl<Context = Self::Context> + 'static;
 
     /// # Warning
     ///
@@ -63,12 +78,36 @@ pub trait JSEngine: Sized {
     /// JS engine version
     fn version() -> String;
 
+    /// Creates a new JavaScript runtime instance.
+    ///
+    /// # Key Notes
+    /// - One thread have only one runtime instance.
+    /// - Each runtime has its own scheduler for managing asynchronous tasks.
+    /// - This ensures proper isolation and thread-safety in JavaScript execution.
+    ///
+    /// # Returns
+    /// A new `JSRuntime` instance with its associated scheduler.
     fn runtime() -> JSRuntime<Self::Runtime> {
+        let runtime = Rc::new(Self::_runtime());
+        let scheduler = Scheduler::new(runtime.clone());
         JSRuntime {
-            inner: Self::_runtime(),
+            inner: runtime,
+            scheduler,
         }
     }
 
+    /// Creates a new JavaScript context instance associated with the given runtime.
+    ///
+    /// # Key Notes
+    /// - Each context is tied to a specific runtime instance.
+    /// - Automatically registers the Rust function class for interop capabilities.
+    /// - Contexts are isolated execution environments within the same runtime.
+    ///
+    /// # Example
+    /// ```rust
+    /// let runtime = JSEngine::runtime();
+    /// let context = JSEngine::context(&runtime);
+    /// ```
     fn context(rt: &JSRuntime<Self::Runtime>) -> JSContext<Self::Context>
     where
         Self::Value: 'static,

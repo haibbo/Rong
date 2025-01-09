@@ -1,12 +1,11 @@
 pub use rusty_js_core::{
     call, Class, ClassSetup, FromJSValue, IntoJSValue, JSClass, JSContext as CoreJSContext,
     JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject,
-    JSRuntime as CoreJSRuntime, JSValue as CoreJSValue, Promise as CorePromise, RustyJSError,
-    Source,
+    JSResult, JSRuntime as CoreJSRuntime, JSValue as CoreJSValue, Promise as CorePromise,
+    RustyJSError, Source,
 };
 
 pub use rusty_js_core::function;
-pub use rusty_js_core::scheduler;
 
 #[cfg(feature = "quickjs")]
 mod engine {

@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextImpl, JSResult, JSRuntime, JSRuntimeImpl};
+use crate::{JSContext, JSContextImpl, JSResult, JSRuntimeImpl};
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
@@ -10,12 +10,12 @@ thread_local! {
     static CURRENT_SCHEDULER: RefCell<Option<Rc<dyn SchedulerHandle>>> = RefCell::new(None);
 }
 
-pub trait SchedulerHandle {
+trait SchedulerHandle {
     fn spawn_boxed(&self, future: Pin<Box<dyn Future<Output = JSResult<()>>>>);
 }
 
-pub struct Scheduler<R: JSRuntimeImpl> {
-    runtime: Rc<JSRuntime<R>>,
+pub(crate) struct Scheduler<R: JSRuntimeImpl> {
+    runtime: Rc<R>,
     tokio_rt: tokio::runtime::Runtime,
     local_set: LocalSet,
 }
@@ -27,7 +27,7 @@ impl<R: JSRuntimeImpl + 'static> SchedulerHandle for Scheduler<R> {
 }
 
 impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
-    pub fn new(runtime: JSRuntime<R>) -> Rc<Self> {
+    pub(crate) fn new(runtime: Rc<R>) -> Rc<Self> {
         // single thread tokio runtime
         let tokio_rt = Builder::new_current_thread()
             .enable_all()
@@ -37,7 +37,7 @@ impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
         let local_set = LocalSet::new();
 
         let scheduler = Rc::new(Self {
-            runtime: Rc::new(runtime),
+            runtime,
             tokio_rt,
             local_set,
         });
@@ -58,7 +58,7 @@ impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
             *current.borrow_mut() = None;
         });
     }
-    pub fn block_on<F, T>(&self, future: F) -> JSResult<T>
+    pub(crate) fn block_on<F, T>(&self, future: F) -> JSResult<T>
     where
         F: Future<Output = JSResult<T>> + 'static,
         T: 'static,
