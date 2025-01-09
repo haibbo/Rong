@@ -4,6 +4,7 @@ use crate::{
 };
 use std::any::TypeId;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 /// JSContextImpl represents a JavaScript context
 ///
@@ -87,14 +88,13 @@ pub trait JSFfiContext {
     type FfiContext;
 }
 
+#[derive(Clone)]
 pub struct JSContext<C: JSContextImpl> {
-    pub(crate) inner: C,
+    inner: Rc<C>,
 }
 
-impl<C: JSContextImpl> Deref for JSContext<C> {
-    type Target = C;
-
-    fn deref(&self) -> &Self::Target {
+impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
+    fn as_ref(&self) -> &C {
         &self.inner
     }
 }
@@ -111,21 +111,12 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
     }
 }
 
-// JSContext implement Deref, it's necessary to implement Drop
-impl<C: JSContextImpl> Clone for JSContext<C> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
-    }
-}
-
 impl<C: JSContextImpl> From<C> for JSContext<C> {
     fn from(c: C) -> Self {
         if c.get_class_registry().is_none() {
             c.init_class_registry();
         }
-        Self { inner: c }
+        Self { inner: Rc::new(c) }
     }
 }
 

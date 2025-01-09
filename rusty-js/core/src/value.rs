@@ -1,5 +1,4 @@
 use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
-use std::ops::Deref;
 
 mod convert;
 pub use convert::*;
@@ -69,7 +68,7 @@ where
     pub(crate) fn new(ctx: &JSContext<V::Context>, value: V) -> Self {
         Self {
             inner: value,
-            ctx: ctx.deref().clone(),
+            ctx: ctx.as_ref().clone(),
         }
     }
 
@@ -106,7 +105,7 @@ where
     where
         V: for<'a> From<(&'a V::Context, T)>,
     {
-        let value = V::from((&ctx.inner, val));
+        let value = V::from((ctx.as_ref(), val));
         JSValue::new(ctx, value)
     }
 
@@ -124,7 +123,7 @@ where
     where
         V: for<'a> From<(&'a V::Context, ())>,
     {
-        let value = V::from((&ctx.inner, ()));
+        let value = V::from((ctx.as_ref(), ()));
         JSValue::new(ctx, value)
     }
 }

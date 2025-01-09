@@ -52,8 +52,8 @@ impl<C: JSContextImpl> JSContext<C> {
         C: JSExceptionHandler,
         C::Value: JSObjectOps,
     {
-        let v = self.inner.new_error();
-        let obj = JSObject::from_js_value(&self.inner, v).unwrap();
+        let v = self.as_ref().new_error();
+        let obj = JSObject::from_js_value(self.as_ref(), v).unwrap();
         obj.set("message", message);
         JSException::from_object(obj)
     }
@@ -130,27 +130,27 @@ where
     C::Value: JSValueImpl,
 {
     pub fn throw_syntax_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
-        let raw = self.inner.throw_syntax_error(message);
+        let raw = self.as_ref().throw_syntax_error(message);
         JSValue::new(self, raw)
     }
 
     pub fn throw_type_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
-        let raw = self.inner.throw_type_error(message);
+        let raw = self.as_ref().throw_type_error(message);
         JSValue::new(self, raw)
     }
 
     pub fn throw_reference_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
-        let raw = self.inner.throw_reference_error(message);
+        let raw = self.as_ref().throw_reference_error(message);
         JSValue::new(self, raw)
     }
 
     pub fn throw_range_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
-        let raw = self.inner.throw_range_error(message);
+        let raw = self.as_ref().throw_range_error(message);
         JSValue::new(self, raw)
     }
 
     pub fn throw_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
-        let raw = self.inner.throw_error(message);
+        let raw = self.as_ref().throw_error(message);
         JSValue::new(self, raw)
     }
 }

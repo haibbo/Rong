@@ -99,7 +99,7 @@ where
 {
     /// new a general object
     pub fn new(ctx: &JSContext<V::Context>) -> Self {
-        let value = V::new_object(&ctx.inner);
+        let value = V::new_object(ctx.as_ref());
         JSValue::new(ctx, value).into()
     }
 

@@ -157,11 +157,12 @@ where
         F: IntoJSCallable<C::Value, P> + 'static,
         P: FromParams<C::Value>,
     {
+        let ctx = self.as_ref();
         let func = RustFunc::new(f);
         let length = func.parameter_required_count();
-        let value = Class::get::<RustFunc<C::Value>>(&self.inner)
+        let value = Class::get::<RustFunc<C::Value>>(ctx)
             .map(|class| class.instance::<RustFunc<C::Value>>(func));
-        let obj = JSObject::from_js_value(&self.inner, value.unwrap()).unwrap();
+        let obj = JSObject::from_js_value(ctx, value.unwrap()).unwrap();
         obj.set("length", length);
         JSFunc(obj)
     }

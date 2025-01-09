@@ -73,10 +73,11 @@ impl<C: JSContextImpl> JSContext<C> {
     where
         C::Value: JSTypeOf,
     {
-        let (promise, resolver, reject) = self.inner.promise();
-        let promise = JSObject::from_js_value(&self.inner, promise)?;
-        let resolver = JSFunc::from_js_value(&self.inner, resolver)?;
-        let reject = JSFunc::from_js_value(&self.inner, reject)?;
+        let ctx = self.as_ref();
+        let (promise, resolver, reject) = ctx.promise();
+        let promise = JSObject::from_js_value(ctx, promise)?;
+        let resolver = JSFunc::from_js_value(ctx, resolver)?;
+        let reject = JSFunc::from_js_value(ctx, reject)?;
         Ok((
             Promise {
                 obj: promise,
@@ -91,7 +92,6 @@ impl<C: JSContextImpl> JSContext<C> {
 impl<V: JSValueImpl + 'static> Promise<V>
 where
     V: JSTypeOf + JSObjectOps,
-    V::Context: 'static,
 {
     /// Creates a new JavaScript Promise using the provided context.
     ///
@@ -129,7 +129,7 @@ where
         let task_ctx = ctx.clone();
 
         // Spawn a new async task to handle the future
-        tokio::task::spawn_local(async move {
+        ctx.spawn_local(async move {
             match future.await {
                 Ok(value) => {
                     let _ = resolve.call::<_, ()>((value,));
@@ -139,6 +139,7 @@ where
                     let _ = reject.call::<_, ()>((js_error,));
                 }
             }
+            Ok(())
         });
 
         Ok(promise)
@@ -187,7 +188,6 @@ impl<V: JSValueImpl + 'static> Promise<V> {
     pub fn into_future<T>(self) -> PromiseFuture<V, T>
     where
         T: FromJSValue<V> + 'static,
-        V::Context: 'static,
     {
         PromiseFuture {
             state: None,
@@ -199,7 +199,6 @@ impl<V: JSValueImpl + 'static> Promise<V> {
 
 impl<V: JSValueImpl + 'static, T> Future for PromiseFuture<V, T>
 where
-    V::Context: 'static,
     T: FromJSValue<V> + JSParameterType + 'static,
     V: JSObjectOps,
 {
