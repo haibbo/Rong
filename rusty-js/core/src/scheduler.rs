@@ -1,4 +1,4 @@
-use crate::{JSResult, JSRuntime, JSRuntimeImpl};
+use crate::{JSContext, JSContextImpl, JSResult, JSRuntime, JSRuntimeImpl};
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
@@ -7,7 +7,7 @@ use tokio::runtime::Builder;
 use tokio::task::LocalSet;
 
 thread_local! {
-    pub static CURRENT_SCHEDULER: RefCell<Option<Rc<dyn SchedulerHandle>>> = RefCell::new(None);
+    static CURRENT_SCHEDULER: RefCell<Option<Rc<dyn SchedulerHandle>>> = RefCell::new(None);
 }
 
 pub trait SchedulerHandle {
@@ -92,5 +92,18 @@ impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
         // Clean up the current scheduler before returning the result
         Self::clear_current_scheduler();
         result
+    }
+}
+
+impl<C: JSContextImpl> JSContext<C> {
+    /// Spawn a future to be executed by the scheduler
+    pub fn spawn_local<F>(&self, future: F)
+    where
+        F: Future<Output = JSResult<()>> + 'static,
+    {
+        if let Some(scheduler) = CURRENT_SCHEDULER.with(|s| s.borrow().as_ref().map(|s| s.clone()))
+        {
+            scheduler.spawn_boxed(Box::pin(future));
+        }
     }
 }

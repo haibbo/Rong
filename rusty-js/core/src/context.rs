@@ -1,11 +1,9 @@
 use crate::{
-    scheduler::CURRENT_SCHEDULER, source::Source, ClassSetup, FromJSValue, JSClass, JSObject,
-    JSObjectOps, JSResult, JSRuntimeImpl, JSValue, JSValueImpl, RustyJSError,
+    source::Source, ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSResult,
+    JSRuntimeImpl, JSValue, JSValueImpl, RustyJSError,
 };
 use std::any::TypeId;
 use std::collections::HashMap;
-use std::future::Future;
-use std::ops::Deref;
 
 /// JSContextImpl represents a JavaScript context
 ///
@@ -193,17 +191,5 @@ where
         let constructor = JSValue::new(self, constructor);
         JC::class_setup(&ClassSetup::new(constructor.clone().into(), self));
         obj.set(JC::NAME, constructor);
-    }
-
-    /// Spawn a future to be executed by the scheduler
-    pub fn spawn_local<F>(&self, future: F)
-    where
-        F: Future<Output = JSResult<()>> + 'static,
-        C::Runtime: 'static,
-    {
-        if let Some(scheduler) = CURRENT_SCHEDULER.with(|s| s.borrow().as_ref().map(|s| s.clone()))
-        {
-            scheduler.spawn_boxed(Box::pin(future));
-        }
     }
 }
