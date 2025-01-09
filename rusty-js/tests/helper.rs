@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-pub use rusty_js::function::{ArgThis, Constructor, Optional, Rest, This, ThisMut};
+pub use rusty_js::function::{Constructor, Optional, Rest, This, ThisMut};
 
 pub use rusty_js::*;
 

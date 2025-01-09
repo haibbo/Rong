@@ -64,28 +64,6 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
 /// ```
 pub struct This<T: 'static>(pub(crate) Ref<'static, T>);
 
-/// Represents a borrowed class instance from JavaScript function arguments.
-///
-/// # Usage
-/// - Used to receive class instances as parameters
-/// - Creates a borrowed reference to the instance
-/// - Can be used anywhere in the parameter list
-/// - Counts towards required parameter count
-///
-/// # Example
-/// ```ignore
-/// use rusty_js_core::function::parameter::{This, ArgThis};
-///
-/// fn add(this: This<Point>, other: ArgThis<Point>) {
-///     // this is the context, other is a borrowed instance
-///     let sum = Point {
-///         x: this.x + other.x,
-///         y: this.y + other.y,
-///     };
-/// }
-/// ```
-pub struct ArgThis<T: 'static>(pub(crate) Ref<'static, T>);
-
 /// Represents the `this` context in JavaScript function calls with mutable access
 pub struct ThisMut<T: 'static>(pub(crate) RefMut<'static, T>);
 
@@ -162,13 +140,6 @@ impl<T> Deref for Optional<T> {
 impl<T> Deref for Rest<T> {
     type Target = Vec<T>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> Deref for ArgThis<T> {
-    type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -256,14 +227,6 @@ impl<T> ParameterKind for RestKind<T> {
     type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
-    }
-}
-
-pub struct ArgThisKind<T>(PhantomData<T>);
-impl<T> ParameterKind for ArgThisKind<T> {
-    type Inner = T;
-    fn param_requirement() -> ParamRequirement {
-        ParamRequirement::single()
     }
 }
 
@@ -364,25 +327,6 @@ where
             }
         }
         Ok(Rest(values))
-    }
-}
-
-impl<T, V> GetParam<V> for ArgThis<T>
-where
-    V: JSObjectOps,
-    T: 'static,
-{
-    type Kind = ArgThisKind<T>;
-
-    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
-        let value = accessor.next_arg().unwrap(); // it's safe
-
-        let obj = JSObject::from_js_value(accessor.context(), value)?;
-        let borrowed = obj.borrow::<T>()?;
-
-        // Safety: because JSObject ensures the object's lifecycle.
-        let static_ref: Ref<'static, T> = unsafe { std::mem::transmute(borrowed) };
-        Ok(ArgThis(static_ref))
     }
 }
 

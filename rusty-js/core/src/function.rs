@@ -1,9 +1,7 @@
 use crate::{IntoJSValue, JSClass, JSResult, JSValueConversion, JSValueImpl, RustyJSError};
 
 mod parameter;
-pub use parameter::{
-    ArgThis, FromParams, JSParameterType, Optional, ParamsAccessor, Rest, This, ThisMut,
-};
+pub use parameter::{FromParams, JSParameterType, Optional, ParamsAccessor, Rest, This, ThisMut};
 
 trait JSCallable<V: JSValueImpl> {
     fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>;

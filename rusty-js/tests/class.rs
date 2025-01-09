@@ -7,6 +7,8 @@ struct Point {
     y: i32,
 }
 
+impl function::JSParameterType for Point {}
+
 impl IntoJSValue<JSEngineValue> for Point {
     fn into_js_value(self, context: &JSEngineContext) -> JSEngineValue {
         Class::get::<Point>(context)
@@ -64,8 +66,7 @@ impl JSClass<JSEngineValue> for Point {
             builder.getter(getter).setter(setter).configurable()
         });
 
-        // Use ArgThis for the second parameter
-        class.method("add", |this: This<Point>, p: ArgThis<Point>| this.add(*p));
+        class.method("add", |this: This<Point>, p: Point| this.add(p));
 
         // Define static method
         class.static_method("sadd", |x: i32, y: i32| Self::sadd(x, y));
