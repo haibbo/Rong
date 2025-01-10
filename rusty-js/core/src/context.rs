@@ -95,15 +95,6 @@ impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
     }
 }
 
-impl<C: JSContextImpl> Drop for JSContext<C> {
-    fn drop(&mut self) {
-        // Clear all constructors in the registry
-        if let Some(registry) = self.inner.get_class_registry() {
-            registry.borrow_mut().clear();
-        }
-    }
-}
-
 impl<C: JSContextImpl> From<C> for JSContext<C> {
     fn from(c: C) -> Self {
         Self { inner: Rc::new(c) }
