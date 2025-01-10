@@ -113,9 +113,14 @@ where
     /// Get class constructor by type
     pub fn get<JC: JSClass<V>>(context: &V::Context) -> Option<Self> {
         let constructor = context
-            .get_class_registry_mut()
-            .and_then(|registry| registry.get(&TypeId::of::<JC>()))
-            .cloned()?;
+            .get_class_registry()
+            .and_then(|registry| {
+                registry
+                    .borrow()
+                    .get(&TypeId::of::<JC>())
+                    .cloned()
+            })?;
+
         match JSObject::from_js_value(context, constructor) {
             Ok(obj) => Some(Self(obj)),
             Err(_) => None,

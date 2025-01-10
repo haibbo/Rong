@@ -5,6 +5,7 @@ use crate::{
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::cell::RefCell;
 
 /// JSContextImpl represents a JavaScript context
 ///
@@ -60,13 +61,14 @@ pub trait JSContextImpl: Clone {
     fn get_opaque<T>(&self) -> *mut T;
 
     fn init_class_registry(&self) {
-        let registry: HashMap<TypeId, Self::Value> = HashMap::new();
+        let registry: RefCell<HashMap<TypeId, Self::Value>> = 
+            RefCell::new(HashMap::new());
         let boxed_registry = Box::new(registry);
         self.set_opaque(Box::into_raw(boxed_registry));
     }
 
-    fn get_class_registry(&self) -> Option<&HashMap<TypeId, Self::Value>> {
-        let ptr = self.get_opaque::<HashMap<TypeId, Self::Value>>();
+    fn get_class_registry(&self) -> Option<&RefCell<HashMap<TypeId, Self::Value>>> {
+        let ptr = self.get_opaque::<RefCell<HashMap<TypeId, Self::Value>>>();
         if ptr.is_null() {
             None
         } else {
@@ -74,13 +76,8 @@ pub trait JSContextImpl: Clone {
         }
     }
 
-    fn get_class_registry_mut(&self) -> Option<&mut HashMap<TypeId, Self::Value>> {
-        let ptr = self.get_opaque::<HashMap<TypeId, Self::Value>>();
-        if ptr.is_null() {
-            None
-        } else {
-            Some(unsafe { &mut *ptr })
-        }
+    fn get_class_registry_mut(&self) -> Option<&RefCell<HashMap<TypeId, Self::Value>>> {
+        self.get_class_registry()
     }
 }
 
@@ -102,12 +99,9 @@ impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
 impl<C: JSContextImpl> Drop for JSContext<C> {
     fn drop(&mut self) {
         // Clear all constructors in the registry
-        // HashMap::clear() will call drop on each Value
-        if let Some(registry) = self.inner.get_class_registry_mut() {
-            registry.clear()
+        if let Some(registry) = self.inner.get_class_registry() {
+            registry.borrow_mut().clear();
         }
-
-        //The inner field will be cleaned up by its own Drop implementation
     }
 }
 
@@ -174,8 +168,8 @@ where
     {
         let constructor = self.inner.register_class::<JC>();
 
-        if let Some(registry) = self.inner.get_class_registry_mut() {
-            registry.insert(TypeId::of::<JC>(), constructor.clone());
+        if let Some(registry) = self.inner.get_class_registry() {
+            registry.borrow_mut().insert(TypeId::of::<JC>(), constructor.clone());
         }
 
         let obj = self.global();
