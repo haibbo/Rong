@@ -70,7 +70,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
             Err(e) => return e.throw_js_exception(ctx),
         };
 
-        let func = match obj.borrow::<RustFunc<_>>() {
+        let func = match obj.borrow::<RustFunc<V>>() {
             Ok(f) => f,
             Err(_) => return RustyJSError::NotJSFunc.throw_js_exception(ctx),
         };
@@ -180,9 +180,9 @@ where
         }
     }
 
-    pub fn method<F, P>(&self, name: &str, f: F)
+    pub fn method<F, P, K: 'static>(&self, name: &str, f: F)
     where
-        F: IntoJSCallable<V, P> + 'static,
+        F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
         V: JSObjectOps + 'static,
     {
@@ -190,9 +190,9 @@ where
         self.prototype.set(name, func.name(name));
     }
 
-    pub fn static_method<F, P>(&self, name: &str, f: F)
+    pub fn static_method<F, P, K: 'static>(&self, name: &str, f: F)
     where
-        F: IntoJSCallable<V, P> + 'static,
+        F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
         V: JSObjectOps + 'static,
     {
@@ -216,9 +216,9 @@ where
         f(PropertyDescriptor::builder()).apply_to(&self.constructor, k);
     }
 
-    pub fn new_func<F, P>(&self, f: F) -> JSFunc<V>
+    pub fn new_func<F, P, K: 'static>(&self, f: F) -> JSFunc<V>
     where
-        F: IntoJSCallable<V, P> + 'static,
+        F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
         V: JSObjectOps + 'static,
     {

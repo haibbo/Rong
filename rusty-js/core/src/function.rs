@@ -1,4 +1,8 @@
-use crate::{IntoJSValue, JSClass, JSResult, JSValueConversion, JSValueImpl, RustyJSError};
+use crate::{
+    IntoJSValue, JSClass, JSContext, JSExceptionHandler, JSObjectOps, JSResult, JSValueImpl,
+    Promise, RustyJSError,
+};
+use std::future::Future;
 
 mod parameter;
 pub use parameter::{FromParams, JSParameterType, Optional, ParamsAccessor, Rest, This, ThisMut};
@@ -18,6 +22,7 @@ where
 }
 
 /// Container to hold rust closure/function that's callable from JS.
+///
 /// Supports various parameter types:
 /// - Regular parameters (i32, String, etc.)
 /// - This<T> for capturing JS `this` context
@@ -26,31 +31,35 @@ where
 ///
 /// Example:
 /// ```ignore
-/// // Function with this context and optional parameter
-/// RustFunc::new(|this: This<MyClass>, x: i32, opt: Optional<String>| {
-///     // ...
-/// })
+/// // Sync function - K will be inferred as SyncFunc
+/// RustFunc::new(|x: i32| x + 1);
 ///
-/// // Function with rest parameters
-/// RustFunc::new(|x: i32, rest: Rest<String>| {
-///     // ...
-/// })
+/// // Async function - K will be inferred as AsyncFunc
+/// RustFunc::new(|x: i32| async move {
+///     // async operation
+///     x + 1
+/// });
 /// ```
 pub(crate) struct RustFunc<V: JSValueImpl> {
     func: Box<dyn JSCallable<V>>,
     required_params: u32,
 }
 
-/// Type parameter P is used to differentiate between function signatures with
-/// different arities. It represents the parameter types as a tuple, e.g:
-/// - () for no parameters
-/// - (T1) for one parameter
-/// - (T1,T2) for two parameters
-///
-/// This allows the compiler to select the correct implementation based on the
-/// function's parameter types, while avoiding implementation conflicts since
-/// each tuple type is distinct.
-pub trait IntoJSCallable<V: JSValueImpl, P>
+/// Marker types for function kinds
+/// Marker type for synchronous functions.
+/// Functions returning direct values will be automatically marked with this type.
+pub struct SyncFunc;
+
+/// Marker type for asynchronous functions.
+/// Functions returning Future will be automatically marked with this type.
+pub struct AsyncFunc;
+
+/// Trait for converting Rust functions into JavaScript callable functions.
+/// Type parameters:
+/// - V: The JavaScript value type
+/// - P: Parameter types tuple
+/// - K: Function kind (SyncFunc or AsyncFunc), automatically inferred from function signature
+pub trait IntoJSCallable<V: JSValueImpl, P, K>
 where
     P: FromParams<V>,
 {
@@ -58,10 +67,11 @@ where
 }
 
 impl<V: JSValueImpl> RustFunc<V> {
-    pub fn new<F, P>(f: F) -> Self
+    pub fn new<F, P, K>(f: F) -> Self
     where
-        F: IntoJSCallable<V, P> + 'static,
+        F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
+        K: 'static,
     {
         let required_params = P::param_requirements().required_count() as u32;
         let func = Box::new(move |accessor: &mut ParamsAccessor<V>| f.call(accessor))
@@ -91,10 +101,11 @@ impl<V: JSValueImpl> RustFunc<V> {
 pub struct Constructor<V: JSValueImpl>(pub(crate) RustFunc<V>);
 
 impl<V: JSValueImpl> Constructor<V> {
-    pub fn new<F, P>(f: F) -> Self
+    pub fn new<F, P, K>(f: F) -> Self
     where
-        F: IntoJSCallable<V, P> + 'static,
+        F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
+        K: 'static,
     {
         Self(RustFunc::new(f))
     }
@@ -102,7 +113,7 @@ impl<V: JSValueImpl> Constructor<V> {
 
 impl<V> JSClass<V> for RustFunc<V>
 where
-    V: JSValueConversion + 'static,
+    V: JSValueImpl + 'static,
 {
     const NAME: &'static str = "RustFunc";
 
@@ -116,7 +127,8 @@ where
 
 macro_rules! impl_js_callable_func {
     ($($t:ident),* $(,)?) => {
-        impl<V, R, Fun $(,$t)*> IntoJSCallable<V, ($($t,)*)> for Fun
+        // Sync function implementation - automatically chosen for functions returning direct values
+        impl<V, R, Fun $(,$t)*> IntoJSCallable<V, ($($t,)*), SyncFunc> for Fun
         where
             Fun: Fn($($t),*) -> R,
             V: JSValueImpl,
@@ -129,6 +141,27 @@ macro_rules! impl_js_callable_func {
                 let ($($t,)*) = params;
                 let result = (self)($($t),*);
                 Ok(result.into_js_value(accessor.context()))
+            }
+        }
+
+        // Async function implementation - automatically chosen for functions returning Future
+        impl<V, R, Fun, Fut $(,$t)*> IntoJSCallable<V, ($($t,)*), AsyncFunc> for Fun
+        where
+            Fun: Fn($($t),*) -> Fut,
+            Fut: Future<Output = R> + 'static,
+            R: IntoJSValue<V> + 'static,
+            V: JSValueImpl + JSObjectOps+'static,
+            V::Context: JSExceptionHandler,
+            ($($t,)*): FromParams<V>,
+        {
+            fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>  {
+                let params = <($($t,)*)>::from_params(accessor)?;
+                #[allow(non_snake_case)]
+                let ($($t,)*) = params;
+                let future = (self)($($t),*);
+                let ctx=accessor.context();
+                let jsctx =JSContext::from(ctx.clone());
+                Ok(Promise::from_future(&jsctx,future)?.into_js_value(ctx))
             }
         }
     };

@@ -91,7 +91,7 @@ impl<C: JSContextImpl> JSContext<C> {
 
 impl<V: JSValueImpl + 'static> Promise<V>
 where
-    V: JSTypeOf + JSObjectOps,
+    V: JSObjectOps,
 {
     /// Creates a new JavaScript Promise using the provided context.
     ///
@@ -119,26 +119,16 @@ where
     /// Returns a `RustyJSError` if the Promise creation fails.
     pub fn from_future<F, R>(ctx: &JSContext<V::Context>, future: F) -> JSResult<Promise<V>>
     where
-        F: Future<Output = JSResult<R>> + 'static,
+        F: Future<Output = R> + 'static,
         R: IntoJSValue<V> + 'static,
         V::Context: JSExceptionHandler,
     {
-        let (promise, resolve, reject) = ctx.promise()?;
-
-        // Clone context for the async task
-        let task_ctx = ctx.clone();
+        let (promise, resolve, _reject) = ctx.promise()?;
 
         // Spawn a new async task to handle the future
         ctx.spawn_local(async move {
-            match future.await {
-                Ok(value) => {
-                    let _ = resolve.call::<_, ()>((value,));
-                }
-                Err(err) => {
-                    let js_error = err.into_js_error(&task_ctx);
-                    let _ = reject.call::<_, ()>((js_error,));
-                }
-            }
+            let result = future.await;
+            let _ = resolve.call::<_, ()>((result,));
             Ok(())
         });
 
