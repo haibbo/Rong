@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::Path;
 
 /// Represents a source of JavaScript code that can be evaluated
@@ -20,8 +19,8 @@ impl Source {
     }
 
     /// Create a Source from a file path
-    pub fn from_path(path: impl AsRef<Path>) -> std::io::Result<Self> {
-        let code = fs::read(path.as_ref())?;
+    pub async fn from_path(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let code = tokio::fs::read(path.as_ref()).await?;
         Ok(Self {
             code,
             name: Some(path.as_ref().to_string_lossy().into_owned()),
