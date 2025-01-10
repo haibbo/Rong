@@ -3,9 +3,9 @@ use crate::{
     JSRuntimeImpl, JSValue, JSValueImpl, RustyJSError,
 };
 use std::any::TypeId;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 /// JSContextImpl represents a JavaScript context
 ///
@@ -29,9 +29,6 @@ pub trait JSContextImpl: Clone {
     /// the implementation need to make sure it has the ownship, like as new method
     /// generally, it should increase referen count of FFI Context
     fn from_ffi(ctx: Self::FfiContext) -> Self;
-
-    /// Set opaque data for the context
-    fn set_opaque<T>(&self, data: *mut T);
 
     /// Calls a JavaScript function with the specified `this` value and arguments.
     ///
@@ -57,12 +54,14 @@ pub trait JSContextImpl: Clone {
     /// - The reject function to reject the promise
     fn promise(&self) -> (Self::Value, Self::Value, Self::Value);
 
+    /// Set opaque data for the context
+    fn set_opaque<T>(&self, data: *mut T);
+
     /// Get opaque data from the context
     fn get_opaque<T>(&self) -> *mut T;
 
     fn init_class_registry(&self) {
-        let registry: RefCell<HashMap<TypeId, Self::Value>> = 
-            RefCell::new(HashMap::new());
+        let registry: RefCell<HashMap<TypeId, Self::Value>> = RefCell::new(HashMap::new());
         let boxed_registry = Box::new(registry);
         self.set_opaque(Box::into_raw(boxed_registry));
     }
@@ -107,9 +106,6 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
 
 impl<C: JSContextImpl> From<C> for JSContext<C> {
     fn from(c: C) -> Self {
-        if c.get_class_registry().is_none() {
-            c.init_class_registry();
-        }
         Self { inner: Rc::new(c) }
     }
 }
@@ -169,7 +165,9 @@ where
         let constructor = self.inner.register_class::<JC>();
 
         if let Some(registry) = self.inner.get_class_registry() {
-            registry.borrow_mut().insert(TypeId::of::<JC>(), constructor.clone());
+            registry
+                .borrow_mut()
+                .insert(TypeId::of::<JC>(), constructor.clone());
         }
 
         let obj = self.global();
