@@ -10,17 +10,17 @@ pub use rusty_js_core::function;
 #[cfg(feature = "quickjs")]
 mod engine {
     use rusty_js_quickjs::QuickJS;
-    pub type ActiveJSEngine = QuickJS;
+    pub type RustyJS = QuickJS;
 }
 
 #[cfg(feature = "quickjs")]
 pub use engine::*;
 
-pub type JSEngineValue = <ActiveJSEngine as JSEngine>::Value;
-pub type JSEngineContext = <ActiveJSEngine as JSEngine>::Context;
+pub type JSEngineValue = <RustyJS as JSEngine>::Value;
+pub type JSEngineContext = <RustyJS as JSEngine>::Context;
 
-pub type JSContext = CoreJSContext<<ActiveJSEngine as JSEngine>::Context>;
-pub type JSRuntime = CoreJSRuntime<<ActiveJSEngine as JSEngine>::Runtime>;
+pub type JSContext = CoreJSContext<<RustyJS as JSEngine>::Context>;
+pub type JSRuntime = CoreJSRuntime<<RustyJS as JSEngine>::Runtime>;
 
 pub type JSValue = CoreJSValue<JSEngineValue>;
 pub type JSObject = CoreJSObject<JSEngineValue>;

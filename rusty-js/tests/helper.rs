@@ -6,16 +6,16 @@ pub use rusty_js::*;
 // Helper function to run tests with JS context
 #[allow(dead_code)]
 pub fn run<F: FnOnce(&JSContext)>(f: F) {
-    let rt = ActiveJSEngine::runtime();
-    let ctx = ActiveJSEngine::context(&rt);
+    let rt = RustyJS::runtime();
+    let ctx = RustyJS::context(&rt);
     f(&ctx);
 }
 
 // Helper function to run tests with both JS context and runtime
 #[allow(dead_code)]
 pub fn run2<F: FnOnce(&JSContext, &JSRuntime)>(f: F) {
-    let rt = ActiveJSEngine::runtime();
-    let ctx = ActiveJSEngine::context(&rt);
+    let rt = RustyJS::runtime();
+    let ctx = RustyJS::context(&rt);
     f(&ctx, &rt);
 }
 
@@ -36,8 +36,8 @@ macro_rules! assert_none {
 #[macro_export]
 macro_rules! async_run {
     ($block:expr) => {{
-        let rt = ActiveJSEngine::runtime();
-        let ctx = ActiveJSEngine::context(&rt);
+        let rt = RustyJS::runtime();
+        let ctx = RustyJS::context(&rt);
         let future = async move { $block(ctx).await };
         rt.block_on(future).unwrap()
     }};
