@@ -1,5 +1,6 @@
 mod helper;
 use helper::*;
+use tokio::time::{sleep, Duration};
 
 #[test]
 fn function_with_optional() {
@@ -171,5 +172,24 @@ fn test_jsfunc_as_argument() {
             ))
             .unwrap();
         assert_eq!(result, 12); // (2 * 3) * 2
+    });
+}
+
+#[test]
+fn test_async_rust_function() {
+    async_run!(|ctx: JSContext| async move {
+        let async_func = JSFunc::new(&ctx, |a: i32, b: i32| async move {
+            sleep(Duration::from_millis(100)).await;
+            a + b
+        });
+        ctx.global().set("add", async_func);
+
+        let result: i32 = ctx
+            .eval::<Promise>(Source::from_bytes(b"add(2,6).then(result=>result)"))?
+            .into_future()
+            .await?;
+
+        assert_eq!(result, 8);
+        Ok(())
     });
 }
