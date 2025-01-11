@@ -1,6 +1,6 @@
 use crate::{
-    function::JSParameterType, FromJSValue, JSContext, JSError, JSException, JSExceptionHandler,
-    JSObject, JSObjectOps, JSValueImpl,
+    FromJSValue, IntoJSValue, JSContext, JSError, JSException, JSExceptionHandler, JSObject,
+    JSObjectOps, JSValueImpl,
 };
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -83,8 +83,18 @@ where
     }
 }
 
-// blanket implementing.
-impl JSParameterType for RustyJSError {}
+impl<V: JSValueImpl> IntoJSValue<V> for RustyJSError
+where
+    V::Context: JSExceptionHandler,
+    V: JSObjectOps,
+{
+    fn into_js_value(self, ctx: &V::Context) -> V {
+        let v = ctx.new_error();
+        let obj = JSObject::from_js_value(ctx, v).unwrap();
+        obj.set("message", self.to_string());
+        obj.into_inner()
+    }
+}
 
 impl From<oneshot::error::RecvError> for RustyJSError {
     fn from(err: oneshot::error::RecvError) -> Self {

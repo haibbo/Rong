@@ -1,6 +1,6 @@
 use crate::{
-    IntoJSValue, JSClass, JSContext, JSExceptionHandler, JSObjectOps, JSResult, JSValueImpl,
-    Promise, RustyJSError,
+    IntoJSValue, JSClass, JSContext, JSObjectOps, JSResult, JSValueImpl, Promise, PromiseResolver,
+    RustyJSError,
 };
 use std::future::Future;
 
@@ -150,8 +150,8 @@ macro_rules! impl_js_callable_func {
             Fun: Fn($($t),*) -> Fut,
             Fut: Future<Output = R> + 'static,
             R: IntoJSValue<V> + 'static,
+            R: PromiseResolver<V>,
             V: JSValueImpl + JSObjectOps+'static,
-            V::Context: JSExceptionHandler,
             ($($t,)*): FromParams<V>,
         {
             fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>  {

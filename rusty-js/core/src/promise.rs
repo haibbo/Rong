@@ -1,7 +1,7 @@
+use crate::JSException;
 use crate::{
-    function::JSParameterType, FromJSValue, IntoJSValue, JSContext, JSContextImpl,
-    JSExceptionHandler, JSFunc, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValueImpl,
-    RustyJSError,
+    function::JSParameterType, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSFunc,
+    JSObject, JSObjectOps, JSResult, JSTypeOf, JSValueImpl, RustyJSError,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -121,14 +121,14 @@ where
     where
         F: Future<Output = R> + 'static,
         R: IntoJSValue<V> + 'static,
-        V::Context: JSExceptionHandler,
+        R: PromiseResolver<V>,
     {
-        let (promise, resolve, _reject) = ctx.promise()?;
+        let (promise, resolve, reject) = ctx.promise()?;
 
         // Spawn a new async task to handle the future
         ctx.spawn_local(async move {
             let result = future.await;
-            let _ = resolve.call::<_, ()>((result,));
+            result.resolve_promise(resolve, reject);
             Ok(())
         });
 
@@ -157,6 +157,34 @@ where
 
     pub fn into_object(self) -> JSObject<V> {
         self.obj
+    }
+}
+
+/// Converts a Rust future result into JavaScript Promise resolution
+/// using the provided resolve/reject callbacks
+pub trait PromiseResolver<V: JSValueImpl> {
+    fn resolve_promise(self, resolve: JSFunc<V>, reject: JSFunc<V>);
+}
+
+// Implement for RustyJSError types
+impl<V> PromiseResolver<V> for RustyJSError
+where
+    RustyJSError: IntoJSValue<V>,
+    V: JSObjectOps,
+{
+    fn resolve_promise(self, _resolve: JSFunc<V>, reject: JSFunc<V>) {
+        let _ = reject.call::<_, ()>((self,));
+    }
+}
+
+// Implement for regular types
+impl<V, T> PromiseResolver<V> for T
+where
+    T: IntoJSValue<V> + JSParameterType,
+    V: JSObjectOps,
+{
+    fn resolve_promise(self, resolve: JSFunc<V>, _reject: JSFunc<V>) {
+        let _ = resolve.call::<_, ()>((self,));
     }
 }
 
@@ -224,12 +252,13 @@ where
 
             // rejected callback used to wake up future and save rejected value
             let reject_state = state.clone();
-            let reject = JSFunc::new(&ctx, move |err: RustyJSError| {
-                // println!("reject callback called");
+            let reject = JSFunc::new(&ctx, move |err: JSException<V>| {
+                //println!("reject callback called");
                 let mut state = reject_state.borrow_mut();
-                if let PromiseState::Pending(waker) =
-                    std::mem::replace(&mut *state, PromiseState::Resolved(Err(err)))
-                {
+                if let PromiseState::Pending(waker) = std::mem::replace(
+                    &mut *state,
+                    PromiseState::Resolved(Err(RustyJSError::Exception(err.into_error()))),
+                ) {
                     waker.wake_by_ref();
                 }
             });

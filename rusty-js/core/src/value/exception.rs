@@ -184,3 +184,6 @@ impl<V: JSObjectOps> fmt::Display for JSException<V> {
         Ok(())
     }
 }
+
+// blanket implementing.
+impl<V: JSValueImpl> crate::function::JSParameterType for JSException<V> {}

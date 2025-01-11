@@ -150,3 +150,6 @@ where
             .and_then(|value| T::from_js_value(self.as_ctx(), value))
     }
 }
+
+// blanket implementing.
+impl<V: JSValueImpl> crate::function::JSParameterType for JSObject<V> {}
