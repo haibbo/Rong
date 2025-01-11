@@ -78,6 +78,24 @@ pub trait JSContextImpl: Clone {
     fn get_class_registry_mut(&self) -> Option<&RefCell<HashMap<TypeId, Self::Value>>> {
         self.get_class_registry()
     }
+
+    /// Clears the class registry
+    /// This should be called by JS engine crate  when the context is being destroyed
+    fn clear_class_registry(&self) {
+        if let Some(registry) = self.get_class_registry_mut() {
+            // Clear the contents of the registry
+            registry.borrow_mut().clear();
+
+            // Get the raw pointer and convert back to Box to properly drop it
+            let ptr = self.get_opaque::<RefCell<HashMap<TypeId, Self::Value>>>();
+            if !ptr.is_null() {
+                unsafe {
+                    // Take ownership of the Box to properly drop it
+                    let _ = Box::from_raw(ptr);
+                }
+            }
+        }
+    }
 }
 
 pub trait JSFfiContext {
