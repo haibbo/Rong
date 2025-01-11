@@ -2,6 +2,9 @@ use crate::{qjs, QJSRuntime, QJSValue};
 use rusty_js_core::{
     JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, Source,
 };
+use std::any::TypeId;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem::MaybeUninit;
 use std::os::raw::{c_char, c_void};
@@ -12,7 +15,14 @@ pub struct QJSContext {
 
 impl Drop for QJSContext {
     fn drop(&mut self) {
-        // println!("free QJS Ctx");
+        // TODO: Free the class registry if it exists
+        // let ptr = unsafe {
+        //     qjs::JS_GetContextOpaque(self.ctx) as *mut RefCell<HashMap<TypeId, QJSValue>>
+        // };
+        // if !ptr.is_null() {
+        //     unsafe { Self::free_class_registry(ptr) };
+        // }
+
         unsafe {
             qjs::JS_FreeContext(self.ctx);
         }
@@ -33,19 +43,33 @@ impl JSContextImpl for QJSContext {
     type Runtime = QJSRuntime;
     type Value = QJSValue;
 
-    fn new(runtime: &Self::Runtime) -> Self {
+    fn new(runtime: &Self::Runtime, registry: *mut RefCell<HashMap<TypeId, Self::Value>>) -> Self {
+        let ctx = unsafe { qjs::JS_NewContext(runtime.to_ffi()) };
+
         unsafe {
-            Self {
-                ctx: qjs::JS_NewContext(runtime.to_ffi()),
-            }
+            qjs::JS_SetContextOpaque(ctx, registry as *mut c_void);
         }
+
+        Self { ctx }
     }
+
     fn to_ffi(&self) -> Self::FfiContext {
         self.ctx
     }
 
     fn from_ffi(ctx: Self::FfiContext) -> Self {
         Self::_from_ffi(ctx)
+    }
+
+    fn get_class_registry(&self) -> Option<&RefCell<HashMap<TypeId, Self::Value>>> {
+        let ptr = unsafe {
+            qjs::JS_GetContextOpaque(self.ctx) as *mut RefCell<HashMap<TypeId, QJSValue>>
+        };
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { &*ptr })
+        }
     }
 
     fn eval(&self, source: Source) -> Self::Value {
@@ -73,16 +97,6 @@ impl JSContextImpl for QJSContext {
             )
         };
         QJSValue::from_parts(self.ctx, raw)
-    }
-
-    /// Set opaque data for the context
-    fn set_opaque<T>(&self, data: *mut T) {
-        unsafe { qjs::JS_SetContextOpaque(self.ctx, data as *mut c_void) };
-    }
-
-    /// Get opaque data from the context
-    fn get_opaque<T>(&self) -> *mut T {
-        unsafe { qjs::JS_GetContextOpaque(self.ctx) as *mut T }
     }
 
     fn call(
