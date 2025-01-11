@@ -75,7 +75,7 @@ fn test_rust_future_in_js() {
         let async_fn = ctx.register_function(move |delay: i32| {
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
-                Ok(format!("completed after {}ms", delay))
+                format!("completed after {}ms", delay)
             };
             Promise::from_future(&ctx2, future).unwrap()
         });
@@ -117,7 +117,7 @@ fn test_rust_future_error_in_js() {
         let async_fn = ctx.register_function(move |_: i32| {
             let future = async {
                 tokio::time::sleep(Duration::from_millis(50)).await;
-                Err::<String, _>(RustyJSError::Error("async operation failed".to_string()))
+                RustyJSError::Error("async operation failed".to_string())
             };
             Promise::from_future(&ctx2, future).unwrap()
         });
