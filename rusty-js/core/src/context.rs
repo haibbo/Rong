@@ -19,9 +19,7 @@ pub trait JSContextImpl: Clone {
     type Runtime: JSRuntimeImpl<Context = Self>;
     type Value: JSValueImpl<Context = Self>;
 
-    fn new(runtime: &Self::Runtime) -> Self
-    where
-        Self: Sized;
+    fn new(runtime: &Self::Runtime) -> Self;
 
     /// FfiContext implements Copy
     fn to_ffi(&self) -> Self::FfiContext;

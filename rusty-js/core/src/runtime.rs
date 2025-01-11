@@ -9,7 +9,7 @@ pub trait JSRuntimeImpl {
     type FfiRuntime: Copy;
 
     /// The JavaScript context type associated with this runtime
-    type Context: JSContextImpl<Runtime = Self>;
+    type Context: JSContextImpl;
 
     /// Creates JavaScript runtime.
     fn new() -> Self;
@@ -56,21 +56,9 @@ impl<C: JSContextImpl> JSContext<C> {
 }
 
 pub trait JSEngine: Sized {
-    type Value: JSValueImpl + JSObjectOps;
-    type Context: JSContextImpl<Value = Self::Value> + JSCodeRunner;
+    type Value: JSValueImpl<Context = Self::Context> + JSObjectOps;
+    type Context: JSContextImpl<Value = Self::Value, Runtime = Self::Runtime> + JSCodeRunner;
     type Runtime: JSRuntimeImpl<Context = Self::Context> + 'static;
-
-    /// # Warning
-    ///
-    /// JS engine is responsible for implementing
-    #[doc(hidden)]
-    fn _runtime() -> Self::Runtime;
-
-    /// # Warning
-    ///
-    /// JS engine is responsible for implementing
-    #[doc(hidden)]
-    fn _context(rt: &Self::Runtime) -> Self::Context;
 
     /// JS engine name
     fn name() -> &'static str;
@@ -88,7 +76,7 @@ pub trait JSEngine: Sized {
     /// # Returns
     /// A new `JSRuntime` instance with its associated scheduler.
     fn runtime() -> JSRuntime<Self::Runtime> {
-        let runtime = Rc::new(Self::_runtime());
+        let runtime = Rc::new(Self::Runtime::new());
         let scheduler = Scheduler::new(runtime.clone());
         JSRuntime {
             inner: runtime,
@@ -112,7 +100,7 @@ pub trait JSEngine: Sized {
     where
         Self::Value: 'static,
     {
-        let ctx = JSContext::from(Self::_context(&rt.inner));
+        let ctx = JSContext::from(Self::Context::new(&rt.inner));
         ctx.as_ref().init_class_registry();
         ctx.register_rustfunc_class();
         ctx
