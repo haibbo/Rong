@@ -19,7 +19,18 @@ pub trait JSContextImpl: Clone {
     type Runtime: JSRuntimeImpl<Context = Self>;
     type Value: JSValueImpl<Context = Self>;
 
-    fn new(runtime: &Self::Runtime) -> Self;
+    /// Creates a new JavaScript context
+    ///
+    /// # Arguments
+    /// * `runtime` - The JavaScript runtime to associate with this context
+    /// * `registry` - Raw pointer to the class registry (created by JSContext::new_class_registry)
+    ///
+    /// # Safety
+    /// The implementation must ensure:
+    /// - The registry pointer is stored in the context
+    /// - The registry is properly cleaned up when the context is dropped by calling free_class_registry
+    /// - The registry pointer is invalid after the context is dropped
+    fn new(runtime: &Self::Runtime, registry: *mut RefCell<HashMap<TypeId, Self::Value>>) -> Self;
 
     /// FfiContext implements Copy
     fn to_ffi(&self) -> Self::FfiContext;
@@ -38,6 +49,29 @@ pub trait JSContextImpl: Clone {
     fn register_class<JC>(&self) -> Self::Value
     where
         JC: JSClass<Self::Value>;
+
+    /// Get class registry from context
+    fn get_class_registry(&self) -> Option<&RefCell<HashMap<TypeId, Self::Value>>>;
+
+    /// Frees a class registry safely
+    ///
+    /// # Safety
+    /// - The pointer must have been created by JSContext::new_class_registry
+    /// - The pointer must not be null
+    /// - The pointer must not be used after this call
+    /// - This function must be called exactly once for each registry
+    unsafe fn free_class_registry(registry: *mut RefCell<HashMap<TypeId, Self::Value>>) {
+        debug_assert!(
+            !registry.is_null(),
+            "free_class_registry called with null pointer"
+        );
+        if !registry.is_null() {
+            // Clear the contents first to ensure proper cleanup of any values
+            (*registry).borrow_mut().clear();
+            // Then drop the Box to free the memory
+            let _ = Box::from_raw(registry);
+        }
+    }
 
     /// Calls a JavaScript function with the specified `this` value and arguments.
     ///
@@ -62,49 +96,6 @@ pub trait JSContextImpl: Clone {
     /// - The resolve function to fulfill the promise
     /// - The reject function to reject the promise
     fn promise(&self) -> (Self::Value, Self::Value, Self::Value);
-
-    /// Set opaque data for the context
-    fn set_opaque<T>(&self, data: *mut T);
-
-    /// Get opaque data from the context
-    fn get_opaque<T>(&self) -> *mut T;
-
-    fn init_class_registry(&self) {
-        let registry: RefCell<HashMap<TypeId, Self::Value>> = RefCell::new(HashMap::new());
-        let boxed_registry = Box::new(registry);
-        self.set_opaque(Box::into_raw(boxed_registry));
-    }
-
-    fn get_class_registry(&self) -> Option<&RefCell<HashMap<TypeId, Self::Value>>> {
-        let ptr = self.get_opaque::<RefCell<HashMap<TypeId, Self::Value>>>();
-        if ptr.is_null() {
-            None
-        } else {
-            Some(unsafe { &*ptr })
-        }
-    }
-
-    fn get_class_registry_mut(&self) -> Option<&RefCell<HashMap<TypeId, Self::Value>>> {
-        self.get_class_registry()
-    }
-
-    /// Clears the class registry
-    /// This should be called by JS engine crate  when the context is being destroyed
-    fn clear_class_registry(&self) {
-        if let Some(registry) = self.get_class_registry_mut() {
-            // Clear the contents of the registry
-            registry.borrow_mut().clear();
-
-            // Get the raw pointer and convert back to Box to properly drop it
-            let ptr = self.get_opaque::<RefCell<HashMap<TypeId, Self::Value>>>();
-            if !ptr.is_null() {
-                unsafe {
-                    // Take ownership of the Box to properly drop it
-                    let _ = Box::from_raw(ptr);
-                }
-            }
-        }
-    }
 }
 
 pub trait JSFfiContext {
@@ -176,5 +167,16 @@ impl<C: JSContextImpl> JSContext<C> {
         let constructor = JSValue::new(self, constructor);
         JC::class_setup(&ClassSetup::new(constructor.clone().into(), self));
         obj.set(JC::NAME, constructor);
+    }
+
+    /// Creates a new class registry
+    ///
+    /// # Returns
+    /// A raw pointer to a RefCell<HashMap> that will be stored in the context.
+    /// The context implementation is responsible for calling JSContextImpl::free_class_registry
+    /// to properly clean up this memory.
+    pub(crate) fn new_class_registry() -> *mut RefCell<HashMap<TypeId, C::Value>> {
+        let registry: RefCell<HashMap<TypeId, C::Value>> = RefCell::new(HashMap::new());
+        Box::into_raw(Box::new(registry))
     }
 }
