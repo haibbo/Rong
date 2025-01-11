@@ -1,6 +1,6 @@
 use crate::function::RustFunc;
 use crate::scheduler::Scheduler;
-use crate::{JSCodeRunner, JSContext, JSContextImpl, JSObjectOps, JSResult, JSValueImpl};
+use crate::{JSContext, JSContextImpl, JSObjectOps, JSResult, JSValueImpl};
 use std::future::Future;
 use std::rc::Rc;
 
@@ -48,7 +48,6 @@ impl<C: JSContextImpl> JSContext<C> {
     /// used to create object instance as function
     pub(crate) fn register_rustfunc_class(&self)
     where
-        C: JSCodeRunner,
         C::Value: JSObjectOps + 'static,
     {
         self.register_class::<RustFunc<C::Value>>();
@@ -57,7 +56,7 @@ impl<C: JSContextImpl> JSContext<C> {
 
 pub trait JSEngine: Sized {
     type Value: JSValueImpl<Context = Self::Context> + JSObjectOps;
-    type Context: JSContextImpl<Value = Self::Value, Runtime = Self::Runtime> + JSCodeRunner;
+    type Context: JSContextImpl<Value = Self::Value, Runtime = Self::Runtime>;
     type Runtime: JSRuntimeImpl<Context = Self::Context> + 'static;
 
     /// JS engine name

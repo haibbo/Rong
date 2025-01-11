@@ -1,6 +1,6 @@
 use crate::{qjs, QJSRuntime, QJSValue};
 use rusty_js_core::{
-    JSClass, JSCodeRunner, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, Source,
+    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, Source,
 };
 use std::ffi::CString;
 use std::mem::MaybeUninit;
@@ -46,6 +46,33 @@ impl JSContextImpl for QJSContext {
 
     fn from_ffi(ctx: Self::FfiContext) -> Self {
         Self::_from_ffi(ctx)
+    }
+
+    fn eval(&self, source: Source) -> Self::Value {
+        let options = EvalOptions::default();
+        self.eval_raw(&source, options.to_flags())
+    }
+
+    fn global(&self) -> Self::Value {
+        let raw = unsafe { qjs::JS_GetGlobalObject(self.ctx) };
+        QJSValue::from_parts(self.ctx, raw)
+    }
+
+    fn register_class<JC>(&self) -> Self::Value
+    where
+        JC: JSClass<QJSValue>,
+    {
+        let name = CString::new(JC::NAME).unwrap();
+        let raw = unsafe {
+            qjs::QJS_CreateClass(
+                self.ctx,
+                name.as_ptr(),
+                Some(crate::class::generic_constructor::<JC>),
+                Some(crate::class::call::<JC>),
+                Some(crate::class::finalizer::<JC>),
+            )
+        };
+        QJSValue::from_parts(self.ctx, raw)
     }
 
     /// Set opaque data for the context
@@ -178,35 +205,6 @@ impl QJSContext {
     {
         let c_message = CString::new(message).unwrap();
         let raw = { throw_fn(self.ctx, c"%s".as_ptr(), c_message.as_ptr()) };
-        QJSValue::from_parts(self.ctx, raw)
-    }
-}
-
-impl JSCodeRunner for QJSContext {
-    fn eval(&self, source: Source) -> Self::Value {
-        let options = EvalOptions::default();
-        self.eval_raw(&source, options.to_flags())
-    }
-
-    fn global(&self) -> Self::Value {
-        let raw = unsafe { qjs::JS_GetGlobalObject(self.ctx) };
-        QJSValue::from_parts(self.ctx, raw)
-    }
-
-    fn register_class<JC>(&self) -> Self::Value
-    where
-        JC: JSClass<QJSValue>,
-    {
-        let name = CString::new(JC::NAME).unwrap();
-        let raw = unsafe {
-            qjs::QJS_CreateClass(
-                self.ctx,
-                name.as_ptr(),
-                Some(crate::class::generic_constructor::<JC>),
-                Some(crate::class::call::<JC>),
-                Some(crate::class::finalizer::<JC>),
-            )
-        };
         QJSValue::from_parts(self.ctx, raw)
     }
 }

@@ -28,6 +28,17 @@ pub trait JSContextImpl: Clone {
     /// generally, it should increase referen count of FFI Context
     fn from_ffi(ctx: Self::FfiContext) -> Self;
 
+    /// Evaluate JavaScript code
+    fn eval(&self, source: Source) -> Self::Value;
+
+    /// Get global object
+    fn global(&self) -> Self::Value;
+
+    /// Register class for rust type
+    fn register_class<JC>(&self) -> Self::Value
+    where
+        JC: JSClass<Self::Value>;
+
     /// Calls a JavaScript function with the specified `this` value and arguments.
     ///
     /// # Arguments
@@ -117,23 +128,7 @@ impl<C: JSContextImpl> From<C> for JSContext<C> {
     }
 }
 
-pub trait JSCodeRunner: JSContextImpl {
-    /// Evaluate JavaScript code
-    fn eval(&self, source: Source) -> Self::Value;
-
-    /// Get global object
-    fn global(&self) -> Self::Value;
-
-    /// Register class for rust type
-    fn register_class<JC>(&self) -> Self::Value
-    where
-        JC: JSClass<Self::Value>;
-}
-
-impl<C> JSContext<C>
-where
-    C: JSCodeRunner,
-{
+impl<C: JSContextImpl> JSContext<C> {
     /// eval javascript
     pub fn eval<T>(&self, source: Source) -> JSResult<T>
     where
