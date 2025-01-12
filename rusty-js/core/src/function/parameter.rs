@@ -335,6 +335,7 @@ where
 /// converted from JSValue to their Rust equivalents.
 pub trait JSParameterType {}
 
+impl JSParameterType for () {}
 impl JSParameterType for i32 {}
 impl JSParameterType for u32 {}
 impl JSParameterType for i64 {}
