@@ -21,13 +21,20 @@ impl JSRuntimeImpl for QJSRuntime {
     // new QuickJS JS Runtime
     fn new() -> Self {
         let rt = unsafe { qjs::JS_NewRuntime() };
+
+        //0x200: dump every object free
+        //0x4000: dump leaked objects and strings in JS_FreeRuntime
+        //more flags, pls refer to quickjs.c
         #[cfg(debug_assertions)]
-        unsafe {
-            if std::env::var("DUMPFLAGS").is_ok() {
-                //0x200: dump every object free
-                //0x4000: dump leaked objects and strings in JS_FreeRuntime
-                //more flags, pls refer to quickjs.c
-                qjs::JS_SetDumpFlags(rt, 0x200 | 0x4000);
+        if let Ok(flags) = std::env::var("DUMPFLAGS") {
+            let flags = if flags.starts_with("0x") {
+                u64::from_str_radix(flags.trim_start_matches("0x"), 16).unwrap_or(0x4000 | 0x200)
+            } else {
+                0x4000 | 0x200
+            };
+            println!("Dump flags: 0x{:x}", flags);
+            unsafe {
+                qjs::JS_SetDumpFlags(rt, flags);
             }
         }
         Self { rt }
