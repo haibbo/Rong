@@ -3,6 +3,7 @@ use crate::{
     RustyJSError,
 };
 use std::ops::Deref;
+use std::fmt;
 
 mod property;
 pub use property::{PropertyAttributes, PropertyDescriptor, PropertyKey};
@@ -153,3 +154,22 @@ where
 
 // blanket implementing.
 impl<V: JSValueImpl> crate::function::JSParameterType for JSObject<V> {}
+
+impl<V> fmt::Display for JSObject<V>
+where
+    V: JSTypeOf + JSValueConversion,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Delegate to JSValue's Display implementation through Deref
+        self.deref().fmt(f)
+    }
+}
+
+impl<V> fmt::Debug for JSObject<V>
+where
+    V: JSTypeOf + JSValueConversion,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "JSObject({})", self)
+    }
+}

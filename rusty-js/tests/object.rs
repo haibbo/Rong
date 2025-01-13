@@ -75,3 +75,20 @@ fn from_javascript() {
         }
     })
 }
+
+#[test]
+fn test_object_display() {
+    run(|ctx| {
+        // Test object with properties
+        let code = "({foo: 'bar', num: 42})";
+        let obj: JSObject = ctx.eval(Source::from_bytes(code)).unwrap();
+        assert_eq!(format!("{}", obj), "object");
+        assert_eq!(format!("{:?}", obj), "JSObject(object)");
+
+        // Test array object
+        let code = "[1, 2, 3]";
+        let obj: JSObject = ctx.eval(Source::from_bytes(code)).unwrap();
+        assert_eq!(format!("{}", obj), "array");
+        assert_eq!(format!("{:?}", obj), "JSObject(array)");
+    });
+}
