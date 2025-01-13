@@ -9,8 +9,8 @@ pub type JSResult<T> = Result<T, RustyJSError>;
 
 #[derive(Error, Debug)]
 pub enum RustyJSError {
-    #[error("Failed to convert into type: {0}")]
-    ConvertError(&'static str),
+    #[error("Failed to convert from {0} to {1}")]
+    ConvertError(&'static str, &'static str),
 
     #[error("Failed to borrow for type {0}")]
     Borrow(&'static str),
@@ -47,7 +47,7 @@ impl RustyJSError {
         V::Context: JSExceptionHandler,
     {
         match self {
-            RustyJSError::ConvertError(_)
+            RustyJSError::ConvertError(_, _)
             | RustyJSError::NotJSFunc
             | RustyJSError::NotObject
             | RustyJSError::NotJSExcep
