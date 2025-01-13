@@ -176,7 +176,7 @@ fn test_jsfunc_as_argument() {
 }
 
 #[test]
-fn test_async_rust_function() {
+fn test_async_rust_fn_resolve() {
     async_run!(|ctx: JSContext| async move {
         let async_func = JSFunc::new(&ctx, |a: i32, b: i32| async move {
             sleep(Duration::from_millis(100)).await;
@@ -185,11 +185,41 @@ fn test_async_rust_function() {
         ctx.global().set("add", async_func);
 
         let result: i32 = ctx
-            .eval::<Promise>(Source::from_bytes(b"add(2,6).then(result=>result)"))?
+            .eval::<Promise>(Source::from_bytes(
+                b"add(2,6).then(result=>{return result;})",
+            ))?
             .into_future()
             .await?;
 
         assert_eq!(result, 8);
+        Ok(())
+    });
+}
+
+#[test]
+fn test_async_rust_fn_reject() {
+    async_run!(|ctx: JSContext| async move {
+        let async_func = JSFunc::new(&ctx, |_a: i32, _b: i32| async move {
+            sleep(Duration::from_millis(100)).await;
+            RustyJSError::Error("Failed to perform add".to_string())
+        }); // PromiseResolver help call reject to propagate error to JS catch
+        ctx.global().set("add", async_func);
+
+        // catch trigger rust resolver callback
+        let result = ctx
+            .eval::<Promise>(Source::from_bytes(
+                br#"add(2,6)
+                .then((resolve) => {return resolve;})
+                .catch(err =>{ return new Error(err+"!");})
+                "#,
+            ))?
+            .into_future::<i32>()
+            .await;
+
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to perform add!"));
         Ok(())
     });
 }
