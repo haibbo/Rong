@@ -201,3 +201,6 @@ macro_rules! impl_js_converter {
         impl_js_converter!($target, $type, $type, $create_fn, $to_fn);
     };
 }
+
+// blanket implementing.
+impl<V: JSValueImpl> crate::function::JSParameterType for JSValue<V> {}

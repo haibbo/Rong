@@ -1,7 +1,7 @@
 use crate::JSException;
 use crate::{
     function::JSParameterType, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSFunc,
-    JSObject, JSObjectOps, JSResult, JSTypeOf, JSValueImpl, RustyJSError,
+    JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl, RustyJSError,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -240,15 +240,30 @@ where
 
             // resolved callback used to wake up future and save resolved value
             let resolve_state = state.clone();
-            let resolve = JSFunc::new(&ctx, move |success: T| {
-                // println!("resolve callback called");
+            let ctx_clone = ctx.clone();
+            let resolve = JSFunc::new(&ctx, move |value: JSValue<V>| {
+                //println!("resolve callback called");
                 let mut state = resolve_state.borrow_mut();
-                if let PromiseState::Pending(waker) =
-                    std::mem::replace(&mut *state, PromiseState::Resolved(Ok(success)))
-                {
-                    waker.wake_by_ref();
+
+                if value.is_error().is_some() || value.is_exception().is_some() {
+                    let err =
+                        JSException::from_js_value(ctx_clone.as_ref(), value.into_inner()).unwrap();
+                    if let PromiseState::Pending(waker) = std::mem::replace(
+                        &mut *state,
+                        PromiseState::Resolved(Err(RustyJSError::Exception(err.into_error()))),
+                    ) {
+                        waker.wake_by_ref();
+                    }
+                } else {
+                    let success = T::from_js_value(ctx_clone.as_ref(), value.into_inner()).unwrap();
+                    if let PromiseState::Pending(waker) =
+                        std::mem::replace(&mut *state, PromiseState::Resolved(Ok(success)))
+                    {
+                        waker.wake_by_ref();
+                    }
                 }
-            });
+            })
+            .name("rsResolver");
 
             // rejected callback used to wake up future and save rejected value
             let reject_state = state.clone();
@@ -261,7 +276,8 @@ where
                 ) {
                     waker.wake_by_ref();
                 }
-            });
+            })
+            .name("rsReject");
 
             // Register resolve handlers
             this.promise
