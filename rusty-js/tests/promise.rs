@@ -193,7 +193,7 @@ fn test_promise_into_future_resolve() {
 }
 
 #[test]
-fn test_promise_into_future_reject() {
+fn test_promise_into_future_reject_error() {
     async_run!(|ctx: JSContext| async move {
         let set_timeout = ctx.register_function(|callback: JSFunc, delay: u32| {
             let future = async move {
@@ -216,6 +216,36 @@ fn test_promise_into_future_reject() {
 
         let error = promise.into_future::<i32>().await.unwrap_err();
         assert!(error.to_string().contains("reject error"));
+        Ok(())
+    })
+}
+
+#[test]
+fn test_promise_into_future_reject_exception() {
+    async_run!(|ctx: JSContext| async move {
+        let set_timeout = JSFunc::new(&ctx, |callback: JSFunc, delay: u32| async move {
+            tokio::time::sleep(Duration::from_millis(delay as u64)).await;
+            let _ = callback.call::<_, ()>(());
+        });
+
+        ctx.global().set("setTimeout", set_timeout);
+
+        let js_code = r#"
+            new Promise((resolve, reject) => {
+                setTimeout(() => {
+                    try {
+                        throw new Error("timeout failure");
+                    } catch (err) {
+                        reject(err);
+                    }
+                }, 100);
+            })
+        "#;
+
+        let promise = ctx.eval::<Promise>(Source::from_bytes(js_code.as_bytes()))?;
+
+        let error = promise.into_future::<i32>().await.unwrap_err();
+        assert!(error.to_string().contains("timeout failure"));
         Ok(())
     })
 }
