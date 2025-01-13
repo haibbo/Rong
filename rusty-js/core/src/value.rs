@@ -1,4 +1,5 @@
 use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
+use std::fmt;
 
 mod convert;
 pub use convert::*;
@@ -204,3 +205,55 @@ macro_rules! impl_js_converter {
 
 // blanket implementing.
 impl<V: JSValueImpl> crate::function::JSParameterType for JSValue<V> {}
+
+impl<V> fmt::Display for JSValue<V>
+where
+    V: JSTypeOf + JSValueConversion,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.type_of() {
+            ValueType::Boolean => {
+                if let Ok(val) = self.clone().try_into::<bool>() {
+                    write!(f, "{}", val)
+                } else {
+                    write!(f, "boolean")
+                }
+            }
+            ValueType::Number => {
+                if let Ok(val) = self.clone().try_into::<f64>() {
+                    write!(f, "{}", val)
+                } else {
+                    write!(f, "number")
+                }
+            }
+            ValueType::String => {
+                if let Ok(val) = self.clone().try_into::<String>() {
+                    write!(f, "{}", val)
+                } else {
+                    write!(f, "string")
+                }
+            }
+            ValueType::Undefined => write!(f, "undefined"),
+            ValueType::Null => write!(f, "null"),
+            ValueType::BigInt => write!(f, "bigint"),
+            ValueType::Object => write!(f, "object"),
+            ValueType::Array => write!(f, "array"),
+            ValueType::Function => write!(f, "function"),
+            ValueType::Constructor => write!(f, "constructor"),
+            ValueType::Promise => write!(f, "promise"),
+            ValueType::Symbol => write!(f, "symbol"),
+            ValueType::Error => write!(f, "error"),
+            ValueType::Exception => write!(f, "exception"),
+            ValueType::Unknown => write!(f, "unknown"),
+        }
+    }
+}
+
+impl<V> fmt::Debug for JSValue<V>
+where
+    V: JSTypeOf + JSValueConversion,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "JSValue({})", self)
+    }
+}
