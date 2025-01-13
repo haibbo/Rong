@@ -39,10 +39,11 @@ where
     V: JSTypeOf,
 {
     fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
-        value
-            .is_exception()
-            .map(|v| Self(JSValue::from_raw_parts(ctx.clone(), v).into()))
-            .ok_or(RustyJSError::NotObject)
+        if value.is_exception().is_some() || value.is_error() {
+            Ok(Self(JSValue::from_raw_parts(ctx.clone(), value).into()))
+        } else {
+            Err(RustyJSError::NotObject)
+        }
     }
 }
 

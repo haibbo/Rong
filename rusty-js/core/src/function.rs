@@ -136,11 +136,7 @@ macro_rules! impl_js_callable_func {
             R: IntoJSValue<V>,
         {
             fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>  {
-                // Unwrap the parameters from the accessor. If there's an error, it will panic
-                // to avoid propagating the error back to JavaScript. This ensures that any
-                // parameter parsing issues are caught early and handled in Rust rather than
-                // causing undefined behavior in JavaScript.
-                let params = <($($t,)*)>::from_params(accessor).unwrap();
+                let params = <($($t,)*)>::from_params(accessor)?;
                 #[allow(non_snake_case)]
                 let ($($t,)*) = params;
                 let result = (self)($($t),*);
@@ -159,8 +155,7 @@ macro_rules! impl_js_callable_func {
             ($($t,)*): FromParams<V>,
         {
             fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>  {
-                // If there's an error, it will panic to avoid propagating the error back to JavaScript
-                let params = <($($t,)*)>::from_params(accessor).unwrap();
+                let params = <($($t,)*)>::from_params(accessor)?;
                 #[allow(non_snake_case)]
                 let ($($t,)*) = params;
                 let future = (self)($($t),*);
