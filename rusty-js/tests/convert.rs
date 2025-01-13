@@ -36,3 +36,54 @@ fn test_convert() {
         assert_some!(jsvalue.is_undefined());
     });
 }
+
+#[test]
+fn test_display() {
+    run(|ctx| {
+        // Test undefined
+        let jsvalue = JSValue::undefined(ctx);
+        assert_eq!(format!("{}", jsvalue), "undefined");
+
+        // Test boolean
+        let jsvalue = JSValue::from(ctx, true);
+        assert_eq!(format!("{}", jsvalue), "true");
+
+        // Test number
+        let jsvalue = JSValue::from(ctx, 42);
+        assert_eq!(format!("{}", jsvalue), "42");
+
+        // Test string
+        let jsvalue = JSValue::from(ctx, "hello");
+        assert_eq!(format!("{}", jsvalue), "hello");
+
+        // Test object
+        let code = "({foo: 'bar'})";
+        let jsvalue: JSValue = ctx.eval(Source::from_bytes(code)).unwrap();
+        assert_eq!(format!("{}", jsvalue), "object");
+
+        // Test array
+        let code = "[1, 2, 3]";
+        let jsvalue: JSValue = ctx.eval(Source::from_bytes(code)).unwrap();
+        assert_eq!(format!("{}", jsvalue), "array");
+
+        // Test function
+        let code = "(function name() {})";
+        let jsvalue: JSValue = ctx.eval(Source::from_bytes(code)).unwrap();
+        assert_eq!(format!("{}", jsvalue), "function");
+
+        // Test promise
+        let code = "new Promise(() => {})";
+        let jsvalue: JSValue = ctx.eval(Source::from_bytes(code)).unwrap();
+        assert_eq!(format!("{}", jsvalue), "promise");
+
+        // Test error
+        let code = "new Error('test error')";
+        let jsvalue: JSValue = ctx.eval(Source::from_bytes(code)).unwrap();
+        assert_eq!(format!("{}", jsvalue), "error");
+
+        // Test null
+        let code = "null";
+        let jsvalue: JSValue = ctx.eval(Source::from_bytes(code)).unwrap();
+        assert_eq!(format!("{}", jsvalue), "null");
+    });
+}
