@@ -52,6 +52,14 @@ impl JSRuntimeImpl for QJSRuntime {
             }
         }
     }
+
+    fn run_gc(&self) {
+        unsafe {
+            #[cfg(debug_assertions)]
+            println!("run gc");
+            qjs::JS_RunGC(self.rt);
+        }
+    }
 }
 
 pub struct QuickJS;

@@ -20,11 +20,25 @@ pub trait JSRuntimeImpl {
     /// Runs all pending jobs in the JavaScript runtime.
     /// This includes executing any queued promise callbacks, microtasks, and other pending operations.
     fn run_pending_jobs(&self);
+
+    /// Runs garbage collection on the JavaScript runtime.
+    ///
+    /// # Key Notes
+    /// - This method triggers a garbage collection cycle to reclaim unused memory.
+    /// - The exact behavior depends on the underlying JavaScript engine implementation.
+    /// - Use this judiciously as it may impact performance.
+    fn run_gc(&self);
 }
 
 pub struct JSRuntime<R: JSRuntimeImpl> {
     inner: Rc<R>,
     scheduler: Rc<Scheduler<R>>,
+}
+
+impl<R: JSRuntimeImpl> Drop for JSRuntime<R> {
+    fn drop(&mut self) {
+        self.inner.run_gc();
+    }
 }
 
 impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
