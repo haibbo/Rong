@@ -10,6 +10,16 @@ use std::mem::MaybeUninit;
 use std::os::raw::{c_char, c_void};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[cfg(feature = "ref_count_tracking")]
+macro_rules! ref_count_println {
+    ($($arg:tt)*) => (println!($($arg)*));
+}
+
+#[cfg(not(feature = "ref_count_tracking"))]
+macro_rules! ref_count_println {
+    ($($arg:tt)*) => {};
+}
+
 /// Container to hold the context-specific data for a QJSContext.
 ///
 /// # Fields
@@ -49,13 +59,15 @@ impl Drop for QJSContext {
             unsafe {
                 // If it's the last reference, clean up registry and ContextData
                 if (*data).decrement_ref() {
-                    #[cfg(debug_assertions)]
-                    println!("free registry on last drop");
+                    ref_count_println!("free registry on last drop (ref_count: 0)");
 
                     Self::free_class_registry((*data).registry);
                     let _ = Box::from_raw(data);
                 } else {
-                    // println!("skip free registry on drop");
+                    ref_count_println!(
+                        "skip free registry on drop (ref_count: {})",
+                        (*data).ref_count.load(Ordering::SeqCst)
+                    );
                 }
             }
         }
@@ -73,7 +85,10 @@ impl Clone for QJSContext {
         if !data.is_null() {
             unsafe {
                 (*data).increment_ref();
-                // println!("increment ref on clone");
+                ref_count_println!(
+                    "increment ref on clone (ref_count: {})",
+                    (*data).ref_count.load(Ordering::SeqCst)
+                );
             }
         }
 
@@ -204,7 +219,10 @@ impl QJSContext {
         if !data.is_null() {
             unsafe {
                 (*data).increment_ref();
-                // println!("increment ref on from_ffi");
+                ref_count_println!(
+                    "increment ref on from_ffi (ref_count: {})",
+                    (*data).ref_count.load(Ordering::SeqCst)
+                );
             }
         }
 

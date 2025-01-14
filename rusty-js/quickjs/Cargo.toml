@@ -6,3 +6,6 @@ edition = "2021"
 [dependencies]
 rusty-js-quickjs-sys={path="./sys/"}
 rusty-js-core = { path = "../core" }
+
+[features]
+ref_count_tracking = []
