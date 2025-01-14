@@ -42,7 +42,7 @@ impl<R: JSRuntimeImpl> Drop for JSRuntime<R> {
 }
 
 impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
-    pub fn block_on<F, T>(self, future: F) -> JSResult<T>
+    pub fn block_on<F, T>(&self, future: F) -> JSResult<T>
     where
         F: Future<Output = JSResult<T>> + 'static,
         T: 'static,
