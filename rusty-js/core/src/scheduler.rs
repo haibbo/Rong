@@ -4,25 +4,32 @@ use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
 use tokio::runtime::Builder;
+use tokio::sync::Notify;
 use tokio::task::LocalSet;
 
 thread_local! {
-    static CURRENT_SCHEDULER: RefCell<Option<Rc<dyn SchedulerHandle>>> = RefCell::new(None);
+    static CURRENT_SCHEDULER: RefCell<Option<Rc<dyn SchedulerHandle + 'static>>> = RefCell::new(None);
 }
 
 trait SchedulerHandle {
     fn spawn_boxed(&self, future: Pin<Box<dyn Future<Output = JSResult<()>>>>);
+    fn microtask_done(&self) -> Rc<Notify>;
 }
 
 pub(crate) struct Scheduler<R: JSRuntimeImpl> {
     runtime: Rc<R>,
     tokio_rt: tokio::runtime::Runtime,
     local_set: LocalSet,
+    microtask_done: Rc<Notify>,
 }
 
 impl<R: JSRuntimeImpl + 'static> SchedulerHandle for Scheduler<R> {
     fn spawn_boxed(&self, future: Pin<Box<dyn Future<Output = JSResult<()>>>>) {
         self.local_set.spawn_local(future);
+    }
+
+    fn microtask_done(&self) -> Rc<Notify> {
+        self.microtask_done.clone()
     }
 }
 
@@ -40,6 +47,7 @@ impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
             runtime,
             tokio_rt,
             local_set,
+            microtask_done: Rc::new(Notify::new()),
         });
 
         Self::set_current_scheduler(scheduler.clone());
@@ -55,7 +63,12 @@ impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
 
     fn clear_current_scheduler() {
         CURRENT_SCHEDULER.with(|current| {
-            *current.borrow_mut() = None;
+            if let Some(scheduler) = current.borrow_mut().take() {
+                // Notify microtasks to stop
+                scheduler.microtask_done().notify_waiters();
+
+                drop(scheduler);
+            }
         });
     }
     pub(crate) fn block_on<F, T>(&self, future: F) -> JSResult<T>
@@ -74,33 +87,41 @@ impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
 
         // Create a task to handle JavaScript engine pending jobs
         let runtime = self.runtime.clone();
-        let js_micro_tasks = async move {
-            loop {
+        let (done_tx, done_rx) = tokio::sync::watch::channel(false);
+        let microtask_done = self.microtask_done.clone();
+
+        // Move js_micro_tasks outside to avoid lifetime issues
+        let js_micro_tasks = {
+            async move {
+                while !*done_rx.borrow() {
+                    runtime.run_pending_jobs();
+                    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                }
+                // One final run to clear any remaining jobs
                 runtime.run_pending_jobs();
-                // Sleep for a short duration instead of yielding
-                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+
+                // Notify that microtasks are done
+                println!("I'm done");
+                microtask_done.notify_waiters();
             }
         };
 
-        // Run the local set until we get the result
         let result = self.tokio_rt.block_on(async {
             self.local_set
                 .run_until(async {
-                    // Spawn the microtasks
-                    let microtask_handle = self.local_set.spawn_local(js_micro_tasks);
+                    self.local_set.spawn_local(js_micro_tasks);
 
-                    // Wait for the main future
                     let result = receiver.await?;
 
-                    // Abort the microtask loop
-                    microtask_handle.abort();
+                    let _ = done_tx.send(true);
+                    self.microtask_done.notified().await;
+                    println!("Got js done");
 
                     result
                 })
                 .await
         });
 
-        // Clean up the current scheduler before returning the result
         Self::clear_current_scheduler();
         result
     }
