@@ -54,8 +54,11 @@ where
 {
     fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
         let obj = JSObject::from_js_value(ctx, value)?;
-        let ctx = JSContext::from(ctx.clone());
-        Ok(Self { obj, ctx })
+        let ctx = JSContext::from_ffi(ctx);
+        Ok(Self {
+            obj,
+            ctx: ctx.clone(),
+        })
     }
 }
 

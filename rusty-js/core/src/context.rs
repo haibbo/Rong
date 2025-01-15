@@ -94,19 +94,66 @@ impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
     }
 }
 
-impl<C: JSContextImpl> From<C> for JSContext<C> {
-    fn from(c: C) -> Self {
-        Self { inner: Rc::new(c) }
-    }
-}
-
 impl<C: JSContextImpl> JSContext<C> {
-    /// New JSContext
+    /// Creates a new JavaScript context that can be safely shared between callbacks and async tasks.
+    ///
+    /// This function:
+    /// 1. Creates a JSContext instance on the heap with a stable address
+    /// 2. Stores this address in an opaque data structure for later retrieval
+    /// 3. Uses Box::leak to keep the original context alive for callbacks
+    ///
+    /// The context will be automatically cleaned up when all clones are dropped.
+    ///
+    /// # Example
+    /// ```
+    /// let ctx = JSContext::new(&runtime);
+    ///
+    /// // Can be safely cloned for async tasks
+    /// let ctx_clone = ctx.clone();
+    /// spawn_local(async move {
+    ///     ctx_clone.eval("...").await?;
+    /// });
+    /// ```
     pub fn new(runtime: &C::Runtime) -> Self {
-        let ctx = C::new(runtime);
-        ctx.set_opaque::<ContextOpaque<C::Value>>(Box::into_raw(ContextOpaque::new()));
+        // Create the inner context first
+        let inner = C::new(runtime);
+
+        // Create the JSContext on the heap to get a stable address
+        // This instance will be leaked and cleaned up when the last clone is dropped
+        let ctx = Box::new(Self {
+            inner: Rc::new(inner),
+        });
+
+        // Store the heap address in the opaque data for later retrieval in callbacks
+        let opaque = Box::into_raw(ContextOpaque::new(ctx.as_ref() as *const _ as usize));
+        ctx.inner.set_opaque::<ContextOpaque<C::Value>>(opaque);
+
+        let leaked_ctx = Box::leak(ctx);
+        // Return a clone of the leaked context
         Self {
-            inner: Rc::new(ctx),
+            inner: leaked_ctx.inner.clone(),
+        }
+    }
+
+    /// Creates a JSContext from an FFI context pointer.
+    ///
+    /// This is used in callback scenarios where the JS engine provides a context pointer.
+    /// From the JS engine's perspective, contexts created from the mainline and from
+    /// callbacks are equivalent since they operate within the same execution context.
+    ///
+    /// # Safety
+    /// - The provided FFI context must be valid and properly aligned
+    /// - The caller must ensure the context pointer remains valid for the duration of use
+    /// - This should only be called with context pointers obtained from the JS engine
+    pub(crate) fn from_ffi(c: &C) -> &Self {
+        let data = c.get_opaque::<ContextOpaque<C::Value>>();
+        if data.is_null() {
+            panic!("[JSContext] opaque is empty");
+        } else {
+            unsafe {
+                let address = (*data).address;
+                std::mem::transmute::<usize, &JSContext<C>>(address)
+            }
         }
     }
 
@@ -170,13 +217,18 @@ impl<C: JSContextImpl> JSContext<C> {
     }
 }
 
-#[cfg(feature = "ref_count_tracking")]
-macro_rules! ref_count_println {
-    ($($arg:tt)*) => (println!($($arg)*));
+#[cfg(feature = "debug_log")]
+macro_rules! context_log {
+    ($op:expr, $count:expr) => {
+        println!("[JSContext] {} ref count: {}", $op, $count)
+    };
+    ($($arg:tt)*) => {
+        println!("[JSContext] {}", format!($($arg)*))
+    };
 }
-
-#[cfg(not(feature = "ref_count_tracking"))]
-macro_rules! ref_count_println {
+#[cfg(not(feature = "debug_log"))]
+macro_rules! context_log {
+    ($op:expr, $count:expr) => {};
     ($($arg:tt)*) => {};
 }
 
@@ -185,28 +237,41 @@ macro_rules! ref_count_println {
 /// # Fields
 /// - `registry`: A pointer to a RefCell containing a HashMap that maps TypeId to type that implements JSValueImpl
 /// - `ref_count`: An AtomicUsize to track the reference count of the context
+/// - `address`: Address of JSContext used to build JSContext from callback case
 struct ContextOpaque<V: JSValueImpl> {
     registry: RefCell<HashMap<TypeId, V>>,
     ref_count: AtomicUsize,
+    address: usize,
 }
 
 impl<V: JSValueImpl> ContextOpaque<V> {
-    fn new() -> Box<Self> {
-        // Creates a new class registry
-        let registry = RefCell::new(HashMap::new());
-
+    fn new(address: usize) -> Box<Self> {
         Box::new(Self {
-            registry,
+            registry: RefCell::new(HashMap::new()),
             ref_count: AtomicUsize::new(1),
+            address,
         })
     }
 
     fn inc_ref(&self) {
-        self.ref_count.fetch_add(1, Ordering::SeqCst);
+        #[allow(unused_variables)]
+        let prev_count = self.ref_count.fetch_add(1, Ordering::SeqCst);
+        context_log!("increment", prev_count + 1);
     }
 
-    fn dec_ref(&self) -> usize {
-        self.ref_count.fetch_sub(1, Ordering::SeqCst)
+    fn dec_ref(&self) -> bool {
+        let prev_count = self.ref_count.fetch_sub(1, Ordering::SeqCst);
+        match prev_count {
+            n if n > 1 => {
+                context_log!("decrement", n - 1);
+                false
+            }
+            1 => {
+                context_log!("decrement to zero");
+                true
+            }
+            _ => false,
+        }
     }
 }
 
@@ -216,21 +281,22 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
 
         if !data.is_null() {
             unsafe {
-                // If it's the last reference, clean up registry and ContextData
-                if (*data).dec_ref() == 1 {
-                    ref_count_println!("free JSContext on last drop (ref_count: 0)");
+                // Check if this is the last reference
+                if (*data).dec_ref() {
+                    context_log!("cleanup context and resources");
 
-                    // Get the registry from the context's opaque data
+                    // Get all the pointers we need before any cleanup
                     let registry = &(*data).registry;
-                    // Clear the contents fristly
+                    let ctx_ptr = (*data).address as *mut JSContext<C>;
+
+                    // Clear the registry first
                     registry.borrow_mut().clear();
 
+                    // Clean up the leaked JSContext
+                    let _ = Box::from_raw(ctx_ptr);
+
+                    // Finally clean up the ContextOpaque
                     let _ = Box::from_raw(data);
-                } else {
-                    ref_count_println!(
-                        "skip free JSContext on drop (ref_count: {})",
-                        (*data).ref_count.load(Ordering::SeqCst)
-                    );
                 }
             }
         }
@@ -243,10 +309,6 @@ impl<C: JSContextImpl> Clone for JSContext<C> {
         if !data.is_null() {
             unsafe {
                 (*data).inc_ref();
-                ref_count_println!(
-                    "increment JSContext ref on clone (ref_count: {})",
-                    (*data).ref_count.load(Ordering::SeqCst)
-                );
             }
         }
 
