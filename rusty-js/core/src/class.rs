@@ -1,7 +1,7 @@
 use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
-    FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
-    JSResult, JSValueImpl, PropertyDescriptor, PropertyKey, RustyJSError,
+    FromJSValue, JSContext, JSExceptionHandler, JSFunc, JSObject, JSObjectOps, JSResult,
+    JSValueImpl, PropertyDescriptor, PropertyKey, RustyJSError,
 };
 
 use std::any::TypeId;
@@ -111,17 +111,12 @@ where
     }
 
     /// Get class constructor by type
-    pub fn get<JC: JSClass<V>>(context: &V::Context) -> Option<Self> {
+    pub fn get<JC: JSClass<V>>(context: &JSContext<V::Context>) -> Option<Self> {
         let constructor = context
             .get_class_registry()
-            .and_then(|registry| {
-                registry
-                    .borrow()
-                    .get(&TypeId::of::<JC>())
-                    .cloned()
-            })?;
+            .and_then(|registry| registry.borrow().get(&TypeId::of::<JC>()).cloned())?;
 
-        match JSObject::from_js_value(context, constructor) {
+        match JSObject::from_js_value(context.as_ref(), constructor) {
             Ok(obj) => Some(Self(obj)),
             Err(_) => None,
         }

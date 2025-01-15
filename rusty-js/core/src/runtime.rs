@@ -113,8 +113,7 @@ pub trait JSEngine: Sized {
     where
         Self::Value: 'static,
     {
-        let registry = JSContext::<Self::Context>::new_class_registry();
-        let ctx = JSContext::from(Self::Context::new(&rt.inner, registry));
+        let ctx = JSContext::<Self::Context>::new(&rt.inner);
         ctx.register_rustfunc_class();
         ctx
     }

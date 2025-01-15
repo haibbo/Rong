@@ -2,50 +2,9 @@ use crate::{qjs, QJSRuntime, QJSValue};
 use rusty_js_core::{
     JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, Source,
 };
-use std::any::TypeId;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem::MaybeUninit;
 use std::os::raw::{c_char, c_void};
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-#[cfg(feature = "ref_count_tracking")]
-macro_rules! ref_count_println {
-    ($($arg:tt)*) => (println!($($arg)*));
-}
-
-#[cfg(not(feature = "ref_count_tracking"))]
-macro_rules! ref_count_println {
-    ($($arg:tt)*) => {};
-}
-
-/// Container to hold the context-specific data for a QJSContext.
-///
-/// # Fields
-/// - `registry`: A pointer to a RefCell containing a HashMap that maps TypeId to QJSValue
-/// - `ref_count`: An AtomicUsize to track the reference count of the context
-struct ContextData {
-    registry: *mut RefCell<HashMap<TypeId, QJSValue>>,
-    ref_count: AtomicUsize,
-}
-
-impl ContextData {
-    fn new(registry: *mut RefCell<HashMap<TypeId, QJSValue>>) -> Box<Self> {
-        Box::new(Self {
-            registry,
-            ref_count: AtomicUsize::new(1),
-        })
-    }
-
-    fn increment_ref(&self) {
-        self.ref_count.fetch_add(1, Ordering::SeqCst);
-    }
-
-    fn decrement_ref(&self) -> bool {
-        self.ref_count.fetch_sub(1, Ordering::SeqCst) == 1
-    }
-}
 
 pub struct QJSContext {
     pub(crate) ctx: *mut qjs::JSContext,
@@ -53,25 +12,6 @@ pub struct QJSContext {
 
 impl Drop for QJSContext {
     fn drop(&mut self) {
-        let data = unsafe { qjs::JS_GetContextOpaque(self.ctx) as *mut ContextData };
-
-        if !data.is_null() {
-            unsafe {
-                // If it's the last reference, clean up registry and ContextData
-                if (*data).decrement_ref() {
-                    ref_count_println!("free registry on last drop (ref_count: 0)");
-
-                    Self::free_class_registry((*data).registry);
-                    let _ = Box::from_raw(data);
-                } else {
-                    ref_count_println!(
-                        "skip free registry on drop (ref_count: {})",
-                        (*data).ref_count.load(Ordering::SeqCst)
-                    );
-                }
-            }
-        }
-
         unsafe {
             qjs::JS_FreeContext(self.ctx);
         }
@@ -80,18 +20,6 @@ impl Drop for QJSContext {
 
 impl Clone for QJSContext {
     fn clone(&self) -> Self {
-        let data = unsafe { qjs::JS_GetContextOpaque(self.ctx) as *mut ContextData };
-
-        if !data.is_null() {
-            unsafe {
-                (*data).increment_ref();
-                ref_count_println!(
-                    "increment ref on clone (ref_count: {})",
-                    (*data).ref_count.load(Ordering::SeqCst)
-                );
-            }
-        }
-
         Self {
             ctx: unsafe { qjs::JS_DupContext(self.ctx) },
         }
@@ -103,14 +31,8 @@ impl JSContextImpl for QJSContext {
     type Runtime = QJSRuntime;
     type Value = QJSValue;
 
-    fn new(runtime: &Self::Runtime, registry: *mut RefCell<HashMap<TypeId, Self::Value>>) -> Self {
+    fn new(runtime: &Self::Runtime) -> Self {
         let ctx = unsafe { qjs::JS_NewContext(runtime.to_ffi()) };
-
-        let data = ContextData::new(registry);
-        unsafe {
-            qjs::JS_SetContextOpaque(ctx, Box::into_raw(data) as *mut c_void);
-        }
-
         Self { ctx }
     }
 
@@ -120,22 +42,6 @@ impl JSContextImpl for QJSContext {
 
     fn from_ffi(ctx: Self::FfiContext) -> Self {
         Self::_from_ffi(ctx)
-    }
-
-    fn get_class_registry(&self) -> Option<&RefCell<HashMap<TypeId, Self::Value>>> {
-        let data = unsafe { qjs::JS_GetContextOpaque(self.ctx) as *mut ContextData };
-        if data.is_null() {
-            None
-        } else {
-            unsafe {
-                let registry = (*data).registry;
-                if registry.is_null() {
-                    None
-                } else {
-                    Some(&*registry)
-                }
-            }
-        }
     }
 
     fn eval(&self, source: Source) -> Self::Value {
@@ -210,22 +116,20 @@ impl JSContextImpl for QJSContext {
 
         (QJSValue::from_parts(self.ctx, promise), resolve, reject)
     }
+
+    /// Set opaque data for the context
+    fn set_opaque<T>(&self, data: *mut T) {
+        unsafe { qjs::JS_SetContextOpaque(self.ctx, data as *mut c_void) };
+    }
+
+    /// Get opaque data from the context
+    fn get_opaque<T>(&self) -> *mut T {
+        unsafe { qjs::JS_GetContextOpaque(self.ctx) as *mut T }
+    }
 }
 
 impl QJSContext {
     fn _from_ffi(ctx: *mut qjs::JSContext) -> Self {
-        let data = unsafe { qjs::JS_GetContextOpaque(ctx) as *mut ContextData };
-
-        if !data.is_null() {
-            unsafe {
-                (*data).increment_ref();
-                ref_count_println!(
-                    "increment ref on from_ffi (ref_count: {})",
-                    (*data).ref_count.load(Ordering::SeqCst)
-                );
-            }
-        }
-
         let ctx = unsafe { qjs::JS_DupContext(ctx) };
         Self { ctx }
     }
