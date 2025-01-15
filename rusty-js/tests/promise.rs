@@ -249,3 +249,41 @@ fn test_promise_into_future_reject_exception() {
         Ok(())
     })
 }
+
+#[test]
+fn test_promise_timeout() {
+    async_run!(|ctx: JSContext| async move {
+        let set_timeout = JSFunc::new(&ctx, |callback: JSFunc, delay: u32| async move {
+            tokio::time::sleep(Duration::from_millis(delay as u64)).await;
+            let _ = callback.call::<_, ()>(());
+        });
+
+        ctx.global().set("setTimeout", set_timeout);
+
+        let code = r#"
+            new Promise((resolve) => {
+                setTimeout(() => {
+                    resolve('never called');
+                }, 100000);
+            });
+        "#;
+
+        let promise = ctx
+            .eval::<Promise>(Source::from_bytes(code.as_bytes()))
+            .unwrap();
+
+        // Use 2 seconds timeout instead of 100ms
+        let future = promise.into_future_with_timeout::<()>(Duration::from_secs(2));
+
+        match future.await {
+            Ok(_) => panic!("Expected timeout error"),
+            Err(RustyJSError::PromiseTimeout(elapsed_ms)) => {
+                assert!(elapsed_ms >= 2000, "Timeout should be at least 2 seconds");
+                assert!(elapsed_ms < 2500, "Timeout should be less than 2.5 seconds");
+            }
+            Err(e) => panic!("Expected PromiseTimeout error, got: {:?}", e),
+        }
+
+        Ok(())
+    })
+}
