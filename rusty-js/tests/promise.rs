@@ -249,3 +249,77 @@ fn test_promise_into_future_reject_exception() {
         Ok(())
     })
 }
+
+#[test]
+fn test_rust_promise_with_mut_state() {
+    run2(|ctx, rt| {
+        let ctx_clone = ctx.clone();
+        let mut counter = 0;
+
+        // Register a function that captures mutable state
+        let counter_fn = ctx.register_function(move || {
+            let (promise, resolve, _) = ctx_clone.promise().unwrap();
+            counter += 1;
+            resolve.call::<_, ()>((counter,)).unwrap();
+            promise
+        });
+
+        ctx.global().set("getCounter", counter_fn);
+
+        // Call the function multiple times and store results
+        let js_code = r#"
+            let result1, result2;
+            getCounter()
+                .then(val => { result1 = val; });
+            getCounter()
+                .then(val => { result2 = val; });
+        "#;
+
+        ctx.eval::<()>(Source::from_bytes(js_code)).unwrap();
+        rt.run_pending_jobs();
+
+        // Check individual results
+        let result1: i32 = ctx.eval(Source::from_bytes("result1")).unwrap();
+        let result2: i32 = ctx.eval(Source::from_bytes("result2")).unwrap();
+        assert_eq!(result1, 1);
+        assert_eq!(result2, 2);
+    });
+}
+
+#[test]
+fn test_rust_async_with_mut_state() {
+    async_run!(|ctx: JSContext| async move {
+        let ctx2 = ctx.clone();
+        let mut counter = 0;
+
+        let async_fn = ctx.register_function(move || {
+            counter += 1;
+            let count = counter;
+
+            let future = async move {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                format!("Counter: {}", count)
+            };
+            Promise::from_future(&ctx2, future).unwrap()
+        });
+
+        ctx.global().set("asyncCounter", async_fn);
+
+        let js_code = r#"
+            let result1, result2;
+            asyncCounter().then(val => { result1 = val; });
+            asyncCounter().then(val => { result2 = val; });
+        "#;
+
+        ctx.eval::<()>(Source::from_bytes(js_code))?;
+
+        // Wait for promises to resolve
+        tokio::time::sleep(Duration::from_millis(60)).await;
+
+        let result1: String = ctx.eval(Source::from_bytes("result1"))?;
+        let result2: String = ctx.eval(Source::from_bytes("result2"))?;
+        assert_eq!(result1, "Counter: 1");
+        assert_eq!(result2, "Counter: 2");
+        Ok(())
+    })
+}

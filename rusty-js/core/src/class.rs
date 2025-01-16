@@ -70,7 +70,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
             Err(e) => return e.throw_js_exception(ctx),
         };
 
-        let func = match obj.borrow::<RustFunc<V>>() {
+        let mut func = match obj.borrow_mut::<RustFunc<V>>() {
             Ok(f) => f,
             Err(_) => return RustyJSError::NotJSFunc.throw_js_exception(ctx),
         };

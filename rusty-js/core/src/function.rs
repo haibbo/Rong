@@ -8,15 +8,15 @@ mod parameter;
 pub use parameter::{FromParams, JSParameterType, Optional, ParamsAccessor, Rest, This, ThisMut};
 
 trait JSCallable<V: JSValueImpl> {
-    fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>;
+    fn call(&mut self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>;
 }
 
 impl<V, F> JSCallable<V> for F
 where
     V: JSValueImpl,
-    F: Fn(&mut ParamsAccessor<V>) -> JSResult<V>,
+    F: FnMut(&mut ParamsAccessor<V>) -> JSResult<V>,
 {
-    fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V> {
+    fn call(&mut self, accessor: &mut ParamsAccessor<V>) -> JSResult<V> {
         (self)(accessor)
     }
 }
@@ -63,11 +63,11 @@ pub trait IntoJSCallable<V: JSValueImpl, P, K>
 where
     P: FromParams<V>,
 {
-    fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>;
+    fn call(&mut self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>;
 }
 
 impl<V: JSValueImpl> RustFunc<V> {
-    pub fn new<F, P, K>(f: F) -> Self
+    pub fn new<F, P, K>(mut f: F) -> Self
     where
         F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
@@ -82,7 +82,7 @@ impl<V: JSValueImpl> RustFunc<V> {
         }
     }
 
-    pub fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V> {
+    pub fn call(&mut self, accessor: &mut ParamsAccessor<V>) -> JSResult<V> {
         let num_args = accessor.args_len() as u32;
         if num_args < self.required_params {
             return Err(RustyJSError::InvalidParameter {
@@ -130,12 +130,12 @@ macro_rules! impl_js_callable_func {
         // Sync function implementation - automatically chosen for functions returning direct values
         impl<V, R, Fun $(,$t)*> IntoJSCallable<V, ($($t,)*), SyncFunc> for Fun
         where
-            Fun: Fn($($t),*) -> R,
+            Fun: FnMut($($t),*) -> R,
             V: JSValueImpl,
             ($($t,)*): FromParams<V>,
             R: IntoJSValue<V>,
         {
-            fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>  {
+            fn call(&mut self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>  {
                 let params = <($($t,)*)>::from_params(accessor)?;
                 #[allow(non_snake_case)]
                 let ($($t,)*) = params;
@@ -147,14 +147,14 @@ macro_rules! impl_js_callable_func {
         // Async function implementation - automatically chosen for functions returning Future
         impl<V, R, Fun, Fut $(,$t)*> IntoJSCallable<V, ($($t,)*), AsyncFunc> for Fun
         where
-            Fun: Fn($($t),*) -> Fut,
+            Fun: FnMut($($t),*) -> Fut,
             Fut: Future<Output = R> + 'static,
             R: IntoJSValue<V> + 'static,
             R: PromiseResolver<V>,
             V: JSValueImpl + JSObjectOps+'static,
             ($($t,)*): FromParams<V>,
         {
-            fn call(&self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>  {
+            fn call(&mut self, accessor: &mut ParamsAccessor<V>) -> JSResult<V>  {
                 let params = <($($t,)*)>::from_params(accessor)?;
                 #[allow(non_snake_case)]
                 let ($($t,)*) = params;
