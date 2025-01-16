@@ -1,4 +1,7 @@
-use crate::{FromJSValue, JSObject, JSObjectOps, JSResult, JSValueImpl, RustyJSError};
+use crate::{
+    FromJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult, JSValueImpl,
+    RustyJSError,
+};
 use std::cell::{Ref, RefMut};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
@@ -231,6 +234,12 @@ impl<T> ParameterKind for ParamKind<T> {
     }
 }
 
+impl<C: JSContextImpl> ParameterKind for JSContext<C> {
+    fn param_requirement() -> ParamRequirement {
+        ParamRequirement::any()
+    }
+}
+
 pub trait GetParam<V: JSValueImpl> {
     type Kind: ParameterKind;
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self>
@@ -249,6 +258,24 @@ where
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.next_arg().unwrap(); // it's safe, since RustFunc::call ensures
         T::from_js_value(accessor.ctx, value)
+    }
+}
+
+impl<'a, V: JSValueImpl> GetParam<V> for &'a JSContext<V::Context> {
+    type Kind = JSContext<V::Context>;
+
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
+        // Get the raw pointer from value
+        let raw_ctx = accessor.context();
+
+        // Convert raw pointer to JSContext reference with proper lifetime
+        let ctx_ref = JSContext::from_raw_ptr(raw_ctx);
+
+        // Extend the lifetime to match the input reference
+        // This is safe because we know the context will live as long as the function call
+        Ok(unsafe {
+            std::mem::transmute::<&JSContext<V::Context>, &'a JSContext<V::Context>>(ctx_ref)
+        })
     }
 }
 
