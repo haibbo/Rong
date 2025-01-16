@@ -182,7 +182,7 @@ where
 pub struct PromiseFuture<V: JSValueImpl, T> {
     state: Option<Rc<RefCell<PromiseState<T>>>>,
     promise: Promise<V>,
-    timeout_duration: Duration,
+    timeout_duration: Option<Duration>, // None means no timeout
     start_time: Option<Instant>,
     _marker: PhantomData<T>,
 }
@@ -197,21 +197,32 @@ impl<V: JSValueImpl, T> Unpin for PromiseFuture<V, T> {}
 
 impl<V: JSValueImpl + 'static> Promise<V> {
     /// Converts the Promise into a Future that resolves to a value of type T.
-    /// Uses a default timeout of 60 seconds to prevent infinite waiting.
-    /// For custom timeout duration, use `into_future_with_timeout`.
+    /// By default, the Promise will never timeout.
+    ///
+    /// # Example
+    /// ```
+    /// let promise = ctx.eval::<Promise>(js_code)?;
+    /// let future = promise.into_future::<i32>();
+    /// ```
     pub fn into_future<T>(self) -> PromiseFuture<V, T>
     where
         T: FromJSValue<V> + 'static,
     {
-        self.into_future_with_timeout(Duration::from_secs(60))
+        PromiseFuture {
+            state: None,
+            promise: self,
+            timeout_duration: None, // No timeout by default
+            start_time: None,
+            _marker: PhantomData::<T>,
+        }
     }
 
-    /// Converts the Promise into a Future that resolves to a value of type T with a custom timeout
-    /// duration. The timeout starts counting from when Promise execution begins (first poll).
+    /// Converts the Promise into a Future with a timeout duration.
+    /// The timeout starts counting from when Promise execution begins (first poll).
     ///
     /// # Arguments
     /// * `timeout` - Duration after which the future will timeout if the Promise hasn't resolved.
-    ///              Minimum timeout duration is 1 second to ensure stable execution.
+    ///              Must be at least 1 second to ensure stable execution.
     ///
     /// # Example
     /// ```
@@ -234,7 +245,7 @@ impl<V: JSValueImpl + 'static> Promise<V> {
         PromiseFuture {
             state: None,
             promise: self,
-            timeout_duration: timeout,
+            timeout_duration: Some(timeout),
             start_time: None,
             _marker: PhantomData::<T>,
         }
@@ -251,27 +262,29 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        // If we haven't set up callbacks yet
+        // First poll: Initialize state and setup callbacks
         if this.state.is_none() {
-            // Create initial state
+            // Create initial state with waker
             let state = Rc::new(RefCell::new(PromiseState::Pending(cx.waker().clone())));
             this.state = Some(state.clone());
 
-            // Start timing when we actually begin executing the Promise
-            this.start_time = Some(Instant::now());
+            // Start timing only if timeout is set
+            if this.timeout_duration.is_some() {
+                this.start_time = Some(Instant::now());
 
-            // Get the context
+                // Setup timeout waker only if timeout is set
+                let waker = cx.waker().clone();
+                let timeout = this.timeout_duration.unwrap();
+                let ctx = JSContext::from_ffi(this.promise.obj.as_ctx());
+                ctx.spawn_local(async move {
+                    sleep(timeout).await;
+                    waker.wake();
+                    Ok(())
+                });
+            }
+
             let inner_ctx = this.promise.obj.as_ctx();
             let ctx = JSContext::from_ffi(inner_ctx);
-
-            // Setup timeout waker
-            let waker = cx.waker().clone();
-            let timeout = this.timeout_duration;
-            ctx.spawn_local(async move {
-                sleep(timeout).await;
-                waker.wake();
-                Ok(())
-            });
 
             // Clone state for callbacks
             let state = this.state.clone().unwrap();
@@ -330,30 +343,21 @@ where
             return Poll::Pending;
         }
 
-        // Check timeout in subsequent polls
-        if let Some(start_time) = this.start_time {
-            let elapsed = start_time.elapsed();
-            if elapsed >= this.timeout_duration {
-                if let Some(state) = &this.state {
-                    let mut state = state.borrow_mut();
-                    // Store the actual elapsed time
-                    if let PromiseState::Pending(waker) =
-                        std::mem::replace(&mut *state, PromiseState::TimedOut(elapsed))
-                    {
-                        waker.wake_by_ref();
-                    }
-                }
-                return Poll::Ready(Err(
-                    RustyJSError::PromiseTimeout(elapsed.as_millis() as u64),
-                ));
-            }
-        }
-
-        // Check if we have a resolved value
         if let Some(state) = &this.state {
             let mut state = state.borrow_mut();
 
-            // Check if we have a resolved value
+            // Check timeout first if it's set
+            if let (Some(start_time), Some(timeout)) = (this.start_time, this.timeout_duration) {
+                let elapsed = start_time.elapsed();
+                if elapsed >= timeout && matches!(*state, PromiseState::Pending(_)) {
+                    *state = PromiseState::TimedOut(elapsed);
+                    return Poll::Ready(Err(RustyJSError::PromiseTimeout(
+                        elapsed.as_millis() as u64
+                    )));
+                }
+            }
+
+            // Then check Promise state
             match &*state {
                 PromiseState::Resolved(Ok(_)) => {
                     if let PromiseState::Resolved(Ok(success)) =
@@ -374,8 +378,9 @@ where
                     *state = PromiseState::Pending(cx.waker().clone());
                 }
                 PromiseState::TimedOut(elapsed) => {
-                    let elapsed_ms = elapsed.as_millis() as u64;
-                    return Poll::Ready(Err(RustyJSError::PromiseTimeout(elapsed_ms)));
+                    return Poll::Ready(Err(RustyJSError::PromiseTimeout(
+                        elapsed.as_millis() as u64
+                    )));
                 }
             }
         }
