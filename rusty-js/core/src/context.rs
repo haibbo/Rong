@@ -1,7 +1,7 @@
 use crate::JSRuntime;
 use crate::{
-    source::Source, ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSResult,
-    JSRuntimeImpl, JSValue, JSValueImpl, RustyJSError,
+    source::Source, ClassSetup, FromJSValue, JSClass, JSException, JSObject, JSObjectOps, JSResult,
+    JSRuntimeImpl, JSTypeOf, JSValue, JSValueImpl, Promise, RustyJSError,
 };
 use std::any::TypeId;
 use std::cell::RefCell;
@@ -180,7 +180,20 @@ impl<C: JSContextImpl> JSContext<C> {
         }
     }
 
-    /// eval javascript
+    /// Evaluate JavaScript code and return the result
+    ///
+    /// # Arguments
+    /// * `source` - The JavaScript source code to evaluate
+    ///
+    /// # Returns
+    /// * `Ok(T)` - The result of the evaluation if successful
+    /// * `Err(RustyJSError)` - If evaluation fails or throws an exception
+    ///
+    /// # Examples
+    /// ```
+    /// let result: i32 = ctx.eval(Source::new("1 + 2")).unwrap();
+    /// assert_eq!(result, 3);
+    /// ```
     pub fn eval<T>(&self, source: Source) -> JSResult<T>
     where
         C::Value: JSObjectOps,
@@ -195,7 +208,18 @@ impl<C: JSContextImpl> JSContext<C> {
         )
     }
 
-    /// get global object
+    /// Get the global object of the JavaScript context
+    ///
+    /// # Returns
+    /// A JSObject representing the global object
+    ///
+    /// # Examples
+    /// ```rust
+    /// let global = ctx.global();
+    /// global.set("myVar", 42);
+    /// let result: i32 = global.get("myVar").unwrap();
+    /// assert_eq!(result, 42);
+    /// ```
     pub fn global(&self) -> JSObject<C::Value> {
         let raw = self.inner.global();
         JSValue::new(self, raw).into()
@@ -275,6 +299,39 @@ impl<C: JSContextImpl> JSContext<C> {
             || T::from_js_value(&self.inner, result.into_inner()),
             |exception| Err(RustyJSError::Exception(exception.into_error())),
         )
+    }
+
+    /// Evaluate JavaScript code and handle both Promise and immediate results
+    ///
+    /// This function evaluates the provided JavaScript source code and:
+    /// 1. If the result is a Promise, waits for it to resolve and returns the resolved value
+    /// 2. If the result is not a Promise, returns it immediately
+    ///
+    /// # Arguments
+    /// * `source` - The JavaScript source code to evaluate
+    ///
+    /// # Returns
+    /// * `Ok(T)` - The result of the evaluation or resolved Promise value
+    /// * `Err(RustyJSError)` - If evaluation fails, throws an exception, or Promise rejects
+    pub async fn eval_async<T>(&self, source: Source) -> JSResult<T>
+    where
+        C::Value: JSTypeOf + JSObjectOps + 'static,
+        T: FromJSValue<C::Value> + 'static,
+    {
+        let result = self.inner.eval(source);
+        let ctx = self.inner.as_ref();
+
+        match (result.is_promise(), result.is_exception().is_some()) {
+            (true, _) => {
+                let promise = Promise::from_js_value(ctx, result)?;
+                promise.into_future::<T>().await
+            }
+            (_, true) => {
+                let err = JSException::from_js_value(ctx, result)?;
+                Err(RustyJSError::Exception(err.into_error()))
+            }
+            _ => T::from_js_value(ctx, result),
+        }
     }
 }
 

@@ -213,7 +213,7 @@ impl<V: JSValueImpl + 'static> Promise<V> {
 
 impl<V: JSValueImpl + 'static, T> Future for PromiseFuture<V, T>
 where
-    T: FromJSValue<V> + JSParameterType + 'static,
+    T: FromJSValue<V> + 'static,
     V: JSObjectOps,
 {
     type Output = JSResult<T>;
