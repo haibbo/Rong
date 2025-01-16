@@ -5,9 +5,10 @@ use std::time::Duration;
 #[test]
 fn test_rust_promise_with_callback() {
     run2(|ctx, rt| {
+        let ctx_clone = ctx.clone();
         // Register a Rust function that returns a promise
-        let timeout_fn = ctx.register_function(move |ctx: &JSContext, millis: i32| {
-            let (promise, resolve, _reject) = ctx.promise().unwrap();
+        let timeout_fn = ctx.register_function(move |millis: i32| {
+            let (promise, resolve, _reject) = ctx_clone.promise().unwrap();
 
             // Directly resolve the promise with the input value
             resolve.call::<_, ()>((millis,)).unwrap();
@@ -69,13 +70,14 @@ fn test_rust_promise_with_resolve() {
 #[test]
 fn test_rust_future_in_js() {
     async_run!(|ctx: JSContext| async move {
+        let ctx2 = ctx.clone();
         // Register a Rust async function that returns a promise
-        let async_fn = ctx.register_function(move |ctx: &JSContext, delay: i32| {
+        let async_fn = ctx.register_function(move |delay: i32| {
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
                 format!("completed after {}ms", delay)
             };
-            Promise::from_future(ctx, future).unwrap()
+            Promise::from_future(&ctx2, future).unwrap()
         });
 
         // Register the function in JS context
@@ -110,13 +112,14 @@ fn test_rust_future_in_js() {
 #[test]
 fn test_rust_future_error_in_js() {
     async_run!(|ctx: JSContext| async move {
+        let ctx2 = ctx.clone();
         // Register a Rust async function that returns a rejected promise
-        let async_fn = ctx.register_function(move |ctx: &JSContext, _: i32| {
+        let async_fn = ctx.register_function(move |_: i32| {
             let future = async {
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 RustyJSError::Error("async operation failed".to_string())
             };
-            Promise::from_future(&ctx, future).unwrap()
+            Promise::from_future(&ctx2, future).unwrap()
         });
 
         // Register the function in JS context
