@@ -160,7 +160,7 @@ macro_rules! impl_js_callable_func {
                 let ($($t,)*) = params;
                 let future = (self)($($t),*);
                 let ctx=accessor.context();
-                let jsctx =JSContext::from_ffi(ctx);
+                let jsctx =JSContext::from_raw_ptr(ctx);
                 Ok(Promise::from_future(&jsctx,future)?.into_js_value(ctx))
             }
         }

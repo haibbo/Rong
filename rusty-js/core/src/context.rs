@@ -145,7 +145,7 @@ impl<C: JSContextImpl> JSContext<C> {
     /// - The provided FFI context must be valid and properly aligned
     /// - The caller must ensure the context pointer remains valid for the duration of use
     /// - This should only be called with context pointers obtained from the JS engine
-    pub(crate) fn from_ffi(c: &C) -> &Self {
+    pub(crate) fn from_raw_ptr(c: &C) -> &Self {
         let data = c.get_opaque::<ContextOpaque<C::Value>>();
         if data.is_null() {
             panic!("[JSContext] opaque is empty");

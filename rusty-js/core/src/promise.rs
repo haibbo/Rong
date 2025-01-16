@@ -275,7 +275,7 @@ where
                 // Setup timeout waker only if timeout is set
                 let waker = cx.waker().clone();
                 let timeout = this.timeout_duration.unwrap();
-                let ctx = JSContext::from_ffi(this.promise.obj.as_ctx());
+                let ctx = JSContext::from_raw_ptr(this.promise.obj.as_ctx());
                 ctx.spawn_local(async move {
                     sleep(timeout).await;
                     waker.wake();
@@ -284,7 +284,7 @@ where
             }
 
             let inner_ctx = this.promise.obj.as_ctx();
-            let ctx = JSContext::from_ffi(inner_ctx);
+            let ctx = JSContext::from_raw_ptr(inner_ctx);
 
             // Clone state for callbacks
             let state = this.state.clone().unwrap();
