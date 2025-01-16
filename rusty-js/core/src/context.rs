@@ -175,8 +175,9 @@ impl<C: JSContextImpl> JSContext<C> {
             panic!("[JSContext] opaque is empty");
         } else {
             unsafe {
-                let address = (*data).address;
-                std::mem::transmute::<usize, &JSContext<C>>(address)
+                // Reconstruct the pointer from the stored address
+                let ctx_ptr = (*data).address as *const JSContext<C>;
+                &*ctx_ptr
             }
         }
     }
