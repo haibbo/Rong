@@ -186,13 +186,11 @@ impl ParamRequirement {
 }
 
 pub trait ParameterKind {
-    type Inner;
     fn param_requirement() -> ParamRequirement;
 }
 
 pub struct Regular<T>(PhantomData<T>);
 impl<T> ParameterKind for Regular<T> {
-    type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::single()
     }
@@ -200,7 +198,6 @@ impl<T> ParameterKind for Regular<T> {
 
 pub struct ThisKind<T>(PhantomData<T>);
 impl<T> ParameterKind for ThisKind<T> {
-    type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
     }
@@ -208,7 +205,6 @@ impl<T> ParameterKind for ThisKind<T> {
 
 pub struct ThisMutKind<T>(PhantomData<T>);
 impl<T> ParameterKind for ThisMutKind<T> {
-    type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
     }
@@ -216,7 +212,6 @@ impl<T> ParameterKind for ThisMutKind<T> {
 
 pub struct OptionalKind<T>(PhantomData<T>);
 impl<T> ParameterKind for OptionalKind<T> {
-    type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::optional()
     }
@@ -224,7 +219,6 @@ impl<T> ParameterKind for OptionalKind<T> {
 
 pub struct RestKind<T>(PhantomData<T>);
 impl<T> ParameterKind for RestKind<T> {
-    type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
     }
@@ -232,7 +226,6 @@ impl<T> ParameterKind for RestKind<T> {
 
 pub struct ParamKind<T>(PhantomData<T>);
 impl<T> ParameterKind for ParamKind<T> {
-    type Inner = T;
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::single()
     }
