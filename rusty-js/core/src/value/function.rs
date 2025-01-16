@@ -161,7 +161,7 @@ where
         let ctx = self.as_ref();
         let func = RustFunc::new(f);
         let length = func.parameter_required_count();
-        let value = Class::get::<RustFunc<C::Value>>(self)
+        let value = Class::get::<RustFunc<C::Value>>(ctx)
             .map(|class| class.instance::<RustFunc<C::Value>>(func))
             .expect("Not Found RustFunc Class");
         let obj = JSObject::from_js_value(ctx, value).unwrap();

@@ -111,12 +111,13 @@ where
     }
 
     /// Get class constructor by type
-    pub fn get<JC: JSClass<V>>(context: &JSContext<V::Context>) -> Option<Self> {
-        let constructor = context
+    pub fn get<JC: JSClass<V>>(context: &V::Context) -> Option<Self> {
+        let ctx = JSContext::from_raw_ptr(context);
+        let constructor = ctx
             .get_class_registry()
             .and_then(|registry| registry.borrow().get(&TypeId::of::<JC>()).cloned())?;
 
-        match JSObject::from_js_value(context.as_ref(), constructor) {
+        match JSObject::from_js_value(context, constructor) {
             Ok(obj) => Some(Self(obj)),
             Err(_) => None,
         }
