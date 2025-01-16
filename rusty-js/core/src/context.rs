@@ -1,3 +1,4 @@
+use crate::JSRuntime;
 use crate::{
     source::Source, ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSResult,
     JSRuntimeImpl, JSValue, JSValueImpl, RustyJSError,
@@ -86,6 +87,7 @@ pub trait JSFfiContext {
 
 pub struct JSContext<C: JSContextImpl> {
     inner: Rc<C>,
+    runtime: JSRuntime<C::Runtime>,
 }
 
 impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
@@ -114,14 +116,15 @@ impl<C: JSContextImpl> JSContext<C> {
     ///     ctx_clone.eval("...").await?;
     /// });
     /// ```
-    pub fn new(runtime: &C::Runtime) -> Self {
+    pub fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
         // Create the inner context first
-        let inner = C::new(runtime);
+        let inner = C::new(&runtime.inner);
 
         // Create the JSContext on the heap to get a stable address
         // This instance will be leaked and cleaned up when the last clone is dropped
         let ctx = Box::new(Self {
             inner: Rc::new(inner),
+            runtime: runtime.clone(),
         });
 
         // Store the heap address in the opaque data for later retrieval in callbacks
@@ -132,6 +135,7 @@ impl<C: JSContextImpl> JSContext<C> {
         // Return a clone of the leaked context
         Self {
             inner: leaked_ctx.inner.clone(),
+            runtime: leaked_ctx.runtime.clone(),
         }
     }
 
@@ -214,6 +218,10 @@ impl<C: JSContextImpl> JSContext<C> {
         } else {
             unsafe { Some(&(*data).registry) }
         }
+    }
+
+    pub(crate) fn runtime(&self) -> &JSRuntime<C::Runtime> {
+        &self.runtime
     }
 }
 
@@ -314,6 +322,7 @@ impl<C: JSContextImpl> Clone for JSContext<C> {
 
         Self {
             inner: self.inner.clone(),
+            runtime: self.runtime.clone(),
         }
     }
 }

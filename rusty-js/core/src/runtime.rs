@@ -31,8 +31,17 @@ pub trait JSRuntimeImpl {
 }
 
 pub struct JSRuntime<R: JSRuntimeImpl> {
-    inner: Rc<R>,
+    pub(crate) inner: Rc<R>,
     scheduler: Rc<Scheduler<R>>,
+}
+
+impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            scheduler: self.scheduler.clone(),
+        }
+    }
 }
 
 impl<R: JSRuntimeImpl> Drop for JSRuntime<R> {
@@ -113,7 +122,7 @@ pub trait JSEngine: Sized {
     where
         Self::Value: 'static,
     {
-        let ctx = JSContext::<Self::Context>::new(&rt.inner);
+        let ctx = JSContext::<Self::Context>::new(rt);
         ctx.register_rustfunc_class();
         ctx
     }
