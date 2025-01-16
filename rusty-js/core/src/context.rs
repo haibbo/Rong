@@ -1,7 +1,8 @@
 use crate::JSRuntime;
 use crate::{
-    source::Source, ClassSetup, FromJSValue, JSClass, JSException, JSObject, JSObjectOps, JSResult,
-    JSRuntimeImpl, JSTypeOf, JSValue, JSValueImpl, Promise, RustyJSError,
+    source::{Source, SourceKind},
+    ClassSetup, FromJSValue, JSClass, JSException, JSObject, JSObjectOps, JSResult, JSRuntimeImpl,
+    JSTypeOf, JSValue, JSValueImpl, Promise, RustyJSError,
 };
 use std::any::TypeId;
 use std::cell::RefCell;
@@ -199,13 +200,18 @@ impl<C: JSContextImpl> JSContext<C> {
         C::Value: JSObjectOps,
         T: FromJSValue<C::Value>,
     {
-        let raw = self.inner.eval(source);
-        let result = JSValue::new(self, raw);
+        let result = match source.kind() {
+            SourceKind::ByteCode(code) => self.inner.run_bytecode(code),
+            SourceKind::JavaScript(code) => self.inner.eval(Source::from_bytes(code.clone())),
+        };
 
-        result.is_exception().map_or_else(
-            || T::from_js_value(&self.inner, result.into_inner()),
-            |exception| Err(RustyJSError::Exception(exception.into_error())),
-        )
+        let ctx = self.inner.as_ref();
+        if let Some(err) = result.is_exception() {
+            let err = JSException::from_js_value(ctx, err)?;
+            Err(RustyJSError::Exception(err.into_error()))
+        } else {
+            T::from_js_value(ctx, result)
+        }
     }
 
     /// Get the global object of the JavaScript context
@@ -267,38 +273,33 @@ impl<C: JSContextImpl> JSContext<C> {
         &self.runtime
     }
 
-    /// Compiles JavaScript source code into bytecode format
+    /// Compile JavaScript source code to bytecode
     ///
     /// # Arguments
-    /// * `source` - The JavaScript source code to compile
+    /// * `code` - The JavaScript source code to compile. Accepts:
+    ///   - &str: JavaScript source code as string
+    ///   - &[u8]: JavaScript source code as bytes
+    ///   - String: Owned JavaScript source code
+    ///   - Vec<u8>: Owned JavaScript source code as bytes
     ///
     /// # Returns
-    /// * `Some(Vec<u8>)` - The compiled bytecode as bytes if compilation succeeds
-    /// * `None` - If compilation fails
-    pub fn compile_to_bytecode(&self, source: Source) -> Option<Vec<u8>> {
-        self.inner.compile_to_bytecode(source)
-    }
-
-    /// Executes previously compiled bytecode
+    /// * `Ok(Source)` - Compiled bytecode wrapped in a Source, ready to be evaluated
+    /// * `Err(RustyJSError)` - If compilation fails
     ///
-    /// # Arguments
-    /// * `bytes` - The bytecode bytes to execute
+    /// # Example
+    /// ```rust
+    /// // From string literal
+    /// let bytecode = ctx.compile_to_bytecode("function add(a, b) { return a + b; }")?;
+    /// let result: i32 = ctx.eval(bytecode)?;
     ///
-    /// # Returns
-    /// * `Ok(T)` - The result of executing the bytecode as a JavaScript value if execution succeeds
-    /// * `Err(RustyJSError)` - If execution fails or throws an exception
-    pub fn run_bytecode<T>(&self, bytes: &[u8]) -> JSResult<T>
-    where
-        C::Value: JSObjectOps,
-        T: FromJSValue<C::Value>,
-    {
-        let raw = self.inner.run_bytecode(bytes);
-        let result = JSValue::new(self, raw);
-
-        result.is_exception().map_or_else(
-            || T::from_js_value(&self.inner, result.into_inner()),
-            |exception| Err(RustyJSError::Exception(exception.into_error())),
-        )
+    /// // From bytes
+    /// let bytecode = ctx.compile_to_bytecode(b"let x = 1;")?;
+    /// ```
+    pub fn compile_to_bytecode<T: AsRef<[u8]>>(&self, code: T) -> JSResult<Source> {
+        self.inner
+            .compile_to_bytecode(Source::from_bytes(code.as_ref()))
+            .map(Source::from_bytecode)
+            .ok_or(RustyJSError::CompileToByteErr)
     }
 
     /// Evaluate JavaScript code and handle both Promise and immediate results
@@ -318,7 +319,11 @@ impl<C: JSContextImpl> JSContext<C> {
         C::Value: JSTypeOf + JSObjectOps + 'static,
         T: FromJSValue<C::Value> + 'static,
     {
-        let result = self.inner.eval(source);
+        let result = match source.kind() {
+            SourceKind::ByteCode(code) => self.inner.run_bytecode(code),
+            SourceKind::JavaScript(code) => self.inner.eval(Source::from_bytes(code.clone())),
+        };
+
         let ctx = self.inner.as_ref();
 
         match (result.is_promise(), result.is_exception().is_some()) {

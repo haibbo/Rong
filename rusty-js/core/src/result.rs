@@ -33,6 +33,9 @@ pub enum RustyJSError {
     #[error("This has already been taken")]
     AlreadyTaken,
 
+    #[error("Failed to compile JS code to bytecode")]
+    CompileToByteErr,
+
     #[error("{0}")]
     Error(String),
 
@@ -58,6 +61,7 @@ impl RustyJSError {
             RustyJSError::Exception(_)
             | RustyJSError::Error(_)
             | RustyJSError::Borrow(_)
+            | RustyJSError::CompileToByteErr
             | RustyJSError::AlreadyTaken => ctx.throw_error(self.to_string()),
         }
     }

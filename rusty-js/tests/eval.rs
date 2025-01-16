@@ -22,10 +22,10 @@ fn test_eval() {
 fn test_bytecode() {
     run(|ctx| {
         let code = "(4 + 8) * 3";
-        let bytes = ctx.compile_to_bytecode(Source::from_bytes(code)).unwrap();
-        println!("bytes.len is {}", bytes.len());
+        let source = ctx.compile_to_bytecode(code).unwrap();
+        // println!("bytes.len is {}", source.len());
 
-        let result: i32 = ctx.run_bytecode(&bytes).unwrap();
+        let result: i32 = ctx.eval(source).unwrap();
         assert_eq!(result, 36);
     });
 }
@@ -50,9 +50,23 @@ fn test_eval_async() {
                 }, 100);
             })
         "#;
-        let result: i32 = ctx.eval_async(Source::from_bytes(js_code)).await.unwrap();
-
+        let source = Source::from_bytes(js_code);
+        println!("source length is {}", source.len());
+        let result: i32 = ctx.eval_async(source).await.unwrap();
         assert_eq!(result, 42);
+
+        let js_code = r#"
+            new Promise((resolve) => {
+                setTimeout(() => {
+                    resolve(10+15);
+                }, 100);
+            })
+        "#;
+
+        let source = ctx.compile_to_bytecode(js_code).unwrap();
+        println!("source length is {}", source.len());
+        let result: i32 = ctx.eval_async(source).await.unwrap();
+        assert_eq!(result, 25);
         Ok(())
     })
 }
