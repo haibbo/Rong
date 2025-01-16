@@ -7,7 +7,6 @@ use crate::{
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// JSContextImpl represents a JavaScript context
@@ -106,7 +105,7 @@ pub trait JSFfiContext {
 }
 
 pub struct JSContext<C: JSContextImpl> {
-    inner: Rc<C>,
+    inner: C,
     runtime: JSRuntime<C::Runtime>,
 }
 
@@ -143,7 +142,7 @@ impl<C: JSContextImpl> JSContext<C> {
         // Create the JSContext on the heap to get a stable address
         // This instance will be leaked and cleaned up when the last clone is dropped
         let ctx = Box::new(Self {
-            inner: Rc::new(inner),
+            inner,
             runtime: runtime.clone(),
         });
 
@@ -206,7 +205,7 @@ impl<C: JSContextImpl> JSContext<C> {
             SourceKind::JavaScript(code) => self.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        let ctx = self.inner.as_ref();
+        let ctx = &self.inner;
         if let Some(err) = result.is_exception() {
             let err = JSException::from_js_value(ctx, err)?;
             Err(RustyJSError::Exception(err.into_error()))
@@ -325,7 +324,7 @@ impl<C: JSContextImpl> JSContext<C> {
             SourceKind::JavaScript(code) => self.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        let ctx = self.inner.as_ref();
+        let ctx = &self.inner;
 
         match (result.is_promise(), result.is_exception().is_some()) {
             (true, _) => {
