@@ -20,14 +20,12 @@ type PromiseResult<V> = Result<(Promise<V>, JSFunc<V>, JSFunc<V>), RustyJSError>
 /// This struct wraps a JavaScript Promise and provides methods to interact with it.
 pub struct Promise<V: JSValueImpl> {
     obj: JSObject<V>,
-    ctx: JSContext<V::Context>,
 }
 
 impl<V: JSValueImpl> Clone for Promise<V> {
     fn clone(&self) -> Self {
         Self {
             obj: self.obj.clone(),
-            ctx: self.ctx.clone(),
         }
     }
 }
@@ -54,11 +52,7 @@ where
 {
     fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
         let obj = JSObject::from_js_value(ctx, value)?;
-        let ctx = JSContext::from_ffi(ctx);
-        Ok(Self {
-            obj,
-            ctx: ctx.clone(),
-        })
+        Ok(Self { obj })
     }
 }
 
@@ -82,14 +76,7 @@ impl<C: JSContextImpl> JSContext<C> {
         let promise = JSObject::from_js_value(ctx, promise)?;
         let resolver = JSFunc::from_js_value(ctx, resolver)?;
         let reject = JSFunc::from_js_value(ctx, reject)?;
-        Ok((
-            Promise {
-                obj: promise,
-                ctx: self.clone(),
-            },
-            resolver,
-            reject,
-        ))
+        Ok((Promise { obj: promise }, resolver, reject))
     }
 }
 
@@ -273,31 +260,32 @@ where
             // Start timing when we actually begin executing the Promise
             this.start_time = Some(Instant::now());
 
+            // Get the context
+            let inner_ctx = this.promise.obj.as_ctx();
+            let ctx = JSContext::from_ffi(inner_ctx);
+
             // Setup timeout waker
             let waker = cx.waker().clone();
             let timeout = this.timeout_duration;
-            this.promise.ctx.spawn_local(async move {
+            ctx.spawn_local(async move {
                 sleep(timeout).await;
                 waker.wake();
                 Ok(())
             });
-
-            // Get the context
-            let ctx = this.promise.ctx.clone();
 
             // Clone state for callbacks
             let state = this.state.clone().unwrap();
 
             // resolved callback used to wake up future and save resolved value
             let resolve_state = state.clone();
-            let ctx_clone = ctx.clone();
-            let resolve = JSFunc::new(&ctx, move |value: JSValue<V>| {
+            let resolve = JSFunc::new(ctx, move |value: JSValue<V>| {
                 //println!("resolve callback called");
                 let mut state = resolve_state.borrow_mut();
+                let temp = value.clone();
+                let ctx = temp.as_ctx();
 
                 if value.is_error().is_some() || value.is_exception().is_some() {
-                    let err =
-                        JSException::from_js_value(ctx_clone.as_ref(), value.into_inner()).unwrap();
+                    let err = JSException::from_js_value(ctx, value.into_inner()).unwrap();
                     if let PromiseState::Pending(waker) = std::mem::replace(
                         &mut *state,
                         PromiseState::Resolved(Err(RustyJSError::Exception(err.into_error()))),
@@ -305,7 +293,7 @@ where
                         waker.wake_by_ref();
                     }
                 } else {
-                    let success = T::from_js_value(ctx_clone.as_ref(), value.into_inner()).unwrap();
+                    let success = T::from_js_value(ctx, value.into_inner()).unwrap();
                     if let PromiseState::Pending(waker) =
                         std::mem::replace(&mut *state, PromiseState::Resolved(Ok(success)))
                     {
@@ -317,7 +305,7 @@ where
 
             // rejected callback used to wake up future and save rejected value
             let reject_state = state.clone();
-            let reject = JSFunc::new(&ctx, move |err: JSException<V>| {
+            let reject = JSFunc::new(ctx, move |err: JSException<V>| {
                 //println!("reject callback called");
                 let mut state = reject_state.borrow_mut();
                 if let PromiseState::Pending(waker) = std::mem::replace(
