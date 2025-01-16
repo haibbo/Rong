@@ -16,3 +16,15 @@ fn test_eval() {
         assert_some!(obj.is_object());
     });
 }
+
+#[test]
+fn test_bytecode() {
+    run(|ctx| {
+        let code = "(4 + 8) * 3";
+        let bytes = ctx.compile_to_bytecode(Source::from_bytes(code)).unwrap();
+        println!("bytes.len is {}", bytes.len());
+
+        let result: i32 = ctx.run_bytecode(&bytes).unwrap();
+        assert_eq!(result, 36);
+    });
+}
