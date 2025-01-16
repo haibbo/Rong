@@ -79,6 +79,25 @@ pub trait JSContextImpl: Clone {
     /// - The resolve function to fulfill the promise
     /// - The reject function to reject the promise
     fn promise(&self) -> (Self::Value, Self::Value, Self::Value);
+
+    /// Compiles JavaScript source code into bytecode format
+    ///
+    /// # Arguments
+    /// * `source` - The JavaScript source code to compile
+    ///
+    /// # Returns
+    /// * `Some(Vec<u8>)` - The compiled bytecode as bytes if compilation succeeds
+    /// * `None` - If compilation fails
+    fn compile_to_bytecode(&self, source: Source) -> Option<Vec<u8>>;
+
+    /// Executes previously compiled bytecode
+    ///
+    /// # Arguments
+    /// * `bytes` - The bytecode bytes to execute
+    ///
+    /// # Returns
+    /// The result of executing the bytecode as a JavaScript value
+    fn run_bytecode(&self, bytes: &[u8]) -> Self::Value;
 }
 
 pub trait JSFfiContext {
@@ -222,6 +241,40 @@ impl<C: JSContextImpl> JSContext<C> {
 
     pub(crate) fn runtime(&self) -> &JSRuntime<C::Runtime> {
         &self.runtime
+    }
+
+    /// Compiles JavaScript source code into bytecode format
+    ///
+    /// # Arguments
+    /// * `source` - The JavaScript source code to compile
+    ///
+    /// # Returns
+    /// * `Some(Vec<u8>)` - The compiled bytecode as bytes if compilation succeeds
+    /// * `None` - If compilation fails
+    pub fn compile_to_bytecode(&self, source: Source) -> Option<Vec<u8>> {
+        self.inner.compile_to_bytecode(source)
+    }
+
+    /// Executes previously compiled bytecode
+    ///
+    /// # Arguments
+    /// * `bytes` - The bytecode bytes to execute
+    ///
+    /// # Returns
+    /// * `Ok(T)` - The result of executing the bytecode as a JavaScript value if execution succeeds
+    /// * `Err(RustyJSError)` - If execution fails or throws an exception
+    pub fn run_bytecode<T>(&self, bytes: &[u8]) -> JSResult<T>
+    where
+        C::Value: JSObjectOps,
+        T: FromJSValue<C::Value>,
+    {
+        let raw = self.inner.run_bytecode(bytes);
+        let result = JSValue::new(self, raw);
+
+        result.is_exception().map_or_else(
+            || T::from_js_value(&self.inner, result.into_inner()),
+            |exception| Err(RustyJSError::Exception(exception.into_error())),
+        )
     }
 }
 

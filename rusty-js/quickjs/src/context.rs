@@ -1,6 +1,6 @@
 use crate::{qjs, QJSRuntime, QJSValue};
 use rusty_js_core::{
-    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, Source,
+    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSTypeOf, JSValueImpl, Source,
 };
 use std::ffi::CString;
 use std::mem::MaybeUninit;
@@ -47,6 +47,52 @@ impl JSContextImpl for QJSContext {
     fn eval(&self, source: Source) -> Self::Value {
         let options = EvalOptions::default();
         self.eval_raw(&source, options.to_flags())
+    }
+
+    fn compile_to_bytecode(&self, source: Source) -> Option<Vec<u8>> {
+        let options = EvalOptions {
+            bytecode: true,
+            ..EvalOptions::default()
+        };
+        let obj = self.eval_raw(&source, options.to_flags());
+        if obj.is_exception().is_some() {
+            return None;
+        }
+
+        let mut out_size = 0;
+        let slice = unsafe {
+            let buf = qjs::JS_WriteObject(
+                self.ctx,
+                &mut out_size,
+                *obj.as_ffi_value(),
+                qjs::JS_WRITE_OBJ_BYTECODE as _,
+            );
+
+            if buf.is_null() {
+                return None;
+            }
+
+            std::slice::from_raw_parts(buf, out_size)
+        };
+        let bytecode = slice.to_vec();
+        Some(bytecode)
+    }
+
+    fn run_bytecode(&self, bytes: &[u8]) -> Self::Value {
+        let result = unsafe {
+            let obj = qjs::JS_ReadObject(
+                self.ctx,
+                bytes.as_ptr(),
+                bytes.len(),
+                qjs::JS_READ_OBJ_BYTECODE as i32,
+            );
+            if qjs::QJS_IsException(self.ctx, obj) != 0 {
+                obj
+            } else {
+                qjs::JS_EvalFunction(self.ctx, obj)
+            }
+        };
+        QJSValue::from_parts(self.ctx, result)
     }
 
     fn global(&self) -> Self::Value {
@@ -142,6 +188,7 @@ struct EvalOptions {
     strict: bool,
     promise: bool,
     backtrace_barrier: bool,
+    bytecode: bool,
 }
 
 impl Default for EvalOptions {
@@ -150,6 +197,7 @@ impl Default for EvalOptions {
             global: true,
             strict: true,
             promise: false,
+            bytecode: false,
             backtrace_barrier: false,
         }
     }
@@ -172,6 +220,9 @@ impl EvalOptions {
         }
         if self.backtrace_barrier {
             flags |= qjs::JS_EVAL_FLAG_BACKTRACE_BARRIER;
+        }
+        if self.bytecode {
+            flags |= qjs::JS_EVAL_FLAG_COMPILE_ONLY;
         }
         flags as _
     }
