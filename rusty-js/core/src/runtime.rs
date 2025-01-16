@@ -59,6 +59,10 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
         self.scheduler.block_on(future)
     }
 
+    pub(crate) fn scheduler(&self) -> &Rc<Scheduler<R>> {
+        &self.scheduler
+    }
+
     /// # Warning
     /// testing purposes only and don't use it in production code.
     #[doc(hidden)]

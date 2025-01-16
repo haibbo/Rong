@@ -1,21 +1,11 @@
 use crate::{JSContext, JSContextImpl, JSResult, JSRuntimeImpl};
 use std::cell::Cell;
-use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
 use std::rc::{Rc, Weak};
 use tokio::runtime::Builder;
 use tokio::sync::Notify;
 use tokio::task::LocalSet;
-
-thread_local! {
-    static CURRENT_SCHEDULER: RefCell<Option<Weak<dyn SchedulerHandle + 'static>>> = RefCell::new(None);
-}
-
-trait SchedulerHandle {
-    fn spawn_boxed(&self, future: Pin<Box<dyn Future<Output = JSResult<()>>>>);
-    fn microtask_done(&self) -> Rc<Notify>;
-}
 
 pub(crate) struct Scheduler<R: JSRuntimeImpl> {
     runtime: Weak<R>,
@@ -28,46 +18,26 @@ pub(crate) struct Scheduler<R: JSRuntimeImpl> {
 impl<R: JSRuntimeImpl> Drop for Scheduler<R> {
     fn drop(&mut self) {
         self.is_dropped.set(true);
-        if let Some(scheduler) =
-            CURRENT_SCHEDULER.with(|s| s.borrow().as_ref().and_then(|w| w.upgrade()))
-        {
-            scheduler.microtask_done().notify_waiters();
-        }
-        CURRENT_SCHEDULER.with(|s| *s.borrow_mut() = None);
-    }
-}
-
-impl<R: JSRuntimeImpl + 'static> SchedulerHandle for Scheduler<R> {
-    fn spawn_boxed(&self, future: Pin<Box<dyn Future<Output = JSResult<()>>>>) {
-        self.local_set.spawn_local(future);
-    }
-
-    fn microtask_done(&self) -> Rc<Notify> {
-        self.microtask_done.clone()
+        self.microtask_done.notify_waiters();
     }
 }
 
 impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
     pub(crate) fn new(runtime: Rc<R>) -> Rc<Self> {
-        let runtime = Rc::downgrade(&runtime);
-        let is_dropped = Rc::new(Cell::new(false));
-
-        let scheduler = Rc::new(Self {
-            runtime,
+        Rc::new(Self {
+            runtime: Rc::downgrade(&runtime),
             tokio_rt: Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .expect("Failed to create tokio runtime"),
             local_set: Rc::new(LocalSet::new()),
             microtask_done: Rc::new(Notify::new()),
-            is_dropped,
-        });
+            is_dropped: Rc::new(Cell::new(false)),
+        })
+    }
 
-        CURRENT_SCHEDULER.with(|current| {
-            *current.borrow_mut() = Some(Rc::downgrade(&scheduler) as Weak<dyn SchedulerHandle>);
-        });
-
-        scheduler
+    pub(crate) fn spawn_local(&self, future: Pin<Box<dyn Future<Output = JSResult<()>>>>) {
+        self.local_set.spawn_local(future);
     }
 
     pub(crate) fn block_on<F, T>(&self, future: F) -> JSResult<T>
@@ -120,16 +90,15 @@ impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
     }
 }
 
-impl<C: JSContextImpl> JSContext<C> {
-    /// Spawn a future to be executed by the scheduler
+impl<C: JSContextImpl> JSContext<C>
+where
+    C::Runtime: 'static,
+{
     pub fn spawn_local<F>(&self, future: F)
     where
         F: Future<Output = JSResult<()>> + 'static,
     {
-        if let Some(scheduler) =
-            CURRENT_SCHEDULER.with(|s| s.borrow().as_ref().and_then(|w| w.upgrade()))
-        {
-            scheduler.spawn_boxed(Box::pin(future));
-        }
+        let scheduler = self.runtime().scheduler();
+        scheduler.spawn_local(Box::pin(future));
     }
 }
