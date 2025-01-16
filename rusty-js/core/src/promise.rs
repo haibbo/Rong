@@ -10,7 +10,6 @@ use std::ops::Deref;
 use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll, Waker};
-use tokio::time::{sleep, Duration, Instant};
 
 /// Type alias for the return value of `promise()` function
 type PromiseResult<V> = Result<(Promise<V>, JSFunc<V>, JSFunc<V>), RustyJSError>;
@@ -182,22 +181,18 @@ where
 pub struct PromiseFuture<V: JSValueImpl, T> {
     state: Option<Rc<RefCell<PromiseState<T>>>>,
     promise: Promise<V>,
-    timeout_duration: Option<Duration>, // None means no timeout
-    start_time: Option<Instant>,
     _marker: PhantomData<T>,
 }
 
 enum PromiseState<T> {
     Pending(Waker),
     Resolved(JSResult<T>),
-    TimedOut(Duration),
 }
 
 impl<V: JSValueImpl, T> Unpin for PromiseFuture<V, T> {}
 
 impl<V: JSValueImpl + 'static> Promise<V> {
     /// Converts the Promise into a Future that resolves to a value of type T.
-    /// By default, the Promise will never timeout.
     ///
     /// # Example
     /// ```
@@ -211,42 +206,6 @@ impl<V: JSValueImpl + 'static> Promise<V> {
         PromiseFuture {
             state: None,
             promise: self,
-            timeout_duration: None, // No timeout by default
-            start_time: None,
-            _marker: PhantomData::<T>,
-        }
-    }
-
-    /// Converts the Promise into a Future with a timeout duration.
-    /// The timeout starts counting from when Promise execution begins (first poll).
-    ///
-    /// # Arguments
-    /// * `timeout` - Duration after which the future will timeout if the Promise hasn't resolved.
-    ///              Must be at least 1 second to ensure stable execution.
-    ///
-    /// # Example
-    /// ```
-    /// let promise = ctx.eval::<Promise>(js_code)?;
-    /// // Set a 2 second timeout
-    /// let future = promise.into_future_with_timeout::<i32>(Duration::from_secs(2));
-    /// ```
-    pub fn into_future_with_timeout<T>(self, timeout: Duration) -> PromiseFuture<V, T>
-    where
-        T: FromJSValue<V> + 'static,
-    {
-        // Enforce minimum timeout of 1 second for stability
-        let min_timeout = Duration::from_secs(1);
-        let timeout = if timeout < min_timeout {
-            min_timeout
-        } else {
-            timeout
-        };
-
-        PromiseFuture {
-            state: None,
-            promise: self,
-            timeout_duration: Some(timeout),
-            start_time: None,
             _marker: PhantomData::<T>,
         }
     }
@@ -267,21 +226,6 @@ where
             // Create initial state with waker
             let state = Rc::new(RefCell::new(PromiseState::Pending(cx.waker().clone())));
             this.state = Some(state.clone());
-
-            // Start timing only if timeout is set
-            if this.timeout_duration.is_some() {
-                this.start_time = Some(Instant::now());
-
-                // Setup timeout waker only if timeout is set
-                let waker = cx.waker().clone();
-                let timeout = this.timeout_duration.unwrap();
-                let ctx = JSContext::from_raw_ptr(this.promise.obj.as_ctx());
-                ctx.spawn_local(async move {
-                    sleep(timeout).await;
-                    waker.wake();
-                    Ok(())
-                });
-            }
 
             let inner_ctx = this.promise.obj.as_ctx();
             let ctx = JSContext::from_raw_ptr(inner_ctx);
@@ -313,8 +257,7 @@ where
                         waker.wake_by_ref();
                     }
                 }
-            })
-            .name("rsResolver");
+            });
 
             // rejected callback used to wake up future and save rejected value
             let reject_state = state.clone();
@@ -327,8 +270,7 @@ where
                 ) {
                     waker.wake_by_ref();
                 }
-            })
-            .name("rsReject");
+            });
 
             // Register resolve handlers
             this.promise
@@ -345,17 +287,6 @@ where
 
         if let Some(state) = &this.state {
             let mut state = state.borrow_mut();
-
-            // Check timeout first if it's set
-            if let (Some(start_time), Some(timeout)) = (this.start_time, this.timeout_duration) {
-                let elapsed = start_time.elapsed();
-                if elapsed >= timeout && matches!(*state, PromiseState::Pending(_)) {
-                    *state = PromiseState::TimedOut(elapsed);
-                    return Poll::Ready(Err(RustyJSError::PromiseTimeout(
-                        elapsed.as_millis() as u64
-                    )));
-                }
-            }
 
             // Then check Promise state
             match &*state {
@@ -376,11 +307,6 @@ where
                 PromiseState::Pending(_) => {
                     // Update the waker
                     *state = PromiseState::Pending(cx.waker().clone());
-                }
-                PromiseState::TimedOut(elapsed) => {
-                    return Poll::Ready(Err(RustyJSError::PromiseTimeout(
-                        elapsed.as_millis() as u64
-                    )));
                 }
             }
         }

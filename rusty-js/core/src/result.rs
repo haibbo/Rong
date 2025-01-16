@@ -33,9 +33,6 @@ pub enum RustyJSError {
     #[error("This has already been taken")]
     AlreadyTaken,
 
-    #[error("Promise timed out after {0}ms")]
-    PromiseTimeout(u64),
-
     #[error("{0}")]
     Error(String),
 
@@ -60,7 +57,6 @@ impl RustyJSError {
 
             RustyJSError::Exception(_)
             | RustyJSError::Error(_)
-            | RustyJSError::PromiseTimeout(_)
             | RustyJSError::Borrow(_)
             | RustyJSError::AlreadyTaken => ctx.throw_error(self.to_string()),
         }
