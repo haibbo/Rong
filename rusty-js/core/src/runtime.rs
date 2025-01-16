@@ -44,12 +44,6 @@ impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
     }
 }
 
-impl<R: JSRuntimeImpl> Drop for JSRuntime<R> {
-    fn drop(&mut self) {
-        self.inner.run_gc();
-    }
-}
-
 impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
     pub fn block_on<F, T>(&self, future: F) -> JSResult<T>
     where
@@ -68,6 +62,16 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
     #[doc(hidden)]
     pub fn run_pending_jobs(&self) {
         self.inner.run_pending_jobs();
+    }
+
+    /// Runs garbage collection on the JavaScript runtime.
+    ///
+    /// # Key Notes
+    /// - This method triggers a garbage collection cycle to reclaim unused memory.
+    /// - The exact behavior depends on the underlying JavaScript engine implementation.
+    /// - Use this judiciously as it may impact performance.
+    pub fn run_gc(&self) {
+        self.inner.run_gc();
     }
 }
 
