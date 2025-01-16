@@ -14,7 +14,7 @@ fn test_throw_error() {
         assert_some!(error.is_exception());
 
         let error = ctx
-            .eval::<()>(Source::from_bytes(b"throw 'throw-error'"))
+            .eval::<()>(Source::from_bytes(b"throw new Error('throw-error')"))
             .unwrap_err();
         let error = error.to_string();
         assert!(
