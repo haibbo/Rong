@@ -7,7 +7,7 @@ use crate::{
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::rc::{Rc, Weak};
 
 /// JSContextImpl represents a JavaScript context
 ///
@@ -105,57 +105,89 @@ pub trait JSFfiContext {
 }
 
 pub struct JSContext<C: JSContextImpl> {
+    rc: Rc<JSContextInner<C>>,
+}
+
+struct JSContextInner<C: JSContextImpl> {
     inner: C,
     runtime: JSRuntime<C::Runtime>,
+    weak: Weak<JSContext<C>>,
 }
 
 impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
     fn as_ref(&self) -> &C {
-        &self.inner
+        &self.rc.inner
     }
 }
 
 impl<C: JSContextImpl> JSContext<C> {
-    /// Creates a new JavaScript context that can be safely shared between callbacks and async tasks.
+    /// Creates a new JavaScript context.
     ///
     /// This function:
-    /// 1. Creates a JSContext instance on the heap with a stable address
-    /// 2. Stores this address in an opaque data structure for later retrieval
-    /// 3. Uses Box::leak to keep the original context alive for callbacks
+    /// 1. Creates a JSContext instance with proper internal structure
+    /// 2. Stores the context address in an opaque data structure for FFI callbacks
+    /// 3. Sets up weak references to prevent memory leaks
     ///
-    /// The context will be automatically cleaned up when all clones are dropped.
+    /// The context can be safely shared between callbacks and async tasks.
+    ///
+    /// # Safety
+    /// - The context must be dropped on the same thread it was created on
+    /// - The runtime must outlive the context
     ///
     /// # Example
     /// ```
-    /// let ctx = JSContext::new(&runtime);
+    /// let rt = RustyJS::runtime();
+    /// let ctx = JSContext::new(&rt);
     ///
     /// // Can be safely cloned for async tasks
     /// let ctx_clone = ctx.clone();
-    /// spawn_local(async move {
-    ///     ctx_clone.eval("...").await?;
+    /// ctx.spawn_local(async move {
+    ///     ctx_clone.eval_async("...").await?;
     /// });
     /// ```
     pub fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
         // Create the inner context first
         let inner = C::new(&runtime.inner);
 
-        // Create the JSContext on the heap to get a stable address
-        // This instance will be leaked and cleaned up when the last clone is dropped
-        let ctx = Box::new(Self {
-            inner,
-            runtime: runtime.clone(),
+        // Create the JSContext instance with proper cyclic reference
+        let ctx = Rc::new_cyclic(|weak| {
+            let inner = JSContextInner {
+                inner,
+                runtime: runtime.clone(),
+                weak: weak.clone(),
+            };
+            JSContext { rc: Rc::new(inner) }
         });
 
-        // Store the heap address in the opaque data for later retrieval in callbacks
-        let opaque = Box::into_raw(ContextOpaque::new(ctx.as_ref() as *const _ as usize));
-        ctx.inner.set_opaque::<ContextOpaque<C::Value>>(opaque);
+        // Create ContextOpaque with the Rc's address
+        let opaque = ContextOpaque::<C::Value>::new(&*ctx as *const _ as usize);
 
-        let leaked_ctx = Box::leak(ctx);
-        // Return a clone of the leaked context
-        Self {
-            inner: leaked_ctx.inner.clone(),
-            runtime: leaked_ctx.runtime.clone(),
-        }
+        // Store the opaque data in the context
+        ctx.rc.inner.set_opaque(Box::into_raw(opaque));
+
+        // Return the context by cloning the Rc
+        (*ctx).clone()
+    }
+
+    /// Get a weak reference to this context
+    ///
+    /// This is useful for scenarios where you need to hold a reference to the context
+    /// without preventing it from being dropped when no longer needed.
+    ///
+    /// # Example
+    /// ```rust
+    /// let weak = ctx.downgrade();
+    ///
+    /// // Later, check if context still exists
+    /// if let Some(ctx) = weak.upgrade() {
+    ///     // Context is still alive
+    ///     ctx.eval("console.log('Context exists')").unwrap();
+    /// } else {
+    ///     println!("Context was dropped");
+    /// }
+    /// ```
+    pub fn downgrade(&self) -> Weak<JSContext<C>> {
+        Weak::clone(&self.rc.weak)
     }
 
     /// Creates a JSContext from an FFI context pointer.
@@ -168,13 +200,23 @@ impl<C: JSContextImpl> JSContext<C> {
     /// - The provided FFI context must be valid and properly aligned
     /// - The caller must ensure the context pointer remains valid for the duration of use
     /// - This should only be called with context pointers obtained from the JS engine
+    /// - The returned reference must not outlive the original context
+    ///
+    /// # Example
+    /// ```rust
+    /// // In a callback from JS engine:
+    /// unsafe {
+    ///     let ctx = JSContext::from_raw_ptr(ffi_ctx);
+    ///     // Use ctx for the duration of the callback
+    /// }
+    /// ```
     pub(crate) fn from_raw_ptr(c: &C) -> &Self {
         let data = c.get_opaque::<ContextOpaque<C::Value>>();
         if data.is_null() {
             panic!("[JSContext] opaque is empty");
         } else {
             unsafe {
-                // Reconstruct the pointer from the stored address
+                // Reconstruct JSContext from pointer address
                 let ctx_ptr = (*data).address as *const JSContext<C>;
                 &*ctx_ptr
             }
@@ -201,11 +243,11 @@ impl<C: JSContextImpl> JSContext<C> {
         T: FromJSValue<C::Value>,
     {
         let result = match source.kind() {
-            SourceKind::ByteCode(code) => self.inner.run_bytecode(code),
-            SourceKind::JavaScript(code) => self.inner.eval(Source::from_bytes(code.clone())),
+            SourceKind::ByteCode(code) => self.rc.inner.run_bytecode(code),
+            SourceKind::JavaScript(code) => self.rc.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        let ctx = &self.inner;
+        let ctx = &self.rc.inner;
         if let Some(err) = result.is_exception() {
             let err = JSException::from_js_value(ctx, err)?;
             Err(RustyJSError::Exception(err.into_error()))
@@ -227,7 +269,7 @@ impl<C: JSContextImpl> JSContext<C> {
     /// assert_eq!(result, 42);
     /// ```
     pub fn global(&self) -> JSObject<C::Value> {
-        let raw = self.inner.global();
+        let raw = self.rc.inner.global();
         JSValue::new(self, raw).into()
     }
 
@@ -245,7 +287,7 @@ impl<C: JSContextImpl> JSContext<C> {
         JC: JSClass<C::Value>,
         C::Value: JSObjectOps,
     {
-        let constructor = self.inner.register_class::<JC>();
+        let constructor = self.rc.inner.register_class::<JC>();
 
         if let Some(registry) = self.get_class_registry() {
             registry
@@ -261,7 +303,7 @@ impl<C: JSContextImpl> JSContext<C> {
 
     /// Get class registry from context
     pub(crate) fn get_class_registry(&self) -> Option<&RefCell<HashMap<TypeId, C::Value>>> {
-        let data = self.inner.get_opaque::<ContextOpaque<C::Value>>();
+        let data = self.rc.inner.get_opaque::<ContextOpaque<C::Value>>();
         if data.is_null() {
             None
         } else {
@@ -270,7 +312,7 @@ impl<C: JSContextImpl> JSContext<C> {
     }
 
     pub(crate) fn runtime(&self) -> &JSRuntime<C::Runtime> {
-        &self.runtime
+        &self.rc.runtime
     }
 
     /// Compile JavaScript source code to bytecode
@@ -296,7 +338,8 @@ impl<C: JSContextImpl> JSContext<C> {
     /// let bytecode = ctx.compile_to_bytecode(b"let x = 1;")?;
     /// ```
     pub fn compile_to_bytecode<T: AsRef<[u8]>>(&self, code: T) -> JSResult<Source> {
-        self.inner
+        self.rc
+            .inner
             .compile_to_bytecode(Source::from_bytes(code.as_ref()))
             .map(Source::from_bytecode)
             .ok_or(RustyJSError::CompileToByteErr)
@@ -320,11 +363,11 @@ impl<C: JSContextImpl> JSContext<C> {
         T: FromJSValue<C::Value> + 'static,
     {
         let result = match source.kind() {
-            SourceKind::ByteCode(code) => self.inner.run_bytecode(code),
-            SourceKind::JavaScript(code) => self.inner.eval(Source::from_bytes(code.clone())),
+            SourceKind::ByteCode(code) => self.rc.inner.run_bytecode(code),
+            SourceKind::JavaScript(code) => self.rc.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        let ctx = &self.inner;
+        let ctx = &self.rc.inner;
 
         match (result.is_promise(), result.is_exception().is_some()) {
             (true, _) => {
@@ -340,21 +383,6 @@ impl<C: JSContextImpl> JSContext<C> {
     }
 }
 
-#[cfg(feature = "debug_log")]
-macro_rules! context_log {
-    ($op:expr, $count:expr) => {
-        println!("[JSContext] {} ref count: {}", $op, $count)
-    };
-    ($($arg:tt)*) => {
-        println!("[JSContext] {}", format!($($arg)*))
-    };
-}
-#[cfg(not(feature = "debug_log"))]
-macro_rules! context_log {
-    ($op:expr, $count:expr) => {};
-    ($($arg:tt)*) => {};
-}
-
 /// Container to hold the context-specific data for a JSContext.
 ///
 /// # Fields
@@ -363,7 +391,6 @@ macro_rules! context_log {
 /// - `address`: Address of JSContext used to build JSContext from callback case
 struct ContextOpaque<V: JSValueImpl> {
     registry: RefCell<HashMap<TypeId, V>>,
-    ref_count: AtomicUsize,
     address: usize,
 }
 
@@ -371,54 +398,24 @@ impl<V: JSValueImpl> ContextOpaque<V> {
     fn new(address: usize) -> Box<Self> {
         Box::new(Self {
             registry: RefCell::new(HashMap::new()),
-            ref_count: AtomicUsize::new(1),
             address,
         })
-    }
-
-    fn inc_ref(&self) {
-        #[allow(unused_variables)]
-        let prev_count = self.ref_count.fetch_add(1, Ordering::SeqCst);
-        context_log!("increment", prev_count + 1);
-    }
-
-    fn dec_ref(&self) -> bool {
-        let prev_count = self.ref_count.fetch_sub(1, Ordering::SeqCst);
-        match prev_count {
-            n if n > 1 => {
-                context_log!("decrement", n - 1);
-                false
-            }
-            1 => {
-                context_log!("decrement to zero");
-                true
-            }
-            _ => false,
-        }
     }
 }
 
 impl<C: JSContextImpl> Drop for JSContext<C> {
     fn drop(&mut self) {
-        let data = self.inner.get_opaque::<ContextOpaque<C::Value>>();
+        if Rc::strong_count(&self.rc) == 1 {
+            let data = self.rc.inner.get_opaque::<ContextOpaque<C::Value>>();
+            if !data.is_null() {
+                unsafe {
+                    // println!("cleanup context and resources");
 
-        if !data.is_null() {
-            unsafe {
-                // Check if this is the last reference
-                if (*data).dec_ref() {
-                    context_log!("cleanup context and resources");
-
-                    // Get all the pointers we need before any cleanup
+                    // cleanup class registry
                     let registry = &(*data).registry;
-                    let ctx_ptr = (*data).address as *mut JSContext<C>;
-
-                    // Clear the registry first
                     registry.borrow_mut().clear();
 
-                    // Clean up the leaked JSContext
-                    let _ = Box::from_raw(ctx_ptr);
-
-                    // Finally clean up the ContextOpaque
+                    // cleanup ContextOpaque
                     let _ = Box::from_raw(data);
                 }
             }
@@ -428,16 +425,8 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
 
 impl<C: JSContextImpl> Clone for JSContext<C> {
     fn clone(&self) -> Self {
-        let data = self.inner.get_opaque::<ContextOpaque<C::Value>>();
-        if !data.is_null() {
-            unsafe {
-                (*data).inc_ref();
-            }
-        }
-
         Self {
-            inner: self.inner.clone(),
-            runtime: self.runtime.clone(),
+            rc: Rc::clone(&self.rc),
         }
     }
 }
