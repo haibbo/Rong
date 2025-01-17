@@ -15,7 +15,7 @@ use std::rc::Rc;
 /// The implementation must ensure that:
 /// 1. Value type implements Drop to properly clean up resources
 /// 2. Context type implements Drop if it holds any resources that need cleanup
-pub trait JSContextImpl: Clone {
+pub trait JSContextImpl {
     /// the JS engine specific type of JavaScript Context
     type FfiContext: Copy;
     type Runtime: JSRuntimeImpl<Context = Self>;
