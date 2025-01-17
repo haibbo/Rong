@@ -145,7 +145,7 @@ impl<C: JSContextImpl> JSContext<C> {
     ///     ctx_clone.eval_async("...").await?;
     /// });
     /// ```
-    pub fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
+    pub(crate) fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
         // Create the inner context first
         let inner = C::new(&runtime.inner);
 
