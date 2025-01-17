@@ -7,7 +7,7 @@ use crate::{
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 
 /// JSContextImpl represents a JavaScript context
 ///
@@ -108,10 +108,23 @@ pub struct JSContext<C: JSContextImpl> {
     rc: Rc<JSContextInner<C>>,
 }
 
+#[cfg(debug_assertions)]
+impl<C: JSContextImpl> std::fmt::Debug for JSContext<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "JSContext {{ address: {:p}, magic number: {:#x}, ref_count: {} }}",
+            self as *const _,
+            self.rc.magic,
+            Rc::strong_count(&self.rc)
+        )
+    }
+}
 struct JSContextInner<C: JSContextImpl> {
     inner: C,
     runtime: JSRuntime<C::Runtime>,
-    weak: Weak<JSContext<C>>,
+    #[cfg(debug_assertions)]
+    magic: usize,
 }
 
 impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
@@ -146,48 +159,23 @@ impl<C: JSContextImpl> JSContext<C> {
     /// });
     /// ```
     pub(crate) fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
-        // Create the inner context first
-        let inner = C::new(&runtime.inner);
+        let inner = JSContextInner {
+            inner: C::new(&runtime.inner),
+            runtime: runtime.clone(),
+            #[cfg(debug_assertions)]
+            magic: 0x5aa5f5f5,
+        };
 
-        // Create the JSContext instance with proper cyclic reference
-        let ctx = Rc::new_cyclic(|weak| {
-            let inner = JSContextInner {
-                inner,
-                runtime: runtime.clone(),
-                weak: weak.clone(),
-            };
-            JSContext { rc: Rc::new(inner) }
-        });
+        let ctx = Box::new(JSContext { rc: Rc::new(inner) });
 
-        // Create ContextOpaque with the Rc's address
-        let opaque = ContextOpaque::<C::Value>::new(&*ctx as *const _ as usize);
+        // leak the JSContext
+        let address = Box::leak(ctx.clone());
 
-        // Store the opaque data in the context
+        // save stale address to opaque
+        let opaque = ContextOpaque::<C::Value>::new(address as *const _ as usize);
         C::set_opaque(ctx.rc.inner.as_ffi(), Box::into_raw(opaque));
 
-        // Return the context by cloning the Rc
-        (*ctx).clone()
-    }
-
-    /// Get a weak reference to this context
-    ///
-    /// This is useful for scenarios where you need to hold a reference to the context
-    /// without preventing it from being dropped when no longer needed.
-    ///
-    /// # Example
-    /// ```rust
-    /// let weak = ctx.downgrade();
-    ///
-    /// // Later, check if context still exists
-    /// if let Some(ctx) = weak.upgrade() {
-    ///     // Context is still alive
-    ///     ctx.eval("console.log('Context exists')").unwrap();
-    /// } else {
-    ///     println!("Context was dropped");
-    /// }
-    /// ```
-    pub(crate) fn downgrade(&self) -> Weak<JSContext<C>> {
-        Weak::clone(&self.rc.weak)
+        *ctx
     }
 
     /// Creates a JSContext from an FFI context pointer.
@@ -216,8 +204,8 @@ impl<C: JSContextImpl> JSContext<C> {
             panic!("[JSContext] opaque is empty");
         } else {
             unsafe {
-                // Reconstruct JSContext from pointer address
                 let ctx_ptr = (*data).address as *const JSContext<C>;
+                // println!("magic number: {:#x}", (*ctx_ptr).rc.magic);
                 &*ctx_ptr
             }
         }
@@ -413,11 +401,14 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
             let data = self.get_opaque();
             if !data.is_null() {
                 unsafe {
-                    // println!("cleanup context and resources");
+                    println!("cleanup context and resources");
 
                     // cleanup class registry
                     let registry = &(*data).registry;
                     registry.borrow_mut().clear();
+
+                    // clear memory for JSContext
+                    let _ = Box::from_raw((*data).address as *mut JSContext<C>);
 
                     // cleanup ContextOpaque
                     let _ = Box::from_raw(data);
