@@ -44,7 +44,7 @@ pub enum RustyJSError {
 }
 
 impl RustyJSError {
-    pub fn throw_js_exception<V>(self, ctx: &V::Context) -> V
+    pub fn throw_js_exception<V>(self, ctx: &JSContext<V::Context>) -> V
     where
         V: JSValueImpl,
         V::Context: JSExceptionHandler,
@@ -54,15 +54,17 @@ impl RustyJSError {
             | RustyJSError::NotJSFunc
             | RustyJSError::NotObject
             | RustyJSError::NotJSExcep
-            | RustyJSError::InvalidParameter { .. } => ctx.throw_type_error(self.to_string()),
+            | RustyJSError::InvalidParameter { .. } => {
+                ctx.as_ref().throw_type_error(self.to_string())
+            }
 
-            RustyJSError::PropertyNotFound => ctx.throw_reference_error(self.to_string()),
+            RustyJSError::PropertyNotFound => ctx.as_ref().throw_reference_error(self.to_string()),
 
             RustyJSError::Exception(_)
             | RustyJSError::Error(_)
             | RustyJSError::Borrow(_)
             | RustyJSError::CompileToByteErr
-            | RustyJSError::AlreadyTaken => ctx.throw_error(self.to_string()),
+            | RustyJSError::AlreadyTaken => ctx.as_ref().throw_error(self.to_string()),
         }
     }
 
@@ -79,7 +81,7 @@ impl<V: JSValueImpl> FromJSValue<V> for RustyJSError
 where
     V: JSObjectOps,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         let obj = JSObject::from_js_value(ctx, value)?;
         Ok(RustyJSError::Exception(
             JSException::from_object(obj).into_error(),
@@ -92,8 +94,8 @@ where
     V::Context: JSExceptionHandler,
     V: JSObjectOps,
 {
-    fn into_js_value(self, ctx: &V::Context) -> V {
-        let v = ctx.new_error();
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+        let v = ctx.as_ref().new_error();
         let obj = JSObject::from_js_value(ctx, v).unwrap();
         obj.set("message", self.to_string());
         obj.into_inner()

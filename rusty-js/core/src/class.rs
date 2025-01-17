@@ -26,6 +26,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         V::Context: JSExceptionHandler,
         V: JSObjectOps,
     {
+        let ctx = JSContext::from_raw_ptr(ctx);
         let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
 
         let instance = match Self::data_constructor().0.call(&mut accessor) {
@@ -63,6 +64,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         V: JSObjectOps,
         V::Context: JSExceptionHandler,
     {
+        let ctx = JSContext::from_raw_ptr(ctx);
         let mut accessor = ParamsAccessor::new(ctx, this, args);
 
         let obj = match JSObject::from_js_value(ctx, function) {
@@ -93,9 +95,9 @@ where
 {
     /// Create a new instance of the class
     pub fn instance<JC: JSClass<V>>(self, value: JC) -> V {
-        let context = self.0.as_ctx();
+        let context = &self.0.get_ctx();
         let ptr = Box::into_raw(Box::new(RefCell::new(value)));
-        V::make_object(context, self.0.clone().into_inner(), ptr)
+        V::make_object(context.as_ref().as_ref(), self.0.clone().into_inner(), ptr)
     }
 
     /// Free resources of a class instance
@@ -111,9 +113,8 @@ where
     }
 
     /// Get class constructor by type
-    pub fn get<JC: JSClass<V>>(context: &V::Context) -> Option<Self> {
-        let ctx = JSContext::from_raw_ptr(context);
-        let constructor = ctx
+    pub fn get<JC: JSClass<V>>(context: &JSContext<V::Context>) -> Option<Self> {
+        let constructor = context
             .get_class_registry()
             .and_then(|registry| registry.borrow().get(&TypeId::of::<JC>()).cloned())?;
 

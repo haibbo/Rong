@@ -1,5 +1,5 @@
 use super::JSValueImpl;
-use crate::{JSResult, RustyJSError};
+use crate::{JSContext, JSResult, RustyJSError};
 
 /// The conversion between Rust primitive types, which implement the `JSCompatible`
 /// marker trait, and `JSValue` is facilitated using the standard `TryInto` and
@@ -77,7 +77,7 @@ pub trait FromJSValue<V>: Sized
 where
     V: JSValueImpl,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self>;
+    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self>;
 }
 
 /// extract rust primitive type from JSValue
@@ -87,7 +87,7 @@ where
     V: TryInto<T, Error = RustyJSError>,
     T: JSCompatible,
 {
-    fn from_js_value(_ctx: &V::Context, value: V) -> JSResult<Self> {
+    fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         value.try_into()
     }
 }
@@ -96,7 +96,7 @@ impl<V> FromJSValue<V> for ()
 where
     V: JSValueConversion,
 {
-    fn from_js_value(_ctx: &V::Context, _value: V) -> JSResult<Self> {
+    fn from_js_value(_ctx: &JSContext<V::Context>, _value: V) -> JSResult<Self> {
         Ok(())
     }
 }
@@ -106,7 +106,7 @@ where
     V: JSValueImpl,
     V: TryInto<String, Error = RustyJSError>,
 {
-    fn from_js_value(_ctx: &V::Context, value: V) -> JSResult<Self> {
+    fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         value.try_into()
     }
 }
@@ -116,7 +116,7 @@ pub trait IntoJSValue<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &V::Context) -> V;
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V;
 }
 
 impl<V> IntoJSValue<V> for &str
@@ -124,8 +124,8 @@ where
     V: JSValueImpl,
     V: for<'a> From<(&'a V::Context, &'a str)>,
 {
-    fn into_js_value(self, ctx: &V::Context) -> V {
-        V::from((ctx, self))
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+        V::from((ctx.as_ref(), self))
     }
 }
 
@@ -134,8 +134,8 @@ where
     V: JSValueImpl,
     V: for<'a> From<(&'a V::Context, &'a str)>,
 {
-    fn into_js_value(self, ctx: &V::Context) -> V {
-        V::from((ctx, self.as_str()))
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+        V::from((ctx.as_ref(), self.as_str()))
     }
 }
 
@@ -143,8 +143,8 @@ impl<V> IntoJSValue<V> for ()
 where
     V: JSValueConversion,
 {
-    fn into_js_value(self, ctx: &V::Context) -> V {
-        V::from((ctx, self))
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+        V::from((ctx.as_ref(), self))
     }
 }
 
@@ -155,7 +155,7 @@ where
     V: for<'a> From<(&'a V::Context, T)>,
     T: JSCompatible,
 {
-    fn into_js_value(self, ctx: &V::Context) -> V {
-        V::from((ctx, self))
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+        V::from((ctx.as_ref(), self))
     }
 }

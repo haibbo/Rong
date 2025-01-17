@@ -247,12 +247,11 @@ impl<C: JSContextImpl> JSContext<C> {
             SourceKind::JavaScript(code) => self.rc.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        let ctx = &self.rc.inner;
         if let Some(err) = result.is_exception() {
-            let err = JSException::from_js_value(ctx, err)?;
+            let err = JSException::from_js_value(self, err)?;
             Err(RustyJSError::Exception(err.into_error()))
         } else {
-            T::from_js_value(ctx, result)
+            T::from_js_value(self, result)
         }
     }
 
@@ -268,9 +267,12 @@ impl<C: JSContextImpl> JSContext<C> {
     /// let result: i32 = global.get("myVar").unwrap();
     /// assert_eq!(result, 42);
     /// ```
-    pub fn global(&self) -> JSObject<C::Value> {
+    pub fn global(&self) -> JSObject<C::Value>
+    where
+        C::Value: JSTypeOf,
+    {
         let raw = self.rc.inner.global();
-        JSValue::new(self, raw).into()
+        JSObject::from_js_value(self, raw).unwrap()
     }
 
     /// Register a JavaScript class for a Rust type.
@@ -296,7 +298,7 @@ impl<C: JSContextImpl> JSContext<C> {
         }
 
         let obj = self.global();
-        let constructor = JSValue::new(self, constructor);
+        let constructor = JSValue::from_raw(self, constructor);
         JC::class_setup(&ClassSetup::new(constructor.clone().into(), self));
         obj.set(JC::NAME, constructor);
     }
@@ -367,18 +369,16 @@ impl<C: JSContextImpl> JSContext<C> {
             SourceKind::JavaScript(code) => self.rc.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        let ctx = &self.rc.inner;
-
         match (result.is_promise(), result.is_exception().is_some()) {
             (true, _) => {
-                let promise = Promise::from_js_value(ctx, result)?;
+                let promise = Promise::from_js_value(self, result)?;
                 promise.into_future::<T>().await
             }
             (_, true) => {
-                let err = JSException::from_js_value(ctx, result)?;
+                let err = JSException::from_js_value(self, result)?;
                 Err(RustyJSError::Exception(err.into_error()))
             }
-            _ => T::from_js_value(ctx, result),
+            _ => T::from_js_value(self, result),
         }
     }
 }

@@ -8,14 +8,14 @@ use std::ops::{Deref, DerefMut};
 
 /// Arguments retrieved from the JavaScript side for calling Rust functions.
 pub struct ParamsAccessor<'a, V: JSValueImpl> {
-    ctx: &'a V::Context,
+    ctx: &'a JSContext<V::Context>,
     this: Option<V>,
     args: Vec<V>,
     is_last_param: bool,
 }
 
 impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
-    pub fn new(ctx: &'a V::Context, this: V, args: Vec<V>) -> Self {
+    pub fn new(ctx: &'a JSContext<V::Context>, this: V, args: Vec<V>) -> Self {
         Self {
             ctx,
             this: Some(this),
@@ -40,7 +40,7 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
         self.this.take()
     }
 
-    pub(crate) fn context(&self) -> &V::Context {
+    pub(crate) fn context(&self) -> &JSContext<V::Context> {
         self.ctx
     }
 
@@ -265,17 +265,13 @@ impl<'a, V: JSValueImpl> GetParam<V> for &'a JSContext<V::Context> {
     type Kind = JSContext<V::Context>;
 
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
-        // Get the raw pointer from value
-        let raw_ctx = accessor.context();
+        let ctx = accessor.context();
 
-        // Convert raw pointer to JSContext reference with proper lifetime
-        let ctx_ref = JSContext::from_raw_ptr(raw_ctx);
-
-        // Extend the lifetime to match the input reference
-        // This is safe because we know the context will live as long as the function call
-        Ok(unsafe {
-            std::mem::transmute::<&JSContext<V::Context>, &'a JSContext<V::Context>>(ctx_ref)
-        })
+        Ok(
+            unsafe {
+                std::mem::transmute::<&JSContext<V::Context>, &'a JSContext<V::Context>>(ctx)
+            },
+        )
     }
 }
 

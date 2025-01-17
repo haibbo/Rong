@@ -20,7 +20,7 @@ impl<V> IntoJSValue<V> for JSException<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &V::Context) -> V {
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
         self.0.into_js_value(ctx)
     }
 }
@@ -38,9 +38,9 @@ impl<V> FromJSValue<V> for JSException<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         if value.is_exception().is_some() || value.is_error() {
-            Ok(Self(JSValue::from_raw_parts(ctx.clone(), value).into()))
+            Ok(Self(JSObject::from_js_value(ctx, value)?))
         } else {
             Err(RustyJSError::NotObject)
         }
@@ -54,7 +54,7 @@ impl<C: JSContextImpl> JSContext<C> {
         C::Value: JSObjectOps,
     {
         let v = self.as_ref().new_error();
-        let obj = JSObject::from_js_value(self.as_ref(), v).unwrap();
+        let obj = JSObject::from_js_value(self, v).unwrap();
         obj.set("message", message);
         JSException::from_object(obj)
     }
@@ -80,7 +80,7 @@ where
 
     /// Convert the exception into JSError
     pub fn into_error(self) -> JSError {
-        let ctx = self.as_ctx().clone();
+        let ctx = self.get_ctx();
         if self.is_error().is_some() {
             JSError {
                 message: self.message(),
@@ -132,27 +132,27 @@ where
 {
     pub fn throw_syntax_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_syntax_error(message);
-        JSValue::new(self, raw)
+        JSValue::from_raw(self, raw)
     }
 
     pub fn throw_type_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_type_error(message);
-        JSValue::new(self, raw)
+        JSValue::from_raw(self, raw)
     }
 
     pub fn throw_reference_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_reference_error(message);
-        JSValue::new(self, raw)
+        JSValue::from_raw(self, raw)
     }
 
     pub fn throw_range_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_range_error(message);
-        JSValue::new(self, raw)
+        JSValue::from_raw(self, raw)
     }
 
     pub fn throw_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_error(message);
-        JSValue::new(self, raw)
+        JSValue::from_raw(self, raw)
     }
 }
 
@@ -178,9 +178,9 @@ impl<V: JSObjectOps> fmt::Display for JSException<V> {
                 stack.fmt(f)?;
             }
         } else {
-            let ctx = self.as_ctx();
+            let ctx = self.get_ctx();
             let js_value = self.as_inner().clone();
-            String::from_js_value(ctx, js_value).unwrap().fmt(f)?;
+            String::from_js_value(&ctx, js_value).unwrap().fmt(f)?;
         }
         Ok(())
     }

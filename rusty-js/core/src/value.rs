@@ -45,7 +45,6 @@ pub trait JSValueImpl: Clone {
 
 pub struct JSValue<V: JSValueImpl> {
     inner: V,
-    ctx1: V::Context, // TODO: delete
     ctx: Weak<JSContext<V::Context>>,
 }
 
@@ -53,15 +52,8 @@ impl<V: JSValueImpl> Clone for JSValue<V> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            ctx1: self.ctx1.clone(),
             ctx: self.ctx.clone(),
         }
-    }
-}
-
-impl<V: JSValueImpl> From<(V::Context, V)> for JSValue<V> {
-    fn from(parts: (V::Context, V)) -> Self {
-        Self::from_raw_parts(parts.0, parts.1)
     }
 }
 
@@ -69,28 +61,17 @@ impl<V> JSValue<V>
 where
     V: JSValueImpl,
 {
-    pub(crate) fn new(ctx: &JSContext<V::Context>, value: V) -> Self {
-        Self {
-            inner: value,
-            ctx1: ctx.as_ref().clone(),
-            ctx: ctx.downgrade(),
-        }
-    }
-
     pub(crate) fn with_value(&self, value: V) -> Self {
         Self {
             inner: value,
-            ctx1: self.ctx1.clone(),
             ctx: self.ctx.clone(),
         }
     }
 
-    pub fn from_raw_parts(ctx: V::Context, value: V) -> Self {
-        let ctx2 = JSContext::from_raw_ptr(&ctx).downgrade();
+    pub(crate) fn from_raw(ctx: &JSContext<V::Context>, value: V) -> Self {
         Self {
             inner: value,
-            ctx1: ctx,
-            ctx: ctx2,
+            ctx: ctx.downgrade(),
         }
     }
 
@@ -100,10 +81,6 @@ where
 
     pub(crate) fn into_inner(self) -> V {
         self.inner
-    }
-
-    pub(crate) fn as_ctx(&self) -> &V::Context {
-        &self.ctx1
     }
 
     /// Returns the context associated with this JSValue as a strong reference.
@@ -131,7 +108,7 @@ where
         V: for<'a> From<(&'a V::Context, T)>,
     {
         let value = V::from((ctx.as_ref(), val));
-        JSValue::new(ctx, value)
+        JSValue::from_raw(ctx, value)
     }
 
     /// Try to converts JSValue to Rust value
@@ -149,7 +126,7 @@ where
         V: for<'a> From<(&'a V::Context, ())>,
     {
         let value = V::from((ctx.as_ref(), ()));
-        JSValue::new(ctx, value)
+        JSValue::from_raw(ctx, value)
     }
 }
 
@@ -157,8 +134,8 @@ impl<V> FromJSValue<V> for JSValue<V>
 where
     V: JSValueImpl,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
-        Ok(JSValue::from_raw_parts(ctx.clone(), value))
+    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+        Ok(JSValue::from_raw(ctx, value))
     }
 }
 
@@ -166,7 +143,7 @@ impl<V> IntoJSValue<V> for JSValue<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, _ctx: &V::Context) -> V {
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> V {
         self.into_inner()
     }
 }

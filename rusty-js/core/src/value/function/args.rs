@@ -1,7 +1,7 @@
-use crate::{IntoJSValue, JSValueImpl};
+use crate::{IntoJSValue, JSContext, JSValueImpl};
 
 pub trait IntoJSArg<V: JSValueImpl> {
-    fn push_js_arg(self, ctx: &V::Context, vec: &mut Vec<V>);
+    fn push_js_arg(self, ctx: &JSContext<V::Context>, vec: &mut Vec<V>);
 }
 
 impl<V, T> IntoJSArg<V> for T
@@ -9,13 +9,13 @@ where
     V: JSValueImpl,
     T: IntoJSValue<V>,
 {
-    fn push_js_arg(self, ctx: &V::Context, vec: &mut Vec<V>) {
+    fn push_js_arg(self, ctx: &JSContext<V::Context>, vec: &mut Vec<V>) {
         vec.push(self.into_js_value(ctx));
     }
 }
 
 pub trait IntoJSArgs<V: JSValueImpl> {
-    fn into_js_args(self, ctx: &V::Context) -> Vec<V>;
+    fn into_js_args(self, ctx: &JSContext<V::Context>) -> Vec<V>;
 }
 
 // Implement for tuples (including single-element tuples)
@@ -27,7 +27,7 @@ macro_rules! impl_into_js_args {
             $($T: IntoJSArg<V>),*
         {
             #[allow(unused_variables)]
-            fn into_js_args(self, ctx: &V::Context) -> Vec<V>  {
+            fn into_js_args(self, ctx: &JSContext<V::Context>) -> Vec<V>  {
                 #[allow(non_snake_case)]
                 let ($($T,)*) = self;
                 #[allow(unused_mut)]

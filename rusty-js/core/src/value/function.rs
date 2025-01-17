@@ -27,7 +27,7 @@ impl<V> IntoJSValue<V> for JSFunc<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &V::Context) -> V {
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
         self.0.into_js_value(ctx)
     }
 }
@@ -36,7 +36,7 @@ impl<V> FromJSValue<V> for JSFunc<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &V::Context, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         if value.is_function() {
             JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
         } else {
@@ -64,9 +64,9 @@ impl<V: JSObjectOps> JSFunc<V> {
         R: FromJSValue<V>,
         V: JSObjectOps,
     {
-        let ctx = self.as_ctx();
+        let ctx = &self.get_ctx();
         let argv = args.into_js_args(ctx);
-        let r = ctx.call(self.as_inner(), this, argv);
+        let r = ctx.as_ref().as_ref().call(self.as_inner(), this, argv);
         let result = JSValue::from_js_value(ctx, r)?;
 
         result.is_exception().map_or_else(
@@ -114,7 +114,7 @@ impl<V: JSObjectOps> JSFunc<V> {
         R: FromJSValue<V>,
         V: JSObjectOps,
     {
-        self.call_internal(Some(this.into_js_value(self.as_ctx())), args)
+        self.call_internal(Some(this.into_js_value(&self.get_ctx())), args)
     }
 
     /// set name of JS Function
@@ -158,13 +158,12 @@ where
         P: FromParams<C::Value>,
         K: 'static,
     {
-        let ctx = self.as_ref();
         let func = RustFunc::new(f);
         let length = func.parameter_required_count();
-        let value = Class::get::<RustFunc<C::Value>>(ctx)
+        let value = Class::get::<RustFunc<C::Value>>(self)
             .map(|class| class.instance::<RustFunc<C::Value>>(func))
             .expect("Not Found RustFunc Class");
-        let obj = JSObject::from_js_value(ctx, value).unwrap();
+        let obj = JSObject::from_js_value(self, value).unwrap();
         obj.set("length", length);
         JSFunc(obj)
     }

@@ -1,5 +1,5 @@
 use crate::{
-    IntoJSValue, JSClass, JSContext, JSObjectOps, JSResult, JSValueImpl, Promise, PromiseResolver,
+    IntoJSValue, JSClass, JSObjectOps, JSResult, JSValueImpl, Promise, PromiseResolver,
     RustyJSError,
 };
 use std::future::Future;
@@ -160,8 +160,7 @@ macro_rules! impl_js_callable_func {
                 let ($($t,)*) = params;
                 let future = (self)($($t),*);
                 let ctx=accessor.context();
-                let jsctx =JSContext::from_raw_ptr(ctx);
-                Ok(Promise::from_future(&jsctx,future)?.into_js_value(ctx))
+                Ok(Promise::from_future(ctx,future)?.into_js_value(ctx))
             }
         }
     };

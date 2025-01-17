@@ -1,4 +1,4 @@
-use crate::{JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
+use crate::{JSContext, JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
 
 // PropertyKey represents a key in a JavaScript object property
 // It can be a number (i32, u32, i64, u64) or a string reference
@@ -46,11 +46,12 @@ impl<'a, 'b: 'a> From<&'b str> for PropertyKey<'a> {
 
 // Convert PropertyKey into the actual JavaScript value type
 // No lifetime bound needed here as we're consuming self
-impl<'a> PropertyKey<'a> {
-    pub(crate) fn into_key<V>(self, ctx: &V::Context) -> V
+impl PropertyKey<'_> {
+    pub(crate) fn into_key<V>(self, context: &JSContext<V::Context>) -> V
     where
         V: JSValueConversion,
     {
+        let ctx = context.as_ref();
         match self {
             Self::Int32(i) => (ctx, i).into(),
             Self::Uint32(i) => (ctx, i).into(),
@@ -168,7 +169,9 @@ where
         K: for<'a> Into<PropertyKey<'a>>,
         V: JSObjectOps,
     {
-        let undefined = V::from((obj.as_ctx(), ())); // UNDEFINED
+        let context = obj.get_ctx();
+        let ctx = context.as_ref().as_ref(); // inner ctx
+        let undefined = V::from((ctx, ())); // UNDEFINED
 
         let value = self
             .value
@@ -191,7 +194,7 @@ where
             })
             .unwrap_or(undefined.clone());
 
-        let key = k.into().into_key(obj.as_ctx());
+        let key = k.into().into_key(&obj.get_ctx());
 
         obj.as_inner()
             .define_property(key, value, getter, setter, self.attributes);
