@@ -1,5 +1,6 @@
 use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
 use std::fmt;
+use std::rc::{Rc, Weak};
 
 mod convert;
 pub use convert::*;
@@ -44,13 +45,15 @@ pub trait JSValueImpl: Clone {
 
 pub struct JSValue<V: JSValueImpl> {
     inner: V,
-    ctx: V::Context,
+    ctx1: V::Context, // TODO: delete
+    ctx: Weak<JSContext<V::Context>>,
 }
 
 impl<V: JSValueImpl> Clone for JSValue<V> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            ctx1: self.ctx1.clone(),
             ctx: self.ctx.clone(),
         }
     }
@@ -69,19 +72,26 @@ where
     pub(crate) fn new(ctx: &JSContext<V::Context>, value: V) -> Self {
         Self {
             inner: value,
-            ctx: ctx.as_ref().clone(),
+            ctx1: ctx.as_ref().clone(),
+            ctx: ctx.downgrade(),
         }
     }
 
     pub(crate) fn with_value(&self, value: V) -> Self {
         Self {
             inner: value,
+            ctx1: self.ctx1.clone(),
             ctx: self.ctx.clone(),
         }
     }
 
     pub fn from_raw_parts(ctx: V::Context, value: V) -> Self {
-        Self { inner: value, ctx }
+        let ctx2 = JSContext::from_raw_ptr(&ctx).downgrade();
+        Self {
+            inner: value,
+            ctx1: ctx,
+            ctx: ctx2,
+        }
     }
 
     pub(crate) fn as_inner(&self) -> &V {
@@ -93,7 +103,21 @@ where
     }
 
     pub(crate) fn as_ctx(&self) -> &V::Context {
-        &self.ctx
+        &self.ctx1
+    }
+
+    /// Returns the context associated with this JSValue as a strong reference.
+    ///
+    /// # Safety
+    ///
+    /// This is safe because the function is called in a context that ensures the upgrade will succeed.
+    /// The Weak reference is guaranteed to be valid and upgradable when this method is called.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying context has been dropped and the Weak reference cannot be upgraded.
+    pub fn get_ctx(&self) -> Rc<JSContext<V::Context>> {
+        self.ctx.upgrade().unwrap()
     }
 }
 
@@ -126,15 +150,6 @@ where
     {
         let value = V::from((ctx.as_ref(), ()));
         JSValue::new(ctx, value)
-    }
-}
-
-impl<V: JSTypeOf> JSValue<V> {
-    pub fn as_object(&self) -> Option<&JSObject<V>> {
-        self.is_object().map(|_| {
-            // it's safe, because JSObject is just wrapper of JSValue
-            unsafe { std::mem::transmute(self) }
-        })
     }
 }
 

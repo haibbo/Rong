@@ -186,7 +186,7 @@ impl<C: JSContextImpl> JSContext<C> {
     ///     println!("Context was dropped");
     /// }
     /// ```
-    pub fn downgrade(&self) -> Weak<JSContext<C>> {
+    pub(crate) fn downgrade(&self) -> Weak<JSContext<C>> {
         Weak::clone(&self.rc.weak)
     }
 
