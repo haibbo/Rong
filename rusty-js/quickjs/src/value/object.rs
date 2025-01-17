@@ -1,6 +1,6 @@
 use crate::qjs;
 use crate::QJSValue;
-use rusty_js_core::{JSContextImpl, JSObjectOps, JSValueImpl, PropertyAttributes};
+use rusty_js_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
 
 impl JSObjectOps for QJSValue {
     fn new_object(ctx: &Self::Context) -> Self {

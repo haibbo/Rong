@@ -183,9 +183,9 @@ macro_rules! impl_js_converter {
             $target: JSValueImpl<Context = T>,
         {
             fn from(t: (&T, $in_type)) -> Self {
-                let ctx = t.0.to_ffi();
-                let raw = unsafe { $create_fn(ctx, t.1) };
-                Self::from_parts(ctx, raw)
+                let ctx = t.0.as_ffi();
+                let raw = unsafe { $create_fn(*ctx, t.1) };
+                Self::from_parts(*ctx, raw)
             }
         }
     };

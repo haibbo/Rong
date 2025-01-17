@@ -1,7 +1,7 @@
 use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
-    FromJSValue, JSContext, JSExceptionHandler, JSFunc, JSObject, JSObjectOps, JSResult,
-    JSValueImpl, PropertyDescriptor, PropertyKey, RustyJSError,
+    FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
+    JSResult, JSValueImpl, PropertyDescriptor, PropertyKey, RustyJSError,
 };
 
 use std::any::TypeId;
@@ -26,7 +26,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         V::Context: JSExceptionHandler,
         V: JSObjectOps,
     {
-        let ctx = JSContext::from_raw_ptr(ctx);
+        let ctx = JSContext::from_raw_ptr(ctx.as_ffi());
         let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
 
         let instance = match Self::data_constructor().0.call(&mut accessor) {
@@ -64,7 +64,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         V: JSObjectOps,
         V::Context: JSExceptionHandler,
     {
-        let ctx = JSContext::from_raw_ptr(ctx);
+        let ctx = JSContext::from_raw_ptr(ctx.as_ffi());
         let mut accessor = ParamsAccessor::new(ctx, this, args);
 
         let obj = match JSObject::from_js_value(ctx, function) {

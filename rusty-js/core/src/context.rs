@@ -29,17 +29,17 @@ pub trait JSContextImpl: Clone {
     /// # Safety
     /// - The caller must ensure the pointer is valid and properly aligned for type T
     /// - The pointer must not be used after the context is dropped
-    fn get_opaque<T>(&self) -> *mut T;
+    fn get_opaque<T>(ctx: &Self::FfiContext) -> *mut T;
 
     /// Set the opaque pointer in the context
     ///
     /// # Safety
     /// - The caller must ensure the pointer is valid and properly aligned for type T
     /// - The caller must ensure proper cleanup of the pointer when no longer needed
-    fn set_opaque<T>(&self, opaque: *mut T);
+    fn set_opaque<T>(ctx: &Self::FfiContext, opaque: *mut T);
 
-    /// FfiContext implements Copy
-    fn to_ffi(&self) -> Self::FfiContext;
+    /// Converts the context to its FFI representation
+    fn as_ffi(&self) -> &Self::FfiContext;
 
     /// the implementation need to make sure it has the ownship, like as new method
     /// generally, it should increase referen count of FFI Context
@@ -163,7 +163,7 @@ impl<C: JSContextImpl> JSContext<C> {
         let opaque = ContextOpaque::<C::Value>::new(&*ctx as *const _ as usize);
 
         // Store the opaque data in the context
-        ctx.rc.inner.set_opaque(Box::into_raw(opaque));
+        C::set_opaque(ctx.rc.inner.as_ffi(), Box::into_raw(opaque));
 
         // Return the context by cloning the Rc
         (*ctx).clone()
@@ -210,8 +210,8 @@ impl<C: JSContextImpl> JSContext<C> {
     ///     // Use ctx for the duration of the callback
     /// }
     /// ```
-    pub(crate) fn from_raw_ptr(c: &C) -> &Self {
-        let data = c.get_opaque::<ContextOpaque<C::Value>>();
+    pub(crate) fn from_raw_ptr(ptr: &C::FfiContext) -> &Self {
+        let data = C::get_opaque::<ContextOpaque<C::Value>>(ptr);
         if data.is_null() {
             panic!("[JSContext] opaque is empty");
         } else {
@@ -305,7 +305,7 @@ impl<C: JSContextImpl> JSContext<C> {
 
     /// Get class registry from context
     pub(crate) fn get_class_registry(&self) -> Option<&RefCell<HashMap<TypeId, C::Value>>> {
-        let data = self.rc.inner.get_opaque::<ContextOpaque<C::Value>>();
+        let data = self.get_opaque();
         if data.is_null() {
             None
         } else {
@@ -381,6 +381,10 @@ impl<C: JSContextImpl> JSContext<C> {
             _ => T::from_js_value(self, result),
         }
     }
+
+    fn get_opaque(&self) -> *mut ContextOpaque<C::Value> {
+        C::get_opaque::<ContextOpaque<C::Value>>(self.rc.inner.as_ffi())
+    }
 }
 
 /// Container to hold the context-specific data for a JSContext.
@@ -406,7 +410,7 @@ impl<V: JSValueImpl> ContextOpaque<V> {
 impl<C: JSContextImpl> Drop for JSContext<C> {
     fn drop(&mut self) {
         if Rc::strong_count(&self.rc) == 1 {
-            let data = self.rc.inner.get_opaque::<ContextOpaque<C::Value>>();
+            let data = self.get_opaque();
             if !data.is_null() {
                 unsafe {
                     // println!("cleanup context and resources");

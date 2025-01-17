@@ -75,7 +75,7 @@ where
     T: JSContextImpl<FfiContext = <QJSValue as JSFfiContext>::FfiContext>,
 {
     fn from(t: (&T, ())) -> Self {
-        let ctx = t.0.to_ffi();
+        let ctx = *t.0.as_ffi();
         let raw = unsafe { qjs::QJS_NewUndefined(ctx) };
         Self::from_parts(ctx, raw)
     }

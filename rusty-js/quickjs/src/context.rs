@@ -36,8 +36,8 @@ impl JSContextImpl for QJSContext {
         Self { ctx }
     }
 
-    fn to_ffi(&self) -> Self::FfiContext {
-        self.ctx
+    fn as_ffi(&self) -> &Self::FfiContext {
+        &self.ctx
     }
 
     fn from_ffi(ctx: Self::FfiContext) -> Self {
@@ -164,13 +164,13 @@ impl JSContextImpl for QJSContext {
     }
 
     /// Set opaque data for the context
-    fn set_opaque<T>(&self, data: *mut T) {
-        unsafe { qjs::JS_SetContextOpaque(self.ctx, data as *mut c_void) };
+    fn set_opaque<T>(ctx: &Self::FfiContext, data: *mut T) {
+        unsafe { qjs::JS_SetContextOpaque(*ctx, data as *mut c_void) };
     }
 
     /// Get opaque data from the context
-    fn get_opaque<T>(&self) -> *mut T {
-        unsafe { qjs::JS_GetContextOpaque(self.ctx) as *mut T }
+    fn get_opaque<T>(ctx: &Self::FfiContext) -> *mut T {
+        unsafe { qjs::JS_GetContextOpaque(*ctx) as *mut T }
     }
 }
 
@@ -178,6 +178,10 @@ impl QJSContext {
     fn _from_ffi(ctx: *mut qjs::JSContext) -> Self {
         let ctx = unsafe { qjs::JS_DupContext(ctx) };
         Self { ctx }
+    }
+
+    pub(crate) fn to_ffi(&self) -> *mut qjs::JSContext {
+        self.ctx
     }
 }
 
