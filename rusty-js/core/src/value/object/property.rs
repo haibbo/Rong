@@ -169,8 +169,7 @@ where
         K: for<'a> Into<PropertyKey<'a>>,
         V: JSObjectOps,
     {
-        let context = obj.get_ctx();
-        let ctx = context.as_ref().as_ref(); // inner ctx
+        let ctx = obj.get_ctx().as_ref();
         let undefined = V::from((ctx, ())); // UNDEFINED
 
         let value = self
@@ -194,7 +193,7 @@ where
             })
             .unwrap_or(undefined.clone());
 
-        let key = k.into().into_key(&obj.get_ctx());
+        let key = k.into().into_key(obj.get_ctx());
 
         obj.as_inner()
             .define_property(key, value, getter, setter, self.attributes);

@@ -66,7 +66,7 @@ impl<V: JSObjectOps> JSFunc<V> {
     {
         let ctx = &self.get_ctx();
         let argv = args.into_js_args(ctx);
-        let r = ctx.as_ref().as_ref().call(self.as_inner(), this, argv);
+        let r = ctx.as_ref().call(self.as_inner(), this, argv);
         let result = JSValue::from_js_value(ctx, r)?;
 
         result.is_exception().map_or_else(
@@ -114,7 +114,7 @@ impl<V: JSObjectOps> JSFunc<V> {
         R: FromJSValue<V>,
         V: JSObjectOps,
     {
-        self.call_internal(Some(this.into_js_value(&self.get_ctx())), args)
+        self.call_internal(Some(this.into_js_value(self.get_ctx())), args)
     }
 
     /// set name of JS Function

@@ -95,9 +95,9 @@ where
 {
     /// Create a new instance of the class
     pub fn instance<JC: JSClass<V>>(self, value: JC) -> V {
-        let context = &self.0.get_ctx();
+        let context = self.0.get_ctx();
         let ptr = Box::into_raw(Box::new(RefCell::new(value)));
-        V::make_object(context.as_ref().as_ref(), self.0.clone().into_inner(), ptr)
+        V::make_object(context.as_ref(), self.0.clone().into_inner(), ptr)
     }
 
     /// Free resources of a class instance

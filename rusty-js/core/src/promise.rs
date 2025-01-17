@@ -234,7 +234,7 @@ where
             // resolved callback used to wake up future and save resolved value
             let resolve_state = state.clone();
             let resolve = JSFunc::new(
-                &ctx,
+                ctx,
                 move |ctx: &JSContext<V::Context>, value: JSValue<V>| {
                     //println!("resolve callback called");
                     let mut state = resolve_state.borrow_mut();
@@ -260,7 +260,7 @@ where
 
             // rejected callback used to wake up future and save rejected value
             let reject_state = state.clone();
-            let reject = JSFunc::new(&ctx, move |err: JSException<V>| {
+            let reject = JSFunc::new(ctx, move |err: JSException<V>| {
                 //println!("reject callback called");
                 let mut state = reject_state.borrow_mut();
                 if let PromiseState::Pending(waker) = std::mem::replace(

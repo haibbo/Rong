@@ -80,7 +80,7 @@ where
 
     /// Convert the exception into JSError
     pub fn into_error(self) -> JSError {
-        let ctx = self.get_ctx();
+        let ctx = self.get_ctx().clone();
         if self.is_error().is_some() {
             JSError {
                 message: self.message(),
@@ -180,7 +180,7 @@ impl<V: JSObjectOps> fmt::Display for JSException<V> {
         } else {
             let ctx = self.get_ctx();
             let js_value = self.as_inner().clone();
-            String::from_js_value(&ctx, js_value).unwrap().fmt(f)?;
+            String::from_js_value(ctx, js_value).unwrap().fmt(f)?;
         }
         Ok(())
     }

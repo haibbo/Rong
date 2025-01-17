@@ -110,16 +110,16 @@ where
         K: Into<PropertyKey<'a>>,
         KV: IntoJSValue<V>,
     {
-        let key = k.into().into_key(&self.get_ctx());
+        let key = k.into().into_key(self.get_ctx());
         self.as_inner()
-            .set_property(key, kv.into_js_value(&self.get_ctx()))
+            .set_property(key, kv.into_js_value(self.get_ctx()))
     }
 
     pub fn del<'a, K>(&'a self, k: K) -> bool
     where
         K: Into<PropertyKey<'a>>,
     {
-        let key = k.into().into_key(&self.get_ctx());
+        let key = k.into().into_key(self.get_ctx());
         self.as_inner().del_property(key)
     }
 
@@ -127,7 +127,7 @@ where
     where
         K: Into<PropertyKey<'a>>,
     {
-        let key = k.into().into_key(&self.get_ctx());
+        let key = k.into().into_key(self.get_ctx());
         self.as_inner().has_property(key)
     }
 
@@ -136,11 +136,11 @@ where
         K: Into<PropertyKey<'a>>,
         T: FromJSValue<V>,
     {
-        let key = k.into().into_key(&self.get_ctx());
+        let key = k.into().into_key(self.get_ctx());
         self.as_inner()
             .get_property(key)
             .ok_or(RustyJSError::PropertyNotFound) // check existence firstly
-            .and_then(|value| T::from_js_value(&self.get_ctx(), value))
+            .and_then(|value| T::from_js_value(self.get_ctx(), value))
     }
 }
 

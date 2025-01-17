@@ -1,6 +1,5 @@
 use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
 use std::fmt;
-use std::rc::{Rc, Weak};
 
 mod convert;
 pub use convert::*;
@@ -45,14 +44,12 @@ pub trait JSValueImpl: Clone {
 
 pub struct JSValue<V: JSValueImpl> {
     inner: V,
-    ctx: Weak<JSContext<V::Context>>,
 }
 
 impl<V: JSValueImpl> Clone for JSValue<V> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            ctx: self.ctx.clone(),
         }
     }
 }
@@ -62,17 +59,11 @@ where
     V: JSValueImpl,
 {
     pub(crate) fn with_value(&self, value: V) -> Self {
-        Self {
-            inner: value,
-            ctx: self.ctx.clone(),
-        }
+        Self { inner: value }
     }
 
-    pub(crate) fn from_raw(ctx: &JSContext<V::Context>, value: V) -> Self {
-        Self {
-            inner: value,
-            ctx: ctx.downgrade(),
-        }
+    pub(crate) fn from_raw(_ctx: &JSContext<V::Context>, value: V) -> Self {
+        Self { inner: value }
     }
 
     pub(crate) fn as_inner(&self) -> &V {
@@ -83,18 +74,9 @@ where
         self.inner
     }
 
-    /// Returns the context associated with this JSValue as a strong reference.
-    ///
-    /// # Safety
-    ///
-    /// This is safe because the function is called in a context that ensures the upgrade will succeed.
-    /// The Weak reference is guaranteed to be valid and upgradable when this method is called.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the underlying context has been dropped and the Weak reference cannot be upgraded.
-    pub fn get_ctx(&self) -> Rc<JSContext<V::Context>> {
-        self.ctx.upgrade().unwrap()
+    /// Get the context associated with this JSValue
+    pub fn get_ctx(&self) -> &JSContext<V::Context> {
+        JSContext::from_raw_ptr(self.as_inner().as_ffi_context())
     }
 }
 
