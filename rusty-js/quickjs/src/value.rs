@@ -35,17 +35,23 @@ impl JSFfiContext for QJSValue {
     type FfiContext = *mut qjs::JSContext;
 }
 
-impl JSValueImpl for QJSValue {
-    type FfiValue = qjs::JSValue;
-    type Context = QJSContext;
-
-    fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self {
+impl QJSValue {
+    fn _from_ffi(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Self {
         // In callback context, generally, all JS variables are from JS engine, in order to make Rust lifetime
         // and ownship works, these variables should be increased referece count first, and then Rust side can
         // drop QJSValue safely
         let value = unsafe { qjs::JS_DupValue(ctx, value) };
 
         Self { value, ctx }
+    }
+}
+
+impl JSValueImpl for QJSValue {
+    type FfiValue = qjs::JSValue;
+    type Context = QJSContext;
+
+    fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self {
+        QJSValue::_from_ffi(ctx, value)
     }
 
     fn from_parts(
