@@ -23,15 +23,15 @@ pub fn derive_js_bindings(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         impl rusty_js_core::IntoJSValue<JSEngineValue> for #name {
-            fn into_js_value(self, context: &JSEngineContext) -> JSEngineValue {
+            fn into_js_value(self, context: &JSContext) -> JSEngineValue {
                 rusty_js_core::Class::get::<Self>(context)
                     .map(|class| class.instance(self))
-                    .unwrap_or_else(|| JSEngineValue::from((context, ())))
+                    .unwrap_or_else(|| JSEngineValue::from((context.as_ref(), ())))
             }
         }
 
         impl rusty_js_core::FromJSValue<JSEngineValue> for #name {
-            fn from_js_value(ctx: &JSEngineContext, value: JSEngineValue) -> rusty_js_core::JSResult<Self> {
+            fn from_js_value(ctx: &JSContext, value: JSEngineValue) -> rusty_js_core::JSResult<Self> {
                 let obj = rusty_js_core::JSObject::from_js_value(ctx, value)?;
                 let instance = obj.borrow::<Self>()?;
                 Ok(*instance)
