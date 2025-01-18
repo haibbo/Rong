@@ -7,7 +7,7 @@ use crate::{
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 /// JSContextImpl represents a JavaScript context
 ///
@@ -108,23 +108,9 @@ pub struct JSContext<C: JSContextImpl> {
     rc: Rc<JSContextInner<C>>,
 }
 
-#[cfg(debug_assertions)]
-impl<C: JSContextImpl> std::fmt::Debug for JSContext<C> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "JSContext {{ address: {:p}, magic number: {:#x}, ref_count: {} }}",
-            self as *const _,
-            self.rc.magic,
-            Rc::strong_count(&self.rc)
-        )
-    }
-}
 struct JSContextInner<C: JSContextImpl> {
     inner: C,
     runtime: JSRuntime<C::Runtime>,
-    #[cfg(debug_assertions)]
-    magic: usize,
 }
 
 impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
@@ -162,20 +148,16 @@ impl<C: JSContextImpl> JSContext<C> {
         let inner = JSContextInner {
             inner: C::new(&runtime.inner),
             runtime: runtime.clone(),
-            #[cfg(debug_assertions)]
-            magic: 0x5aa5f5f5,
         };
 
-        let ctx = Box::new(JSContext { rc: Rc::new(inner) });
-
-        // leak the JSContext
-        let address = Box::leak(ctx.clone());
+        let ctx = JSContext { rc: Rc::new(inner) };
+        let weak = Rc::downgrade(&ctx.rc);
 
         // save stale address to opaque
-        let opaque = ContextOpaque::<C::Value>::new(address as *const _ as usize);
+        let opaque = ContextOpaque::<C::Value>::new(weak);
         C::set_opaque(ctx.rc.inner.as_ffi(), Box::into_raw(opaque));
 
-        *ctx
+        ctx
     }
 
     /// Creates a JSContext from an FFI context pointer.
@@ -198,15 +180,18 @@ impl<C: JSContextImpl> JSContext<C> {
     ///     // Use ctx for the duration of the callback
     /// }
     /// ```
-    pub(crate) fn from_raw_ptr(ptr: &C::FfiContext) -> &Self {
+    pub(crate) fn from_raw_ptr(ptr: &C::FfiContext) -> Self {
         let data = C::get_opaque::<ContextOpaque<C::Value>>(ptr);
         if data.is_null() {
             panic!("[JSContext] opaque is empty");
         } else {
             unsafe {
-                let ctx_ptr = (*data).address as *const JSContext<C>;
-                // println!("magic number: {:#x}", (*ctx_ptr).rc.magic);
-                &*ctx_ptr
+                let ctx_inner = &(*data).ctx_inner;
+                if let Some(ctx) = ctx_inner.upgrade() {
+                    Self { rc: ctx }
+                } else {
+                    panic!("[JSContext] context has been dropped");
+                }
             }
         }
     }
@@ -379,18 +364,17 @@ impl<C: JSContextImpl> JSContext<C> {
 ///
 /// # Fields
 /// - `registry`: A pointer to a RefCell containing a HashMap that maps TypeId to type that implements JSValueImpl
-/// - `ref_count`: An AtomicUsize to track the reference count of the context
 /// - `address`: Address of JSContext used to build JSContext from callback case
 struct ContextOpaque<V: JSValueImpl> {
     registry: RefCell<HashMap<TypeId, V>>,
-    address: usize,
+    ctx_inner: Weak<JSContextInner<V::Context>>,
 }
 
 impl<V: JSValueImpl> ContextOpaque<V> {
-    fn new(address: usize) -> Box<Self> {
+    fn new(ctx_inner: Weak<JSContextInner<V::Context>>) -> Box<Self> {
         Box::new(Self {
             registry: RefCell::new(HashMap::new()),
-            address,
+            ctx_inner,
         })
     }
 }
@@ -407,9 +391,6 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
                     let registry = &(*data).registry;
                     registry.borrow_mut().clear();
 
-                    // clear memory for JSContext
-                    let _ = Box::from_raw((*data).address as *mut JSContext<C>);
-
                     // cleanup ContextOpaque
                     let _ = Box::from_raw(data);
                 }
@@ -423,5 +404,16 @@ impl<C: JSContextImpl> Clone for JSContext<C> {
         Self {
             rc: Rc::clone(&self.rc),
         }
+    }
+}
+
+impl<C: JSContextImpl> std::fmt::Debug for JSContext<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "JSContext {{ address: {:p}, ref_count: {} }}",
+            self as *const _,
+            Rc::strong_count(&self.rc)
+        )
     }
 }
