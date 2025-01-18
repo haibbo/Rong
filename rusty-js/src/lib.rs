@@ -13,7 +13,12 @@ mod engine {
     pub type RustyJS = QuickJS;
 }
 
-#[cfg(feature = "quickjs")]
+#[cfg(feature = "jscore")]
+mod engine {
+    use rusty_js_jscore::JavaScriptCore;
+    pub type RustyJS = JavaScriptCore;
+}
+
 pub use engine::*;
 
 pub type JSEngineValue = <RustyJS as JSEngine>::Value;
