@@ -185,13 +185,11 @@ impl<C: JSContextImpl> JSContext<C> {
         if data.is_null() {
             panic!("[JSContext] opaque is empty");
         } else {
-            unsafe {
-                let ctx_inner = &(*data).ctx_inner;
-                if let Some(ctx) = ctx_inner.upgrade() {
-                    Self { rc: ctx }
-                } else {
-                    panic!("[JSContext] context has been dropped");
-                }
+            let ctx_inner = unsafe { &(*data).ctx_inner };
+            if let Some(ctx) = ctx_inner.upgrade() {
+                Self { rc: ctx }
+            } else {
+                panic!("[JSContext] context has been dropped");
             }
         }
     }
