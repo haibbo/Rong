@@ -18,28 +18,32 @@ pub use function::*;
 
 pub trait JSValueImpl: Clone {
     /// the JS engine specific type of JavaScript Value
-    type FfiValue: Copy;
+    type RawValue: Copy;
 
     /// Associates with a type that implements JSContextImpl
     /// This represents the context wrapper type (e.g. QJSContext)
     type Context: JSContextImpl<Value = Self>;
 
-    /// In callback context, generally, all JSValue variables are from JS engine,
-    /// in order to make Rust lifetime and ownship works, these variables should
-    /// be increased referece count first, and then Rust side can drop JSValue safely.
-    fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self;
+    /// Create a JSValue from borrowed raw parts, increasing reference count to ensure safety.
+    /// Used for values received from JS engine callbacks or external sources.
+    fn from_borrowed_raw(
+        ctx: <Self::Context as JSContextImpl>::RawContext,
+        value: Self::RawValue,
+    ) -> Self;
 
-    /// almost the same as from_ffi, but without referece count increased, it's used when varialbe
-    /// are returned from New JS variable function, such as eval, JS_NewObject
-    fn from_parts(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue)
-        -> Self;
+    /// Create a JSValue from owned raw parts without reference counting.
+    /// Used for values newly created by Rust code that we own directly.
+    fn from_owned_raw(
+        ctx: <Self::Context as JSContextImpl>::RawContext,
+        value: Self::RawValue,
+    ) -> Self;
 
     /// Consumes the ownship and returns the FFI level of JSValue but stop triggering drop.
     /// This API should be used when engine API needs the ownshipe of JS variable
-    fn into_ffi_value(self) -> Self::FfiValue;
+    fn into_raw_value(self) -> Self::RawValue;
 
-    fn as_ffi_value(&self) -> &Self::FfiValue;
-    fn as_ffi_context(&self) -> &<Self::Context as JSContextImpl>::FfiContext;
+    fn as_raw_value(&self) -> &Self::RawValue;
+    fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext;
 }
 
 pub struct JSValue<V: JSValueImpl> {
@@ -62,7 +66,7 @@ where
         Self { inner: value }
     }
 
-    pub(crate) fn from_raw(_ctx: &JSContext<V::Context>, value: V) -> Self {
+    pub(crate) fn from_borrowed_raw(_ctx: &JSContext<V::Context>, value: V) -> Self {
         Self { inner: value }
     }
 
@@ -76,7 +80,7 @@ where
 
     /// Get the context associated with this JSValue
     pub fn get_ctx(&self) -> JSContext<V::Context> {
-        JSContext::from_raw_ptr(self.as_inner().as_ffi_context())
+        JSContext::from_borrowed_raw_ptr(self.as_inner().as_raw_context())
     }
 }
 
@@ -90,7 +94,7 @@ where
         V: for<'a> From<(&'a V::Context, T)>,
     {
         let value = V::from((ctx.as_ref(), val));
-        JSValue::from_raw(ctx, value)
+        JSValue::from_borrowed_raw(ctx, value)
     }
 
     /// Try to converts JSValue to Rust value
@@ -108,7 +112,7 @@ where
         V: for<'a> From<(&'a V::Context, ())>,
     {
         let value = V::from((ctx.as_ref(), ()));
-        JSValue::from_raw(ctx, value)
+        JSValue::from_borrowed_raw(ctx, value)
     }
 }
 
@@ -117,7 +121,7 @@ where
     V: JSValueImpl,
 {
     fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        Ok(JSValue::from_raw(ctx, value))
+        Ok(JSValue::from_borrowed_raw(ctx, value))
     }
 }
 
@@ -140,7 +144,7 @@ macro_rules! impl_js_converter {
             type Error = RustyJSError;
             fn try_into(self) -> Result<$out_type, Self::Error> {
                 let mut result: $out_type = Default::default();
-                if unsafe { $to_fn(*self.as_ffi_context(), *self.as_ffi_value(), &mut result) } < 0
+                if unsafe { $to_fn(*self.as_raw_context(), *self.as_raw_value(), &mut result) } < 0
                 {
                     #[cfg(debug_assertions)]
                     println!(
@@ -161,13 +165,13 @@ macro_rules! impl_js_converter {
 
         impl<T> From<(&T, $in_type)> for $target
         where
-            T: JSContextImpl<FfiContext = <$target as JSFfiContext>::FfiContext>,
+            T: JSContextImpl<RawContext = <$target as JSRawContext>::RawContext>,
             $target: JSValueImpl<Context = T>,
         {
             fn from(t: (&T, $in_type)) -> Self {
-                let ctx = t.0.as_ffi();
+                let ctx = t.0.as_raw();
                 let raw = unsafe { $create_fn(*ctx, t.1) };
-                Self::from_parts(*ctx, raw)
+                Self::from_owned_raw(*ctx, raw)
             }
         }
     };

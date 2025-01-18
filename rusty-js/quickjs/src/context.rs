@@ -27,21 +27,21 @@ impl Clone for QJSContext {
 }
 
 impl JSContextImpl for QJSContext {
-    type FfiContext = *mut qjs::JSContext;
+    type RawContext = *mut qjs::JSContext;
     type Runtime = QJSRuntime;
     type Value = QJSValue;
 
     fn new(runtime: &Self::Runtime) -> Self {
-        let ctx = unsafe { qjs::JS_NewContext(runtime.to_ffi()) };
+        let ctx = unsafe { qjs::JS_NewContext(runtime.to_raw()) };
         Self { ctx }
     }
 
-    fn as_ffi(&self) -> &Self::FfiContext {
+    fn as_raw(&self) -> &Self::RawContext {
         &self.ctx
     }
 
-    fn from_ffi(ctx: Self::FfiContext) -> Self {
-        Self::_from_ffi(ctx)
+    fn from_borrowed_raw(ctx: Self::RawContext) -> Self {
+        Self::_from_borrowed_raw(ctx)
     }
 
     fn eval(&self, source: Source) -> Self::Value {
@@ -64,7 +64,7 @@ impl JSContextImpl for QJSContext {
             let buf = qjs::JS_WriteObject(
                 self.ctx,
                 &mut out_size,
-                *obj.as_ffi_value(),
+                *obj.as_raw_value(),
                 qjs::JS_WRITE_OBJ_BYTECODE as _,
             );
 
@@ -92,12 +92,12 @@ impl JSContextImpl for QJSContext {
                 qjs::JS_EvalFunction(self.ctx, obj)
             }
         };
-        QJSValue::from_parts(self.ctx, result)
+        QJSValue::from_owned_raw(self.ctx, result)
     }
 
     fn global(&self) -> Self::Value {
         let raw = unsafe { qjs::JS_GetGlobalObject(self.ctx) };
-        QJSValue::from_parts(self.ctx, raw)
+        QJSValue::from_owned_raw(self.ctx, raw)
     }
 
     fn register_class<JC>(&self) -> Self::Value
@@ -114,7 +114,7 @@ impl JSContextImpl for QJSContext {
                 Some(crate::class::finalizer::<JC>),
             )
         };
-        QJSValue::from_parts(self.ctx, raw)
+        QJSValue::from_owned_raw(self.ctx, raw)
     }
 
     fn call(
@@ -126,22 +126,22 @@ impl JSContextImpl for QJSContext {
         // Convert this to JSValue or undefined
         let this_val = this.map_or_else(
             || unsafe { qjs::QJS_NewUndefined(self.ctx) },
-            |v| *v.as_ffi_value(),
+            |v| *v.as_raw_value(),
         );
 
         // Convert argv to raw JSValues
-        let mut args: Vec<qjs::JSValue> = argv.iter().map(|v| *v.as_ffi_value()).collect();
+        let mut args: Vec<qjs::JSValue> = argv.iter().map(|v| *v.as_raw_value()).collect();
 
         let v = unsafe {
             qjs::JS_Call(
                 self.ctx,
-                *function.as_ffi_value(),
+                *function.as_raw_value(),
                 this_val,
                 args.len() as std::ffi::c_int,
                 args.as_mut_ptr(),
             )
         };
-        QJSValue::from_parts(self.ctx, v)
+        QJSValue::from_owned_raw(self.ctx, v)
     }
 
     fn promise(&self) -> (Self::Value, Self::Value, Self::Value) {
@@ -157,30 +157,30 @@ impl JSContextImpl for QJSContext {
         // Safety: JS_NewPromiseCapability initializes the array
         let resolving_funcs = unsafe { resolving_funcs.assume_init() };
 
-        let resolve = QJSValue::from_parts(self.ctx, resolving_funcs[0]);
-        let reject = QJSValue::from_parts(self.ctx, resolving_funcs[1]);
+        let resolve = QJSValue::from_owned_raw(self.ctx, resolving_funcs[0]);
+        let reject = QJSValue::from_owned_raw(self.ctx, resolving_funcs[1]);
 
-        (QJSValue::from_parts(self.ctx, promise), resolve, reject)
+        (QJSValue::from_owned_raw(self.ctx, promise), resolve, reject)
     }
 
     /// Set opaque data for the context
-    fn set_opaque<T>(ctx: &Self::FfiContext, data: *mut T) {
+    fn set_opaque<T>(ctx: &Self::RawContext, data: *mut T) {
         unsafe { qjs::JS_SetContextOpaque(*ctx, data as *mut c_void) };
     }
 
     /// Get opaque data from the context
-    fn get_opaque<T>(ctx: &Self::FfiContext) -> *mut T {
+    fn get_opaque<T>(ctx: &Self::RawContext) -> *mut T {
         unsafe { qjs::JS_GetContextOpaque(*ctx) as *mut T }
     }
 }
 
 impl QJSContext {
-    fn _from_ffi(ctx: *mut qjs::JSContext) -> Self {
+    fn _from_borrowed_raw(ctx: *mut qjs::JSContext) -> Self {
         let ctx = unsafe { qjs::JS_DupContext(ctx) };
         Self { ctx }
     }
 
-    pub(crate) fn to_ffi(&self) -> *mut qjs::JSContext {
+    pub(crate) fn to_raw(&self) -> *mut qjs::JSContext {
         self.ctx
     }
 }
@@ -246,7 +246,7 @@ impl QJSContext {
                 c_filename.as_ptr(),
                 flags,
             );
-            QJSValue::from_parts(self.ctx, val)
+            QJSValue::from_owned_raw(self.ctx, val)
         }
     }
 
@@ -256,7 +256,7 @@ impl QJSContext {
     {
         let c_message = CString::new(message).unwrap();
         let raw = { throw_fn(self.ctx, c"%s".as_ptr(), c_message.as_ptr()) };
-        QJSValue::from_parts(self.ctx, raw)
+        QJSValue::from_owned_raw(self.ctx, raw)
     }
 }
 
@@ -292,6 +292,6 @@ impl JSExceptionHandler for QJSContext {
     }
 
     fn new_error(&self) -> Self::Value {
-        unsafe { QJSValue::from_parts(self.ctx, qjs::JS_NewError(self.ctx)) }
+        unsafe { QJSValue::from_owned_raw(self.ctx, qjs::JS_NewError(self.ctx)) }
     }
 }

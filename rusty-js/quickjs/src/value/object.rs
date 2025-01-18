@@ -4,16 +4,16 @@ use rusty_js_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
 
 impl JSObjectOps for QJSValue {
     fn new_object(ctx: &Self::Context) -> Self {
-        let ctx = ctx.to_ffi();
+        let ctx = ctx.to_raw();
         let v = unsafe { qjs::JS_NewObject(ctx) };
-        QJSValue::from_parts(ctx, v)
+        QJSValue::from_owned_raw(ctx, v)
     }
 
     fn make_object<T>(ctx: &Self::Context, constructor: Self, data: *mut T) -> Self {
-        let ctx = ctx.to_ffi();
+        let ctx = ctx.to_raw();
         let constructor = constructor.value;
         let v = unsafe { qjs::QJS_ObjectMake(ctx, constructor, data.cast()) };
-        QJSValue::from_parts(ctx, v)
+        QJSValue::from_owned_raw(ctx, v)
     }
 
     fn get_opaque<T>(&self) -> *mut T {
@@ -46,7 +46,7 @@ impl JSObjectOps for QJSValue {
     }
 
     fn set_property(&self, key: Self, value: Self) -> bool {
-        let kv = value.into_ffi_value(); //necessary
+        let kv = value.into_raw_value(); //necessary
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
             let v = qjs::JS_SetProperty(self.ctx, self.value, atom, kv);
@@ -66,7 +66,7 @@ impl JSObjectOps for QJSValue {
         if unsafe { qjs::QJS_IsUndefined(self.ctx, v) != 0 } {
             None
         } else {
-            Some(QJSValue::from_parts(key.ctx, v))
+            Some(QJSValue::from_owned_raw(key.ctx, v))
         }
     }
 

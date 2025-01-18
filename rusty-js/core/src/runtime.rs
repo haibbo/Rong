@@ -5,8 +5,8 @@ use std::future::Future;
 use std::rc::Rc;
 
 pub trait JSRuntimeImpl {
-    /// the JS engine specific type of JavaScript Runtime
-    type FfiRuntime: Copy;
+    /// The raw runtime handle type associated with this runtime.
+    type RawRuntime;
 
     /// The JavaScript context type associated with this runtime
     type Context: JSContextImpl;
@@ -14,8 +14,13 @@ pub trait JSRuntimeImpl {
     /// Creates JavaScript runtime.
     fn new() -> Self;
 
-    /// Converts the runtime to its FFI (Foreign Function Interface) representation.
-    fn to_ffi(&self) -> Self::FfiRuntime;
+    /// Converts the runtime to its raw underlying representation.
+    ///
+    /// # Key Notes
+    /// - This provides access to the low-level, engine-specific runtime handle.
+    /// - Useful for advanced use cases requiring direct interaction with the engine.
+    /// - The returned value is a copy of the raw runtime handle.
+    fn to_raw(&self) -> Self::RawRuntime;
 
     /// Runs all pending jobs in the JavaScript runtime.
     /// This includes executing any queued promise callbacks, microtasks, and other pending operations.

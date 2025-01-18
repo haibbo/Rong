@@ -1,5 +1,5 @@
 use crate::{qjs, QJSContext};
-use rusty_js_core::{impl_js_converter, JSContextImpl, JSFfiContext, JSValueImpl, RustyJSError};
+use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl, RustyJSError};
 use std::ffi::CStr;
 
 mod object;
@@ -31,12 +31,12 @@ impl Drop for QJSValue {
     }
 }
 
-impl JSFfiContext for QJSValue {
-    type FfiContext = *mut qjs::JSContext;
+impl JSRawContext for QJSValue {
+    type RawContext = *mut qjs::JSContext;
 }
 
 impl QJSValue {
-    fn _from_ffi(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Self {
+    fn _from_raw(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Self {
         // In callback context, generally, all JS variables are from JS engine, in order to make Rust lifetime
         // and ownship works, these variables should be increased referece count first, and then Rust side can
         // drop QJSValue safely
@@ -47,43 +47,46 @@ impl QJSValue {
 }
 
 impl JSValueImpl for QJSValue {
-    type FfiValue = qjs::JSValue;
+    type RawValue = qjs::JSValue;
     type Context = QJSContext;
 
-    fn from_ffi(ctx: <Self::Context as JSContextImpl>::FfiContext, value: Self::FfiValue) -> Self {
-        QJSValue::_from_ffi(ctx, value)
+    fn from_borrowed_raw(
+        ctx: <Self::Context as JSContextImpl>::RawContext,
+        value: Self::RawValue,
+    ) -> Self {
+        QJSValue::_from_raw(ctx, value)
     }
 
-    fn from_parts(
-        ctx: <Self::Context as JSContextImpl>::FfiContext,
-        value: Self::FfiValue,
+    fn from_owned_raw(
+        ctx: <Self::Context as JSContextImpl>::RawContext,
+        value: Self::RawValue,
     ) -> Self {
         Self { value, ctx }
     }
 
-    fn into_ffi_value(self) -> Self::FfiValue {
+    fn into_raw_value(self) -> Self::RawValue {
         let value = self.value;
         std::mem::forget(self); // forbiden triggering drop
         value
     }
 
-    fn as_ffi_value(&self) -> &Self::FfiValue {
+    fn as_raw_value(&self) -> &Self::RawValue {
         &self.value
     }
 
-    fn as_ffi_context(&self) -> &<Self::Context as JSContextImpl>::FfiContext {
+    fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext {
         &self.ctx
     }
 }
 
 impl<T> From<(&T, ())> for QJSValue
 where
-    T: JSContextImpl<FfiContext = <QJSValue as JSFfiContext>::FfiContext>,
+    T: JSContextImpl<RawContext = <QJSValue as JSRawContext>::RawContext>,
 {
     fn from(t: (&T, ())) -> Self {
-        let ctx = *t.0.as_ffi();
+        let ctx = *t.0.as_raw();
         let raw = unsafe { qjs::QJS_NewUndefined(ctx) };
-        Self::from_parts(ctx, raw)
+        Self::from_owned_raw(ctx, raw)
     }
 }
 

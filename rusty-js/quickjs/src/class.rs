@@ -10,14 +10,14 @@ pub(crate) unsafe extern "C" fn generic_constructor<JC>(
 where
     JC: JSClass<QJSValue>,
 {
-    let this = QJSValue::from_ffi(ctx, this);
+    let this = QJSValue::from_borrowed_raw(ctx, this);
 
     let args: Vec<_> = (0..argc as usize)
-        .map(move |i| QJSValue::from_ffi(ctx, *argv.add(i)))
+        .map(move |i| QJSValue::from_borrowed_raw(ctx, *argv.add(i)))
         .collect();
 
-    let ctx = QJSContext::from_ffi(ctx);
-    <JC as JSClassExt<QJSValue>>::constructor(&ctx, this, args).into_ffi_value()
+    let ctx = QJSContext::from_borrowed_raw(ctx);
+    <JC as JSClassExt<QJSValue>>::constructor(&ctx, this, args).into_raw_value()
 }
 
 pub(crate) unsafe extern "C" fn finalizer<JC>(_rt: *mut qjs::JSRuntime, obj: qjs::JSValue)
@@ -25,7 +25,7 @@ where
     JC: JSClass<QJSValue>,
 {
     let ctx: *mut qjs::JSContext = std::ptr::null_mut();
-    let value = QJSValue::from_ffi(ctx, obj);
+    let value = QJSValue::from_borrowed_raw(ctx, obj);
     <JC as JSClassExt<QJSValue>>::free(value);
 }
 
@@ -41,12 +41,12 @@ pub(crate) unsafe extern "C" fn call<JC>(
 where
     JC: JSClass<QJSValue>,
 {
-    let this = QJSValue::from_ffi(ctx, this);
-    let function = QJSValue::from_ffi(ctx, function);
+    let this = QJSValue::from_borrowed_raw(ctx, this);
+    let function = QJSValue::from_borrowed_raw(ctx, function);
     let args: Vec<_> = (0..argc as usize)
-        .map(move |i| QJSValue::from_ffi(ctx, *argv.add(i)))
+        .map(move |i| QJSValue::from_borrowed_raw(ctx, *argv.add(i)))
         .collect();
 
-    let ctx = QJSContext::from_ffi(ctx);
-    <JC as JSClassExt<QJSValue>>::call(&ctx, function, this, args).into_ffi_value()
+    let ctx = QJSContext::from_borrowed_raw(ctx);
+    <JC as JSClassExt<QJSValue>>::call(&ctx, function, this, args).into_raw_value()
 }

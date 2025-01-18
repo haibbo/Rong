@@ -26,7 +26,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         V::Context: JSExceptionHandler,
         V: JSObjectOps,
     {
-        let ctx = &JSContext::from_raw_ptr(ctx.as_ffi());
+        let ctx = &JSContext::from_borrowed_raw_ptr(ctx.as_raw());
         let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
 
         let instance = match Self::data_constructor().0.call(&mut accessor) {
@@ -64,7 +64,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         V: JSObjectOps,
         V::Context: JSExceptionHandler,
     {
-        let ctx = &JSContext::from_raw_ptr(ctx.as_ffi());
+        let ctx = &JSContext::from_borrowed_raw_ptr(ctx.as_raw());
         let mut accessor = ParamsAccessor::new(ctx, this, args);
 
         let obj = match JSObject::from_js_value(ctx, function) {

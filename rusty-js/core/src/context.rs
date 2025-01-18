@@ -17,7 +17,7 @@ use std::rc::{Rc, Weak};
 /// 2. Context type implements Drop if it holds any resources that need cleanup
 pub trait JSContextImpl {
     /// the JS engine specific type of JavaScript Context
-    type FfiContext: Copy;
+    type RawContext: Copy;
     type Runtime: JSRuntimeImpl<Context = Self>;
     type Value: JSValueImpl<Context = Self>;
 
@@ -29,21 +29,21 @@ pub trait JSContextImpl {
     /// # Safety
     /// - The caller must ensure the pointer is valid and properly aligned for type T
     /// - The pointer must not be used after the context is dropped
-    fn get_opaque<T>(ctx: &Self::FfiContext) -> *mut T;
+    fn get_opaque<T>(ctx: &Self::RawContext) -> *mut T;
 
     /// Set the opaque pointer in the context
     ///
     /// # Safety
     /// - The caller must ensure the pointer is valid and properly aligned for type T
     /// - The caller must ensure proper cleanup of the pointer when no longer needed
-    fn set_opaque<T>(ctx: &Self::FfiContext, opaque: *mut T);
+    fn set_opaque<T>(ctx: &Self::RawContext, opaque: *mut T);
 
     /// Converts the context to its FFI representation
-    fn as_ffi(&self) -> &Self::FfiContext;
+    fn as_raw(&self) -> &Self::RawContext;
 
     /// the implementation need to make sure it has the ownship, like as new method
     /// generally, it should increase referen count of FFI Context
-    fn from_ffi(ctx: Self::FfiContext) -> Self;
+    fn from_borrowed_raw(ctx: Self::RawContext) -> Self;
 
     /// Evaluate JavaScript code
     fn eval(&self, source: Source) -> Self::Value;
@@ -100,8 +100,8 @@ pub trait JSContextImpl {
     fn run_bytecode(&self, bytes: &[u8]) -> Self::Value;
 }
 
-pub trait JSFfiContext {
-    type FfiContext;
+pub trait JSRawContext {
+    type RawContext;
 }
 
 pub struct JSContext<C: JSContextImpl> {
@@ -155,7 +155,7 @@ impl<C: JSContextImpl> JSContext<C> {
 
         // save stale address to opaque
         let opaque = ContextOpaque::<C::Value>::new(weak);
-        C::set_opaque(ctx.rc.inner.as_ffi(), Box::into_raw(opaque));
+        C::set_opaque(ctx.rc.inner.as_raw(), Box::into_raw(opaque));
 
         ctx
     }
@@ -176,11 +176,11 @@ impl<C: JSContextImpl> JSContext<C> {
     /// ```rust
     /// // In a callback from JS engine:
     /// unsafe {
-    ///     let ctx = JSContext::from_raw_ptr(ffi_ctx);
+    ///     let ctx = JSContext::from_borrowed_raw_ptr(ffi_ctx);
     ///     // Use ctx for the duration of the callback
     /// }
     /// ```
-    pub(crate) fn from_raw_ptr(ptr: &C::FfiContext) -> Self {
+    pub(crate) fn from_borrowed_raw_ptr(ptr: &C::RawContext) -> Self {
         let data = C::get_opaque::<ContextOpaque<C::Value>>(ptr);
         if data.is_null() {
             panic!("[JSContext] opaque is empty");
@@ -271,7 +271,7 @@ impl<C: JSContextImpl> JSContext<C> {
         }
 
         let obj = self.global();
-        let constructor = JSValue::from_raw(self, constructor);
+        let constructor = JSValue::from_borrowed_raw(self, constructor);
         JC::class_setup(&ClassSetup::new(constructor.clone().into(), self));
         obj.set(JC::NAME, constructor);
     }
@@ -356,7 +356,7 @@ impl<C: JSContextImpl> JSContext<C> {
     }
 
     fn get_opaque(&self) -> *mut ContextOpaque<C::Value> {
-        C::get_opaque::<ContextOpaque<C::Value>>(self.rc.inner.as_ffi())
+        C::get_opaque::<ContextOpaque<C::Value>>(self.rc.inner.as_raw())
     }
 }
 

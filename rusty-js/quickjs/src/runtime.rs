@@ -15,7 +15,7 @@ impl Drop for QJSRuntime {
 }
 
 impl JSRuntimeImpl for QJSRuntime {
-    type FfiRuntime = *mut qjs::JSRuntime;
+    type RawRuntime = *mut qjs::JSRuntime;
     type Context = QJSContext;
 
     // new QuickJS JS Runtime
@@ -40,7 +40,7 @@ impl JSRuntimeImpl for QJSRuntime {
         Self { rt }
     }
 
-    fn to_ffi(&self) -> Self::FfiRuntime {
+    fn to_raw(&self) -> Self::RawRuntime {
         self.rt
     }
 

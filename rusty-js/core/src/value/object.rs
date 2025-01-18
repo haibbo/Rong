@@ -33,7 +33,7 @@ where
 {
     fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         if value.is_object() {
-            Ok(JSValue::from_raw(ctx, value).into())
+            Ok(JSValue::from_borrowed_raw(ctx, value).into())
         } else {
             Err(RustyJSError::NotObject)
         }
