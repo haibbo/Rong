@@ -114,7 +114,7 @@ impl<V: JSObjectOps> JSFunc<V> {
         R: FromJSValue<V>,
         V: JSObjectOps,
     {
-        self.call_internal(Some(this.into_js_value(self.get_ctx())), args)
+        self.call_internal(Some(this.into_js_value(&self.get_ctx())), args)
     }
 
     /// set name of JS Function

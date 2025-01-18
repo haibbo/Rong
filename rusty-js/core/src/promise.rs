@@ -226,7 +226,7 @@ where
             let state = Rc::new(RefCell::new(PromiseState::Pending(cx.waker().clone())));
             this.state = Some(state.clone());
 
-            let ctx = this.promise.obj.get_ctx();
+            let ctx = &this.promise.obj.get_ctx();
 
             // Clone state for callbacks
             let state = this.state.clone().unwrap();

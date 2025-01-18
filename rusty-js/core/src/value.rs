@@ -75,7 +75,7 @@ where
     }
 
     /// Get the context associated with this JSValue
-    pub fn get_ctx(&self) -> &JSContext<V::Context> {
+    pub fn get_ctx(&self) -> JSContext<V::Context> {
         JSContext::from_raw_ptr(self.as_inner().as_ffi_context())
     }
 }

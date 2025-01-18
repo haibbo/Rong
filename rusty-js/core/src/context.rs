@@ -385,7 +385,7 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
             let data = self.get_opaque();
             if !data.is_null() {
                 unsafe {
-                    println!("cleanup context and resources");
+                    //println!("cleanup context and resources");
 
                     // cleanup class registry
                     let registry = &(*data).registry;
