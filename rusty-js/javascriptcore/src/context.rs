@@ -1,17 +1,21 @@
 use crate::{jsc, JSCRuntime, JSCValue};
-use rusty_js_core::JSContextImpl;
+use rusty_js_core::{JSContextImpl, JSRuntimeImpl};
 
 pub struct JSCContext {
-    raw: jsc::JSContextRef,
+    raw: *mut jsc::OpaqueJSContext,
 }
 
 impl JSContextImpl for JSCContext {
-    type RawContext = jsc::JSContextRef;
+    type RawContext = *mut jsc::OpaqueJSContext;
     type Runtime = JSCRuntime;
     type Value = JSCValue;
 
     fn new(runtime: &Self::Runtime) -> Self {
-        todo!()
+        Self {
+            raw: unsafe {
+                jsc::JSGlobalContextCreateInGroup(runtime.to_raw(), std::ptr::null_mut())
+            },
+        }
     }
 
     fn get_opaque<T>(ctx: &Self::RawContext) -> *mut T {
@@ -23,7 +27,7 @@ impl JSContextImpl for JSCContext {
     }
 
     fn as_raw(&self) -> &Self::RawContext {
-        todo!()
+        &self.raw
     }
 
     fn from_borrowed_raw(ctx: Self::RawContext) -> Self {
@@ -64,5 +68,34 @@ impl JSContextImpl for JSCContext {
 
     fn run_bytecode(&self, bytes: &[u8]) -> Self::Value {
         todo!()
+    }
+}
+
+impl JSCContext {
+    fn _from_borrowed_raw(ctx: *mut jsc::OpaqueJSContext) -> Self {
+        let raw = unsafe { jsc::JSGlobalContextRetain(ctx) };
+        Self { raw }
+    }
+
+    pub(crate) fn to_raw(&self) -> *mut jsc::OpaqueJSContext {
+        self.raw
+    }
+}
+
+impl Drop for JSCContext {
+    fn drop(&mut self) {
+        unsafe {
+            jsc::JSGlobalContextRelease(self.raw);
+        }
+    }
+}
+
+impl Clone for JSCContext {
+    fn clone(&self) -> Self {
+        unsafe {
+            // Retains a global JavaScript execution context.
+            jsc::JSGlobalContextRetain(self.raw);
+            Self { raw: self.raw }
+        }
     }
 }

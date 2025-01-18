@@ -2,27 +2,35 @@ use crate::{jsc, JSCContext, JSCValue};
 use rusty_js_core::{JSEngine, JSRuntimeImpl};
 
 pub struct JSCRuntime {
-    raw: jsc::JSContextGroupRef,
+    raw: *const jsc::OpaqueJSContextGroup,
 }
 
 impl JSRuntimeImpl for JSCRuntime {
-    type RawRuntime = jsc::JSContextGroupRef;
+    type RawRuntime = *const jsc::OpaqueJSContextGroup;
     type Context = JSCContext;
 
     fn new() -> Self {
-        todo!()
+        Self {
+            raw: unsafe { jsc::JSContextGroupCreate() },
+        }
     }
 
     fn to_raw(&self) -> Self::RawRuntime {
-        todo!()
+        self.raw
     }
 
-    fn run_pending_jobs(&self) {
-        todo!()
-    }
+    // JavaScriptCore has no this API
+    fn run_pending_jobs(&self) {}
 
-    fn run_gc(&self) {
-        todo!()
+    // JavaScriptCore has no this API
+    fn run_gc(&self) {}
+}
+
+impl Drop for JSCRuntime {
+    fn drop(&mut self) {
+        unsafe {
+            jsc::JSContextGroupRelease(self.raw);
+        }
     }
 }
 

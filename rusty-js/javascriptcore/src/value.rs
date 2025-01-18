@@ -1,7 +1,7 @@
 use crate::{jsc, JSCContext};
 use rusty_js_core::JSValueImpl;
 
-mod object;
+// mod object;
 
 #[derive(Clone)]
 pub struct JSCValue {
