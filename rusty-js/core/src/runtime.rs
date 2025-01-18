@@ -91,7 +91,7 @@ impl<C: JSContextImpl> JSContext<C> {
 }
 
 pub trait JSEngine: Sized {
-    type Value: JSValueImpl<Context = Self::Context> + JSObjectOps;
+    type Value: JSValueImpl<Context = Self::Context>;
     type Context: JSContextImpl<Value = Self::Value, Runtime = Self::Runtime>;
     type Runtime: JSRuntimeImpl<Context = Self::Context> + 'static;
 
@@ -133,7 +133,7 @@ pub trait JSEngine: Sized {
     /// ```
     fn context(rt: &JSRuntime<Self::Runtime>) -> JSContext<Self::Context>
     where
-        Self::Value: 'static,
+        Self::Value: JSObjectOps + 'static,
     {
         let ctx = JSContext::<Self::Context>::new(rt);
         ctx.register_rustfunc_class();
