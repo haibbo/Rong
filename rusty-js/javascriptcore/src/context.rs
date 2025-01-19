@@ -19,11 +19,11 @@ impl JSContextImpl for JSCContext {
     }
 
     fn get_opaque<T>(ctx: &Self::RawContext) -> *mut T {
-        todo!()
+        std::ptr::null_mut()
     }
 
     fn set_opaque<T>(ctx: &Self::RawContext, opaque: *mut T) {
-        todo!()
+        //    todo!()
     }
 
     fn as_raw(&self) -> &Self::RawContext {

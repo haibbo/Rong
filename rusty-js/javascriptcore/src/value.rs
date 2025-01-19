@@ -1,12 +1,26 @@
 use crate::{jsc, JSCContext};
-use rusty_js_core::JSValueImpl;
+use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl, RustyJSError};
+use std::ffi::CString;
 
-// mod object;
+mod object;
+mod valuetype;
 
 #[derive(Clone)]
 pub struct JSCValue {
     value: jsc::JSValueRef,
-    ctx: jsc::JSGlobalContextRef,
+    ctx: *mut jsc::OpaqueJSContext,
+}
+
+impl Drop for JSCValue {
+    fn drop(&mut self) {
+        unsafe {
+            jsc::JSValueUnprotect(self.ctx, self.value);
+        }
+    }
+}
+
+impl JSRawContext for JSCValue {
+    type RawContext = *mut jsc::OpaqueJSContext;
 }
 
 impl JSValueImpl for JSCValue {
@@ -14,28 +28,181 @@ impl JSValueImpl for JSCValue {
     type Context = JSCContext;
 
     fn from_borrowed_raw(
-        ctx: <Self::Context as rusty_js_core::JSContextImpl>::RawContext,
+        ctx: <Self::Context as JSContextImpl>::RawContext,
         value: Self::RawValue,
     ) -> Self {
-        todo!()
+        unsafe {
+            // Protect value from GC
+            jsc::JSValueProtect(ctx as *const jsc::OpaqueJSContext, value as jsc::JSValueRef);
+            Self { value, ctx }
+        }
     }
 
     fn from_owned_raw(
-        ctx: <Self::Context as rusty_js_core::JSContextImpl>::RawContext,
+        ctx: <Self::Context as JSContextImpl>::RawContext,
         value: Self::RawValue,
     ) -> Self {
-        todo!()
+        Self { value, ctx }
     }
 
     fn into_raw_value(self) -> Self::RawValue {
-        todo!()
+        let value = self.value;
+        std::mem::forget(self); // // forbiden triggering drop
+        value
     }
 
     fn as_raw_value(&self) -> &Self::RawValue {
-        todo!()
+        &self.value
     }
 
-    fn as_raw_context(&self) -> &<Self::Context as rusty_js_core::JSContextImpl>::RawContext {
-        todo!()
+    fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext {
+        &self.ctx
     }
 }
+
+impl<T> From<(&T, ())> for JSCValue
+where
+    T: JSContextImpl<RawContext = <JSCValue as JSRawContext>::RawContext>,
+{
+    fn from(t: (&T, ())) -> Self {
+        let ctx = *t.0.as_raw();
+        let raw = unsafe { jsc::JSValueMakeUndefined(ctx) };
+        Self::from_owned_raw(ctx, raw)
+    }
+}
+
+impl_js_converter!(
+    JSCValue,
+    bool,
+    |ctx, value| unsafe { jsc::JSValueMakeBoolean(ctx, value) },
+    |ctx, value, result: *mut bool| unsafe {
+        if jsc::JSValueIsBoolean(ctx, value) {
+            *result = jsc::JSValueToBoolean(ctx, value);
+            0
+        } else {
+            -1
+        }
+    }
+);
+
+// Note: In JavaScriptCore, all numbers are internally represented as f64 (double precision floating point).
+// This means there may be precision loss when converting between integer types and JavaScript numbers.
+impl_js_converter!(
+    JSCValue,
+    i32,
+    |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
+    |ctx, value, result: &mut i32| unsafe {
+        let exception = std::ptr::null_mut();
+        *result = jsc::JSValueToNumber(ctx, value, exception) as i32;
+        if exception.is_null() {
+            0
+        } else {
+            -1
+        }
+    }
+);
+
+impl_js_converter!(
+    JSCValue,
+    f64,
+    |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value) },
+    |ctx, value, result: &mut f64| unsafe {
+        let exception = std::ptr::null_mut::<jsc::JSValueRef>();
+        *result = jsc::JSValueToNumber(ctx, value, exception);
+        if exception.is_null() {
+            0
+        } else {
+            -1
+        }
+    }
+);
+
+impl_js_converter!(
+    JSCValue,
+    &str,
+    String,
+    |ctx, value: &str| unsafe {
+        let cstr = CString::new(value).unwrap();
+        let js_str = jsc::JSStringCreateWithUTF8CString(cstr.as_ptr());
+        let result = jsc::JSValueMakeString(ctx, js_str);
+        jsc::JSStringRelease(js_str);
+        result
+    },
+    |ctx, value, result: *mut String| unsafe {
+        if !jsc::JSValueIsString(ctx, value) {
+            return -1;
+        }
+
+        let js_str = jsc::JSValueToStringCopy(ctx, value, std::ptr::null_mut());
+        if js_str.is_null() {
+            return -1;
+        }
+
+        // Get required buffer size (including null terminator)
+        let max_size = jsc::JSStringGetMaximumUTF8CStringSize(js_str);
+        let mut buffer: Vec<u8> = Vec::with_capacity(max_size);
+        let actual_size = jsc::JSStringGetUTF8CString(
+            js_str,
+            buffer.as_mut_ptr().cast::<::std::os::raw::c_char>(),
+            max_size,
+        );
+        buffer.set_len(actual_size - 1);
+        jsc::JSStringRelease(js_str);
+
+        match String::from_utf8(buffer) {
+            Ok(s) => {
+                *result = s.to_string();
+                0
+            }
+            Err(_) => -1,
+        }
+    }
+);
+
+impl_js_converter!(
+    JSCValue,
+    u32,
+    |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
+    |ctx, value, result: &mut u32| unsafe {
+        let exception = std::ptr::null_mut();
+        *result = jsc::JSValueToNumber(ctx, value, exception) as u32;
+        if exception.is_null() {
+            0
+        } else {
+            -1
+        }
+    }
+);
+
+// Warning: Numbers larger than 2^53 may lose precision when converted to JavaScript number
+impl_js_converter!(
+    JSCValue,
+    i64,
+    |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
+    |ctx, value, result: &mut i64| unsafe {
+        let exception = std::ptr::null_mut();
+        *result = jsc::JSValueToNumber(ctx, value, exception) as i64;
+        if exception.is_null() {
+            0
+        } else {
+            -1
+        }
+    }
+);
+
+// Warning: Numbers larger than 2^53 may lose precision when converted to JavaScript number
+// Unlike QuickJS, JavaScriptCore doesn't have native BigInt support
+impl_js_converter!(
+    JSCValue,
+    u64,
+    |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
+    |ctx, value, result: &mut u64| unsafe {
+        let exception = std::ptr::null_mut();
+        *result = jsc::JSValueToNumber(ctx, value, exception) as u64;
+        if exception.is_null() {
+            0
+        } else {
+            -1
+        }
+    }
+);
