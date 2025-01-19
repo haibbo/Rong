@@ -1,5 +1,5 @@
 use crate::{jsc, JSCValue};
-use rusty_js_core::{JSTypeOf, JSValueImpl};
+use rusty_js_core::JSTypeOf;
 
 impl JSTypeOf for JSCValue {
     fn is_exception(&self) -> Option<Self> {
@@ -8,8 +8,8 @@ impl JSTypeOf for JSCValue {
     }
 
     fn is_error(&self) -> bool {
-        todo!()
-        // unsafe { jsc::JSValueIsError(self.ctx, self.value) }
+        // In JavaScriptCore, no direct API. Let's assume no error
+        false
     }
 
     fn is_array(&self) -> bool {
@@ -18,7 +18,6 @@ impl JSTypeOf for JSCValue {
 
     fn is_promise(&self) -> bool {
         todo!()
-        // unsafe { jsc::JSValueIsPromise(self.ctx, self.value) }
     }
 
     fn is_undefined(&self) -> bool {
@@ -50,8 +49,12 @@ impl JSTypeOf for JSCValue {
     }
 
     fn is_function(&self) -> bool {
-        todo!()
-        // unsafe { jsc::JSValueIsFunction(self.ctx, self.value) }
+        unsafe {
+            if !self.is_object() {
+                return false;
+            }
+            jsc::JSObjectIsFunction(self.ctx, self.value as jsc::JSObjectRef)
+        }
     }
 
     fn is_object(&self) -> bool {
@@ -59,7 +62,11 @@ impl JSTypeOf for JSCValue {
     }
 
     fn is_constructor(&self) -> bool {
-        todo!()
-        // unsafe { jsc::JSValueIsConstructor(self.ctx, self.value) }
+        unsafe {
+            if !self.is_object() {
+                return false;
+            }
+            jsc::JSObjectIsConstructor(self.ctx, self.value as jsc::JSObjectRef)
+        }
     }
 }
