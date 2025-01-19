@@ -1,7 +1,7 @@
 use crate::{JSException, JSValue, JSValueImpl};
 
 #[derive(Clone, Debug)]
-pub enum ValueType {
+pub enum JSValueType {
     Undefined,
     Null,
     Error,
@@ -35,37 +35,37 @@ pub trait JSTypeOf: JSValueImpl {
     fn is_object(&self) -> bool;
     fn is_constructor(&self) -> bool;
 
-    fn type_of(&self) -> ValueType {
+    fn type_of(&self) -> JSValueType {
         if self.is_exception().is_some() {
-            ValueType::Exception
+            JSValueType::Exception
         } else if self.is_error() {
-            ValueType::Error
+            JSValueType::Error
         } else if self.is_promise() {
-            ValueType::Promise
+            JSValueType::Promise
         } else if self.is_array() {
-            ValueType::Array
+            JSValueType::Array
         } else if self.is_function() {
-            ValueType::Function
+            JSValueType::Function
         } else if self.is_constructor() {
-            ValueType::Constructor
+            JSValueType::Constructor
         } else if self.is_object() {
-            ValueType::Object
+            JSValueType::Object
         } else if self.is_undefined() {
-            ValueType::Undefined
+            JSValueType::Undefined
         } else if self.is_null() {
-            ValueType::Null
+            JSValueType::Null
         } else if self.is_boolean() {
-            ValueType::Boolean
+            JSValueType::Boolean
         } else if self.is_number() {
-            ValueType::Number
+            JSValueType::Number
         } else if self.is_bigint() {
-            ValueType::BigInt
+            JSValueType::BigInt
         } else if self.is_string() {
-            ValueType::String
+            JSValueType::String
         } else if self.is_symbol() {
-            ValueType::Symbol
+            JSValueType::Symbol
         } else {
-            ValueType::Unknown
+            JSValueType::Unknown
         }
     }
 }
@@ -74,7 +74,7 @@ impl<V> JSValue<V>
 where
     V: JSTypeOf,
 {
-    pub fn type_of(&self) -> ValueType {
+    pub fn type_of(&self) -> JSValueType {
         self.inner.type_of()
     }
 
