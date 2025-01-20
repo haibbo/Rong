@@ -49,8 +49,12 @@ impl JSCValue {
     fn _from_borrowed_raw(ctx: *mut jsc::OpaqueJSContext, value: jsc::JSValueRef) -> Self {
         unsafe {
             if jsc::JSValueIsObject(ctx, value) {
-                jsc::JSValueToObject(ctx, value, std::ptr::null_mut());
-                Self::new(value, ctx, JSValueKind::Object).protect()
+                let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+                let obj = jsc::JSValueToObject(ctx, value, &mut exception);
+                if !exception.is_null() {
+                    panic!("JSC: failed to convert to Object")
+                };
+                Self::new(obj, ctx, JSValueKind::Object).protect()
             } else {
                 Self::new(value, ctx, JSValueKind::Scalar).protect()
             }
@@ -60,8 +64,12 @@ impl JSCValue {
     fn _from_owned_raw(ctx: *mut jsc::OpaqueJSContext, value: jsc::JSValueRef) -> Self {
         unsafe {
             if jsc::JSValueIsObject(ctx, value) {
-                jsc::JSValueToObject(ctx, value, std::ptr::null_mut());
-                Self::new(value, ctx, JSValueKind::Object)
+                let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+                let obj = jsc::JSValueToObject(ctx, value, &mut exception);
+                if !exception.is_null() {
+                    panic!("JSC: failed to convert to Object")
+                };
+                Self::new(obj, ctx, JSValueKind::Object)
             } else {
                 Self::new(value, ctx, JSValueKind::Scalar)
             }

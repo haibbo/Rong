@@ -1,5 +1,5 @@
 use crate::{jsc, JSCRuntime, JSCValue};
-use rusty_js_core::{JSContextImpl, JSRuntimeImpl, JSValueImpl};
+use rusty_js_core::{JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl};
 use std::ffi::CString;
 
 pub struct JSCContext {
@@ -39,14 +39,14 @@ impl JSContextImpl for JSCContext {
             let js_str = jsc::JSStringCreateWithUTF8CString(code.as_ptr() as *const _);
             let js_filename = jsc::JSStringCreateWithUTF8CString(filename.as_ptr() as *const _);
 
-            let exception: *mut jsc::JSValueRef = std::ptr::null_mut();
+            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
             let result = jsc::JSEvaluateScript(
                 self.raw,
                 js_str,
                 std::ptr::null_mut(), // thisObject (null means use global object)
                 js_filename,
                 1,
-                exception,
+                &mut exception,
             );
 
             jsc::JSStringRelease(js_str);
@@ -54,10 +54,13 @@ impl JSContextImpl for JSCContext {
 
             // Check if an exception occurred
             if !exception.is_null() {
-                // Convert the exception to a JSValue
-                return JSCValue::from_owned_raw(self.raw, *exception).with_exception();
+                // println!("got exception");
+                return JSCValue::from_owned_raw(self.raw, exception).with_exception();
             }
-
+            // println!(
+            //     "Result isObject: {}",
+            //     jsc::JSValueIsObject(self.raw, result)
+            // );
             JSCValue::from_owned_raw(self.raw, result)
         }
     }
@@ -123,6 +126,54 @@ impl Clone for JSCContext {
             // Retains a global JavaScript execution context.
             jsc::JSGlobalContextRetain(self.raw);
             Self { raw: self.raw }
+        }
+    }
+}
+
+impl JSExceptionHandler for JSCContext {
+    fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value {
+        self.create_error(message.as_ref())
+    }
+
+    fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value {
+        self.create_error(message.as_ref())
+    }
+
+    fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value {
+        self.create_error(message.as_ref())
+    }
+
+    fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value {
+        self.create_error(message.as_ref())
+    }
+
+    fn throw_error(&self, message: impl AsRef<str>) -> Self::Value {
+        self.create_error(message.as_ref())
+    }
+
+    fn new_error(&self) -> Self::Value {
+        self.create_error("")
+    }
+}
+
+impl JSCContext {
+    fn create_error(&self, message: &str) -> JSCValue {
+        unsafe {
+            let c_message = CString::new(message).unwrap();
+            let js_str = jsc::JSStringCreateWithUTF8CString(c_message.as_ptr());
+
+            let args = [jsc::JSValueMakeString(self.raw, js_str)];
+            let exception: *mut jsc::JSValueRef = std::ptr::null_mut();
+
+            let error = jsc::JSObjectMakeError(self.raw, 1, args.as_ptr(), exception);
+
+            jsc::JSStringRelease(js_str);
+
+            if !exception.is_null() {
+                JSCValue::from_owned_raw(self.raw, *exception).with_exception()
+            } else {
+                JSCValue::from_owned_raw(self.raw, error).with_exception()
+            }
         }
     }
 }
