@@ -18,14 +18,6 @@ impl JSContextImpl for JSCContext {
         }
     }
 
-    fn get_opaque<T>(ctx: &Self::RawContext) -> *mut T {
-        std::ptr::null_mut()
-    }
-
-    fn set_opaque<T>(ctx: &Self::RawContext, opaque: *mut T) {
-        //    todo!()
-    }
-
     fn as_raw(&self) -> &Self::RawContext {
         &self.raw
     }
@@ -68,6 +60,10 @@ impl JSContextImpl for JSCContext {
 
     fn run_bytecode(&self, bytes: &[u8]) -> Self::Value {
         todo!()
+    }
+
+    fn context_id(ctx: &Self::RawContext) -> usize {
+        *ctx as *const _ as usize
     }
 }
 
