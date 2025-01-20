@@ -4,7 +4,7 @@ use rusty_js_core::{
 };
 use std::ffi::CString;
 use std::mem::MaybeUninit;
-use std::os::raw::{c_char, c_void};
+use std::os::raw::c_char;
 
 pub struct QJSContext {
     pub(crate) ctx: *mut qjs::JSContext,
@@ -163,14 +163,8 @@ impl JSContextImpl for QJSContext {
         (QJSValue::from_owned_raw(self.ctx, promise), resolve, reject)
     }
 
-    /// Set opaque data for the context
-    fn set_opaque<T>(ctx: &Self::RawContext, data: *mut T) {
-        unsafe { qjs::JS_SetContextOpaque(*ctx, data as *mut c_void) };
-    }
-
-    /// Get opaque data from the context
-    fn get_opaque<T>(ctx: &Self::RawContext) -> *mut T {
-        unsafe { qjs::JS_GetContextOpaque(*ctx) as *mut T }
+    fn context_id(ctx: &Self::RawContext) -> usize {
+        *ctx as *const _ as usize
     }
 }
 
