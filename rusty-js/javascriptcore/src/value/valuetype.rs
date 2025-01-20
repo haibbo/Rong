@@ -1,14 +1,19 @@
-use crate::{jsc, JSCValue};
+use crate::{jsc, value::JSValueKind, JSCValue};
 use rusty_js_core::JSTypeOf;
 
 impl JSTypeOf for JSCValue {
     fn is_exception(&self) -> Option<Self> {
-        // In JavaScriptCore, exceptions are handled through context
-        None
+        if self.exception {
+            Some(self.clone())
+        } else {
+            None
+        }
     }
 
     fn is_error(&self) -> bool {
-        // In JavaScriptCore, no direct API. Let's assume no error
+        if self.kind != JSValueKind::Object {
+            return false;
+        }
         false
     }
 
@@ -17,7 +22,8 @@ impl JSTypeOf for JSCValue {
     }
 
     fn is_promise(&self) -> bool {
-        todo!()
+        // In JavaScriptCore, no direct API. Let's assume no error
+        false
     }
 
     fn is_undefined(&self) -> bool {
@@ -58,7 +64,7 @@ impl JSTypeOf for JSCValue {
     }
 
     fn is_object(&self) -> bool {
-        unsafe { jsc::JSValueIsObject(self.ctx, self.value) }
+        self.kind == JSValueKind::Object
     }
 
     fn is_constructor(&self) -> bool {

@@ -55,7 +55,7 @@ impl JSContextImpl for JSCContext {
             // Check if an exception occurred
             if !exception.is_null() {
                 // Convert the exception to a JSValue
-                return JSCValue::from_owned_raw(self.raw, *exception);
+                return JSCValue::from_owned_raw(self.raw, *exception).with_exception();
             }
 
             JSCValue::from_owned_raw(self.raw, result)

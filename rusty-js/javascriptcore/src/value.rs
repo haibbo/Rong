@@ -5,10 +5,68 @@ use std::ffi::CString;
 mod object;
 mod valuetype;
 
+#[derive(Clone, PartialEq)]
+pub(crate) enum JSValueKind {
+    Scalar,
+    Object,
+}
+
 #[derive(Clone)]
 pub struct JSCValue {
     value: jsc::JSValueRef,
     ctx: *mut jsc::OpaqueJSContext,
+    exception: bool,
+    kind: JSValueKind,
+}
+
+impl JSCValue {
+    pub(crate) fn new(
+        value: jsc::JSValueRef,
+        ctx: *mut jsc::OpaqueJSContext,
+        kind: JSValueKind,
+    ) -> Self {
+        Self {
+            value,
+            ctx,
+            kind,
+            exception: false,
+        }
+    }
+
+    /// Protects the current value from garbage collection.
+    pub(crate) fn protect(self) -> Self {
+        unsafe {
+            jsc::JSValueProtect(self.ctx, self.value);
+        }
+        self
+    }
+
+    pub(crate) fn with_exception(mut self) -> Self {
+        self.exception = true;
+        self
+    }
+
+    fn _from_borrowed_raw(ctx: *mut jsc::OpaqueJSContext, value: jsc::JSValueRef) -> Self {
+        unsafe {
+            if jsc::JSValueIsObject(ctx, value) {
+                jsc::JSValueToObject(ctx, value, std::ptr::null_mut());
+                Self::new(value, ctx, JSValueKind::Object).protect()
+            } else {
+                Self::new(value, ctx, JSValueKind::Scalar).protect()
+            }
+        }
+    }
+
+    fn _from_owned_raw(ctx: *mut jsc::OpaqueJSContext, value: jsc::JSValueRef) -> Self {
+        unsafe {
+            if jsc::JSValueIsObject(ctx, value) {
+                jsc::JSValueToObject(ctx, value, std::ptr::null_mut());
+                Self::new(value, ctx, JSValueKind::Object)
+            } else {
+                Self::new(value, ctx, JSValueKind::Scalar)
+            }
+        }
+    }
 }
 
 impl Drop for JSCValue {
@@ -31,18 +89,14 @@ impl JSValueImpl for JSCValue {
         ctx: <Self::Context as JSContextImpl>::RawContext,
         value: Self::RawValue,
     ) -> Self {
-        unsafe {
-            // Protect value from GC
-            jsc::JSValueProtect(ctx as *const jsc::OpaqueJSContext, value as jsc::JSValueRef);
-            Self { value, ctx }
-        }
+        JSCValue::_from_borrowed_raw(ctx, value)
     }
 
     fn from_owned_raw(
         ctx: <Self::Context as JSContextImpl>::RawContext,
         value: Self::RawValue,
     ) -> Self {
-        Self { value, ctx }
+        JSCValue::_from_owned_raw(ctx, value)
     }
 
     fn into_raw_value(self) -> Self::RawValue {
