@@ -8,7 +8,7 @@ mod exception;
 pub use exception::*;
 
 mod valuetype;
-pub use valuetype::{JSTypeOf, ValueType};
+pub use valuetype::{JSTypeOf, JSValueType};
 
 mod object;
 pub use object::*;
@@ -190,39 +190,39 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.type_of() {
-            ValueType::Boolean => {
+            JSValueType::Boolean => {
                 if let Ok(val) = self.clone().try_into::<bool>() {
                     write!(f, "{}", val)
                 } else {
                     write!(f, "boolean")
                 }
             }
-            ValueType::Number => {
+            JSValueType::Number => {
                 if let Ok(val) = self.clone().try_into::<f64>() {
                     write!(f, "{}", val)
                 } else {
                     write!(f, "number")
                 }
             }
-            ValueType::String => {
+            JSValueType::String => {
                 if let Ok(val) = self.clone().try_into::<String>() {
                     write!(f, "{}", val)
                 } else {
                     write!(f, "string")
                 }
             }
-            ValueType::Undefined => write!(f, "undefined"),
-            ValueType::Null => write!(f, "null"),
-            ValueType::BigInt => write!(f, "bigint"),
-            ValueType::Object => write!(f, "object"),
-            ValueType::Array => write!(f, "array"),
-            ValueType::Function => write!(f, "function"),
-            ValueType::Constructor => write!(f, "constructor"),
-            ValueType::Promise => write!(f, "promise"),
-            ValueType::Symbol => write!(f, "symbol"),
-            ValueType::Error => write!(f, "error"),
-            ValueType::Exception => write!(f, "exception"),
-            ValueType::Unknown => write!(f, "unknown"),
+            JSValueType::Undefined => write!(f, "undefined"),
+            JSValueType::Null => write!(f, "null"),
+            JSValueType::BigInt => write!(f, "bigint"),
+            JSValueType::Object => write!(f, "object"),
+            JSValueType::Array => write!(f, "array"),
+            JSValueType::Function => write!(f, "function"),
+            JSValueType::Constructor => write!(f, "constructor"),
+            JSValueType::Promise => write!(f, "promise"),
+            JSValueType::Symbol => write!(f, "symbol"),
+            JSValueType::Error => write!(f, "error"),
+            JSValueType::Exception => write!(f, "exception"),
+            JSValueType::Unknown => write!(f, "unknown"),
         }
     }
 }

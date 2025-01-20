@@ -8,6 +8,7 @@ use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
+use std::sync::{LazyLock, RwLock};
 
 /// JSContextImpl represents a JavaScript context
 ///
@@ -16,30 +17,39 @@ use std::rc::{Rc, Weak};
 /// 1. Value type implements Drop to properly clean up resources
 /// 2. Context type implements Drop if it holds any resources that need cleanup
 pub trait JSContextImpl {
-    /// the JS engine specific type of JavaScript Context
-    type RawContext: Copy;
+    /// The JavaScript engine's native context type.
+    ///
+    /// This represents the raw, engine-specific context handle that is used internally
+    type RawContext;
+
+    /// The runtime type associated with this context.
+    ///
+    /// This specifies the JavaScript runtime implementation that this context belongs to.
+    /// The runtime must implement JSRuntimeImpl and have its Context type set to Self.
     type Runtime: JSRuntimeImpl<Context = Self>;
+
+    /// The JavaScript value type associated with this context.
+    ///
+    /// This specifies the type used to represent JavaScript values within this context.
+    /// The value type must implement JSValueImpl and have its Context type set to Self.
     type Value: JSValueImpl<Context = Self>;
 
     /// Creates a new JavaScript context
     fn new(runtime: &Self::Runtime) -> Self;
 
-    /// Get the opaque pointer stored in the context
-    ///
-    /// # Safety
-    /// - The caller must ensure the pointer is valid and properly aligned for type T
-    /// - The pointer must not be used after the context is dropped
-    fn get_opaque<T>(ctx: &Self::RawContext) -> *mut T;
-
-    /// Set the opaque pointer in the context
-    ///
-    /// # Safety
-    /// - The caller must ensure the pointer is valid and properly aligned for type T
-    /// - The caller must ensure proper cleanup of the pointer when no longer needed
-    fn set_opaque<T>(ctx: &Self::RawContext, opaque: *mut T);
-
     /// Converts the context to its FFI representation
     fn as_raw(&self) -> &Self::RawContext;
+
+    /// Returns a unique identifier for the context that can be used as a key in CTX_OPAQUE
+    ///
+    /// This identifier must be:
+    /// - Unique per context instance
+    /// - Stable for the lifetime of the context
+    /// - Suitable for use as a HashMap key
+    ///
+    /// # Returns
+    /// A usize value that uniquely identifies this context instance
+    fn context_id(ctx: &Self::RawContext) -> usize;
 
     /// the implementation need to make sure it has the ownship, like as new method
     /// generally, it should increase referen count of FFI Context
@@ -155,7 +165,12 @@ impl<C: JSContextImpl> JSContext<C> {
 
         // save stale address to opaque
         let opaque = ContextOpaque::<C::Value>::new(weak);
-        C::set_opaque(ctx.rc.inner.as_raw(), Box::into_raw(opaque));
+        let raw_ctx = ctx.rc.inner.as_raw();
+        let key = C::context_id(raw_ctx);
+        CTX_OPAQUE
+            .write()
+            .unwrap()
+            .insert(key, Box::into_raw(opaque) as usize);
 
         ctx
     }
@@ -181,17 +196,15 @@ impl<C: JSContextImpl> JSContext<C> {
     /// }
     /// ```
     pub(crate) fn from_borrowed_raw_ptr(ptr: &C::RawContext) -> Self {
-        let data = C::get_opaque::<ContextOpaque<C::Value>>(ptr);
+        let data = Self::_get_opaque(ptr);
         if data.is_null() {
             panic!("[JSContext] opaque is empty");
         } else {
-            unsafe {
-                let ctx_inner = &(*data).ctx_inner;
-                if let Some(ctx) = ctx_inner.upgrade() {
-                    Self { rc: ctx }
-                } else {
-                    panic!("[JSContext] context has been dropped");
-                }
+            let ctx_inner = unsafe { &(*data).ctx_inner };
+            if let Some(ctx) = ctx_inner.upgrade() {
+                Self { rc: ctx }
+            } else {
+                panic!("[JSContext] context has been dropped");
             }
         }
     }
@@ -356,7 +369,17 @@ impl<C: JSContextImpl> JSContext<C> {
     }
 
     fn get_opaque(&self) -> *mut ContextOpaque<C::Value> {
-        C::get_opaque::<ContextOpaque<C::Value>>(self.rc.inner.as_raw())
+        let key = self.rc.inner.as_raw();
+        Self::_get_opaque(key)
+    }
+
+    fn _get_opaque(raw_ctx: &C::RawContext) -> *mut ContextOpaque<C::Value> {
+        let key = C::context_id(raw_ctx);
+        if let Some(opaque_ptr) = CTX_OPAQUE.read().unwrap().get(&key) {
+            *opaque_ptr as *mut ContextOpaque<C::Value>
+        } else {
+            std::ptr::null_mut()
+        }
     }
 }
 
@@ -364,7 +387,7 @@ impl<C: JSContextImpl> JSContext<C> {
 ///
 /// # Fields
 /// - `registry`: A pointer to a RefCell containing a HashMap that maps TypeId to type that implements JSValueImpl
-/// - `address`: Address of JSContext used to build JSContext from callback case
+/// - `ctx_inner`: Weak reference to the JSContextInner used to build JSContext from callback case
 struct ContextOpaque<V: JSValueImpl> {
     registry: RefCell<HashMap<TypeId, V>>,
     ctx_inner: Weak<JSContextInner<V::Context>>,
@@ -378,6 +401,12 @@ impl<V: JSValueImpl> ContextOpaque<V> {
         })
     }
 }
+
+// Global HashMap to store ContextOpaque<V>
+// Like JavaScriptCore engine, it does not provide API to save opaque on JS Context,
+// that's why we introduce general solution CTX_OPAQUE
+static CTX_OPAQUE: LazyLock<RwLock<HashMap<usize, usize>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 impl<C: JSContextImpl> Drop for JSContext<C> {
     fn drop(&mut self) {
