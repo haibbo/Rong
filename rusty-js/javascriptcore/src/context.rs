@@ -1,5 +1,6 @@
 use crate::{jsc, JSCRuntime, JSCValue};
-use rusty_js_core::{JSContextImpl, JSRuntimeImpl};
+use rusty_js_core::{JSContextImpl, JSRuntimeImpl, JSValueImpl};
+use std::ffi::CString;
 
 pub struct JSCContext {
     raw: *mut jsc::OpaqueJSContext,
@@ -22,16 +23,50 @@ impl JSContextImpl for JSCContext {
         &self.raw
     }
 
+    fn context_id(ctx: &Self::RawContext) -> usize {
+        *ctx as *const _ as usize
+    }
+
     fn from_borrowed_raw(ctx: Self::RawContext) -> Self {
         todo!()
     }
 
     fn eval(&self, source: rusty_js_core::Source) -> Self::Value {
-        todo!()
+        let filename = source.name().unwrap_or("eval");
+        let code = CString::new(source.code()).unwrap();
+
+        unsafe {
+            let js_str = jsc::JSStringCreateWithUTF8CString(code.as_ptr() as *const _);
+            let js_filename = jsc::JSStringCreateWithUTF8CString(filename.as_ptr() as *const _);
+
+            let exception: *mut jsc::JSValueRef = std::ptr::null_mut();
+            let result = jsc::JSEvaluateScript(
+                self.raw,
+                js_str,
+                std::ptr::null_mut(), // thisObject (null means use global object)
+                js_filename,
+                1,
+                exception,
+            );
+
+            jsc::JSStringRelease(js_str);
+            jsc::JSStringRelease(js_filename);
+
+            // Check if an exception occurred
+            if !exception.is_null() {
+                // Convert the exception to a JSValue
+                return JSCValue::from_owned_raw(self.raw, *exception);
+            }
+
+            JSCValue::from_owned_raw(self.raw, result)
+        }
     }
 
     fn global(&self) -> Self::Value {
-        todo!()
+        unsafe {
+            let global_obj = jsc::JSContextGetGlobalObject(self.raw);
+            JSCValue::from_owned_raw(self.raw, global_obj)
+        }
     }
 
     fn register_class<JC>(&self) -> Self::Value
@@ -60,10 +95,6 @@ impl JSContextImpl for JSCContext {
 
     fn run_bytecode(&self, bytes: &[u8]) -> Self::Value {
         todo!()
-    }
-
-    fn context_id(ctx: &Self::RawContext) -> usize {
-        *ctx as *const _ as usize
     }
 }
 
