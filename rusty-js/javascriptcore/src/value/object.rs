@@ -5,36 +5,39 @@ impl JSObjectOps for JSCValue {
     fn new_object(ctx: &Self::Context) -> Self {
         unsafe {
             let obj = jsc::JSObjectMake(ctx.to_raw(), std::ptr::null_mut(), std::ptr::null_mut());
-            JSCValue::from_owned_raw(ctx.to_raw(), obj)
+            JSCValue::from_owned_obj(ctx.to_raw(), obj)
         }
     }
 
     fn make_object<T>(ctx: &Self::Context, constructor: Self, data: *mut T) -> Self {
         unsafe {
-            let obj = jsc::JSObjectMake(ctx.to_raw(), constructor.value as _, data as *mut _);
-            JSCValue::from_owned_raw(ctx.to_raw(), obj)
+            // must clear LSB bit
+            let classref = jsc::JSObjectGetPrivate(constructor.as_obj()) as usize & !0x1;
+
+            let obj = jsc::JSObjectMake(ctx.to_raw(), classref as jsc::JSClassRef, data as _);
+            JSCValue::from_owned_obj(ctx.to_raw(), obj)
         }
     }
 
     fn get_opaque<T>(&self) -> *mut T {
         unsafe {
-            let private_data = jsc::JSObjectGetPrivate(self.value as _);
+            let private_data = jsc::JSObjectGetPrivate(self.as_obj());
             private_data as *mut T
         }
     }
 
     fn del_property(&self, key: Self) -> bool {
-        let obj = self.value as jsc::JSObjectRef;
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
         unsafe {
-            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.value, &mut exception);
+            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.as_value(), &mut exception);
             if !exception.is_null() {
                 jsc::JSStringRelease(str_ref);
                 return false;
             }
 
-            let result = jsc::JSObjectDeleteProperty(self.ctx, obj, str_ref, &mut exception);
+            let result =
+                jsc::JSObjectDeleteProperty(self.ctx, self.as_obj(), str_ref, &mut exception);
             jsc::JSStringRelease(str_ref);
 
             if !exception.is_null() {
@@ -46,16 +49,16 @@ impl JSObjectOps for JSCValue {
     }
 
     fn has_property(&self, key: Self) -> bool {
-        let obj = self.value as jsc::JSObjectRef;
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
         unsafe {
-            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.value, &mut exception);
+            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.as_value(), &mut exception);
             if !exception.is_null() {
                 jsc::JSStringRelease(str_ref);
                 return false;
             }
 
+            let obj = self.as_obj();
             let result = jsc::JSObjectHasProperty(self.ctx, obj, str_ref);
             jsc::JSStringRelease(str_ref);
             result
@@ -64,20 +67,20 @@ impl JSObjectOps for JSCValue {
 
     fn set_property(&self, key: Self, value: Self) -> bool {
         unsafe {
-            let obj = self.value as jsc::JSObjectRef;
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
-            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.value, &mut exception);
+            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.as_value(), &mut exception);
             if !exception.is_null() {
                 jsc::JSStringRelease(str_ref);
                 return false;
             }
 
+            let obj = self.as_obj();
             jsc::JSObjectSetProperty(
                 self.ctx,
                 obj,
                 str_ref,
-                value.value,
+                value.as_value(),
                 jsc::kJSPropertyAttributeNone,
                 &mut exception,
             );
@@ -89,15 +92,15 @@ impl JSObjectOps for JSCValue {
 
     fn get_property(&self, key: Self) -> Option<Self> {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-        let obj = self.value as jsc::JSObjectRef;
 
         unsafe {
-            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.value, &mut exception);
+            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.as_value(), &mut exception);
             if !exception.is_null() {
                 jsc::JSStringRelease(str_ref);
                 return None;
             }
 
+            let obj = self.as_obj();
             let value = jsc::JSObjectGetProperty(self.ctx, obj, str_ref, &mut exception);
             jsc::JSStringRelease(str_ref);
 
@@ -117,20 +120,20 @@ impl JSObjectOps for JSCValue {
         attributes: PropertyAttributes,
     ) -> bool {
         unsafe {
-            let obj = self.value as jsc::JSObjectRef;
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
-            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.value, &mut exception);
+            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.as_value(), &mut exception);
             if !exception.is_null() {
                 return false;
             }
 
+            let obj = self.as_obj();
             if attributes.has_value() {
                 jsc::JSObjectSetProperty(
                     self.ctx,
                     obj,
                     str_ref,
-                    value.value,
+                    value.as_value(),
                     to_jsc_attributes(attributes),
                     &mut exception,
                 );
@@ -149,8 +152,8 @@ impl JSObjectOps for JSCValue {
 
     fn set_prototype(&self, prototype: Self) -> bool {
         unsafe {
-            let obj = self.value as jsc::JSObjectRef;
-            jsc::JSObjectSetPrototype(self.ctx, obj, prototype.value);
+            let obj = self.as_obj();
+            jsc::JSObjectSetPrototype(self.ctx, obj, prototype.as_value());
             true
         }
     }
