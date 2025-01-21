@@ -5,32 +5,35 @@ use std::ffi::CString;
 mod object;
 mod valuetype;
 
-#[derive(Clone, PartialEq)]
-pub(crate) enum JSValueKind {
-    Scalar,
-    Object,
-}
-
 #[derive(Clone)]
 pub struct JSCValue {
-    value: jsc::JSValueRef,
+    value: *const jsc::OpaqueJSValue,
     ctx: *mut jsc::OpaqueJSContext,
     exception: bool,
-    kind: JSValueKind,
+    is_object: bool,
 }
 
 impl JSCValue {
-    pub(crate) fn new(
-        value: jsc::JSValueRef,
-        ctx: *mut jsc::OpaqueJSContext,
-        kind: JSValueKind,
-    ) -> Self {
+    pub(crate) fn new(ctx: *mut jsc::OpaqueJSContext, value: *const jsc::OpaqueJSValue) -> Self {
         Self {
-            value,
             ctx,
-            kind,
+            value,
             exception: false,
+            is_object: false,
         }
+    }
+
+    pub(crate) fn as_obj(&self) -> jsc::JSObjectRef {
+        if self.is_object {
+            self.value as jsc::JSObjectRef
+        } else {
+            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+            unsafe { jsc::JSValueToObject(self.ctx, self.value, &mut exception) }
+        }
+    }
+
+    pub(crate) fn as_value(&self) -> jsc::JSValueRef {
+        self.value
     }
 
     /// Protects the current value from garbage collection.
@@ -46,42 +49,25 @@ impl JSCValue {
         self
     }
 
-    fn _from_borrowed_raw(ctx: *mut jsc::OpaqueJSContext, value: jsc::JSValueRef) -> Self {
-        unsafe {
-            if jsc::JSValueIsObject(ctx, value) {
-                let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-                let obj = jsc::JSValueToObject(ctx, value, &mut exception);
-                if !exception.is_null() {
-                    panic!("JSC: failed to convert to Object")
-                };
-                Self::new(obj, ctx, JSValueKind::Object).protect()
-            } else {
-                Self::new(value, ctx, JSValueKind::Scalar).protect()
-            }
-        }
+    pub(crate) fn with_object(mut self) -> Self {
+        self.is_object = true;
+        self
     }
 
-    fn _from_owned_raw(ctx: *mut jsc::OpaqueJSContext, value: jsc::JSValueRef) -> Self {
-        unsafe {
-            if jsc::JSValueIsObject(ctx, value) {
-                let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-                let obj = jsc::JSValueToObject(ctx, value, &mut exception);
-                if !exception.is_null() {
-                    panic!("JSC: failed to convert to Object")
-                };
-                Self::new(obj, ctx, JSValueKind::Object)
-            } else {
-                Self::new(value, ctx, JSValueKind::Scalar)
-            }
-        }
+    pub(crate) fn from_borrowed_obj(ctx: *mut jsc::OpaqueJSContext, obj: jsc::JSObjectRef) -> Self {
+        JSCValue::new(ctx, obj).with_object().protect()
+    }
+
+    pub(crate) fn from_owned_obj(ctx: *mut jsc::OpaqueJSContext, obj: jsc::JSObjectRef) -> Self {
+        JSCValue::new(ctx, obj).with_object()
     }
 }
 
 impl Drop for JSCValue {
     fn drop(&mut self) {
-        unsafe {
-            // Finalizer callback, ctx is set to NULL
-            if !self.ctx.is_null() {
+        // Finalizer callback, ctx is set to NULL
+        if !self.ctx.is_null() {
+            unsafe {
                 jsc::JSValueUnprotect(self.ctx, self.value);
             }
         }
@@ -93,21 +79,21 @@ impl JSRawContext for JSCValue {
 }
 
 impl JSValueImpl for JSCValue {
-    type RawValue = jsc::JSValueRef;
+    type RawValue = *const jsc::OpaqueJSValue;
     type Context = JSCContext;
 
     fn from_borrowed_raw(
         ctx: <Self::Context as JSContextImpl>::RawContext,
         value: Self::RawValue,
     ) -> Self {
-        JSCValue::_from_borrowed_raw(ctx, value)
+        JSCValue::new(ctx, value).protect()
     }
 
     fn from_owned_raw(
         ctx: <Self::Context as JSContextImpl>::RawContext,
         value: Self::RawValue,
     ) -> Self {
-        JSCValue::_from_owned_raw(ctx, value)
+        JSCValue::new(ctx, value)
     }
 
     fn into_raw_value(self) -> Self::RawValue {
@@ -141,6 +127,7 @@ impl_js_converter!(
     bool,
     |ctx, value| unsafe { jsc::JSValueMakeBoolean(ctx, value) },
     |ctx, value, result: *mut bool| unsafe {
+        let value = value;
         if jsc::JSValueIsBoolean(ctx, value) {
             *result = jsc::JSValueToBoolean(ctx, value);
             0
@@ -157,8 +144,8 @@ impl_js_converter!(
     i32,
     |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
     |ctx, value, result: &mut i32| unsafe {
-        let exception = std::ptr::null_mut();
-        *result = jsc::JSValueToNumber(ctx, value, exception) as i32;
+        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+        *result = jsc::JSValueToNumber(ctx, value, &mut exception) as i32;
         if exception.is_null() {
             0
         } else {
@@ -172,8 +159,8 @@ impl_js_converter!(
     f64,
     |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value) },
     |ctx, value, result: &mut f64| unsafe {
-        let exception = std::ptr::null_mut::<jsc::JSValueRef>();
-        *result = jsc::JSValueToNumber(ctx, value, exception);
+        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+        *result = jsc::JSValueToNumber(ctx, value, &mut exception);
         if exception.is_null() {
             0
         } else {
@@ -194,6 +181,7 @@ impl_js_converter!(
         result
     },
     |ctx, value, result: *mut String| unsafe {
+        let value = value;
         if jsc::JSValueIsUndefined(ctx, value) {
             *result = String::from("UNDEFINED");
             return 0;
@@ -234,8 +222,8 @@ impl_js_converter!(
     u32,
     |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
     |ctx, value, result: &mut u32| unsafe {
-        let exception = std::ptr::null_mut();
-        *result = jsc::JSValueToNumber(ctx, value, exception) as u32;
+        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+        *result = jsc::JSValueToNumber(ctx, value, &mut exception) as u32;
         if exception.is_null() {
             0
         } else {
@@ -250,8 +238,8 @@ impl_js_converter!(
     i64,
     |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
     |ctx, value, result: &mut i64| unsafe {
-        let exception = std::ptr::null_mut();
-        *result = jsc::JSValueToNumber(ctx, value, exception) as i64;
+        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+        *result = jsc::JSValueToNumber(ctx, value, &mut exception) as i64;
         if exception.is_null() {
             0
         } else {
@@ -267,8 +255,8 @@ impl_js_converter!(
     u64,
     |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
     |ctx, value, result: &mut u64| unsafe {
-        let exception = std::ptr::null_mut();
-        *result = jsc::JSValueToNumber(ctx, value, exception) as u64;
+        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+        *result = jsc::JSValueToNumber(ctx, value, &mut exception) as u64;
         if exception.is_null() {
             0
         } else {

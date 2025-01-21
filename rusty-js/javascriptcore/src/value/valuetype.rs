@@ -1,4 +1,4 @@
-use crate::{jsc, value::JSValueKind, JSCValue};
+use crate::{jsc, JSCValue};
 use rusty_js_core::JSTypeOf;
 
 impl JSTypeOf for JSCValue {
@@ -7,7 +7,7 @@ impl JSTypeOf for JSCValue {
             Some(self.clone())
         } else {
             /*
-            let obj = self.value as jsc::JSObjectRef;
+            let obj = self.as_obj()
             let exception: *mut jsc::JSValueRef = std::ptr::null_mut();
 
             unsafe {
@@ -38,7 +38,7 @@ impl JSTypeOf for JSCValue {
         /*
         unsafe {
             println!("......");
-            let obj = self.value as jsc::JSObjectRef;
+            let obj = self.as_obj()
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
             let name_str = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr() as *const _);
@@ -80,7 +80,7 @@ impl JSTypeOf for JSCValue {
         if !self.is_object() {
             return false;
         }
-        unsafe { jsc::JSValueIsArray(self.ctx, self.value) }
+        unsafe { jsc::JSValueIsArray(self.ctx, self.as_value()) }
     }
 
     fn is_promise(&self) -> bool {
@@ -112,58 +112,65 @@ impl JSTypeOf for JSCValue {
             }
 
             // is instance of Promsie
-            jsc::JSValueIsInstanceOfConstructor(self.ctx, self.value, constructor, &mut exception)
+            jsc::JSValueIsInstanceOfConstructor(
+                self.ctx,
+                self.as_value(),
+                constructor,
+                &mut exception,
+            )
         }
     }
 
     fn is_undefined(&self) -> bool {
-        unsafe { jsc::JSValueIsUndefined(self.ctx, self.value) }
+        unsafe { jsc::JSValueIsUndefined(self.ctx, self.as_value()) }
     }
 
     fn is_null(&self) -> bool {
-        unsafe { jsc::JSValueIsNull(self.ctx, self.value) }
+        unsafe { jsc::JSValueIsNull(self.ctx, self.as_value()) }
     }
 
     fn is_boolean(&self) -> bool {
-        unsafe { jsc::JSValueIsBoolean(self.ctx, self.value) }
+        unsafe { jsc::JSValueIsBoolean(self.ctx, self.as_value()) }
     }
 
     fn is_number(&self) -> bool {
-        unsafe { jsc::JSValueIsNumber(self.ctx, self.value) }
+        unsafe { jsc::JSValueIsNumber(self.ctx, self.as_value()) }
     }
 
     fn is_bigint(&self) -> bool {
-        unsafe { jsc::JSValueIsBigInt(self.ctx, self.value) }
+        unsafe { jsc::JSValueIsBigInt(self.ctx, self.as_value()) }
     }
 
     fn is_string(&self) -> bool {
-        unsafe { jsc::JSValueIsString(self.ctx, self.value) }
+        unsafe { jsc::JSValueIsString(self.ctx, self.as_value()) }
     }
 
     fn is_symbol(&self) -> bool {
-        unsafe { jsc::JSValueIsSymbol(self.ctx, self.value) }
+        unsafe { jsc::JSValueIsSymbol(self.ctx, self.as_value()) }
     }
 
     fn is_function(&self) -> bool {
         if !self.is_object() {
             return false;
         }
+
         unsafe {
-            let obj = self.value as jsc::JSObjectRef;
+            let obj = self.as_obj();
             jsc::JSObjectIsFunction(self.ctx, obj)
         }
     }
 
     fn is_object(&self) -> bool {
-        self.kind == JSValueKind::Object
+        self.is_object || unsafe { jsc::JSValueIsObject(self.ctx, self.as_value()) }
     }
 
     fn is_constructor(&self) -> bool {
         if !self.is_object() {
             return false;
         }
+
         unsafe {
-            let obj = self.value as jsc::JSObjectRef;
+            let obj = self.as_obj();
             jsc::JSObjectIsConstructor(self.ctx, obj)
         }
     }
