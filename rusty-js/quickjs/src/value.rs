@@ -157,6 +157,11 @@ impl_js_converter!(
         qjs::JS_NewStringLen(ctx, value.as_ptr() as _, len as _)
     },
     |ctx, value, result: *mut String| {
+        if qjs::QJS_IsUndefined(ctx, value) != 0 {
+            *result = String::from("UNDEFINED");
+            return 0;
+        }
+
         if qjs::QJS_IsString(ctx, value) == 0 {
             return -1;
         }

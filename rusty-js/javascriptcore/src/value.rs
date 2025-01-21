@@ -191,6 +191,11 @@ impl_js_converter!(
         result
     },
     |ctx, value, result: *mut String| unsafe {
+        if jsc::JSValueIsUndefined(ctx, value) {
+            *result = String::from("UNDEFINED");
+            return 0;
+        }
+
         if !jsc::JSValueIsString(ctx, value) {
             return -1;
         }

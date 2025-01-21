@@ -22,7 +22,7 @@ impl JSRuntimeImpl for JSCRuntime {
     // JavaScriptCore has no this API
     fn run_pending_jobs(&self) {}
 
-    // JavaScriptCore has no this API
+    // JavaScriptCore  GC works on Conext level, not runtime
     fn run_gc(&self) {}
 }
 
