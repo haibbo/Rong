@@ -6,21 +6,6 @@ impl JSTypeOf for JSCValue {
         if self.exception {
             Some(self.clone())
         } else {
-            /*
-            let obj = self.as_obj()
-            let exception: *mut jsc::JSValueRef = std::ptr::null_mut();
-
-            unsafe {
-                let name_str = jsc::JSStringCreateWithUTF8CString(c"message".as_ptr() as *const _);
-                let name_val = jsc::JSObjectGetProperty(self.ctx, obj, name_str, exception);
-                jsc::JSStringRelease(name_str);
-
-                if jsc::JSValueIsUndefined(self.ctx, name_val) || !exception.is_null() {
-                    return None;
-                }
-            }
-            Some(self.clone())
-            */
             None
         }
     }
@@ -34,46 +19,6 @@ impl JSTypeOf for JSCValue {
             return true;
         }
         false
-
-        /*
-        unsafe {
-            println!("......");
-            let obj = self.as_obj()
-            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-
-            let name_str = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr() as *const _);
-            let name_val = jsc::JSObjectGetProperty(self.ctx, obj, name_str, &mut exception);
-            jsc::JSStringRelease(name_str);
-
-            if !exception.is_null() {
-                println!("false: {}", line!());
-                return false;
-            }
-
-            if jsc::JSValueIsString(self.ctx, name_val) {
-                let name = jsc::JSValueToStringCopy(self.ctx, name_val, &mut exception);
-                if !exception.is_null() {
-                    jsc::JSStringRelease(name);
-                    println!("false: {}", line!());
-                    return false;
-                }
-
-                let name_chars = jsc::JSStringGetCharactersPtr(name);
-                let length = jsc::JSStringGetLength(name);
-                let name_str = std::slice::from_raw_parts(name_chars as *const u8, length);
-
-                jsc::JSStringRelease(name);
-
-                if let Ok(s) = std::str::from_utf8(name_str) {
-                    s.ends_with("Error")
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        }
-        */
     }
 
     fn is_array(&self) -> bool {
