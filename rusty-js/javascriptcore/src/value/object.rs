@@ -1,12 +1,6 @@
 use crate::{jsc, JSCValue};
 use rusty_js_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
 
-// pls refer to JSObjectRef.h
-const JS_PROPERTY_ATTRIBUTE_NONE: u32 = 0;
-const JS_PROPERTY_ATTRIBUTE_READ_ONLY: u32 = 1 << 1;
-const JS_PROPERTY_ATTRIBUTE_DONT_ENUM: u32 = 1 << 2;
-const JS_PROPERTY_ATTRIBUTE_DONT_DELETE: u32 = 1 << 3;
-
 impl JSObjectOps for JSCValue {
     fn new_object(ctx: &Self::Context) -> Self {
         unsafe {
@@ -84,7 +78,7 @@ impl JSObjectOps for JSCValue {
                 obj,
                 str_ref,
                 value.value,
-                JS_PROPERTY_ATTRIBUTE_NONE,
+                jsc::kJSPropertyAttributeNone,
                 &mut exception,
             );
             jsc::JSStringRelease(str_ref);
@@ -163,16 +157,16 @@ impl JSObjectOps for JSCValue {
 }
 
 fn to_jsc_attributes(attr: PropertyAttributes) -> u32 {
-    let mut flags = JS_PROPERTY_ATTRIBUTE_NONE;
+    let mut flags = jsc::kJSPropertyAttributeNone;
 
     if !attr.is_writable() {
-        flags |= JS_PROPERTY_ATTRIBUTE_READ_ONLY;
+        flags |= jsc::kJSPropertyAttributeReadOnly;
     }
     if !attr.is_enumerable() {
-        flags |= JS_PROPERTY_ATTRIBUTE_DONT_ENUM;
+        flags |= jsc::kJSPropertyAttributeDontEnum
     }
     if !attr.is_configurable() {
-        flags |= JS_PROPERTY_ATTRIBUTE_DONT_DELETE;
+        flags |= jsc::kJSPropertyAttributeDontDelete
     }
 
     flags

@@ -55,6 +55,7 @@ fn main() {
         .allowlist_function("JS.*")
         .allowlist_type("JS.*")
         .allowlist_var("JS.*")
+        .allowlist_var("kJSPropertyAttribute.*")
         .generate()
         .expect("Unable to generate bindings for JavaScriptCore");
 
