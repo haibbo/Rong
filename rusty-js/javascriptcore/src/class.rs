@@ -6,7 +6,7 @@ pub(crate) unsafe extern "C" fn generic_constructor<JC>(
     constructor: jsc::JSObjectRef,
     argument_count: usize,
     arguments: *const jsc::JSValueRef,
-    _exception: *mut jsc::JSValueRef,
+    exception: *mut jsc::JSValueRef,
 ) -> jsc::JSObjectRef
 where
     JC: JSClass<JSCValue>,
@@ -19,7 +19,16 @@ where
         .collect();
 
     let ctx = JSCContext::from_borrowed_raw(raw);
-    <JC as JSClassExt<JSCValue>>::constructor(&ctx, this, args).into_raw_value() as jsc::JSObjectRef
+    let value = <JC as JSClassExt<JSCValue>>::constructor(&ctx, this, args);
+    if value.exception {
+        if !exception.is_null() {
+            *exception = value.into_raw_value();
+        }
+        // Return null to indicate an exception occurred
+        return std::ptr::null_mut();
+    }
+
+    value.into_raw_value() as jsc::JSObjectRef
 }
 
 pub(crate) unsafe extern "C" fn finalizer<JC>(object: jsc::JSObjectRef)
@@ -45,7 +54,7 @@ pub(crate) unsafe extern "C" fn call_as_function<JC>(
     this_object: jsc::JSObjectRef,
     argument_count: usize,
     arguments: *const jsc::JSValueRef,
-    _exception: *mut jsc::JSValueRef,
+    exception: *mut jsc::JSValueRef,
 ) -> jsc::JSValueRef
 where
     JC: JSClass<JSCValue>,
@@ -64,7 +73,13 @@ where
     };
 
     // Call the function implementation
-    <JC as JSClassExt<JSCValue>>::call(&ctx, function, this, args)
-        .into_raw_value()
-        .cast()
+    let value = <JC as JSClassExt<JSCValue>>::call(&ctx, function, this, args);
+    if value.exception {
+        if !exception.is_null() {
+            *exception = value.into_raw_value();
+        }
+        // Return null to indicate an exception occurred
+        return std::ptr::null_mut();
+    }
+    value.into_raw_value()
 }

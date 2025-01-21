@@ -9,7 +9,7 @@ mod valuetype;
 pub struct JSCValue {
     value: *const jsc::OpaqueJSValue,
     ctx: *mut jsc::OpaqueJSContext,
-    exception: bool,
+    pub(crate) exception: bool,
     is_object: bool,
 }
 
