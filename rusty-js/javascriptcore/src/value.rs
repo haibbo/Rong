@@ -80,7 +80,10 @@ impl JSCValue {
 impl Drop for JSCValue {
     fn drop(&mut self) {
         unsafe {
-            jsc::JSValueUnprotect(self.ctx, self.value);
+            // Finalizer callback, ctx is set to NULL
+            if !self.ctx.is_null() {
+                jsc::JSValueUnprotect(self.ctx, self.value);
+            }
         }
     }
 }
