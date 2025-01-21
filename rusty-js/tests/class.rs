@@ -82,7 +82,29 @@ fn constructor() {
 }
 
 #[test]
-fn function() {
+fn rustfunc_class_registered() {
+    run(|ctx| {
+        assert_eq!(
+            ctx.eval::<String>(Source::from_bytes(b"RustFunc.name"))
+                .unwrap(),
+            "RustFunc"
+        );
+        assert_eq!(
+            ctx.eval::<String>(Source::from_bytes("typeof RustFunc"))
+                .unwrap(),
+            "function"
+        );
+
+        assert_eq!(
+            ctx.eval::<String>(Source::from_bytes(b"RustFunc.constructor.name"))
+                .unwrap(),
+            "Function"
+        );
+    });
+}
+
+#[test]
+fn basic_add_fn() {
     run(|ctx| {
         let func = ctx
             .register_function(|a: i32, b: i32, c: i32| a + b + c)
