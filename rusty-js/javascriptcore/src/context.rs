@@ -1,5 +1,5 @@
 use crate::{jsc, JSCRuntime, JSCValue};
-use rusty_js_core::{JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl};
+use rusty_js_core::{JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, RustyJSError};
 use std::ffi::CString;
 use std::ptr;
 
@@ -267,11 +267,11 @@ impl JSContextImpl for JSCContext {
         }
     }
 
-    fn compile_to_bytecode(&self, _source: rusty_js_core::Source) -> Option<Vec<u8>> {
-        None
+    fn compile_to_bytecode(&self, _source: rusty_js_core::Source) -> Result<Vec<u8>, RustyJSError> {
+        Err(RustyJSError::NotSupportByteCode)
     }
 
-    fn run_bytecode(&self, bytes: &[u8]) -> Self::Value {
+    fn run_bytecode(&self, _bytes: &[u8]) -> Self::Value {
         todo!()
     }
 }

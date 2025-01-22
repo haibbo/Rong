@@ -1,6 +1,7 @@
 use crate::{qjs, QJSRuntime, QJSValue};
 use rusty_js_core::{
-    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSTypeOf, JSValueImpl, Source,
+    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSTypeOf, JSValueImpl, RustyJSError,
+    Source,
 };
 use std::ffi::CString;
 use std::mem::MaybeUninit;
@@ -49,14 +50,14 @@ impl JSContextImpl for QJSContext {
         self.eval_raw(&source, options.to_flags())
     }
 
-    fn compile_to_bytecode(&self, source: Source) -> Option<Vec<u8>> {
+    fn compile_to_bytecode(&self, source: Source) -> Result<Vec<u8>, RustyJSError> {
         let options = EvalOptions {
             bytecode: true,
             ..EvalOptions::default()
         };
         let obj = self.eval_raw(&source, options.to_flags());
         if obj.is_exception().is_some() {
-            return None;
+            return Err(RustyJSError::CompileToByteErr);
         }
 
         let mut out_size = 0;
@@ -69,13 +70,13 @@ impl JSContextImpl for QJSContext {
             );
 
             if buf.is_null() {
-                return None;
+                return Err(RustyJSError::CompileToByteErr);
             }
 
             std::slice::from_raw_parts(buf, out_size)
         };
         let bytecode = slice.to_vec();
-        Some(bytecode)
+        Ok(bytecode)
     }
 
     fn run_bytecode(&self, bytes: &[u8]) -> Self::Value {
