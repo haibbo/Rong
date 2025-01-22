@@ -1,6 +1,18 @@
 use crate::{jsc, JSCValue};
 use rusty_js_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
 
+fn make_instance(
+    ctx: *mut jsc::OpaqueJSContext,
+    constructor: JSCValue,
+    data: *mut (),
+) -> jsc::JSObjectRef {
+    unsafe {
+        // must clear LSB bit
+        let classref = jsc::JSObjectGetPrivate(constructor.as_obj()) as usize & !0x1;
+        jsc::JSObjectMake(ctx, classref as jsc::JSClassRef, data as _)
+    }
+}
+
 impl JSObjectOps for JSCValue {
     fn new_object(ctx: &Self::Context) -> Self {
         unsafe {
@@ -9,20 +21,17 @@ impl JSObjectOps for JSCValue {
         }
     }
 
-    fn make_object<T>(ctx: &Self::Context, constructor: Self, data: *mut T) -> Self {
-        unsafe {
-            // must clear LSB bit
-            let classref = jsc::JSObjectGetPrivate(constructor.as_obj()) as usize & !0x1;
-
-            let obj = jsc::JSObjectMake(ctx.to_raw(), classref as jsc::JSClassRef, data as _);
-            JSCValue::from_owned_obj(ctx.to_raw(), obj)
-        }
+    fn make_instance(ctx: &Self::Context, constructor: Self, data: *mut ()) -> Self {
+        // println!("set: {} {:?}", std::any::type_name::<T>(), data);
+        let obj = make_instance(ctx.to_raw(), constructor, data);
+        JSCValue::from_owned_obj(ctx.to_raw(), obj)
     }
 
-    fn get_opaque<T>(&self) -> *mut T {
+    fn get_opaque(&self) -> *mut () {
+        // println!("get: {} {:?}", std::any::type_name::<T>(), private_data);
         unsafe {
             let private_data = jsc::JSObjectGetPrivate(self.as_obj());
-            private_data as *mut T
+            private_data as _
         }
     }
 
