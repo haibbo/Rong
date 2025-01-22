@@ -41,7 +41,7 @@ impl JSClass<JSEngineValue> for Point {
 
         // Define static property with getter and setter
         class.static_property("origin", |builder| {
-            let getter = class.new_func(|| Point { x: 0, y: 0 });
+            let getter = class.new_func(|| Point { x: 0x5a, y: 0xa5 });
             let setter = class.new_func(|| {
                 // Read-only property, setter does nothing
             });
@@ -220,8 +220,8 @@ fn test_static_property() {
         let origin = ctx
             .eval::<Point>(Source::from_bytes(b"Point.origin"))
             .unwrap();
-        assert_eq!(origin.x, 0);
-        assert_eq!(origin.y, 0);
+        assert_eq!(origin.x, 0x5a);
+        assert_eq!(origin.y, 0xa5);
 
         // Test property exists on constructor
         assert!(ctx
