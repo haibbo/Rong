@@ -15,10 +15,28 @@ impl JSTypeOf for JSCValue {
             return false;
         }
 
-        if self.exception {
-            return true;
+        unsafe {
+            let global = jsc::JSContextGetGlobalObject(self.ctx);
+
+            let error = jsc::JSStringCreateWithUTF8CString(c"Error".as_ptr());
+            let error_constructor =
+                jsc::JSObjectGetProperty(self.ctx, global, error, std::ptr::null_mut());
+            jsc::JSStringRelease(error);
+
+            if !jsc::JSValueIsObject(self.ctx, error_constructor) {
+                return false;
+            }
+
+            let error_constructor =
+                jsc::JSValueToObject(self.ctx, error_constructor, std::ptr::null_mut());
+
+            jsc::JSValueIsInstanceOfConstructor(
+                self.ctx,
+                self.as_value(),
+                error_constructor,
+                std::ptr::null_mut(),
+            )
         }
-        false
     }
 
     fn is_array(&self) -> bool {
