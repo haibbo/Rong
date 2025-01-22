@@ -83,3 +83,26 @@ where
     }
     value.into_raw_value()
 }
+
+pub unsafe extern "C" fn has_instance(
+    ctx: jsc::JSContextRef,
+    constructor: jsc::JSObjectRef,
+    possible_instance: jsc::JSValueRef,
+    _exception: *mut jsc::JSValueRef,
+) -> bool {
+    if !jsc::JSValueIsObject(ctx, possible_instance) {
+        return false;
+    }
+
+    let instance = jsc::JSValueToObject(ctx, possible_instance, std::ptr::null_mut());
+    let private = jsc::JSObjectGetPrivate(instance);
+
+    if !private.is_null() {
+        let constructor_private = jsc::JSObjectGetPrivate(constructor) as usize;
+
+        // check LSB whether is set
+        return (constructor_private & 1) != 0;
+    }
+
+    false
+}

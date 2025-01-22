@@ -95,7 +95,7 @@ impl JSContextImpl for JSCContext {
                 getPropertyNames: None,
                 callAsFunction: Some(crate::class::call_as_function::<JC>),
                 callAsConstructor: Some(crate::class::generic_constructor::<JC>),
-                hasInstance: None,
+                hasInstance: Some(crate::class::has_instance),
                 convertToType: None,
             };
 
