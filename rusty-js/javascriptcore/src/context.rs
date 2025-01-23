@@ -1,6 +1,6 @@
 use crate::{jsc, JSCRuntime, JSCValue};
 use rusty_js_core::{JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, RustyJSError};
-use std::ffi::CString;
+use std::ffi::{c_char, CString};
 use std::ptr;
 
 pub struct JSCContext {
@@ -350,5 +350,18 @@ impl JSCContext {
                 JSCValue::from_owned_obj(self.raw, error).with_exception()
             }
         }
+    }
+}
+
+pub(crate) fn get_constructor(
+    ctx: *mut jsc::OpaqueJSContext,
+    name: *const c_char,
+) -> jsc::JSObjectRef {
+    unsafe {
+        let global = jsc::JSContextGetGlobalObject(ctx);
+        let js_name = jsc::JSStringCreateWithUTF8CString(name);
+        let value = jsc::JSObjectGetProperty(ctx, global, js_name, ptr::null_mut());
+        jsc::JSStringRelease(js_name);
+        jsc::JSValueToObject(ctx, value, ptr::null_mut())
     }
 }

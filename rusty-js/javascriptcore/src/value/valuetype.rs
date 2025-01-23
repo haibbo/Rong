@@ -12,24 +12,11 @@ impl JSTypeOf for JSCValue {
         }
 
         unsafe {
-            let global = jsc::JSContextGetGlobalObject(self.ctx);
-
-            let error = jsc::JSStringCreateWithUTF8CString(c"Error".as_ptr());
-            let error_constructor =
-                jsc::JSObjectGetProperty(self.ctx, global, error, std::ptr::null_mut());
-            jsc::JSStringRelease(error);
-
-            if !jsc::JSValueIsObject(self.ctx, error_constructor) {
-                return false;
-            }
-
-            let error_constructor =
-                jsc::JSValueToObject(self.ctx, error_constructor, std::ptr::null_mut());
-
+            let error_ctor = crate::context::get_constructor(self.ctx, c"Error".as_ptr());
             jsc::JSValueIsInstanceOfConstructor(
                 self.ctx,
                 self.as_value(),
-                error_constructor,
+                error_ctor,
                 std::ptr::null_mut(),
             )
         }
