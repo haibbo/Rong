@@ -7,14 +7,11 @@ impl JSTypeOf for QJSValue {
         unsafe { qjs::QJS_IsBool(self.ctx, self.value) != 0 }
     }
 
-    fn is_exception(&self) -> Option<Self> {
-        unsafe {
-            if qjs::QJS_IsException(self.ctx, self.value) != 0 {
-                let exception = qjs::JS_GetException(self.ctx);
-                Some(QJSValue::from_owned_raw(self.ctx, exception))
-            } else {
-                None
-            }
+    fn is_exception(&self) -> bool {
+        if self.exception {
+            true
+        } else {
+            false
         }
     }
 

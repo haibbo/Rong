@@ -8,6 +8,7 @@ mod valuetype;
 pub struct QJSValue {
     value: qjs::JSValue,
     ctx: *mut qjs::JSContext,
+    exception: bool,
 }
 
 impl Clone for QJSValue {
@@ -16,6 +17,7 @@ impl Clone for QJSValue {
         Self {
             value,
             ctx: self.ctx,
+            exception: self.exception,
         }
     }
 }
@@ -42,7 +44,33 @@ impl QJSValue {
         // drop QJSValue safely
         let value = unsafe { qjs::JS_DupValue(ctx, value) };
 
-        Self { value, ctx }
+        Self {
+            value,
+            ctx,
+            exception: false,
+        }
+    }
+
+    pub(crate) fn new(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Self {
+        Self {
+            value,
+            ctx,
+            exception: false,
+        }
+    }
+
+    // In callback context, generally, all JS variables are from JS engine, in order to make Rust lifetime
+    // and ownship works, these variables should be increased referece count first, and then Rust side can
+    // drop QJSValue safely
+    pub(crate) fn protect(mut self) -> Self {
+        let value = unsafe { qjs::JS_DupValue(self.ctx, self.value) };
+        self.value = value;
+        self
+    }
+
+    pub(crate) fn with_exception(mut self) -> Self {
+        self.exception = true;
+        self
     }
 }
 
@@ -54,14 +82,14 @@ impl JSValueImpl for QJSValue {
         ctx: <Self::Context as JSContextImpl>::RawContext,
         value: Self::RawValue,
     ) -> Self {
-        QJSValue::_from_raw(ctx, value)
+        QJSValue::new(ctx, value).protect()
     }
 
     fn from_owned_raw(
         ctx: <Self::Context as JSContextImpl>::RawContext,
         value: Self::RawValue,
     ) -> Self {
-        Self { value, ctx }
+        QJSValue::new(ctx, value)
     }
 
     fn into_raw_value(self) -> Self::RawValue {

@@ -56,7 +56,7 @@ impl JSContextImpl for QJSContext {
             ..EvalOptions::default()
         };
         let obj = self.eval_raw(&source, options.to_flags());
-        if obj.is_exception().is_some() {
+        if obj.is_exception() {
             return Err(RustyJSError::CompileToByteErr);
         }
 
@@ -133,7 +133,7 @@ impl JSContextImpl for QJSContext {
         // Convert argv to raw JSValues
         let mut args: Vec<qjs::JSValue> = argv.iter().map(|v| *v.as_raw_value()).collect();
 
-        let v = unsafe {
+        let val = unsafe {
             qjs::JS_Call(
                 self.ctx,
                 *function.as_raw_value(),
@@ -142,7 +142,13 @@ impl JSContextImpl for QJSContext {
                 args.as_mut_ptr(),
             )
         };
-        QJSValue::from_owned_raw(self.ctx, v)
+
+        if unsafe { qjs::QJS_IsException(self.ctx, val) != 0 } {
+            let exception = unsafe { qjs::JS_GetException(self.ctx) };
+            QJSValue::from_owned_raw(self.ctx, exception).with_exception()
+        } else {
+            QJSValue::from_owned_raw(self.ctx, val)
+        }
     }
 
     fn promise(&self) -> (Self::Value, Self::Value, Self::Value) {
@@ -241,7 +247,12 @@ impl QJSContext {
                 c_filename.as_ptr(),
                 flags,
             );
-            QJSValue::from_owned_raw(self.ctx, val)
+            if qjs::QJS_IsException(self.ctx, val) != 0 {
+                let exception = qjs::JS_GetException(self.ctx);
+                QJSValue::from_owned_raw(self.ctx, exception).with_exception()
+            } else {
+                QJSValue::from_owned_raw(self.ctx, val)
+            }
         }
     }
 
@@ -251,7 +262,7 @@ impl QJSContext {
     {
         let c_message = CString::new(message).unwrap();
         let raw = { throw_fn(self.ctx, c"%s".as_ptr(), c_message.as_ptr()) };
-        QJSValue::from_owned_raw(self.ctx, raw)
+        QJSValue::from_owned_raw(self.ctx, raw).with_exception()
     }
 }
 
