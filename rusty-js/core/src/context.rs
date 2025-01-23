@@ -235,8 +235,8 @@ impl<C: JSContextImpl> JSContext<C> {
             SourceKind::JavaScript(code) => self.rc.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        if let Some(err) = result.is_exception() {
-            let err = JSException::from_js_value(self, err)?;
+        if result.is_exception() {
+            let err = JSException::from_js_value(self, result)?;
             Err(RustyJSError::Exception(err.into_error()))
         } else {
             T::from_js_value(self, result)
@@ -356,7 +356,7 @@ impl<C: JSContextImpl> JSContext<C> {
             SourceKind::JavaScript(code) => self.rc.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        match (result.is_promise(), result.is_exception().is_some()) {
+        match (result.is_promise(), result.is_exception()) {
             (true, _) => {
                 let promise = Promise::from_js_value(self, result)?;
                 promise.into_future::<T>().await

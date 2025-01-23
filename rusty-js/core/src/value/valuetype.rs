@@ -20,7 +20,7 @@ pub enum JSValueType {
 }
 
 pub trait JSTypeOf: JSValueImpl {
-    fn is_exception(&self) -> Option<Self>;
+    fn is_exception(&self) -> bool;
     fn is_error(&self) -> bool;
     fn is_array(&self) -> bool;
     fn is_promise(&self) -> bool;
@@ -36,7 +36,7 @@ pub trait JSTypeOf: JSValueImpl {
     fn is_constructor(&self) -> bool;
 
     fn type_of(&self) -> JSValueType {
-        if self.is_exception().is_some() {
+        if self.is_exception() {
             JSValueType::Exception
         } else if self.is_error() {
             JSValueType::Error
@@ -77,12 +77,6 @@ where
     pub fn type_of(&self) -> JSValueType {
         self.inner.type_of()
     }
-
-    pub fn is_exception(&self) -> Option<JSException<V>> {
-        self.inner
-            .is_exception()
-            .map(|e| JSException::from_object(self.with_value(e).into()))
-    }
 }
 
 macro_rules! generate_is_type {
@@ -106,6 +100,7 @@ macro_rules! generate_is_type {
 
 generate_is_type!(
     is_error,
+    is_exception,
     is_array,
     is_promise,
     is_function,

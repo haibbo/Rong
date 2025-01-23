@@ -1,7 +1,7 @@
 use crate::function::{FromParams, IntoJSCallable, JSParameterType, RustFunc};
 use crate::{
-    Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
-    JSTypeOf, JSValue, JSValueImpl, RustyJSError,
+    Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSException, JSObject, JSObjectOps,
+    JSResult, JSTypeOf, JSValueImpl, RustyJSError,
 };
 use std::ops::Deref;
 
@@ -66,13 +66,16 @@ impl<V: JSObjectOps> JSFunc<V> {
     {
         let ctx = &self.get_ctx();
         let argv = args.into_js_args(ctx);
-        let r = ctx.as_ref().call(self.as_inner(), this, argv);
-        let result = JSValue::from_js_value(ctx, r)?;
+        let result = ctx.as_ref().call(self.as_inner(), this, argv);
 
-        result.is_exception().map_or_else(
-            || R::from_js_value(ctx, result.into_inner()),
-            |exception| Err(RustyJSError::Exception(exception.into_error())),
-        )
+        // let result = JSValue::from_js_value(ctx, r)?;
+
+        if result.is_exception() {
+            let exception = JSException::from_js_value(ctx, result)?;
+            Err(RustyJSError::Exception(exception.into_error()))
+        } else {
+            R::from_js_value(ctx, result)
+        }
     }
 
     /// Calls the JavaScript function with the given arguments.
