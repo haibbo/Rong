@@ -1,6 +1,6 @@
 use crate::qjs;
 use crate::QJSValue;
-use rusty_js_core::{JSTypeOf, JSValueImpl};
+use rusty_js_core::JSTypeOf;
 
 impl JSTypeOf for QJSValue {
     fn is_boolean(&self) -> bool {
@@ -8,11 +8,7 @@ impl JSTypeOf for QJSValue {
     }
 
     fn is_exception(&self) -> bool {
-        if self.exception {
-            true
-        } else {
-            false
-        }
+        self.exception
     }
 
     fn is_error(&self) -> bool {
