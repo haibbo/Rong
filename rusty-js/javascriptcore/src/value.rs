@@ -5,7 +5,6 @@ use std::ffi::CString;
 mod object;
 mod valuetype;
 
-#[derive(Clone)]
 pub struct JSCValue {
     value: *const jsc::OpaqueJSValue,
     ctx: *mut jsc::OpaqueJSContext,
@@ -264,3 +263,12 @@ impl_js_converter!(
         }
     }
 );
+
+impl Clone for JSCValue {
+    fn clone(&self) -> Self {
+        let mut cloned = JSCValue::new(self.ctx, self.value);
+        cloned.exception = self.exception;
+        cloned.is_object = self.is_object;
+        cloned.protect()
+    }
+}
