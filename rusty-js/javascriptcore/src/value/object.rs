@@ -22,13 +22,11 @@ impl JSObjectOps for JSCValue {
     }
 
     fn make_instance(ctx: &Self::Context, constructor: Self, data: *mut ()) -> Self {
-        // println!("set: {} {:?}", std::any::type_name::<T>(), data);
         let obj = make_instance(ctx.to_raw(), constructor, data);
         JSCValue::from_owned_obj(ctx.to_raw(), obj)
     }
 
     fn get_opaque(&self) -> *mut () {
-        // println!("get: {} {:?}", std::any::type_name::<T>(), private_data);
         unsafe {
             let private_data = jsc::JSObjectGetPrivate(self.as_obj());
             private_data as _
@@ -105,34 +103,130 @@ impl JSObjectOps for JSCValue {
         setter: Self,
         attributes: PropertyAttributes,
     ) -> bool {
+        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+
+        // Get the Object constructor
+        let object_ctor = crate::context::get_constructor(self.ctx, c"Object".as_ptr());
+
         unsafe {
-            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+            // Create property descriptor
+            let descriptor =
+                jsc::JSObjectMake(self.ctx, std::ptr::null_mut(), std::ptr::null_mut());
 
-            let str_ref = jsc::JSValueToStringCopy(self.ctx, key.as_value(), &mut exception);
-            if !exception.is_null() {
-                return false;
-            }
-
-            let obj = self.as_obj();
             if attributes.has_value() {
+                let value_str = jsc::JSStringCreateWithUTF8CString(c"value".as_ptr());
                 jsc::JSObjectSetProperty(
                     self.ctx,
-                    obj,
-                    str_ref,
+                    descriptor,
+                    value_str,
                     value.as_value(),
-                    to_jsc_attributes(attributes),
+                    jsc::kJSPropertyAttributeNone,
                     &mut exception,
                 );
-                if exception.is_null() {
+                jsc::JSStringRelease(value_str);
+                if !exception.is_null() {
                     return false;
                 }
             }
-            // TODO: will handle when supporting class
-            // if attributes.has_get() {}
-            // if attributes.has_set() {}
 
-            jsc::JSStringRelease(str_ref);
-            true
+            if attributes.has_get() {
+                let get_str = jsc::JSStringCreateWithUTF8CString(c"get".as_ptr());
+                jsc::JSObjectSetProperty(
+                    self.ctx,
+                    descriptor,
+                    get_str,
+                    getter.as_value(),
+                    jsc::kJSPropertyAttributeNone,
+                    &mut exception,
+                );
+                jsc::JSStringRelease(get_str);
+                if !exception.is_null() {
+                    return false;
+                }
+            }
+
+            if attributes.has_set() {
+                let set_str = jsc::JSStringCreateWithUTF8CString(c"set".as_ptr());
+                jsc::JSObjectSetProperty(
+                    self.ctx,
+                    descriptor,
+                    set_str,
+                    setter.as_value(),
+                    jsc::kJSPropertyAttributeNone,
+                    &mut exception,
+                );
+                jsc::JSStringRelease(set_str);
+                if !exception.is_null() {
+                    return false;
+                }
+            }
+
+            // Add enumerable/configurable/writable flags
+            let flags = to_jsc_attributes(attributes);
+            let enumerable_str = jsc::JSStringCreateWithUTF8CString(c"enumerable".as_ptr());
+            jsc::JSObjectSetProperty(
+                self.ctx,
+                descriptor,
+                enumerable_str,
+                jsc::JSValueMakeBoolean(self.ctx, (flags & jsc::kJSPropertyAttributeDontEnum) == 0),
+                jsc::kJSPropertyAttributeNone,
+                &mut exception,
+            );
+            jsc::JSStringRelease(enumerable_str);
+
+            let configurable_str = jsc::JSStringCreateWithUTF8CString(c"configurable".as_ptr());
+            jsc::JSObjectSetProperty(
+                self.ctx,
+                descriptor,
+                configurable_str,
+                jsc::JSValueMakeBoolean(
+                    self.ctx,
+                    (flags & jsc::kJSPropertyAttributeDontDelete) == 0,
+                ),
+                jsc::kJSPropertyAttributeNone,
+                &mut exception,
+            );
+            jsc::JSStringRelease(configurable_str);
+
+            if attributes.has_value() {
+                let writable_str = jsc::JSStringCreateWithUTF8CString(c"writable".as_ptr());
+                jsc::JSObjectSetProperty(
+                    self.ctx,
+                    descriptor,
+                    writable_str,
+                    jsc::JSValueMakeBoolean(
+                        self.ctx,
+                        (flags & jsc::kJSPropertyAttributeReadOnly) == 0,
+                    ),
+                    jsc::kJSPropertyAttributeNone,
+                    &mut exception,
+                );
+                jsc::JSStringRelease(writable_str);
+            }
+
+            // Get defineProperty function
+            let define_prop_str = jsc::JSStringCreateWithUTF8CString(c"defineProperty".as_ptr());
+            let define_prop_fn =
+                jsc::JSObjectGetProperty(self.ctx, object_ctor, define_prop_str, &mut exception);
+            jsc::JSStringRelease(define_prop_str);
+
+            if !exception.is_null() || jsc::JSValueIsUndefined(self.ctx, define_prop_fn) {
+                return false;
+            }
+
+            // Call defineProperty
+            let args = [self.as_value(), key.as_value(), descriptor];
+
+            jsc::JSObjectCallAsFunction(
+                self.ctx,
+                define_prop_fn as jsc::JSObjectRef,
+                std::ptr::null_mut(),
+                args.len(),
+                args.as_ptr(),
+                &mut exception,
+            );
+
+            exception.is_null()
         }
     }
 
