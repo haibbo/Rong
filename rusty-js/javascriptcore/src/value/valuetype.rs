@@ -2,12 +2,8 @@ use crate::{jsc, JSCValue};
 use rusty_js_core::JSTypeOf;
 
 impl JSTypeOf for JSCValue {
-    fn is_exception(&self) -> Option<Self> {
-        if self.exception {
-            Some(self.clone())
-        } else {
-            None
-        }
+    fn is_exception(&self) -> bool {
+        self.exception
     }
 
     fn is_error(&self) -> bool {
