@@ -39,6 +39,15 @@ impl JSClass<JSEngineValue> for Point {
                 .with_default_method_attr()
         });
 
+        class.property("y", |builder| {
+            let getter = class.new_func(|this: This<Point>| this.y);
+            let setter = class.new_func(|mut this: ThisMut<Point>, y: i32| this.y = y);
+            builder
+                .getter(getter)
+                .setter(setter)
+                .with_default_method_attr()
+        });
+
         // Define static property with getter and setter
         class.static_property("origin", |builder| {
             let getter = class.new_func(|| Point { x: 0x5a, y: 0xa5 });
@@ -70,11 +79,17 @@ fn constructor() {
                 .unwrap(),
             "Function"
         );
+
+        assert!(ctx
+            .eval::<bool>(Source::from_bytes(b"Point.prototype.constructor==Point"))
+            .unwrap());
+
         assert_eq!(
             ctx.eval::<String>(Source::from_bytes(b"typeof Point"))
                 .unwrap(),
             "function"
         );
+
         assert!(ctx
             .eval::<bool>(Source::from_bytes(b"point instanceof Point"))
             .unwrap());
@@ -89,6 +104,7 @@ fn rustfunc_class_registered() {
                 .unwrap(),
             "RustFunc"
         );
+
         assert_eq!(
             ctx.eval::<String>(Source::from_bytes("typeof RustFunc"))
                 .unwrap(),
@@ -260,9 +276,11 @@ fn test_extend_class() {
     run(|ctx| {
         ctx.register_class::<Point>();
 
-        let color = ctx
-            .eval::<u32>(Source::from_bytes(
+        // Test class extension with method inheritance
+        let result = ctx
+            .eval::<i32>(Source::from_bytes(
                 br#"
+
                 class ColorPoint extends Point {
                     constructor(x, y, color) {
                         super(x, y);
@@ -272,10 +290,27 @@ fn test_extend_class() {
                         return this.color;
                     }
                 }
-                let p = new ColorPoint(2, 3, 0x5fa5); p.get_color()
+                let p = new ColorPoint(2, 3, 0x5fa5);
+
+                // Verify prototype chain
+                if (!(ColorPoint.prototype.__proto__ === Point.prototype)) {
+                    throw new Error('Prototype chain broken');
+                }
+                if (!(ColorPoint.__proto__ === Point)) {
+                    throw new Error('Constructor chain broken');
+                }
+
+                // Verify inherited methods work
+                let added = p.add(new Point(1, 2));
+                if (added.x !== 3 || added.y !== 5) {
+                     throw new Error('Inherited method failed');
+                }
+
+                // Verify new method works
+                p.get_color()
                 "#,
             ))
             .unwrap();
-        assert_eq!(color, 0x5fa5);
+        assert_eq!(result, 0x5fa5);
     });
 }
