@@ -36,6 +36,9 @@ pub enum RustyJSError {
     #[error("Failed to compile JS code to bytecode")]
     CompileToByteErr,
 
+    #[error("Does not support bytecode")]
+    NotSupportByteCode,
+
     #[error("{0}")]
     Error(String),
 
@@ -64,6 +67,7 @@ impl RustyJSError {
             | RustyJSError::Error(_)
             | RustyJSError::Borrow(_)
             | RustyJSError::CompileToByteErr
+            | RustyJSError::NotSupportByteCode
             | RustyJSError::AlreadyTaken => ctx.as_ref().throw_error(self.to_string()),
         }
     }

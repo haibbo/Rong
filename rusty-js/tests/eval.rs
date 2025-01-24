@@ -22,8 +22,11 @@ fn test_eval() {
 fn test_bytecode() {
     run(|ctx| {
         let code = "(4 + 8) * 3";
-        let source = ctx.compile_to_bytecode(code).unwrap();
-        // println!("bytes.len is {}", source.len());
+        let source = match ctx.compile_to_bytecode(code) {
+            Ok(source) => source,
+            Err(RustyJSError::NotSupportByteCode) => return,
+            Err(e) => panic!("Unexpected error: {:?}", e),
+        };
 
         let result: i32 = ctx.eval(source).unwrap();
         assert_eq!(result, 36);
@@ -63,8 +66,13 @@ fn test_eval_async() {
             })
         "#;
 
-        let source = ctx.compile_to_bytecode(js_code).unwrap();
-        println!("source length is {}", source.len());
+        let source = match ctx.compile_to_bytecode(js_code) {
+            Ok(source) => source,
+            Err(RustyJSError::NotSupportByteCode) => return Ok(()),
+            Err(e) => panic!("Unexpected error: {:?}", e),
+        };
+        // println!("source length is {}", source.len());
+
         let result: i32 = ctx.eval_async(source).await.unwrap();
         assert_eq!(result, 25);
         Ok(())

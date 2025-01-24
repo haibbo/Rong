@@ -62,10 +62,10 @@ pub trait JSObjectOps: JSValueConversion + JSTypeOf {
 
     /// if failed, it needs to return EXCEPTION
     /// constructor represents JS Class
-    fn make_object<T>(ctx: &Self::Context, constructor: Self, data: *mut T) -> Self;
+    fn make_instance(ctx: &Self::Context, constructor: Self, data: *mut ()) -> Self;
 
-    /// get private data saved in object by make_object
-    fn get_opaque<T>(&self) -> *mut T;
+    /// get private data saved in object by make_instance
+    fn get_opaque(&self) -> *mut ();
 
     fn del_property(&self, key: Self) -> bool;
     fn has_property(&self, key: Self) -> bool;

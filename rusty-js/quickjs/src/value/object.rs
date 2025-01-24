@@ -9,16 +9,15 @@ impl JSObjectOps for QJSValue {
         QJSValue::from_owned_raw(ctx, v)
     }
 
-    fn make_object<T>(ctx: &Self::Context, constructor: Self, data: *mut T) -> Self {
+    fn make_instance(ctx: &Self::Context, constructor: Self, data: *mut ()) -> Self {
         let ctx = ctx.to_raw();
         let constructor = constructor.value;
         let v = unsafe { qjs::QJS_ObjectMake(ctx, constructor, data.cast()) };
         QJSValue::from_owned_raw(ctx, v)
     }
 
-    fn get_opaque<T>(&self) -> *mut T {
-        let v = unsafe { qjs::QJS_ObjectGetPrivate(self.value) };
-        v as *mut T
+    fn get_opaque(&self) -> *mut () {
+        unsafe { qjs::QJS_ObjectGetPrivate(self.value) as _ }
     }
 
     fn del_property(&self, key: Self) -> bool {

@@ -97,13 +97,13 @@ where
     pub fn instance<JC: JSClass<V>>(self, value: JC) -> V {
         let context = self.0.get_ctx();
         let ptr = Box::into_raw(Box::new(RefCell::new(value)));
-        V::make_object(context.as_ref(), self.0.clone().into_inner(), ptr)
+        V::make_instance(context.as_ref(), self.0.clone().into_inner(), ptr as _)
     }
 
     /// Free resources of a class instance
     pub(crate) fn free<JC: JSClass<V>>(instance: V) {
         let value = instance.clone();
-        let ptr = value.get_opaque::<RefCell<JC>>();
+        let ptr = value.get_opaque() as *mut RefCell<JC>;
         if !ptr.is_null() {
             // SAFETY: ptr was created by Box::into_raw in instance()
             unsafe {
@@ -135,7 +135,7 @@ where
 {
     /// Borrow the underlying data from an instance
     pub fn borrow<T>(&self) -> JSResult<Ref<'_, T>> {
-        let ptr = self.as_inner().get_opaque::<RefCell<T>>();
+        let ptr = self.as_inner().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
         } else {
@@ -146,7 +146,7 @@ where
 
     /// Mutably borrow the underlying data from an instance
     pub fn borrow_mut<T>(&self) -> JSResult<RefMut<'_, T>> {
-        let ptr = self.as_inner().get_opaque::<RefCell<T>>();
+        let ptr = self.as_inner().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
         } else {

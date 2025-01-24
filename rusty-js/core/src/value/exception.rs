@@ -39,7 +39,7 @@ where
     V: JSTypeOf,
 {
     fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        if value.is_exception().is_some() || value.is_error() {
+        if value.is_exception() || value.is_error() {
             Ok(Self(JSObject::from_js_value(ctx, value)?))
         } else {
             Err(RustyJSError::NotObject)

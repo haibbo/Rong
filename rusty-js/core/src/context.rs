@@ -96,9 +96,11 @@ pub trait JSContextImpl {
     /// * `source` - The JavaScript source code to compile
     ///
     /// # Returns
-    /// * `Some(Vec<u8>)` - The compiled bytecode as bytes if compilation succeeds
-    /// * `None` - If compilation fails
-    fn compile_to_bytecode(&self, source: Source) -> Option<Vec<u8>>;
+    /// * `Ok(Vec<u8>)` - The compiled bytecode as bytes if compilation succeeds
+    /// * `Err(RustyJSError)` - If compilation fails with one of these errors:
+    ///   - `RustyJSError::CompileToByteErr`: General compilation error
+    ///   - `RustyJSError::NotSupportByteCode`: Bytecode compilation not supported by runtime
+    fn compile_to_bytecode(&self, source: Source) -> Result<Vec<u8>, RustyJSError>;
 
     /// Executes previously compiled bytecode
     ///
@@ -233,8 +235,8 @@ impl<C: JSContextImpl> JSContext<C> {
             SourceKind::JavaScript(code) => self.rc.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        if let Some(err) = result.is_exception() {
-            let err = JSException::from_js_value(self, err)?;
+        if result.is_exception() {
+            let err = JSException::from_js_value(self, result)?;
             Err(RustyJSError::Exception(err.into_error()))
         } else {
             T::from_js_value(self, result)
@@ -330,7 +332,6 @@ impl<C: JSContextImpl> JSContext<C> {
             .inner
             .compile_to_bytecode(Source::from_bytes(code.as_ref()))
             .map(Source::from_bytecode)
-            .ok_or(RustyJSError::CompileToByteErr)
     }
 
     /// Evaluate JavaScript code and handle both Promise and immediate results
@@ -355,7 +356,7 @@ impl<C: JSContextImpl> JSContext<C> {
             SourceKind::JavaScript(code) => self.rc.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        match (result.is_promise(), result.is_exception().is_some()) {
+        match (result.is_promise(), result.is_exception()) {
             (true, _) => {
                 let promise = Promise::from_js_value(self, result)?;
                 promise.into_future::<T>().await
