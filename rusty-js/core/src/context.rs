@@ -284,7 +284,7 @@ impl<C: JSContextImpl> JSContext<C> {
         }
 
         let obj = self.global();
-        let constructor = JSValue::from_borrowed_raw(self, constructor);
+        let constructor = JSValue::from_raw(self, constructor);
         JC::class_setup(&ClassSetup::new(constructor.clone().into(), self));
         obj.set(JC::NAME, constructor);
     }

@@ -132,27 +132,27 @@ where
 {
     pub fn throw_syntax_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_syntax_error(message);
-        JSValue::from_borrowed_raw(self, raw)
+        JSValue::from_raw(self, raw)
     }
 
     pub fn throw_type_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_type_error(message);
-        JSValue::from_borrowed_raw(self, raw)
+        JSValue::from_raw(self, raw)
     }
 
     pub fn throw_reference_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_reference_error(message);
-        JSValue::from_borrowed_raw(self, raw)
+        JSValue::from_raw(self, raw)
     }
 
     pub fn throw_range_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_range_error(message);
-        JSValue::from_borrowed_raw(self, raw)
+        JSValue::from_raw(self, raw)
     }
 
     pub fn throw_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_error(message);
-        JSValue::from_borrowed_raw(self, raw)
+        JSValue::from_raw(self, raw)
     }
 }
 

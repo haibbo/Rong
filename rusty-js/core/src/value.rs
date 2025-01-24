@@ -66,7 +66,7 @@ where
         Self { inner: value }
     }
 
-    pub(crate) fn from_borrowed_raw(_ctx: &JSContext<V::Context>, value: V) -> Self {
+    pub(crate) fn from_raw(_ctx: &JSContext<V::Context>, value: V) -> Self {
         Self { inner: value }
     }
 
@@ -94,7 +94,7 @@ where
         V: for<'a> From<(&'a V::Context, T)>,
     {
         let value = V::from((ctx.as_ref(), val));
-        JSValue::from_borrowed_raw(ctx, value)
+        JSValue::from_raw(ctx, value)
     }
 
     /// Try to converts JSValue to Rust value
@@ -112,7 +112,7 @@ where
         V: for<'a> From<(&'a V::Context, ())>,
     {
         let value = V::from((ctx.as_ref(), ()));
-        JSValue::from_borrowed_raw(ctx, value)
+        JSValue::from_raw(ctx, value)
     }
 }
 
@@ -121,7 +121,7 @@ where
     V: JSValueImpl,
 {
     fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        Ok(JSValue::from_borrowed_raw(ctx, value))
+        Ok(JSValue::from_raw(ctx, value))
     }
 }
 
