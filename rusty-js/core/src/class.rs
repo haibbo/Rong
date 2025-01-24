@@ -39,9 +39,15 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
             Err(e) => return e.throw_js_exception(ctx),
         };
 
-        let proto = match JSObject::from_js_value(ctx, this)
-            .and_then(|constructor| constructor.get("prototype"))
-        {
+        // why not using constructor in class registry?
+        // because for extended class, it's NEW Constructor
+        let proto = match JSObject::from_js_value(ctx, this).and_then(|constructor| {
+            // println!(
+            //     "Constructor Name is {}",
+            //     constructor.get::<_, String>("name").unwrap()
+            // );
+            constructor.get("prototype")
+        }) {
             Ok(proto) => proto,
             Err(e) => return e.throw_js_exception(ctx),
         };
@@ -97,7 +103,13 @@ where
     pub fn instance<JC: JSClass<V>>(self, value: JC) -> V {
         let context = self.0.get_ctx();
         let ptr = Box::into_raw(Box::new(RefCell::new(value)));
-        V::make_instance(context.as_ref(), self.0.clone().into_inner(), ptr as _)
+
+        let instance = V::make_instance(context.as_ref(), self.0.clone().into_inner(), ptr as _);
+
+        // instance object inherits Constructor's prototype
+        self.get_prototype()
+            .map(|proto| instance.set_prototype(proto.as_inner().clone()));
+        instance
     }
 
     /// Free resources of a class instance
