@@ -111,7 +111,8 @@ impl JSContextImpl for JSCContext {
             jsc::JSObjectSetPrivate(constructor, classid as _);
 
             let class_name = jsc::JSStringCreateWithUTF8CString(class_name);
-            let constructor_ref = jsc::JSStringCreateWithUTF8CString(c"constructor".as_ptr());
+            let constructor_name = jsc::JSStringCreateWithUTF8CString(c"constructor".as_ptr());
+            let proto_name = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
 
             // setup constructor's attribute: name
             let nameproperty = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
@@ -128,57 +129,46 @@ impl JSContextImpl for JSCContext {
             );
             jsc::JSStringRelease(nameproperty);
 
-            // define prototype object
+            // Create prototype object
             let prototypeobject = jsc::JSObjectMake(self.raw, ptr::null_mut(), ptr::null_mut());
-            let prototypeprop = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
+
+            // Set JC::NAME.prototype
             jsc::JSObjectSetProperty(
                 self.raw,
                 constructor,
-                prototypeprop,
+                proto_name,
                 prototypeobject,
                 jsc::kJSPropertyAttributeDontEnum
                     | jsc::kJSPropertyAttributeReadOnly
                     | jsc::kJSPropertyAttributeDontDelete,
                 ptr::null_mut(),
             );
-            jsc::JSStringRelease(prototypeprop);
 
-            // set prototype.constructor:  constructor
+            // Set JC::NAME.prototype.constructor
             jsc::JSObjectSetProperty(
                 self.raw,
                 prototypeobject,
-                constructor_ref,
+                constructor_name,
                 constructor,
                 jsc::kJSPropertyAttributeDontEnum,
                 ptr::null_mut(),
             );
 
-            // get global object
-            let global = jsc::JSContextGetGlobalObject(self.raw);
+            // Get Function constructor using helper function
+            let functionconstructor = get_constructor(self.raw, c"Function".as_ptr());
 
-            // get Function's Constructor
-            let functionname = jsc::JSStringCreateWithUTF8CString(c"Function".as_ptr());
-            let functionvalue =
-                jsc::JSObjectGetProperty(self.raw, global, functionname, ptr::null_mut());
-            jsc::JSStringRelease(functionname);
-
-            // make sure functionvalue is object and Function
-            if jsc::JSValueIsObject(self.raw, functionvalue) {
-                let functionconstructor =
-                    jsc::JSValueToObject(self.raw, functionvalue, ptr::null_mut());
-
-                // set JC::NAME.constructor to Function
-                jsc::JSObjectSetProperty(
-                    self.raw,
-                    constructor,
-                    constructor_ref,
-                    functionconstructor,
-                    jsc::kJSPropertyAttributeDontEnum,
-                    ptr::null_mut(),
-                );
-            }
+            // Set JC::NAME.constructor to Function
+            jsc::JSObjectSetProperty(
+                self.raw,
+                constructor,
+                constructor_name,
+                functionconstructor,
+                jsc::kJSPropertyAttributeDontEnum,
+                ptr::null_mut(),
+            );
 
             // register constructor function to global object
+            let global = jsc::JSContextGetGlobalObject(self.raw);
             jsc::JSObjectSetProperty(
                 self.raw,
                 global,
@@ -188,7 +178,8 @@ impl JSContextImpl for JSCContext {
                 ptr::null_mut(),
             );
             jsc::JSStringRelease(class_name);
-            jsc::JSStringRelease(constructor_ref);
+            jsc::JSStringRelease(constructor_name);
+            jsc::JSStringRelease(proto_name);
 
             JSCValue::from_owned_obj(self.raw, constructor)
         }
