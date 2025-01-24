@@ -1,4 +1,4 @@
-use crate::{JSException, JSValue, JSValueImpl};
+use crate::{JSValue, JSValueImpl};
 
 #[derive(Clone, Debug)]
 pub enum JSValueType {

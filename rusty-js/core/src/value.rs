@@ -62,10 +62,6 @@ impl<V> JSValue<V>
 where
     V: JSValueImpl,
 {
-    pub(crate) fn with_value(&self, value: V) -> Self {
-        Self { inner: value }
-    }
-
     pub(crate) fn from_raw(_ctx: &JSContext<V::Context>, value: V) -> Self {
         Self { inner: value }
     }
