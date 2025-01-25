@@ -72,6 +72,20 @@ impl JSContextImpl for JSCContext {
         }
     }
 
+    /// Bug:
+    ///
+    /// It is not possible to use JS subclassing with objects created from a class
+    /// definition that sets callAsConstructor by default. The callAsConstructor's
+    /// constructor is not changed to extended class constructor.
+    ///
+    /// Subclassing is supported via the JSObjectMakeConstructor function, but it has
+    /// disadvantages:
+    /// - can not set private data to constructor object. WeakMap is alternative solution.
+    /// - typeof constructor is 'object' not 'function'(nodejs, bun, quickjs etc)
+    ///
+    /// Because the crate is specially desigend for mini-program, we shoud not avoid
+    /// to use subclass/extend-class, in other word, directly extend feature at native
+    /// side.
     fn register_class<JC>(&self) -> Self::Value
     where
         JC: rusty_js_core::JSClass<Self::Value>,

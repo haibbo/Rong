@@ -311,6 +311,7 @@ fn test_extend_class() {
                 "#,
             ))
             .unwrap();
+        eprintln!("JavaScripCore does not know get_color as a function, pls refer Bug note on its register_class");
         assert_eq!(result, 0x5fa5);
     });
 }
