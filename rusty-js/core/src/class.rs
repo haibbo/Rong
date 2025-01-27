@@ -53,7 +53,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         };
 
         instance.prototype(proto);
-        instance.into_inner()
+        instance.into_value()
     }
 
     /// Free resources of a class instance by finalizer
@@ -104,11 +104,11 @@ where
         let context = self.0.get_ctx();
         let ptr = Box::into_raw(Box::new(RefCell::new(value)));
 
-        let instance = V::make_instance(context.as_ref(), self.0.clone().into_inner(), ptr as _);
+        let instance = V::make_instance(context.as_ref(), self.0.clone().into_value(), ptr as _);
 
         // instance object inherits Constructor's prototype
         self.get_prototype()
-            .map(|proto| instance.set_prototype(proto.as_inner().clone()));
+            .map(|proto| instance.set_prototype(proto.as_value().clone()));
         instance
     }
 
@@ -147,7 +147,7 @@ where
 {
     /// Borrow the underlying data from an instance
     pub fn borrow<T>(&self) -> JSResult<Ref<'_, T>> {
-        let ptr = self.as_inner().get_opaque() as *mut RefCell<T>;
+        let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
         } else {
@@ -158,7 +158,7 @@ where
 
     /// Mutably borrow the underlying data from an instance
     pub fn borrow_mut<T>(&self) -> JSResult<RefMut<'_, T>> {
-        let ptr = self.as_inner().get_opaque() as *mut RefCell<T>;
+        let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
         } else {
@@ -168,7 +168,7 @@ where
     }
 
     pub fn prototype(&self, proto: JSObject<V>) -> bool {
-        self.as_inner().set_prototype(proto.into_inner())
+        self.as_value().set_prototype(proto.into_value())
     }
 }
 

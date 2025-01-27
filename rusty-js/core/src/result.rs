@@ -102,7 +102,7 @@ where
         let v = ctx.as_ref().new_error();
         let obj = JSObject::from_js_value(ctx, v).unwrap();
         obj.set("message", self.to_string());
-        obj.into_inner()
+        obj.into_value()
     }
 }
 

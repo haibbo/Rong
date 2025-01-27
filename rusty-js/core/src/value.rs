@@ -66,17 +66,17 @@ where
         Self { inner: value }
     }
 
-    pub(crate) fn as_inner(&self) -> &V {
+    pub(crate) fn as_value(&self) -> &V {
         &self.inner
     }
 
-    pub(crate) fn into_inner(self) -> V {
+    pub(crate) fn into_value(self) -> V {
         self.inner
     }
 
     /// Get the context associated with this JSValue
     pub fn get_ctx(&self) -> JSContext<V::Context> {
-        JSContext::from_borrowed_raw_ptr(self.as_inner().as_raw_context())
+        JSContext::from_borrowed_raw_ptr(self.as_value().as_raw_context())
     }
 }
 
@@ -126,7 +126,7 @@ where
     V: JSValueImpl,
 {
     fn into_js_value(self, _ctx: &JSContext<V::Context>) -> V {
-        self.into_inner()
+        self.into_value()
     }
 }
 

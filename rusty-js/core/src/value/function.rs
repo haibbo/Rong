@@ -66,7 +66,7 @@ impl<V: JSObjectOps> JSFunc<V> {
     {
         let ctx = &self.get_ctx();
         let argv = args.into_js_args(ctx);
-        let result = ctx.as_ref().call(self.as_inner(), this, argv);
+        let result = ctx.as_ref().call(self.as_value(), this, argv);
 
         // let result = JSValue::from_js_value(ctx, r)?;
 
@@ -127,7 +127,7 @@ impl<V: JSObjectOps> JSFunc<V> {
     }
 
     pub(crate) fn into_inner(self) -> V {
-        self.0.into_inner()
+        self.0.into_value()
     }
 }
 

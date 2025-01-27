@@ -179,7 +179,7 @@ impl<V: JSObjectOps> fmt::Display for JSException<V> {
             }
         } else {
             let ctx = self.get_ctx();
-            let js_value = self.as_inner().clone();
+            let js_value = self.as_value().clone();
             String::from_js_value(&ctx, js_value).unwrap().fmt(f)?;
         }
         Ok(())

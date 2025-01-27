@@ -195,7 +195,7 @@ where
 
         let key = k.into().into_key(ctx);
 
-        obj.as_inner()
+        obj.as_value()
             .define_property(key, value, getter, setter, self.attributes);
     }
 }

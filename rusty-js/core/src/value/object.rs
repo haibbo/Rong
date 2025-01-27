@@ -52,7 +52,7 @@ where
     V: JSValueImpl,
 {
     fn into_js_value(self, _ctx: &JSContext<V::Context>) -> V {
-        self.0.into_inner()
+        self.0.into_value()
     }
 }
 
@@ -96,8 +96,8 @@ where
         JSObject::from_js_value(ctx, value).unwrap()
     }
 
-    pub(crate) fn into_inner(self) -> V {
-        self.0.into_inner()
+    pub(crate) fn into_value(self) -> V {
+        self.0.into_value()
     }
 }
 
@@ -112,7 +112,7 @@ where
     {
         let ctx = &self.get_ctx();
         let key = k.into().into_key(ctx);
-        self.as_inner().set_property(key, kv.into_js_value(ctx))
+        self.as_value().set_property(key, kv.into_js_value(ctx))
     }
 
     pub fn del<'a, K>(&'a self, k: K) -> bool
@@ -120,7 +120,7 @@ where
         K: Into<PropertyKey<'a>>,
     {
         let key = k.into().into_key(&self.get_ctx());
-        self.as_inner().del_property(key)
+        self.as_value().del_property(key)
     }
 
     pub fn has<'a, K>(&self, k: K) -> bool
@@ -128,7 +128,7 @@ where
         K: Into<PropertyKey<'a>>,
     {
         let key = k.into().into_key(&self.get_ctx());
-        self.as_inner().has_property(key)
+        self.as_value().has_property(key)
     }
 
     pub fn get<'a, K, T>(&'a self, k: K) -> JSResult<T>
@@ -138,7 +138,7 @@ where
     {
         let ctx = &self.get_ctx();
         let key = k.into().into_key(ctx);
-        self.as_inner()
+        self.as_value()
             .get_property(key)
             .ok_or(RustyJSError::PropertyNotFound) // check existence firstly
             .and_then(|value| T::from_js_value(ctx, value))

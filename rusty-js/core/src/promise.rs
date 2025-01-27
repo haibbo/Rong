@@ -240,7 +240,7 @@ where
                     let mut state = resolve_state.borrow_mut();
 
                     if value.is_error().is_some() || value.is_exception().is_some() {
-                        let err = JSException::from_js_value(ctx, value.into_inner()).unwrap();
+                        let err = JSException::from_js_value(ctx, value.into_value()).unwrap();
                         if let PromiseState::Pending(waker) = std::mem::replace(
                             &mut *state,
                             PromiseState::Resolved(Err(RustyJSError::Exception(err.into_error()))),
@@ -248,7 +248,7 @@ where
                             waker.wake_by_ref();
                         }
                     } else {
-                        let success = T::from_js_value(ctx, value.into_inner()).unwrap();
+                        let success = T::from_js_value(ctx, value.into_value()).unwrap();
                         if let PromiseState::Pending(waker) =
                             std::mem::replace(&mut *state, PromiseState::Resolved(Ok(success)))
                         {
