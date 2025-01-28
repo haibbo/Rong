@@ -1,11 +1,11 @@
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_macro_input, ItemImpl, ItemStruct};
+use syn::{parse_macro_input, DeriveInput, ItemImpl};
 
 mod class;
 mod methods;
 
-/// Example:
 /// Attribute macro for creating JavaScript classes from Rust structs
 ///
 /// # Example
@@ -22,15 +22,26 @@ mod methods;
 /// - `FromJSValue<JSEngineValue>`
 /// - `JSParameterType`
 #[proc_macro_attribute]
-pub fn class(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Parse the input struct
-    let input = parse_macro_input!(item as ItemStruct);
+pub fn class(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as DeriveInput);
+    let attr2: TokenStream2 = attr.into();
 
-    // Parse options (currently unused but kept for future expansion)
-    let opts = class::ClassOpts::default();
+    // Create a new class attribute with the original attribute parameters.
+    // This is necessary because the original attribute is consumed during macro expansion,
+    // but we need to parse it again in class_impl to extract options like rename.
+    let class_attr = syn::parse_quote!(#[class(#attr2)]);
 
-    // Generate the implementations
-    match class::class_impl(&input, &opts) {
+    // Create a new DeriveInput with all original attributes plus the reconstructed class attribute
+    let mut new_input = input.clone();
+    new_input.attrs.push(class_attr);
+
+    // Parse options from attributes
+    let opts = match class::ClassOpts::from_attrs(&new_input.attrs) {
+        Ok(opts) => opts,
+        Err(err) => return TokenStream::from(err.to_compile_error()),
+    };
+
+    match class::class_impl(&new_input, &opts) {
         Ok(expanded) => expanded.into(),
         Err(err) => err.to_compile_error().into(),
     }
@@ -47,12 +58,12 @@ pub fn method(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemImpl);
+
     let methods: Vec<_> = input
         .items
         .iter()
         .filter_map(|item| {
             if let syn::ImplItem::Fn(method) = item {
-                // Only include methods that have our #[method] attribute
                 if method
                     .attrs
                     .iter()

@@ -38,7 +38,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
 
     let output = quote! {
         impl rusty_js::JSClass<rusty_js::JSEngineValue> for #impl_type {
-            const NAME: &'static str = stringify!(#impl_type);
+            const NAME: &'static str = Self::JS_CLASS_NAME;
 
             #constructor
 
