@@ -32,3 +32,6 @@ pub type JSObject = CoreJSObject<JSEngineValue>;
 pub type JSFunc = CoreJSFunc<JSEngineValue>;
 pub type Promise = CorePromise<JSEngineValue>;
 pub type JSException = CoreJSException<JSEngineValue>;
+
+// re-export macro public symbols to rusty_js
+pub use rusty_js_macro::{js_class, js_method, js_methods};

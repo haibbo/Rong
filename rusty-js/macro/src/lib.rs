@@ -1,45 +1,194 @@
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{parse_macro_input, DeriveInput, ItemImpl};
 
-/// Derive macro for implementing JavaScript value conversion traits
-/// This will implement:
-/// - IntoJSValue
-/// - FromJSValue
-/// - JSParameterType
+mod class;
+mod methods;
+
+/// Expose a Rust struct as a JavaScript class.
 ///
-/// Example:
+/// This macro generates the necessary code to make a Rust struct usable as a JavaScript class,
+/// including type conversions and class registration.
+///
+/// # Attributes
+/// - `rename = "name"`: Use a different name for the class in JavaScript
+///
+/// # Generated Implementations
+/// - `IntoJSValue<JSEngineValue>`
+/// - `FromJSValue<JSEngineValue>`
+/// - `JSParameterType`
+///
+/// # Example
 /// ```rust
-/// #[derive(JSType)]
+/// #[js_class(rename = "Point2D")]
 /// struct Point {
 ///     x: i32,
 ///     y: i32,
 /// }
 /// ```
-#[proc_macro_derive(JSType)]
-pub fn derive_js_bindings(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let name = &input.ident;
+#[proc_macro_attribute]
+pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as DeriveInput);
+    let attr2: TokenStream2 = attr.into();
+
+    // Create a new class attribute with the original attribute parameters.
+    // This is necessary because the original attribute is consumed during macro expansion,
+    // but we need to parse it again in class_impl to extract options like rename.
+    let class_attr = syn::parse_quote!(#[js_class(#attr2)]);
+
+    // Create a new DeriveInput with all original attributes plus the reconstructed class attribute
+    let mut new_input = input.clone();
+    new_input.attrs.push(class_attr);
+
+    // Parse options from attributes
+    let opts = match class::ClassOpts::from_attrs(&new_input.attrs) {
+        Ok(opts) => opts,
+        Err(err) => return TokenStream::from(err.to_compile_error()),
+    };
+
+    match class::class_impl(&new_input, &opts) {
+        Ok(expanded) => expanded.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// Define JavaScript methods and properties for a class.
+///
+/// This macro can only be applied to impl blocks and processes method definitions
+/// marked with `#[js_method]`. Methods can be exposed as:
+/// - Regular methods
+/// - Property getters/setters
+/// - Static methods/properties
+///
+/// # Method Types
+/// - Instance methods: Take `&self` or `&mut self`
+/// - Static methods: No self parameter
+/// - Constructors: Marked with `#[js_method(constructor)]`
+///
+/// # Example
+/// ```rust
+/// #[js_methods]
+/// impl Point {
+///     // Constructor
+///     #[js_method(constructor)]
+///     fn new(x: i32, y: i32) -> Self {
+///         Self { x, y }
+///     }
+///
+///     // Instance property
+///     #[js_method(getter, enumerable)]
+///     fn x(&self) -> i32 { self.x }
+///
+///     // Static method
+///     #[js_method]
+///     fn create(x: i32, y: i32) -> Self {
+///         Self { x, y }
+///     }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn js_methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // First try to parse as impl block
+    let result = syn::parse::<ItemImpl>(item.clone());
+
+    // Return error if not an impl block
+    if result.is_err() {
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "#[js_methods] can only be used on impl blocks",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    let input = result.unwrap();
+
+    // Process methods as before
+    let methods: Vec<_> = input
+        .items
+        .iter()
+        .filter_map(|item| {
+            if let syn::ImplItem::Fn(method) = item {
+                if method
+                    .attrs
+                    .iter()
+                    .any(|attr| attr.path().is_ident("js_method"))
+                {
+                    Some(method.clone())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let impl_tokens = match methods::methods_impl(&input, &methods) {
+        Ok(tokens) => tokens,
+        Err(err) => return TokenStream::from(err.to_compile_error()),
+    };
 
     let expanded = quote! {
-        impl rusty_js_core::IntoJSValue<JSEngineValue> for #name {
-            fn into_js_value(self, context: &JSContext) -> JSEngineValue {
-                rusty_js_core::Class::get::<Self>(context)
-                    .map(|class| class.instance(self))
-                    .unwrap_or_else(|| JSEngineValue::from((context.as_ref(), ())))
-            }
-        }
+        #input
 
-        impl rusty_js_core::FromJSValue<JSEngineValue> for #name {
-            fn from_js_value(ctx: &JSContext, value: JSEngineValue) -> rusty_js_core::JSResult<Self> {
-                let obj = rusty_js_core::JSObject::from_js_value(ctx, value)?;
-                let instance = obj.borrow::<Self>()?;
-                Ok(*instance)
-            }
-        }
-
-        impl rusty_js_core::function::JSParameterType for #name {}
+        #impl_tokens
     };
 
     TokenStream::from(expanded)
+}
+
+/// Configure how a Rust method is exposed to JavaScript.
+///
+/// This attribute can only be applied to methods, not to impl blocks.
+/// For impl blocks, use `#[js_methods]` instead.
+///
+/// This attribute configures the behavior of individual methods when they are
+/// exposed to JavaScript. It supports various options for controlling how the
+/// method appears and behaves in JavaScript.
+///
+/// # Options
+/// - `getter`: Expose as a property getter
+/// - `setter`: Expose as a property setter
+/// - `enumerable`: Make the property visible in enumerations
+/// - `rename = "name"`: Use a different name in JavaScript
+/// - `constructor`: Mark as the class constructor
+///
+/// # Property Attributes
+/// - All properties are configurable by default
+/// - Properties are non-enumerable by default
+/// - Writable state is determined by the presence of a setter
+///
+/// # Examples
+/// ```rust
+/// #[js_methods]  // Use js_methods for impl block
+/// impl MyClass {
+///     // Constructor
+///     #[js_method(constructor)]
+///     fn new() -> Self { Self {} }
+///
+///     // Public property with custom name
+///     #[js_method(getter, enumerable, rename = "value")]
+///     fn get_value(&self) -> i32 { self.value }
+///
+///     // Regular method
+///     #[js_method(rename = "calculateTotal")]
+///     fn calc_total(&self) -> i32 { self.value * 2 }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn js_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // Try to parse as impl block to check for misuse
+    if syn::parse::<ItemImpl>(item.clone()).is_ok() {
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "Use #[js_methods] for impl blocks, not #[js_method]",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    // Just pass through the original item if it's not an impl block
+    item
 }

@@ -2,6 +2,7 @@
 name = "rusty-js-macro"
 version = "0.1.0"
 edition = "2021"
+description = "Macro system for RustyJS to help expose Rust types to JavaScript"
 
 [lib]
 proc-macro = true
@@ -10,4 +11,3 @@ proc-macro = true
 syn = { version = "2.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
-rusty-js-core = { path = "../core" }
