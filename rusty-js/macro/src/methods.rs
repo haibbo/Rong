@@ -87,9 +87,33 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                 .collect();
 
             let (patterns, types): (Vec<_>, Vec<_>) = args.into_iter().unzip();
-            
+
+            // Handle instance methods with proper This/ThisMut mapping
+            let (receiver_type, method_call) = if let Some(receiver) = method.sig.receiver() {
+                if receiver.mutability.is_some() {
+                    // For &mut self methods, use ThisMut and map to Self::method_name
+                    (
+                        quote! { mut this: rusty_js::function::ThisMut<#impl_type> },
+                        quote! { Self::#method_name(&mut *this, #(#patterns),*) },
+                    )
+                } else {
+                    // For &self methods, use This and map to Self::method_name
+                    (
+                        quote! { this: rusty_js::function::This<#impl_type> },
+                        quote! { Self::#method_name(&*this, #(#patterns),*) },
+                    )
+                }
+            } else {
+                unreachable!("Already checked is_instance_method")
+            };
+
             instance_methods.push(quote! {
-                class.method(#js_name, move |this: rusty_js::function::This<#impl_type>, #(#patterns: #types),*| this.#method_name(#(#patterns),*));
+                class.method(
+                    #js_name,
+                    move |#receiver_type, #(#patterns: #types),*| {
+                        #method_call
+                    }
+                );
             });
         } else {
             let args: Vec<_> = params
@@ -104,9 +128,14 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                 .collect();
 
             let (patterns, types): (Vec<_>, Vec<_>) = args.into_iter().unzip();
-            
+
             static_methods.push(quote! {
-                class.static_method(#js_name, move |#(#patterns: #types),*| Self::#method_name(#(#patterns),*));
+                class.static_method(
+                    #js_name,
+                    move |#(#patterns: #types),*| {
+                        Self::#method_name(#(#patterns),*)
+                    }
+                );
             });
         }
     }
