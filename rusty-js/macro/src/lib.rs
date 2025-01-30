@@ -55,8 +55,8 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Define JavaScript methods and properties for a class.
 ///
-/// This macro processes method definitions marked with `#[js_method]` and generates
-/// the appropriate JavaScript bindings. Methods can be exposed as:
+/// This macro can only be applied to impl blocks and processes method definitions
+/// marked with `#[js_method]`. Methods can be exposed as:
 /// - Regular methods
 /// - Property getters/setters
 /// - Static methods/properties
@@ -89,8 +89,22 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn js_methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(item as ItemImpl);
+    // First try to parse as impl block
+    let result = syn::parse::<ItemImpl>(item.clone());
 
+    // Return error if not an impl block
+    if result.is_err() {
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "#[js_methods] can only be used on impl blocks",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    let input = result.unwrap();
+
+    // Process methods as before
     let methods: Vec<_> = input
         .items
         .iter()
@@ -127,6 +141,9 @@ pub fn js_methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Configure how a Rust method is exposed to JavaScript.
 ///
+/// This attribute can only be applied to methods, not to impl blocks.
+/// For impl blocks, use `#[js_methods]` instead.
+///
 /// This attribute configures the behavior of individual methods when they are
 /// exposed to JavaScript. It supports various options for controlling how the
 /// method appears and behaves in JavaScript.
@@ -145,7 +162,7 @@ pub fn js_methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 /// ```rust
-/// #[js_methods]
+/// #[js_methods]  // Use js_methods for impl block
 /// impl MyClass {
 ///     // Constructor
 ///     #[js_method(constructor)]
@@ -162,6 +179,16 @@ pub fn js_methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn js_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Just pass through the original item
+    // Try to parse as impl block to check for misuse
+    if syn::parse::<ItemImpl>(item.clone()).is_ok() {
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "Use #[js_methods] for impl blocks, not #[js_method]",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    // Just pass through the original item if it's not an impl block
     item
 }
