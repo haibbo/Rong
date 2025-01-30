@@ -1,8 +1,10 @@
 [workspace]
 members = [
     "core",
-    "quickjs",
     "macro",
+    "quickjs",
+    "javascriptcore",
+    "examples/point",
 ]
 
 [package]
@@ -23,4 +25,4 @@ jscore = ["rusty-js-jscore"]
 default = ["quickjs"]
 
 [dev-dependencies]
-tokio = { version = "1.0", features = ["rt", "time", "macros", "test-util"] }
+tokio = { version = "1.0", features = ["rt", "time", "macros"] }

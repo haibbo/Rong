@@ -1,0 +1,7 @@
+[package]
+name = "rustyjs-example-point"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusty-js = { path = "../../" }
