@@ -6,30 +6,36 @@ use syn::{parse_macro_input, DeriveInput, ItemImpl};
 mod class;
 mod methods;
 
-/// Attribute macro for creating JavaScript classes from Rust structs
+/// Expose a Rust struct as a JavaScript class.
+///
+/// This macro generates the necessary code to make a Rust struct usable as a JavaScript class,
+/// including type conversions and class registration.
+///
+/// # Attributes
+/// - `rename = "name"`: Use a different name for the class in JavaScript
+///
+/// # Generated Implementations
+/// - `IntoJSValue<JSEngineValue>`
+/// - `FromJSValue<JSEngineValue>`
+/// - `JSParameterType`
 ///
 /// # Example
 /// ```rust
-/// #[class]
+/// #[js_class(rename = "Point2D")]
 /// struct Point {
 ///     x: i32,
 ///     y: i32,
 /// }
 /// ```
-///
-/// This will implement:
-/// - `IntoJSValue<JSEngineValue>`
-/// - `FromJSValue<JSEngineValue>`
-/// - `JSParameterType`
 #[proc_macro_attribute]
-pub fn class(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let attr2: TokenStream2 = attr.into();
 
     // Create a new class attribute with the original attribute parameters.
     // This is necessary because the original attribute is consumed during macro expansion,
     // but we need to parse it again in class_impl to extract options like rename.
-    let class_attr = syn::parse_quote!(#[class(#attr2)]);
+    let class_attr = syn::parse_quote!(#[js_class(#attr2)]);
 
     // Create a new DeriveInput with all original attributes plus the reconstructed class attribute
     let mut new_input = input.clone();
@@ -47,16 +53,42 @@ pub fn class(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-/// Attribute macro for method configuration
+/// Define JavaScript methods and properties for a class.
+///
+/// This macro processes method definitions marked with `#[js_method]` and generates
+/// the appropriate JavaScript bindings. Methods can be exposed as:
+/// - Regular methods
+/// - Property getters/setters
+/// - Static methods/properties
+///
+/// # Method Types
+/// - Instance methods: Take `&self` or `&mut self`
+/// - Static methods: No self parameter
+/// - Constructors: Marked with `#[js_method(constructor)]`
+///
+/// # Example
+/// ```rust
+/// #[js_methods]
+/// impl Point {
+///     // Constructor
+///     #[js_method(constructor)]
+///     fn new(x: i32, y: i32) -> Self {
+///         Self { x, y }
+///     }
+///
+///     // Instance property
+///     #[js_method(getter, enumerable)]
+///     fn x(&self) -> i32 { self.x }
+///
+///     // Static method
+///     #[js_method]
+///     fn create(x: i32, y: i32) -> Self {
+///         Self { x, y }
+///     }
+/// }
+/// ```
 #[proc_macro_attribute]
-pub fn method(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    // Just pass through the original item
-    item
-}
-
-/// Attribute macro for implementing methods
-#[proc_macro_attribute]
-pub fn methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn js_methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemImpl);
 
     let methods: Vec<_> = input
@@ -67,7 +99,7 @@ pub fn methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 if method
                     .attrs
                     .iter()
-                    .any(|attr| attr.path().is_ident("method"))
+                    .any(|attr| attr.path().is_ident("js_method"))
                 {
                     Some(method.clone())
                 } else {
@@ -91,4 +123,45 @@ pub fn methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(expanded)
+}
+
+/// Configure how a Rust method is exposed to JavaScript.
+///
+/// This attribute configures the behavior of individual methods when they are
+/// exposed to JavaScript. It supports various options for controlling how the
+/// method appears and behaves in JavaScript.
+///
+/// # Options
+/// - `getter`: Expose as a property getter
+/// - `setter`: Expose as a property setter
+/// - `enumerable`: Make the property visible in enumerations
+/// - `rename = "name"`: Use a different name in JavaScript
+/// - `constructor`: Mark as the class constructor
+///
+/// # Property Attributes
+/// - All properties are configurable by default
+/// - Properties are non-enumerable by default
+/// - Writable state is determined by the presence of a setter
+///
+/// # Examples
+/// ```rust
+/// #[js_methods]
+/// impl MyClass {
+///     // Constructor
+///     #[js_method(constructor)]
+///     fn new() -> Self { Self {} }
+///
+///     // Public property with custom name
+///     #[js_method(getter, enumerable, rename = "value")]
+///     fn get_value(&self) -> i32 { self.value }
+///
+///     // Regular method
+///     #[js_method(rename = "calculateTotal")]
+///     fn calc_total(&self) -> i32 { self.value * 2 }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn js_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // Just pass through the original item
+    item
 }

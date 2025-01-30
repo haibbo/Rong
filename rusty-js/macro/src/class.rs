@@ -13,7 +13,7 @@ impl ClassOpts {
         let mut opts = ClassOpts::default();
 
         for attr in attrs {
-            if !attr.path().is_ident("class") {
+            if !attr.path().is_ident("js_class") {
                 continue;
             }
 
@@ -54,7 +54,7 @@ pub fn class_impl(input: &DeriveInput, opts: &ClassOpts) -> syn::Result<TokenStr
     let filtered_attrs: Vec<_> = input
         .attrs
         .iter()
-        .filter(|attr| !attr.path().is_ident("class"))
+        .filter(|attr| !attr.path().is_ident("js_class"))
         .collect();
 
     // Rebuild type definition with filtered attributes

@@ -2,53 +2,49 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Expr, ImplItemFn, ItemImpl, Lit, Meta};
 
-/// # Property Attributes
-///
-/// - `configurable`: Property can be deleted and its attributes can be modified
-/// - `enumerable`: Property shows up in enumerations of the object's properties
-/// - The writable state is automatically determined by the presence of a setter
-///
 /// Configuration options for JavaScript method/property bindings.
-///
+/// 
 /// # Property Types
-///
+/// 
 /// Properties are automatically categorized as static or instance based on the presence
 /// of a self receiver:
 /// - Methods with no self receiver become static properties/methods
 /// - Methods with self receiver become instance properties/methods
-///
+/// 
 /// # Property Attributes
-///
-/// When defining a property with getter/setter, only the `enumerable` attribute needs to be
-/// specified. This is because:
-///
-/// 1. All properties are automatically configurable (can be deleted and modified)
-/// 2. The `enumerable` attribute controls property visibility:
-///    - `true`: Property appears in `Object.keys()` and `for...in` loops
-///    - `false`: Property is hidden from enumeration (default)
-/// 3. Accessor properties (with getter/setter) don't use the `writable` attribute
-///
-/// ## Example
+/// 
+/// JavaScript properties have three key attributes that control their behavior:
+/// 
+/// ## Configurable
+/// - When `true`: Property can be deleted and its attributes can be modified
+/// - Default: `true` for all properties created by this macro
+/// - Note: This is automatically set and cannot be changed
+/// 
+/// ## Enumerable
+/// - When `true`: Property shows up in enumerations (`Object.keys()`, `for...in`)
+/// - Default: `false` (properties are hidden by default)
+/// - Set with: `#[js_method(enumerable)]`
+/// 
+/// ## Writable
+/// - When `true`: Property value can be changed
+/// - Automatically determined by the presence of a setter
+/// - Note: Accessor properties (getter/setter) don't use this attribute
+/// 
+/// # Examples
+/// 
 /// ```rust
-/// #[methods]
-/// impl Point {
-///     // Public property - visible in Object.keys() and for...in
-///     #[method(getter, enumerable, rename = "x")]
-///     fn getx(&self) -> i32 {
-///         self.x
-///     }
-///
-///     // Internal property - hidden from enumeration
-///     #[method(getter, rename = "y")]
-///     fn gety(&self) -> i32 {
-///         self.y
-///     }
-///
-///     // Setter only needs the rename to match
-///     #[method(setter, rename = "x")]
-///     fn setx(&mut self, x: i32) {
-///         self.x = x;
-///     }
+/// #[js_methods]
+/// impl MyStruct {
+///     // Public property with getter and setter
+///     #[js_method(getter, enumerable)]
+///     fn value(&self) -> i32 { self.value }
+///     
+///     #[js_method(setter)]
+///     fn set_value(&mut self, v: i32) { self.value = v; }
+/// 
+///     // Read-only property (getter only)
+///     #[js_method(getter)]
+///     fn computed(&self) -> i32 { self.value * 2 }
 /// }
 /// ```
 #[derive(Default)]
@@ -64,7 +60,7 @@ impl MethodOpts {
         let mut opts = MethodOpts::default();
 
         for attr in attrs {
-            if !attr.path().is_ident("method") {
+            if !attr.path().is_ident("js_method") {
                 continue;
             }
 
@@ -122,7 +118,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
 
         // Check if this is a constructor
         if method.attrs.iter().any(|attr| {
-            attr.path().is_ident("method")
+            attr.path().is_ident("js_method")
                 && attr
                     .meta
                     .require_list()

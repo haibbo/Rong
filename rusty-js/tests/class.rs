@@ -1,8 +1,8 @@
 mod helper;
 use helper::*;
-use rusty_js_macro::class;
+use rusty_js_macro::js_class;
 
-#[class]
+#[js_class]
 struct Point {
     x: i32,
     y: i32,
