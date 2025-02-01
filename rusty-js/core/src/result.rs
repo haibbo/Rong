@@ -27,6 +27,9 @@ pub enum RustyJSError {
     #[error("Not JS Function")]
     NotJSFunc,
 
+    #[error("Not JS Array")]
+    NotJSArray,
+
     #[error("Not JS Exception Object")]
     NotJSExcep,
 
@@ -55,6 +58,7 @@ impl RustyJSError {
         match self {
             RustyJSError::ConvertError(_, _)
             | RustyJSError::NotJSFunc
+            | RustyJSError::NotJSArray
             | RustyJSError::NotObject
             | RustyJSError::NotJSExcep
             | RustyJSError::InvalidParameter { .. } => {

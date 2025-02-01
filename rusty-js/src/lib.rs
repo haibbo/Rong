@@ -1,8 +1,8 @@
 pub use rusty_js_core::{
-    call, Class, ClassSetup, FromJSValue, IntoJSValue, JSClass, JSContext as CoreJSContext,
-    JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject,
-    JSResult, JSRuntime as CoreJSRuntime, JSValue as CoreJSValue, Promise as CorePromise,
-    RustyJSError, Source,
+    call, Class, ClassSetup, FromJSValue, IntoJSValue, JSArray as CoreJSArray, JSClass,
+    JSContext as CoreJSContext, JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc,
+    JSObject as CoreJSObject, JSResult, JSRuntime as CoreJSRuntime, JSValue as CoreJSValue,
+    Promise as CorePromise, RustyJSError, Source,
 };
 
 pub use rusty_js_core::function;
@@ -32,6 +32,7 @@ pub type JSObject = CoreJSObject<JSEngineValue>;
 pub type JSFunc = CoreJSFunc<JSEngineValue>;
 pub type Promise = CorePromise<JSEngineValue>;
 pub type JSException = CoreJSException<JSEngineValue>;
+pub type JSArray = CoreJSArray<JSEngineValue>;
 
 // re-export macro public symbols to rusty_js
 pub use rusty_js_macro::{js_class, js_method, js_methods};

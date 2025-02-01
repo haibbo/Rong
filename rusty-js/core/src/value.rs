@@ -13,6 +13,9 @@ pub use valuetype::{JSTypeOf, JSValueType};
 mod object;
 pub use object::*;
 
+mod array;
+pub use array::*;
+
 mod function;
 pub use function::*;
 
