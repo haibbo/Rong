@@ -2,6 +2,7 @@ use crate::{qjs, QJSContext};
 use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl, RustyJSError};
 use std::ffi::CStr;
 
+mod array;
 mod object;
 mod valuetype;
 
