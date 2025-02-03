@@ -127,7 +127,6 @@ impl_js_converter!(
     bool,
     |ctx, value| unsafe { jsc::JSValueMakeBoolean(ctx, value) },
     |ctx, value, result: *mut bool| unsafe {
-        let value = value;
         if jsc::JSValueIsBoolean(ctx, value) {
             *result = jsc::JSValueToBoolean(ctx, value);
             0
@@ -181,7 +180,6 @@ impl_js_converter!(
         result
     },
     |ctx, value, result: *mut String| unsafe {
-        let value = value;
         if jsc::JSValueIsUndefined(ctx, value) {
             *result = String::from("UNDEFINED");
             return 0;
