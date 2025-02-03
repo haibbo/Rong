@@ -3,45 +3,45 @@ use quote::quote;
 use syn::{Expr, ImplItemFn, ItemImpl, Lit, Meta};
 
 /// Configuration options for JavaScript method/property bindings.
-/// 
+///
 /// # Property Types
-/// 
+///
 /// Properties are automatically categorized as static or instance based on the presence
 /// of a self receiver:
 /// - Methods with no self receiver become static properties/methods
 /// - Methods with self receiver become instance properties/methods
-/// 
+///
 /// # Property Attributes
-/// 
+///
 /// JavaScript properties have three key attributes that control their behavior:
-/// 
+///
 /// ## Configurable
 /// - When `true`: Property can be deleted and its attributes can be modified
 /// - Default: `true` for all properties created by this macro
 /// - Note: This is automatically set and cannot be changed
-/// 
+///
 /// ## Enumerable
 /// - When `true`: Property shows up in enumerations (`Object.keys()`, `for...in`)
 /// - Default: `false` (properties are hidden by default)
 /// - Set with: `#[js_method(enumerable)]`
-/// 
+///
 /// ## Writable
 /// - When `true`: Property value can be changed
 /// - Automatically determined by the presence of a setter
 /// - Note: Accessor properties (getter/setter) don't use this attribute
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```rust
 /// #[js_methods]
 /// impl MyStruct {
 ///     // Public property with getter and setter
 ///     #[js_method(getter, enumerable)]
 ///     fn value(&self) -> i32 { self.value }
-///     
+///
 ///     #[js_method(setter)]
 ///     fn set_value(&mut self, v: i32) { self.value = v; }
-/// 
+///
 ///     // Read-only property (getter only)
 ///     #[js_method(getter)]
 ///     fn computed(&self) -> i32 { self.value * 2 }
@@ -124,7 +124,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                     .require_list()
                     .ok()
                     .and_then(|list| list.parse_args::<Meta>().ok())
-                    .map_or(false, |meta| meta.path().is_ident("constructor"))
+                    .is_some_and(|meta| meta.path().is_ident("constructor"))
         }) {
             constructor = Some(quote! {
                 fn data_constructor() -> rusty_js::function::Constructor<rusty_js::JSEngineValue> {
