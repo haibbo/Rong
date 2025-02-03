@@ -1,7 +1,8 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValueImpl,
-    RustyJSError,
+    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf,
+    JSValueConversion, JSValueImpl, RustyJSError,
 };
+use std::fmt;
 use std::marker::PhantomData;
 use std::ops::Deref;
 
@@ -74,19 +75,21 @@ where
         self.len() == 0
     }
 
-    /// Get element at specified index
-    ///
-    /// # Arguments
-    /// * `index` - The array index to retrieve
+    /// Get element at index
     ///
     /// # Returns
-    /// `JSResult<T>` where T is the type of the element
-    pub fn get<T>(&self, index: u32) -> JSResult<T>
+    /// - `Ok(Some(value))` if element exists and can be converted
+    /// - `Ok(None)` if index is out of bounds
+    /// - `Err(_)` if type conversion fails
+    pub fn get<T>(&self, index: u32) -> JSResult<Option<T>>
     where
         T: FromJSValue<V>,
     {
-        let v = self.as_value().get(index);
-        T::from_js_value(&self.0.get_ctx(), v)
+        if index >= self.len() {
+            return Ok(None);
+        }
+        let value = self.as_value().get(index);
+        T::from_js_value(&self.get_ctx(), value).map(Some)
     }
 
     /// Set element at specified index
@@ -119,6 +122,48 @@ where
             count,
             marker: PhantomData,
         }
+    }
+
+    /// Push a value to the end of the array
+    ///
+    /// # Arguments
+    /// * `value` - The value to push
+    ///
+    /// # Returns
+    /// `JSResult<()>` indicating success or failure
+    pub fn push<T>(&self, value: T) -> JSResult<()>
+    where
+        T: IntoJSValue<V>,
+    {
+        let ctx = self.get_ctx();
+        let v = value.into_js_value(&ctx);
+        let index = self.len();
+        self.as_value().set(index, v);
+        Ok(())
+    }
+
+    /// Pop element from end of array
+    ///
+    /// # Returns
+    /// - `Ok(Some(value))` if array not empty and value can be converted
+    /// - `Ok(None)` if array is empty
+    /// - `Err(_)` if type conversion fails
+    pub fn pop<T>(&self) -> JSResult<Option<T>>
+    where
+        T: FromJSValue<V>,
+    {
+        if self.is_empty() {
+            return Ok(None);
+        }
+
+        let index = self.len() - 1;
+        let value = self.as_value().get(index);
+
+        // delete the element and update its length
+        self.0.del(index);
+        self.0.set("length", index);
+
+        T::from_js_value(&self.get_ctx(), value).map(Some)
     }
 }
 
@@ -164,10 +209,29 @@ where
     T: FromJSValue<V>,
 {
     fn len(&self) -> usize {
-        (self.count - self.index) as _
+        (self.count - self.index) as usize
     }
 }
 
 // blanket implementing.
 // Type JSFunc can be as parameter of JS callback of rust function
 impl<V: JSValueImpl> crate::function::JSParameterType for JSArray<V> {}
+
+impl<V> fmt::Display for JSArray<V>
+where
+    V: JSTypeOf + JSValueConversion,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Delegate to JSValue's Display implementation through Deref
+        self.0.deref().fmt(f)
+    }
+}
+
+impl<V> fmt::Debug for JSArray<V>
+where
+    V: JSTypeOf + JSValueConversion,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "JSArray({})", self)
+    }
+}
