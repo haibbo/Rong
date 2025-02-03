@@ -2,6 +2,7 @@ use crate::{jsc, JSCContext};
 use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl, RustyJSError};
 use std::ffi::CString;
 
+mod array;
 mod object;
 mod valuetype;
 
