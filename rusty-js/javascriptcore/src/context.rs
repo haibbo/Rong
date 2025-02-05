@@ -337,7 +337,7 @@ impl JSExceptionHandler for JSCContext {
 }
 
 impl JSCContext {
-    fn create_error(&self, message: &str) -> JSCValue {
+    pub(crate) fn create_error(&self, message: &str) -> JSCValue {
         unsafe {
             let c_message = CString::new(message).unwrap();
             let js_str = jsc::JSStringCreateWithUTF8CString(c_message.as_ptr());

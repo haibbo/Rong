@@ -5,6 +5,7 @@ use std::ffi::CString;
 mod array;
 mod array_buffer;
 mod object;
+mod typed_array;
 mod valuetype;
 
 pub struct JSCValue {
