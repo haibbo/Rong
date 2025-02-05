@@ -19,6 +19,9 @@ pub use array::*;
 mod array_buffer;
 pub use array_buffer::*;
 
+mod typed_array;
+pub use typed_array::*;
+
 mod function;
 pub use function::*;
 

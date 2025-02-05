@@ -33,6 +33,15 @@ pub enum RustyJSError {
     #[error("Not JS ArrayBuffer")]
     NotJSArrayBuffer,
 
+    #[error("Not JS TypedArray")]
+    NotJSTypedArray,
+
+    #[error("Invalid TypedArray alignment: byte_offset must be a multiple of element size")]
+    TypedArrayAlignmentError,
+
+    #[error("Invalid TypedArray range: offset or length exceeds buffer size")]
+    TypedArrayRangeError,
+
     #[error("Not JS Exception Object")]
     NotJSExcep,
 
@@ -63,6 +72,8 @@ impl RustyJSError {
             | RustyJSError::NotJSFunc
             | RustyJSError::NotJSArray
             | RustyJSError::NotJSArrayBuffer
+            | RustyJSError::NotJSTypedArray
+            | RustyJSError::TypedArrayAlignmentError
             | RustyJSError::NotObject
             | RustyJSError::NotJSExcep
             | RustyJSError::InvalidParameter { .. } => {
@@ -70,6 +81,8 @@ impl RustyJSError {
             }
 
             RustyJSError::PropertyNotFound => ctx.as_ref().throw_reference_error(self.to_string()),
+
+            RustyJSError::TypedArrayRangeError => ctx.as_ref().throw_range_error(self.to_string()),
 
             RustyJSError::Exception(_)
             | RustyJSError::Error(_)
