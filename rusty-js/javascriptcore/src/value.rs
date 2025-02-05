@@ -3,6 +3,7 @@ use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl,
 use std::ffi::CString;
 
 mod array;
+mod array_buffer;
 mod object;
 mod valuetype;
 
