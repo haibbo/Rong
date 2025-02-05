@@ -23,6 +23,7 @@ pub trait JSTypeOf: JSValueImpl {
     fn is_exception(&self) -> bool;
     fn is_error(&self) -> bool;
     fn is_array(&self) -> bool;
+    fn is_array_buffer(&self) -> bool;
     fn is_promise(&self) -> bool;
     fn is_undefined(&self) -> bool;
     fn is_null(&self) -> bool;
@@ -102,6 +103,7 @@ generate_is_type!(
     is_error,
     is_exception,
     is_array,
+    is_array_buffer,
     is_promise,
     is_function,
     is_constructor,

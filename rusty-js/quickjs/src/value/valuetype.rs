@@ -19,6 +19,10 @@ impl JSTypeOf for QJSValue {
         unsafe { qjs::JS_IsArray(self.ctx, self.value) != 0 }
     }
 
+    fn is_array_buffer(&self) -> bool {
+        unsafe { qjs::JS_IsArrayBuffer(self.value) != 0 }
+    }
+
     fn is_promise(&self) -> bool {
         unsafe { qjs::QJS_IsPromise(self.ctx, self.value) != 0 }
     }

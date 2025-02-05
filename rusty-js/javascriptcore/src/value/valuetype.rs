@@ -29,6 +29,21 @@ impl JSTypeOf for JSCValue {
         unsafe { jsc::JSValueIsArray(self.ctx, self.as_value()) }
     }
 
+    fn is_array_buffer(&self) -> bool {
+        if !self.is_object() {
+            return false;
+        }
+        unsafe {
+            let error_ctor = crate::context::get_constructor(self.ctx, c"ArrayBuffer".as_ptr());
+            jsc::JSValueIsInstanceOfConstructor(
+                self.ctx,
+                self.as_value(),
+                error_ctor,
+                std::ptr::null_mut(),
+            )
+        }
+    }
+
     fn is_promise(&self) -> bool {
         if !self.is_object() {
             return false;
