@@ -80,7 +80,7 @@ impl JSContextImpl for QJSContext {
     }
 
     fn run_bytecode(&self, bytes: &[u8]) -> Self::Value {
-        let result = unsafe {
+        unsafe {
             let obj = qjs::JS_ReadObject(
                 self.ctx,
                 bytes.as_ptr(),
@@ -88,12 +88,16 @@ impl JSContextImpl for QJSContext {
                 qjs::JS_READ_OBJ_BYTECODE as i32,
             );
             if qjs::QJS_IsException(self.ctx, obj) != 0 {
-                obj
+                QJSValue::from_owned_raw(self.ctx, obj).with_exception()
             } else {
-                qjs::JS_EvalFunction(self.ctx, obj)
+                let eval_result = qjs::JS_EvalFunction(self.ctx, obj);
+                if qjs::QJS_IsException(self.ctx, eval_result) != 0 {
+                    QJSValue::from_owned_raw(self.ctx, eval_result).with_exception()
+                } else {
+                    QJSValue::from_owned_raw(self.ctx, eval_result)
+                }
             }
-        };
-        QJSValue::from_owned_raw(self.ctx, result)
+        }
     }
 
     fn global(&self) -> Self::Value {
