@@ -1,5 +1,5 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf,
+    FromJSValue, IntoJSValue, JSContext, JSException, JSObject, JSObjectOps, JSResult, JSTypeOf,
     JSValueConversion, JSValueImpl, RustyJSError,
 };
 use std::fmt;
@@ -49,10 +49,18 @@ pub trait JSArrayOps: JSValueImpl {
     fn new(ctx: &Self::Context) -> Self;
 
     /// Get element at index
+    ///
+    /// # Returns
+    /// Returns the element at the specified index, or an `exception` if failed.
+    /// Caller should check if the result is an exception.
     fn get(&self, index: u32) -> Self;
 
     /// Set element at index
-    fn set(&self, index: u32, value: Self);
+    ///
+    /// # Returns
+    /// Returns `UNDEFINED` if successful, or an `exception` if failed.
+    /// Both are of type `Self`. Caller should check if the result is an exception.
+    fn set(&self, index: u32, value: Self) -> Self;
 }
 
 impl<V> JSArray<V>
@@ -61,8 +69,13 @@ where
 {
     /// Create a new empty JavaScript array
     pub fn new(ctx: &JSContext<V::Context>) -> JSResult<Self> {
-        let v = JSArrayOps::new(ctx.as_ref());
-        JSArray::from_js_value(ctx, v)
+        let value = V::new(ctx.as_ref());
+        if value.is_exception() {
+            let err = JSException::from_js_value(ctx, value)?;
+            Err(RustyJSError::Exception(err.into_error()))
+        } else {
+            Self::from_js_value(ctx, value)
+        }
     }
 
     /// Get the length of the JavaScript array
@@ -80,7 +93,7 @@ where
     /// # Returns
     /// - `Ok(Some(value))` if element exists and can be converted
     /// - `Ok(None)` if index is out of bounds
-    /// - `Err(_)` if type conversion fails
+    /// - `Err(_)` if type conversion fails or an exception occurred
     pub fn get<T>(&self, index: u32) -> JSResult<Option<T>>
     where
         T: FromJSValue<V>,
@@ -89,7 +102,13 @@ where
             return Ok(None);
         }
         let value = self.as_value().get(index);
-        T::from_js_value(&self.get_ctx(), value).map(Some)
+        let ctx = &self.get_ctx();
+        if value.is_exception() {
+            let err = JSException::from_js_value(ctx, value)?;
+            Err(RustyJSError::Exception(err.into_error()))
+        } else {
+            T::from_js_value(ctx, value).map(Some)
+        }
     }
 
     /// Set element at specified index
@@ -97,14 +116,24 @@ where
     /// # Arguments
     /// * `index` - The array index to set
     /// * `value` - The value to set at the index
+    ///
+    /// # Returns
+    /// - `Ok(())` if successful
+    /// - `Err(RustyJSError)` if an exception occurred
     pub fn set<T>(&self, index: u32, value: T) -> JSResult<()>
     where
         T: IntoJSValue<V>,
     {
         let ctx = self.get_ctx();
         let v = value.into_js_value(&ctx);
-        self.as_value().set(index, v);
-        Ok(())
+        let result = self.as_value().set(index, v);
+
+        if result.is_exception() {
+            let err = JSException::from_js_value(&ctx, result)?;
+            Err(RustyJSError::Exception(err.into_error()))
+        } else {
+            Ok(())
+        }
     }
 
     /// Create an iterator over the array elements
