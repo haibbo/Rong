@@ -5,18 +5,42 @@ use rusty_js_core::{JSArrayOps, JSValueImpl};
 impl JSArrayOps for QJSValue {
     fn new(ctx: &Self::Context) -> Self {
         let ctx = ctx.to_raw();
-        let v = unsafe { qjs::JS_NewArray(ctx) };
-        QJSValue::from_owned_raw(ctx, v)
+        unsafe {
+            let v = qjs::JS_NewArray(ctx);
+
+            if qjs::QJS_IsException(ctx, v) != 0 {
+                QJSValue::from_owned_raw(ctx, v).with_exception()
+            } else {
+                QJSValue::from_owned_raw(ctx, v)
+            }
+        }
     }
 
     fn get(&self, index: u32) -> Self {
-        let v = unsafe { qjs::JS_GetPropertyUint32(self.ctx, self.value, index) };
-        QJSValue::from_owned_raw(self.ctx, v)
+        let ctx = self.ctx;
+        unsafe {
+            let v = qjs::JS_GetPropertyUint32(ctx, self.value, index);
+
+            if qjs::QJS_IsException(ctx, v) != 0 {
+                QJSValue::from_owned_raw(ctx, v).with_exception()
+            } else {
+                QJSValue::from_owned_raw(ctx, v)
+            }
+        }
     }
 
-    fn set(&self, index: u32, value: Self) {
+    fn set(&self, index: u32, value: Self) -> Self {
+        let ctx = self.ctx;
         unsafe {
-            qjs::JS_SetPropertyUint32(self.ctx, self.value, index, value.into_raw_value());
+            let status = qjs::JS_SetPropertyUint32(ctx, self.value, index, value.into_raw_value());
+            if status != 0 {
+                let raw = qjs::QJS_NewUndefined(ctx);
+                QJSValue::from_owned_raw(ctx, raw)
+            } else {
+                let err =
+                    qjs::JS_ThrowPlainError(ctx, c"QJS: set array index %u failed".as_ptr(), index);
+                QJSValue::from_owned_raw(ctx, err).with_exception()
+            }
         }
     }
 }
