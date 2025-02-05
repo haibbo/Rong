@@ -3,6 +3,7 @@ use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl,
 use std::ffi::CStr;
 
 mod array;
+mod array_buffer;
 mod object;
 mod valuetype;
 
@@ -182,7 +183,7 @@ impl_js_converter!(
     &str,
     String,
     |ctx, value: &str| {
-        let len = value.as_bytes().len();
+        let len = value.len();
         qjs::JS_NewStringLen(ctx, value.as_ptr() as _, len as _)
     },
     |ctx, value, result: *mut String| {
