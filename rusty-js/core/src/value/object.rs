@@ -99,6 +99,10 @@ where
     pub(crate) fn into_value(self) -> V {
         self.0.into_value()
     }
+
+    pub(crate) fn as_mut_value(&mut self) -> &mut V {
+        &mut self.0.inner
+    }
 }
 
 impl<V> JSObject<V>

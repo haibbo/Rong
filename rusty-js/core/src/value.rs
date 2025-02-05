@@ -16,6 +16,9 @@ pub use object::*;
 mod array;
 pub use array::*;
 
+mod array_buffer;
+pub use array_buffer::*;
+
 mod function;
 pub use function::*;
 
