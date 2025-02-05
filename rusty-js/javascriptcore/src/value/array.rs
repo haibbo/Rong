@@ -28,7 +28,7 @@ impl JSArrayOps for JSCValue {
         }
     }
 
-    fn set(&self, index: u32, value: Self) {
+    fn set(&self, index: u32, value: Self) -> Self {
         unsafe {
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();
             jsc::JSObjectSetPropertyAtIndex(
@@ -38,6 +38,12 @@ impl JSArrayOps for JSCValue {
                 value.as_value(),
                 &mut exception,
             );
+            if !exception.is_null() {
+                JSCValue::from_owned_raw(self.ctx, exception).with_exception()
+            } else {
+                let raw = jsc::JSValueMakeUndefined(self.ctx);
+                JSCValue::from_owned_raw(self.ctx, raw)
+            }
         }
     }
 }
