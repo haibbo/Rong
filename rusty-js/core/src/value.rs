@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
+use crate::{JSContext, JSContextImpl, JSResult};
 use std::fmt;
 
 mod convert;
@@ -96,19 +96,17 @@ where
     /// Converts  Rust value into a `JSValue`.
     pub fn from<T>(ctx: &JSContext<V::Context>, val: T) -> Self
     where
-        V: for<'a> From<(&'a V::Context, T)>,
+        T: IntoJSValue<V>,
     {
-        let value = V::from((ctx.as_ref(), val));
-        JSValue::from_raw(ctx, value)
+        JSValue::from_raw(ctx, val.into_js_value(ctx))
     }
 
     /// Try to converts JSValue to Rust value
     pub fn try_into<T>(self) -> JSResult<T>
     where
-        V: TryInto<T, Error = RustyJSError>,
-        T: Default,
+        T: FromJSValue<V>,
     {
-        self.inner.try_into()
+        T::from_js_value(&self.get_ctx(), self.into_value())
     }
 
     /// create JS UNDEFINED Value

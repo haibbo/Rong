@@ -360,6 +360,7 @@ impl JSParameterType for f32 {}
 impl JSParameterType for f64 {}
 impl JSParameterType for bool {}
 impl JSParameterType for String {}
+impl JSParameterType for usize {}
 
 macro_rules! impl_from_params {
     ($($T:ident),*) => {

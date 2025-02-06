@@ -159,3 +159,24 @@ where
         V::from((ctx.as_ref(), self))
     }
 }
+
+impl<V> FromJSValue<V> for usize
+where
+    V: JSValueImpl,
+    V: TryInto<u64, Error = RustyJSError>,
+{
+    fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+        let u64_val = TryInto::<u64>::try_into(value)?;
+        Ok(u64_val as usize)
+    }
+}
+
+impl<V> IntoJSValue<V> for usize
+where
+    V: JSValueImpl,
+    V: for<'a> From<(&'a V::Context, u64)>,
+{
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+        V::from((ctx.as_ref(), self as u64))
+    }
+}
