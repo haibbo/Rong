@@ -146,7 +146,7 @@ impl_js_converter!(
     |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
     |ctx, value, result: &mut i32| unsafe {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-        *result = jsc::JSValueToNumber(ctx, value, &mut exception) as i32;
+        *result = jsc::JSValueToInt32(ctx, value, &mut exception);
         if exception.is_null() {
             0
         } else {
@@ -223,7 +223,7 @@ impl_js_converter!(
     |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
     |ctx, value, result: &mut u32| unsafe {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-        *result = jsc::JSValueToNumber(ctx, value, &mut exception) as u32;
+        *result = jsc::JSValueToUInt32(ctx, value, &mut exception);
         if exception.is_null() {
             0
         } else {
@@ -236,10 +236,10 @@ impl_js_converter!(
 impl_js_converter!(
     JSCValue,
     i64,
-    |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
+    |ctx, value| unsafe { jsc::JSBigIntCreateWithInt64(ctx, value, std::ptr::null_mut()) },
     |ctx, value, result: &mut i64| unsafe {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-        *result = jsc::JSValueToNumber(ctx, value, &mut exception) as i64;
+        *result = jsc::JSValueToInt64(ctx, value, &mut exception);
         if exception.is_null() {
             0
         } else {
@@ -253,10 +253,10 @@ impl_js_converter!(
 impl_js_converter!(
     JSCValue,
     u64,
-    |ctx, value| unsafe { jsc::JSValueMakeNumber(ctx, value as f64) },
+    |ctx, value| unsafe { jsc::JSBigIntCreateWithUInt64(ctx, value, std::ptr::null_mut()) },
     |ctx, value, result: &mut u64| unsafe {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-        *result = jsc::JSValueToNumber(ctx, value, &mut exception) as u64;
+        *result = jsc::JSValueToUInt64(ctx, value, &mut exception);
         if exception.is_null() {
             0
         } else {
