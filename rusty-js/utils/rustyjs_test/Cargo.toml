@@ -5,4 +5,4 @@ edition = "2021"
 description = "Test utilities for rusty-js"
 
 [dependencies]
-rusty-js = { path = "../..", default-features = false }
+rusty-js = { path = "../.."}
