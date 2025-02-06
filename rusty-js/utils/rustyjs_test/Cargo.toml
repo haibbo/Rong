@@ -1,0 +1,8 @@
+[package]
+name = "rustyjs_test"
+version = "0.1.0"
+edition = "2021"
+description = "Test utilities for rusty-js"
+
+[dependencies]
+rusty-js = { path = "../..", default-features = false }

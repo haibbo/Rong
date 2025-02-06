@@ -1,7 +1,6 @@
-#[allow(unused_imports)]
-pub use rusty_js::function::{Constructor, Optional, Rest, This, ThisMut};
-
 pub use rusty_js::*;
+// Re-export commonly used types for tests
+pub use rusty_js::function::{Constructor, Optional, Rest, This, ThisMut};
 
 // Helper function to run tests with JS context
 #[allow(dead_code)]

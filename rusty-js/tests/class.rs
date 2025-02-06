@@ -1,5 +1,4 @@
-mod helper;
-use helper::*;
+use rustyjs_test::*;
 use rusty_js_macro::js_class;
 
 #[js_class]

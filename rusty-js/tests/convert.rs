@@ -1,5 +1,4 @@
-mod helper;
-use helper::*;
+use rustyjs_test::*;
 
 use std::string::String;
 

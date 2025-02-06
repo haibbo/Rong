@@ -1,5 +1,4 @@
-mod helper;
-use helper::*;
+use rustyjs_test::*;
 
 #[test]
 fn test_array_basic_operations() {
