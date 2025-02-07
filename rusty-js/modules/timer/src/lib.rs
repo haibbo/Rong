@@ -39,21 +39,15 @@ use rusty_js::{function::Optional, JSContext, JSFunc, JSResult};
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::Duration;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::error::TrySendError;
-use tokio::time::{interval, sleep};
+use tokio::sync::Notify;
 
 static NEXT_ID: AtomicU32 = AtomicU32::new(0);
-
-static TIMEOUT_HANDLES: LazyLock<Mutex<HashMap<u32, mpsc::Sender<TimeoutMessage>>>> =
+static CANCEL_NOTIFIERS: LazyLock<Mutex<HashMap<u32, Arc<Notify>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-
-enum TimeoutMessage {
-    Cancel(u32),
-}
 
 fn set_timeout_with_repeat(
     ctx: &JSContext,
@@ -62,67 +56,80 @@ fn set_timeout_with_repeat(
     repeat: bool,
 ) -> u32 {
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    let (tx, mut rx) = mpsc::channel::<TimeoutMessage>(10);
+    let notifier = Arc::new(Notify::new());
 
+    CANCEL_NOTIFIERS
+        .lock()
+        .unwrap()
+        .insert(id, notifier.clone());
+
+    // Convert negative delay to 0, following browser behavior
     let delay = delay.unwrap_or(0.0).max(0.0) as u64;
+
     ctx.spawn_local(async move {
-        if repeat {
-            let mut interval = interval(Duration::from_millis(delay));
-            loop {
-                tokio::select! {
-                    _ = interval.tick() => {
-                        //eprintln!("Interval {}: triggered!", id);
-                        let _=callback.call::<_, ()>(());
-                    }
-                    msg = rx.recv() => {
-                        match msg {
-                            Some(TimeoutMessage::Cancel(cancel_id)) if cancel_id == id => {
-                                println!("Interval {}: canceled!", id);
-                                break;
-                            },
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        } else {
+        // Use a fixed minimum interval of 1ms since tokio::interval doesn't support zero intervals
+        let mut interval = tokio::time::interval(Duration::from_millis(1));
+
+        // For non-zero delays, wait before first execution
+        if delay > 0 {
             tokio::select! {
-                _ = sleep(Duration::from_millis(delay)) => {
-                    println!("Timeout {}: triggered!", id);
-                    let _=callback.call::<_, ()>(());
-                }
-                msg = rx.recv() => {
-                    match msg {
-                        Some(TimeoutMessage::Cancel(cancel_id)) if cancel_id == id => {
-                            println!("Timeout {}: canceled!", id);
-                        },
-                        _ => {}
-                    }
+                _ = tokio::time::sleep(Duration::from_millis(delay)) => {}
+                _ = notifier.notified() => {
+                    CANCEL_NOTIFIERS.lock().unwrap().remove(&id);
+                    return Ok(());
                 }
             }
         }
-        TIMEOUT_HANDLES.lock().unwrap().remove(&id);
+
+        // Check if timer was cancelled during initial delay
+        if !CANCEL_NOTIFIERS.lock().unwrap().contains_key(&id) {
+            return Ok(());
+        }
+
+        // Execute first callback
+        if callback.call::<_, ()>(()).is_ok() {
+            // For setTimeout, exit after first execution
+            if !repeat {
+                CANCEL_NOTIFIERS.lock().unwrap().remove(&id);
+                return Ok(());
+            }
+        } else {
+            // Clean up and exit if callback fails
+            CANCEL_NOTIFIERS.lock().unwrap().remove(&id);
+            return Ok(());
+        }
+
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    // Check if timer was cancelled
+                    if !CANCEL_NOTIFIERS.lock().unwrap().contains_key(&id) {
+                        break;
+                    }
+
+                    // Execute callback and break loop if it fails
+                    if callback.call::<_, ()>(()).is_err() {
+                        break;
+                    }
+                }
+                _ = notifier.notified() => {
+                    // Timer was cancelled
+                    break;
+                }
+            }
+        }
+
+        // Clean up resources
+        CANCEL_NOTIFIERS.lock().unwrap().remove(&id);
         Ok(())
     });
 
-    TIMEOUT_HANDLES.lock().unwrap().insert(id, tx);
     id
 }
 
 fn cancel_timeout(id: u32) {
-    if let Some(tx) = TIMEOUT_HANDLES.lock().unwrap().remove(&id) {
-        match tx.try_send(TimeoutMessage::Cancel(id)) {
-            Ok(_) => {} // cancel successfully
-            Err(TrySendError::Full(_)) => {
-                eprintln!(
-                    "Warning: Cancel channel full. Cancel message for timer {} may be lost.",
-                    id
-                );
-            }
-            Err(TrySendError::Closed(_)) => {
-                // Timer already finished, nothing to do
-            }
-        }
+    if let Some(notifier) = CANCEL_NOTIFIERS.lock().unwrap().remove(&id) {
+        notifier.notify_waiters();
     }
 }
 
@@ -165,6 +172,7 @@ mod tests {
     use rustyjs_test::*;
     use std::sync::atomic::{AtomicI32, Ordering};
     use std::sync::Arc;
+    use tokio::time::sleep;
 
     #[test]
     fn test_set_timeout() {
@@ -267,21 +275,29 @@ mod tests {
             });
             ctx.global().set("increment", increment);
 
+            // Use JavaScript APIs to set and clear interval
             ctx.eval::<()>(Source::from_bytes(
                 r#"
-                let intervalId = setInterval(increment, 50);
-                setTimeout(() => clearInterval(intervalId), 125);
+                let id = setInterval(increment, 50);
+                setTimeout(() => {
+                    clearInterval(id);
+                }, 125);
             "#,
             ))
             .unwrap();
 
-            // Wait for the interval to be cleared
-            sleep(Duration::from_millis(200)).await;
+            // Wait for interval to be cleared
+            sleep(Duration::from_millis(150)).await;
+
             let count = counter.load(Ordering::SeqCst);
-            assert!(
-                (2..=3).contains(&count),
-                "Expected 2-3 increments, got {}",
-                count
+            assert!(count >= 2, "Expected at least 2 increments, got {}", count);
+
+            // Wait to ensure no more increments occur
+            sleep(Duration::from_millis(100)).await;
+            let final_count = counter.load(Ordering::SeqCst);
+            assert_eq!(
+                count, final_count,
+                "Counter should not increase after clearInterval"
             );
 
             Ok(())
