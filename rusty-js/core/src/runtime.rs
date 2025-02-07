@@ -1,6 +1,9 @@
 use crate::function::RustFunc;
 use crate::scheduler::Scheduler;
 use crate::{JSContext, JSContextImpl, JSObjectOps, JSResult, JSValueImpl};
+use std::any::TypeId;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::future::Future;
 use std::rc::Rc;
 use tokio::sync::Notify;
@@ -39,6 +42,7 @@ pub trait JSRuntimeImpl {
 pub struct JSRuntime<R: JSRuntimeImpl> {
     pub(crate) inner: Rc<R>,
     scheduler: Rc<Scheduler<R>>,
+    services: ServiceContainer,
 }
 
 impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
@@ -46,6 +50,7 @@ impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
         Self {
             inner: self.inner.clone(),
             scheduler: self.scheduler.clone(),
+            services: self.services.clone(),
         }
     }
 }
@@ -82,6 +87,20 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
     /// - Use this judiciously as it may impact performance.
     pub fn run_gc(&self) {
         self.inner.run_gc();
+    }
+
+    /// Get or initialize a runtime service
+    /// If the service is not registered, it will be initialized with default values
+    pub fn get_or_init_service<T: JSRuntimeService + Default>(&self) -> &T {
+        if let Some(service) = self.services.get::<T>() {
+            service
+        } else {
+            let service = T::default();
+            self.services.register(service);
+            self.services
+                .get::<T>()
+                .expect("Service should be registered")
+        }
     }
 }
 
@@ -121,6 +140,7 @@ pub trait JSEngine: Sized {
         JSRuntime {
             inner: runtime,
             scheduler,
+            services: ServiceContainer::new(),
         }
     }
 
@@ -143,5 +163,64 @@ pub trait JSEngine: Sized {
         let ctx = JSContext::<Self::Context>::new(rt);
         ctx.register_rustfunc_class();
         ctx
+    }
+}
+
+/// A trait for runtime services that can be attached to JSRuntime
+pub trait JSRuntimeService: 'static {
+    /// Called when the service is being initialized
+    fn on_init(&self) {}
+
+    /// Called when the service is being shutdown
+    fn on_shutdown(&self) {}
+}
+
+/// A container for runtime services with proper lifecycle management
+#[derive(Clone)]
+struct ServiceContainer {
+    services: Rc<RefCell<HashMap<TypeId, Box<dyn JSRuntimeService>>>>,
+}
+
+impl ServiceContainer {
+    fn new() -> Self {
+        Self {
+            services: Rc::new(RefCell::new(HashMap::new())),
+        }
+    }
+
+    fn register<T: JSRuntimeService>(&self, extension: T) {
+        let mut services = self.services.borrow_mut();
+        extension.on_init();
+        services.insert(TypeId::of::<T>(), Box::new(extension));
+    }
+
+    fn get<T: JSRuntimeService>(&self) -> Option<&T> {
+        // SAFETY: This is safe because:
+        // 1. We only insert services through register<T>
+        // 2. TypeId is unique for each type
+        // 3. The extension is never removed until container is dropped
+        // 4. The RefCell ensures we don't have multiple mutable borrows
+        unsafe {
+            let services = self.services.borrow();
+            services
+                .get(&TypeId::of::<T>())
+                .map(|ext| &*(ext.as_ref() as *const dyn JSRuntimeService as *const T))
+        }
+    }
+
+    fn shutdown(&self) {
+        let mut services = self.services.borrow_mut();
+        for (_, ext) in services.drain() {
+            ext.on_shutdown();
+        }
+    }
+}
+
+impl Drop for ServiceContainer {
+    fn drop(&mut self) {
+        // Only shutdown if we're the last reference
+        if Rc::strong_count(&self.services) == 1 {
+            self.shutdown();
+        }
     }
 }
