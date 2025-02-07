@@ -301,7 +301,7 @@ impl<C: JSContextImpl> JSContext<C> {
         }
     }
 
-    pub(crate) fn runtime(&self) -> &JSRuntime<C::Runtime> {
+    pub fn runtime(&self) -> &JSRuntime<C::Runtime> {
         &self.rc.runtime
     }
 
