@@ -35,127 +35,161 @@
 //! });
 //! ```
 
-use rusty_js::{function::Optional, JSContext, JSFunc, JSResult};
+use rusty_js::{function::Optional, JSContext, JSFunc, JSResult, JSRuntimeService};
 
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
-use std::sync::LazyLock;
 use std::sync::Mutex;
-use std::time::Duration;
 use tokio::sync::Notify;
+use tokio::time::Duration;
 
-static NEXT_ID: AtomicU32 = AtomicU32::new(0);
-static CANCEL_NOTIFIERS: LazyLock<Mutex<HashMap<u32, Arc<Notify>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+#[derive(Clone)]
+pub struct TimerRegistry {
+    inner: Rc<TimerRegistryInner>,
+}
+
+struct TimerRegistryInner {
+    next_id: AtomicU32,
+    notifiers: Mutex<HashMap<u32, Rc<Notify>>>,
+}
+
+impl JSRuntimeService for TimerRegistry {
+    fn on_shutdown(&self) {
+        self.shutdown();
+    }
+}
+
+impl Default for TimerRegistry {
+    fn default() -> Self {
+        Self {
+            inner: Rc::new(TimerRegistryInner {
+                next_id: AtomicU32::new(0),
+                notifiers: Mutex::new(HashMap::new()),
+            }),
+        }
+    }
+}
+
+impl TimerRegistry {
+    fn next_id(&self) -> u32 {
+        self.inner.next_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn register_timer(&self, id: u32, notifier: Rc<Notify>) {
+        self.inner.notifiers.lock().unwrap().insert(id, notifier);
+    }
+
+    fn cancel_timer(&self, id: u32) {
+        if let Some(notifier) = self.inner.notifiers.lock().unwrap().remove(&id) {
+            notifier.notify_waiters();
+        }
+    }
+
+    fn is_timer_active(&self, id: u32) -> bool {
+        self.inner.notifiers.lock().unwrap().contains_key(&id)
+    }
+
+    fn shutdown(&self) {
+        let mut notifiers = self.inner.notifiers.lock().unwrap();
+        if notifiers.is_empty() {
+            return;
+        }
+
+        for (_id, notifier) in notifiers.drain() {
+            // println!("Cleaning up timer {}", id);
+            notifier.notify_waiters();
+        }
+    }
+}
+
+impl Drop for TimerRegistry {
+    fn drop(&mut self) {
+        // println!(
+        //     "TimerRegistry being dropped (Rc count: {})",
+        //     Rc::strong_count(&self.inner)
+        // );
+        self.shutdown();
+    }
+}
 
 fn set_timeout_with_repeat(
-    ctx: &JSContext,
+    registry: TimerRegistry,
     callback: JSFunc,
     delay: Optional<f64>,
     repeat: bool,
 ) -> u32 {
-    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    let notifier = Arc::new(Notify::new());
+    let id = registry.next_id();
+    let notifier = Rc::new(Notify::new());
 
-    CANCEL_NOTIFIERS
-        .lock()
-        .unwrap()
-        .insert(id, notifier.clone());
+    let ctx = callback.get_ctx();
+    let scheduler_shutdown = ctx.runtime().get_shutdown_signal();
 
-    // Convert negative delay to 0, following browser behavior
+    registry.register_timer(id, notifier.clone());
     let delay = delay.unwrap_or(0.0).max(0.0) as u64;
 
     ctx.spawn_local(async move {
-        // Use a fixed minimum interval of 1ms since tokio::interval doesn't support zero intervals
-        let mut interval = tokio::time::interval(Duration::from_millis(1));
+        let mut interval = tokio::time::interval(Duration::from_millis(delay.max(1)));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-        // For non-zero delays, wait before first execution
+        // Initial delay
         if delay > 0 {
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_millis(delay)) => {}
-                _ = notifier.notified() => {
-                    CANCEL_NOTIFIERS.lock().unwrap().remove(&id);
-                    return Ok(());
-                }
+                _ = notifier.notified() => return Ok(()),
+                _ = scheduler_shutdown.notified() => return Ok(()),
             }
         }
 
-        // Check if timer was cancelled during initial delay
-        if !CANCEL_NOTIFIERS.lock().unwrap().contains_key(&id) {
+        // First execution
+        if registry.is_timer_active(id) && callback.call::<_, ()>(()).is_ok() && !repeat {
             return Ok(());
         }
 
-        // Execute first callback
-        if callback.call::<_, ()>(()).is_ok() {
-            // For setTimeout, exit after first execution
-            if !repeat {
-                CANCEL_NOTIFIERS.lock().unwrap().remove(&id);
-                return Ok(());
-            }
-        } else {
-            // Clean up and exit if callback fails
-            CANCEL_NOTIFIERS.lock().unwrap().remove(&id);
-            return Ok(());
-        }
-
-        loop {
+        // Repeat loop
+        while registry.is_timer_active(id) {
             tokio::select! {
                 _ = interval.tick() => {
-                    // Check if timer was cancelled
-                    if !CANCEL_NOTIFIERS.lock().unwrap().contains_key(&id) {
-                        break;
-                    }
-
-                    // Execute callback and break loop if it fails
                     if callback.call::<_, ()>(()).is_err() {
                         break;
                     }
                 }
-                _ = notifier.notified() => {
-                    // Timer was cancelled
-                    break;
-                }
+                _ = notifier.notified() => break,
+                _ = scheduler_shutdown.notified() => break,
             }
         }
 
-        // Clean up resources
-        CANCEL_NOTIFIERS.lock().unwrap().remove(&id);
         Ok(())
     });
 
     id
 }
 
-fn cancel_timeout(id: u32) {
-    if let Some(notifier) = CANCEL_NOTIFIERS.lock().unwrap().remove(&id) {
-        notifier.notify_waiters();
-    }
-}
-
 pub fn init(ctx: &JSContext) -> JSResult<()> {
+    let registry = {
+        let runtime = ctx.runtime();
+        runtime.get_or_init_service::<TimerRegistry>().clone()
+    };
+
     let global = ctx.global();
 
-    let set_timeout = JSFunc::new(
-        ctx,
-        |ctx: &JSContext, callback: JSFunc, delay: Optional<f64>| {
-            set_timeout_with_repeat(ctx, callback, delay, false)
-        },
-    );
-
-    let clear_timeout = JSFunc::new(ctx, |id: u32| {
-        cancel_timeout(id);
+    let registry_clone = registry.clone();
+    let set_timeout = JSFunc::new(ctx, move |callback: JSFunc, delay: Optional<f64>| {
+        set_timeout_with_repeat(registry_clone.clone(), callback, delay, false)
     });
 
-    let set_interval = JSFunc::new(
-        ctx,
-        |ctx: &JSContext, callback: JSFunc, delay: Optional<f64>| {
-            set_timeout_with_repeat(ctx, callback, delay, true)
-        },
-    );
+    let registry_clone = registry.clone();
+    let clear_timeout = JSFunc::new(ctx, move |id: u32| {
+        registry_clone.cancel_timer(id);
+    });
 
-    let clear_interval = JSFunc::new(ctx, |id: u32| {
-        cancel_timeout(id);
+    let registry_clone = registry.clone();
+    let set_interval = JSFunc::new(ctx, move |callback: JSFunc, delay: Optional<f64>| {
+        set_timeout_with_repeat(registry_clone.clone(), callback, delay, true)
+    });
+
+    let clear_interval = JSFunc::new(ctx, move |id: u32| {
+        registry.cancel_timer(id);
     });
 
     global.set("setTimeout", set_timeout);
@@ -170,8 +204,8 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 mod tests {
     use super::*;
     use rustyjs_test::*;
+    use std::rc::Rc;
     use std::sync::atomic::{AtomicI32, Ordering};
-    use std::sync::Arc;
     use tokio::time::sleep;
 
     #[test]
@@ -203,7 +237,7 @@ mod tests {
         async_run!(|ctx: JSContext| async move {
             init(&ctx).unwrap();
 
-            let counter = Arc::new(AtomicI32::new(0));
+            let counter = Rc::new(AtomicI32::new(0));
             let counter_clone = counter.clone();
 
             let increment = JSFunc::new(&ctx, move || {
@@ -228,11 +262,11 @@ mod tests {
     }
 
     #[test]
-    fn test_set_interval() {
+    fn test_set_interval_without_cancel() {
         async_run!(|ctx: JSContext| async move {
             init(&ctx).unwrap();
 
-            let counter = Arc::new(AtomicI32::new(0));
+            let counter = Rc::new(AtomicI32::new(0));
             let counter_clone = counter.clone();
 
             let increment = JSFunc::new(&ctx, move || {
@@ -242,32 +276,29 @@ mod tests {
 
             // Keep the interval handle in scope
             let _interval_id: u32 = ctx
-                .eval(Source::from_bytes(
-                    r#"
-                setInterval(increment, 50)
-            "#,
-                ))
+                .eval(Source::from_bytes("setInterval(increment, 50)"))
                 .unwrap();
 
             // Wait for multiple intervals
             sleep(Duration::from_millis(175)).await;
             let count = counter.load(Ordering::SeqCst);
-            assert!(count >= 3, "Expected at least 3 increments, got {}", count);
+            assert!(
+                (3..=5).contains(&count),
+                "Expected 3 to 5 increments, got {}",
+                count
+            );
 
-            // cleanup
-            cancel_timeout(_interval_id);
-            sleep(Duration::from_millis(100)).await;
-
+            // without cancel explicitly, it should no panic!
             Ok(())
         })
     }
 
     #[test]
-    fn test_clear_interval() {
+    fn test_set_clear_interval() {
         async_run!(|ctx: JSContext| async move {
             init(&ctx).unwrap();
 
-            let counter = Arc::new(AtomicI32::new(0));
+            let counter = Rc::new(AtomicI32::new(0));
             let counter_clone = counter.clone();
 
             let increment = JSFunc::new(&ctx, move || {
