@@ -3,6 +3,7 @@ use crate::scheduler::Scheduler;
 use crate::{JSContext, JSContextImpl, JSObjectOps, JSResult, JSValueImpl};
 use std::future::Future;
 use std::rc::Rc;
+use tokio::sync::Notify;
 
 pub trait JSRuntimeImpl {
     /// The raw runtime handle type associated with this runtime.
@@ -60,6 +61,10 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
 
     pub(crate) fn scheduler(&self) -> &Rc<Scheduler<R>> {
         &self.scheduler
+    }
+
+    pub fn get_shutdown_signal(&self) -> Rc<Notify> {
+        self.scheduler.get_shutdown_signal()
     }
 
     /// # Warning

@@ -1,5 +1,6 @@
 use crate::{JSContext, JSContextImpl, JSResult, JSRuntimeImpl};
 use std::cell::Cell;
+use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
 use std::rc::{Rc, Weak};
@@ -12,12 +13,41 @@ pub(crate) struct Scheduler<R: JSRuntimeImpl> {
     tokio_rt: tokio::runtime::Runtime,
     local_set: Rc<LocalSet>,
     microtask_done: Rc<Notify>,
-    is_dropped: Rc<Cell<bool>>,
+    is_dropped: Cell<bool>,
+    shutdown_signal: Rc<Notify>,
+    active_tasks: RefCell<usize>,
+    tasks_done: Rc<Notify>,
 }
 
 impl<R: JSRuntimeImpl> Drop for Scheduler<R> {
     fn drop(&mut self) {
+        // println!(
+        //     "Scheduler being dropped, active tasks: {}",
+        //     self.active_tasks.borrow()
+        // );
+
+        // Mark scheduler as dropped and notify all tasks to shutdown
         self.is_dropped.set(true);
+        self.shutdown_signal.notify_waiters();
+
+        // Give tasks a chance to complete gracefully
+        self.tokio_rt.block_on(async {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        });
+
+        let local_set = self.local_set.clone();
+        let active_tasks = self.active_tasks.clone();
+
+        // If there are still active tasks, force shutdown by dropping local_set
+        if *active_tasks.borrow() > 0 {
+            println!(
+                "Scheduler still has {} active tasks, forcing shutdown",
+                active_tasks.borrow()
+            );
+            drop(local_set);
+        }
+
+        // Notify that microtasks are done
         self.microtask_done.notify_waiters();
     }
 }
@@ -32,12 +62,42 @@ impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
                 .expect("Failed to create tokio runtime"),
             local_set: Rc::new(LocalSet::new()),
             microtask_done: Rc::new(Notify::new()),
-            is_dropped: Rc::new(Cell::new(false)),
+            is_dropped: Cell::new(false),
+            shutdown_signal: Rc::new(Notify::new()),
+            active_tasks: RefCell::new(0),
+            tasks_done: Rc::new(Notify::new()),
         })
     }
 
+    pub(crate) fn get_shutdown_signal(&self) -> Rc<Notify> {
+        self.shutdown_signal.clone()
+    }
+
     pub(crate) fn spawn_local(&self, future: Pin<Box<dyn Future<Output = JSResult<()>>>>) {
-        self.local_set.spawn_local(future);
+        let shutdown_signal = self.shutdown_signal.clone();
+        let active_tasks = self.active_tasks.clone();
+        let tasks_done = self.tasks_done.clone();
+
+        *active_tasks.borrow_mut() += 1;
+        // println!("Task started, active tasks: {}", active_tasks.borrow());
+
+        self.local_set.spawn_local(async move {
+            let result = tokio::select! {
+                res = future => res,
+                _ = shutdown_signal.notified() => {
+                    // println!("Task cancelled by scheduler shutdown");
+                    Ok(())
+                }
+            };
+
+            *active_tasks.borrow_mut() -= 1;
+            let count = *active_tasks.borrow();
+            if count == 0 {
+                tasks_done.notify_waiters();
+            }
+
+            result
+        });
     }
 
     pub(crate) fn block_on<F, T>(&self, future: F) -> JSResult<T>
@@ -46,47 +106,81 @@ impl<R: JSRuntimeImpl + 'static> Scheduler<R> {
         T: 'static,
     {
         let (sender, receiver) = tokio::sync::oneshot::channel();
+        let active_tasks = self.active_tasks.clone();
+        let tasks_done = self.tasks_done.clone();
+        let runtime = self.runtime.clone();
 
         let local_set = self.local_set.clone();
+
+        *active_tasks.borrow_mut() += 1;
+
         local_set.spawn_local(async move {
             let result = future.await;
             let _ = sender.send(result);
+
+            *active_tasks.borrow_mut() -= 1;
+            let count = *active_tasks.borrow();
+
+            // println!("Main task completed, active tasks: {}", count);
+            if count == 0 {
+                tasks_done.notify_waiters();
+            }
         });
 
-        self.runtime.upgrade().expect("Failed to upgrade runtime");
-        let (done_tx, done_rx) = tokio::sync::watch::channel(false);
+        // Spawn a task to handle microtasks
         let microtask_done = self.microtask_done.clone();
-
-        let js_micro_tasks = {
-            let is_dropped = self.is_dropped.clone();
-            let runtime_weak = self.runtime.clone();
-            async move {
-                while !*done_rx.borrow() && !is_dropped.get() {
-                    if let Some(rt) = runtime_weak.upgrade() {
-                        rt.run_pending_jobs();
-                    } else {
-                        break;
+        let shutdown_signal = self.shutdown_signal.clone();
+        local_set.spawn_local(async move {
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep(std::time::Duration::from_millis(1)) => {
+                        if let Some(rt) = runtime.upgrade() {
+                            rt.run_pending_jobs();
+                        } else {
+                            break;
+                        }
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+                        //Microtask loop cancelled by scheduler shutdown
+                    _ = shutdown_signal.notified() => break
                 }
-                microtask_done.notify_waiters();
             }
-        };
+            microtask_done.notify_waiters();
+        });
 
+        let result = self
+            .tokio_rt
+            .block_on(async { local_set.run_until(async { receiver.await? }).await });
+
+        // After block_on completes, notify all tasks to shutdown
+        self.shutdown_signal.notify_waiters();
+
+        // Wait for all tasks to complete while keeping local_set running
+        let local_set = self.local_set.clone();
         self.tokio_rt.block_on(async {
             local_set
                 .run_until(async {
-                    local_set.spawn_local(js_micro_tasks);
-
-                    let result = receiver.await?;
-
-                    let _ = done_tx.send(true);
-                    self.microtask_done.notified().await;
-
-                    result
+                    let mut timeout = tokio::time::interval(std::time::Duration::from_millis(100));
+                    loop {
+                        tokio::select! {
+                            _ = self.tasks_done.notified() => {
+                                if *self.active_tasks.borrow() == 0 {
+                                    // println!("All tasks completed successfully");
+                                    break;
+                                }
+                            }
+                            _ = timeout.tick() => {
+                                if *self.active_tasks.borrow() == 0 {
+                                        break;
+                                }
+                                println!("Still waiting for {} tasks to complete", self.active_tasks.borrow());
+                            }
+                        }
+                    }
                 })
                 .await
-        })
+        });
+
+        result
     }
 }
 
