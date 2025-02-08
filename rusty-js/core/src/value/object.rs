@@ -57,22 +57,50 @@ where
 }
 
 pub trait JSObjectOps: JSValueConversion + JSTypeOf {
-    /// if failed, it needs to return EXCEPTION
+    /// Creates a new empty object in the given context.
+    /// Returns EXCEPTION if creation fails.
     fn new_object(ctx: &Self::Context) -> Self;
 
-    /// if failed, it needs to return EXCEPTION
-    /// constructor represents JS Class
+    /// Creates a new instance using the given constructor and private data.
+    /// Returns EXCEPTION if instantiation fails.
+    ///
+    /// # Arguments
+    /// * `ctx` - The JavaScript context
+    /// * `constructor` - The constructor function (JS Class)
+    /// * `data` - Pointer to private data to store in the object
     fn make_instance(ctx: &Self::Context, constructor: Self, data: *mut ()) -> Self;
 
-    /// get private data saved in object by make_instance
+    /// Checks if this object is an instance of the given constructor.
+    fn instance_of(&self, constructor: Self) -> bool;
+
+    /// Gets the private data stored in the object.
+    /// Returns a raw pointer to the opaque data.
     fn get_opaque(&self) -> *mut ();
 
+    /// Deletes a property from the object.
+    /// Returns true if the property was successfully deleted.
     fn del_property(&self, key: Self) -> bool;
+
+    /// Checks if the object has the specified property.
     fn has_property(&self, key: Self) -> bool;
+
+    /// Sets a property on the object with the given value.
+    /// Returns true if the property was successfully set.
     fn set_property(&self, key: Self, value: Self) -> bool;
 
+    /// Sets the prototype of the object.
+    /// Returns true if the prototype was successfully set.
     fn set_prototype(&self, prototype: Self) -> bool;
 
+    /// Defines a property with the given attributes and optional getter/setter.
+    /// Returns true if the property was successfully defined.
+    ///
+    /// # Arguments
+    /// * `key` - The property key
+    /// * `value` - The property value
+    /// * `getter` - Optional getter function
+    /// * `setter` - Optional setter function
+    /// * `attributes` - Property attributes (writable, enumerable, configurable)
     fn define_property(
         &self,
         key: Self,
@@ -82,7 +110,9 @@ pub trait JSObjectOps: JSValueConversion + JSTypeOf {
         attributes: PropertyAttributes,
     ) -> bool;
 
-    /// if failed, it needs to return EXCEPTION
+    /// Gets the value of a property.
+    /// Returns Some(value) if the property exists, None otherwise.
+    /// Returns EXCEPTION if the operation fails.
     fn get_property(&self, key: Self) -> Option<Self>;
 }
 

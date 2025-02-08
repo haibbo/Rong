@@ -112,6 +112,15 @@ where
         instance
     }
 
+    pub fn instance_of<JC: JSClass<V>>(object: JSObject<V>) -> bool {
+        let context = object.get_ctx();
+        if let Some(class) = Class::<V>::get::<JC>(&context) {
+            object.as_value().instance_of(class.0.into_value())
+        } else {
+            false
+        }
+    }
+
     /// Free resources of a class instance
     pub(crate) fn free<JC: JSClass<V>>(instance: V) {
         let value = instance.clone();

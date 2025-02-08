@@ -1,5 +1,5 @@
-use rustyjs_test::*;
 use rusty_js_macro::js_class;
+use rustyjs_test::*;
 
 #[js_class]
 struct Point {
@@ -72,6 +72,18 @@ fn constructor() {
             .unwrap();
         assert_eq!(point.x, 2);
         assert_eq!(point.y, 3);
+
+        // Test instance_of with Point
+        let obj = ctx
+            .eval::<JSObject>(Source::from_bytes(b"new Point(2,3)"))
+            .unwrap();
+        assert!(Class::instance_of::<Point>(obj));
+
+        // Test instance_of with non-Point object
+        let obj = ctx
+            .eval::<JSObject>(Source::from_bytes(b"let o = {}; o"))
+            .unwrap();
+        assert!(!Class::instance_of::<Point>(obj));
 
         assert_eq!(
             ctx.eval::<String>(Source::from_bytes(b"Point.constructor.name"))
