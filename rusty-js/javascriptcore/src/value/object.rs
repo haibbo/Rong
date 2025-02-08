@@ -77,21 +77,11 @@ impl JSObjectOps for JSCValue {
         }
     }
 
-    fn get_property(&self, key: Self) -> Option<Self> {
-        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-
+    fn set_prototype(&self, prototype: Self) -> bool {
         unsafe {
-            let value = jsc::JSObjectGetPropertyForKey(
-                self.ctx,
-                self.as_obj(),
-                key.as_value(),
-                &mut exception,
-            );
-            if !exception.is_null() || jsc::JSValueIsUndefined(self.ctx, value) {
-                None
-            } else {
-                Some(JSCValue::from_owned_raw(self.ctx, value))
-            }
+            let obj = self.as_obj();
+            jsc::JSObjectSetPrototype(self.ctx, obj, prototype.as_value());
+            true
         }
     }
 
@@ -230,11 +220,34 @@ impl JSObjectOps for JSCValue {
         }
     }
 
-    fn set_prototype(&self, prototype: Self) -> bool {
+    fn get_property(&self, key: Self) -> Option<Self> {
+        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+
         unsafe {
-            let obj = self.as_obj();
-            jsc::JSObjectSetPrototype(self.ctx, obj, prototype.as_value());
-            true
+            let value = jsc::JSObjectGetPropertyForKey(
+                self.ctx,
+                self.as_obj(),
+                key.as_value(),
+                &mut exception,
+            );
+            if !exception.is_null() || jsc::JSValueIsUndefined(self.ctx, value) {
+                None
+            } else {
+                Some(JSCValue::from_owned_raw(self.ctx, value))
+            }
+        }
+    }
+
+    fn instance_of(&self, constructor: Self) -> bool {
+        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+        unsafe {
+            let result = jsc::JSValueIsInstanceOfConstructor(
+                self.ctx,
+                self.as_value(),
+                constructor.as_obj(),
+                &mut exception,
+            );
+            exception.is_null() && result
         }
     }
 }
