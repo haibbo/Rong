@@ -91,7 +91,7 @@ where
 
 impl<V> JSValue<V>
 where
-    V: JSValueImpl,
+    V: JSValueImpl + JSTypeOf,
 {
     /// Converts  Rust value into a `JSValue`.
     pub fn from<T>(ctx: &JSContext<V::Context>, val: T) -> Self
@@ -116,6 +116,15 @@ where
     {
         let value = V::from((ctx.as_ref(), ()));
         JSValue::from_raw(ctx, value)
+    }
+
+    /// Convert JSValue into JSObject if it is an object
+    ///
+    /// # Returns
+    /// - `Some(JSObject)` if the value is an object
+    /// - `None` if the value is not an object
+    pub fn into_object(self) -> Option<JSObject<V>> {
+        self.take_is_object().map(|v| v.into())
     }
 }
 
