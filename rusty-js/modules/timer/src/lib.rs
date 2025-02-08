@@ -97,19 +97,9 @@ impl TimerRegistry {
         }
 
         for (_id, notifier) in notifiers.drain() {
-            // println!("Cleaning up timer {}", id);
+            // println!("Cleaning up timer {}", _id);
             notifier.notify_waiters();
         }
-    }
-}
-
-impl Drop for TimerRegistry {
-    fn drop(&mut self) {
-        // println!(
-        //     "TimerRegistry being dropped (Rc count: {})",
-        //     Rc::strong_count(&self.inner)
-        // );
-        self.shutdown();
     }
 }
 
