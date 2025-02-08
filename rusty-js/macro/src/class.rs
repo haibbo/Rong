@@ -63,7 +63,7 @@ pub fn class_impl(input: &DeriveInput, opts: &ClassOpts) -> syn::Result<TokenStr
             let fields = &s.fields;
             quote! {
                 #(#filtered_attrs)*
-                #[derive(Clone, Copy)]
+                #[derive(Clone)]
                 #vis struct #type_name #generics #fields
             }
         }
@@ -89,7 +89,7 @@ pub fn class_impl(input: &DeriveInput, opts: &ClassOpts) -> syn::Result<TokenStr
             fn from_js_value(ctx: &rusty_js::JSContext, value: rusty_js::JSEngineValue) -> rusty_js::JSResult<Self> {
                 let obj = rusty_js::JSObject::from_js_value(ctx, value)?;
                 let instance = obj.borrow::<Self>()?;
-                Ok(*instance)
+                Ok(instance.clone())
             }
         }
 

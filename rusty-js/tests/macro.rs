@@ -21,10 +21,11 @@ impl Point {
 
     #[js_method(getter, configurable, rename = "ORIGIN")]
     fn get_origin() -> Point {
-        *ORIGIN
+        ORIGIN
             .get_or_init(|| Mutex::new(Point { x: 0x5a, y: 0xa5 }))
             .lock()
             .unwrap()
+            .clone()
     }
 
     #[js_method(setter, rename = "ORIGIN")]
