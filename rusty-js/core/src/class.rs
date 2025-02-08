@@ -112,7 +112,8 @@ where
         instance
     }
 
-    pub fn instance_of<JC: JSClass<V>>(object: JSObject<V>) -> bool {
+    /// Check if the object is an instance of the specified class
+    pub fn instance_of<JC: JSClass<V>>(object: &JSObject<V>) -> bool {
         let context = object.get_ctx();
         if let Some(class) = Class::<V>::get::<JC>(&context) {
             object.as_value().instance_of(class.0.into_value())
@@ -147,6 +148,22 @@ where
 
     pub fn get_prototype(&self) -> Option<JSObject<V>> {
         self.0.get("prototype").ok()
+    }
+
+    /// Construct a Class from a JSObject if it is an instance of the specified class
+    ///
+    /// # Arguments
+    /// * `obj` - The JSObject to check and convert
+    ///
+    /// # Returns
+    /// - `Some(Class)` if the object is an instance of the specified class
+    /// - `None` if the object is not an instance of the specified class
+    pub fn from_object<JC: JSClass<V>>(obj: &JSObject<V>) -> Option<Self> {
+        if Self::instance_of::<JC>(obj) {
+            Some(Self(obj.clone()))
+        } else {
+            None
+        }
     }
 }
 

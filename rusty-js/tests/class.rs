@@ -77,13 +77,13 @@ fn constructor() {
         let obj = ctx
             .eval::<JSObject>(Source::from_bytes(b"new Point(2,3)"))
             .unwrap();
-        assert!(Class::instance_of::<Point>(obj));
+        assert!(Class::instance_of::<Point>(&obj));
 
         // Test instance_of with non-Point object
         let obj = ctx
             .eval::<JSObject>(Source::from_bytes(b"let o = {}; o"))
             .unwrap();
-        assert!(!Class::instance_of::<Point>(obj));
+        assert!(!Class::instance_of::<Point>(&obj));
 
         assert_eq!(
             ctx.eval::<String>(Source::from_bytes(b"Point.constructor.name"))
