@@ -219,6 +219,7 @@ where
             JSValueType::BigInt => write!(f, "bigint"),
             JSValueType::Object => write!(f, "object"),
             JSValueType::Array => write!(f, "array"),
+            JSValueType::ArrayBuffer => write!(f, "arrayBuffer"),
             JSValueType::Function => write!(f, "function"),
             JSValueType::Constructor => write!(f, "constructor"),
             JSValueType::Promise => write!(f, "promise"),

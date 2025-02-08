@@ -12,6 +12,7 @@ pub enum JSValueType {
     String,
     Object,
     Array,
+    ArrayBuffer,
     Function,
     Constructor,
     Promise,
@@ -45,6 +46,8 @@ pub trait JSTypeOf: JSValueImpl {
             JSValueType::Promise
         } else if self.is_array() {
             JSValueType::Array
+        } else if self.is_array_buffer() {
+            JSValueType::ArrayBuffer
         } else if self.is_function() {
             JSValueType::Function
         } else if self.is_constructor() {
