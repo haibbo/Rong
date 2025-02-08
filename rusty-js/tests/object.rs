@@ -6,7 +6,7 @@ fn basic() {
         let v = 3;
         let key = "key";
         let obj = JSObject::new(ctx);
-        assert_some!(obj.is_object());
+        assert!(obj.is_object());
 
         assert!(obj.set(key, v));
         assert!(obj.has(key));
@@ -50,14 +50,14 @@ fn from_javascript() {
                 "#,
             ))
             .unwrap();
-        assert_some!(obj.get::<_, JSObject>("a1").unwrap().is_array());
-        assert_some!(obj.get::<_, JSObject>("a2").unwrap().is_array());
-        assert_some!(obj.get::<_, JSObject>("a3").unwrap().is_array());
-        assert_some!(obj.get::<_, JSObject>("func1").unwrap().is_function());
-        assert_some!(obj.get::<_, JSObject>("func2").unwrap().is_function());
-        assert_none!(obj.get::<_, JSObject>("obj1").unwrap().is_function());
-        assert_none!(obj.get::<_, JSObject>("obj1").unwrap().is_array());
-        assert_some!(obj.get::<_, JSObject>("obj1").unwrap().is_object());
+        assert!(obj.get::<_, JSObject>("a1").unwrap().is_array());
+        assert!(obj.get::<_, JSObject>("a2").unwrap().is_array());
+        assert!(obj.get::<_, JSObject>("a3").unwrap().is_array());
+        assert!(obj.get::<_, JSObject>("func1").unwrap().is_function());
+        assert!(obj.get::<_, JSObject>("func2").unwrap().is_function());
+        assert!(!obj.get::<_, JSObject>("obj1").unwrap().is_function());
+        assert!(!obj.get::<_, JSObject>("obj1").unwrap().is_array());
+        assert!(obj.get::<_, JSObject>("obj1").unwrap().is_object());
         assert_eq!(
             obj.get::<_, JSObject>("obj1")
                 .unwrap()

@@ -13,7 +13,7 @@ fn test_eval() {
         assert_eq!(String::from("hi"), result);
 
         let obj = ctx.global();
-        assert_some!(obj.is_object());
+        assert!(obj.is_object());
     });
 }
 

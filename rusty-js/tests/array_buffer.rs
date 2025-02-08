@@ -8,7 +8,7 @@ fn test_array_buffer_creation() {
 
         // Test u8 buffer (should work directly)
         let buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes(ctx, &data).unwrap();
-        assert_some!(buffer.is_array_buffer());
+        assert!(buffer.is_array_buffer());
         assert_eq!(buffer.len(), 4);
         assert_eq!(buffer.element_count(), 4);
         assert_eq!(buffer.as_slice(), &[1, 2, 3, 4]);

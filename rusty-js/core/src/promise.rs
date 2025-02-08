@@ -239,7 +239,7 @@ where
                     //println!("resolve callback called");
                     let mut state = resolve_state.borrow_mut();
 
-                    if value.is_error().is_some() || value.is_exception().is_some() {
+                    if value.is_error() || value.is_exception() {
                         let err = JSException::from_js_value(ctx, value.into_value()).unwrap();
                         if let PromiseState::Pending(waker) = std::mem::replace(
                             &mut *state,

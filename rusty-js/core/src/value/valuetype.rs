@@ -84,18 +84,22 @@ where
 }
 
 macro_rules! generate_is_type {
-    ($($method: ident),*) => {
+    ($($take_method: ident => $is_method: ident),*) => {
         impl<V> JSValue<V>
         where
             V: JSTypeOf,
         {
             $(
-                pub fn $method(&self) -> Option<&Self> {
-                    if self.inner.$method() {
+                pub fn $take_method(self) -> Option<Self> {
+                    if self.inner.$is_method() {
                         Some(self)
-                    }else{
+                    } else {
                         None
                     }
+                }
+
+                pub fn $is_method(&self) -> bool {
+                    self.inner.$is_method()
                 }
             )*
         }
@@ -103,19 +107,19 @@ macro_rules! generate_is_type {
 }
 
 generate_is_type!(
-    is_error,
-    is_exception,
-    is_array,
-    is_array_buffer,
-    is_promise,
-    is_function,
-    is_constructor,
-    is_object,
-    is_undefined,
-    is_null,
-    is_boolean,
-    is_number,
-    is_bigint,
-    is_string,
-    is_symbol
+    take_is_object => is_object,
+    take_is_array => is_array,
+    take_is_array_buffer => is_array_buffer,
+    take_is_function => is_function,
+    take_is_constructor => is_constructor,
+    take_is_promise => is_promise,
+    take_is_error => is_error,
+    take_is_exception => is_exception,
+    take_is_undefined => is_undefined,
+    take_is_null => is_null,
+    take_is_boolean => is_boolean,
+    take_is_number => is_number,
+    take_is_bigint => is_bigint,
+    take_is_string => is_string,
+    take_is_symbol => is_symbol
 );

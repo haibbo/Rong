@@ -19,20 +19,6 @@ pub fn run2<F: FnOnce(&JSContext, &JSRuntime)>(f: F) {
 }
 
 #[macro_export]
-macro_rules! assert_some {
-    ($expr:expr) => {
-        assert!($expr.is_some())
-    };
-}
-
-#[macro_export]
-macro_rules! assert_none {
-    ($expr:expr) => {
-        assert!($expr.is_none())
-    };
-}
-
-#[macro_export]
 macro_rules! async_run {
     ($block:expr) => {{
         let rt = RustyJS::runtime();

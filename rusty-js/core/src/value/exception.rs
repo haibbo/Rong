@@ -81,7 +81,7 @@ where
     /// Convert the exception into JSError
     pub fn into_error(self) -> JSError {
         let ctx = self.get_ctx().clone();
-        if self.is_error().is_some() {
+        if self.is_error() {
             JSError {
                 message: self.message(),
                 stack: self.stack(),
@@ -167,7 +167,7 @@ impl<V: JSObjectOps> fmt::Debug for JSException<V> {
 
 impl<V: JSObjectOps> fmt::Display for JSException<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.is_error().is_some() {
+        if self.is_error() {
             "Error:".fmt(f)?;
             if let Some(message) = &self.message() {
                 ' '.fmt(f)?;

@@ -6,11 +6,11 @@ use std::string::String;
 fn test_convert() {
     run(|ctx| {
         let jsvalue = JSValue::from(ctx, false);
-        assert_some!(jsvalue.is_boolean());
+        assert!(jsvalue.is_boolean());
         assert!(!jsvalue.try_into::<bool>().unwrap());
 
         let jsvalue = JSValue::from(ctx, i32::MIN);
-        assert_some!(jsvalue.is_number());
+        assert!(jsvalue.is_number());
         assert_eq!(i32::MIN, jsvalue.try_into().unwrap());
 
         let jsvalue = JSValue::from(ctx, u32::MAX);
@@ -20,7 +20,7 @@ fn test_convert() {
         assert_eq!(i64::MIN, jsvalue.try_into().unwrap());
 
         let jsvalue = JSValue::from(ctx, u64::MAX);
-        assert_some!(jsvalue.is_bigint());
+        assert!(jsvalue.is_bigint());
         assert_eq!(u64::MAX, jsvalue.try_into().unwrap());
 
         let jsvalue = JSValue::from(ctx, f64::MIN);
@@ -28,26 +28,26 @@ fn test_convert() {
 
         let hello = "Hello";
         let jsvalue = JSValue::from(ctx, hello);
-        assert_some!(jsvalue.is_string());
+        assert!(jsvalue.is_string());
         let output: String = jsvalue.try_into().unwrap();
         assert_eq!(String::from(hello), output);
 
         let jsvalue = JSValue::undefined(ctx);
-        assert_some!(jsvalue.is_undefined());
+        assert!(jsvalue.is_undefined());
         let output: String = jsvalue.try_into().unwrap();
         assert_eq!(String::from("UNDEFINED"), output);
 
         // Test usize conversion
         let test_usize: usize = 42;
         let jsvalue = JSValue::from(ctx, test_usize);
-        assert_some!(jsvalue.is_bigint());
+        assert!(jsvalue.is_bigint());
         let output: usize = jsvalue.try_into().unwrap();
         assert_eq!(test_usize, output);
 
         // Test large usize conversion
         let large_usize: usize = usize::MAX;
         let jsvalue = JSValue::from(ctx, large_usize);
-        assert_some!(jsvalue.is_bigint());
+        assert!(jsvalue.is_bigint());
         let output: usize = jsvalue.try_into().unwrap();
         assert_eq!(large_usize, output);
     });
