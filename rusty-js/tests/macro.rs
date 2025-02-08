@@ -1,5 +1,7 @@
 use rusty_js_macro::{js_class, js_method, js_methods};
+use rustyjs_test::*;
 use std::sync::{Mutex, OnceLock};
+use tokio::time::Duration;
 
 #[js_class(rename = "PointX")]
 #[derive(Debug, PartialEq)]
@@ -70,12 +72,24 @@ impl Point {
         self.x += dx;
         self.y += dy;
     }
+
+    #[js_method(rename = "moveByAsync")]
+    pub async fn move_by_async(&mut self, dx: i32, dy: i32) {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        self.x += dx;
+        self.y += dy;
+    }
+
+    #[js_method(rename = "createAsync")]
+    pub async fn create_async(x: i32, y: i32) -> Self {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        Self { x, y }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rusty_js::*;
 
     fn setup() -> JSContext {
         let rt = RustyJS::runtime();
@@ -216,5 +230,45 @@ mod tests {
             desc,
             "ORIGIN should be configurable but not enumerable, with getter and setter"
         );
+    }
+
+    #[test]
+    fn test_async_instance_method() {
+        async_run!(|ctx: JSContext| async move {
+            ctx.register_class::<Point>();
+
+            let result: Point = ctx
+                .eval_async(Source::from_bytes(
+                    r#"
+                    (async function() {
+                        let p = new PointX(1, 2);
+                        await p.moveByAsync(10, 20);
+                        return p;
+                    })();
+                "#,
+                ))
+                .await?;
+            assert_eq!(result, Point { x: 11, y: 22 });
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_async_static_method() {
+        async_run!(|ctx: JSContext| async move {
+            ctx.register_class::<Point>();
+
+            let result: Point = ctx
+                .eval_async(Source::from_bytes(
+                    r#"
+                    (async function() {
+                        return await PointX.createAsync(5, 6);
+                    })();
+                "#,
+                ))
+                .await?;
+            assert_eq!(result, Point { x: 5, y: 6 });
+            Ok(())
+        });
     }
 }
