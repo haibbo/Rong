@@ -55,18 +55,12 @@ impl JSObjectOps for QJSValue {
         v != 0
     }
 
-    fn get_property(&self, key: Self) -> Option<Self> {
-        let v = unsafe {
-            let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
-            let v = qjs::JS_GetProperty(key.ctx, self.value, atom);
-            qjs::JS_FreeAtom(self.ctx, atom);
-            v
-        };
-        if unsafe { qjs::QJS_IsUndefined(self.ctx, v) != 0 } {
-            None
-        } else {
-            Some(QJSValue::from_owned_raw(key.ctx, v))
-        }
+    fn set_prototype(&self, prototype: Self) -> bool {
+        let p = prototype.value;
+
+        // JS_SetPrototype clone input prototype
+        let v = unsafe { qjs::JS_SetPrototype(self.ctx, self.value, p) };
+        v != 0
     }
 
     fn define_property(
@@ -99,11 +93,23 @@ impl JSObjectOps for QJSValue {
         v != 0
     }
 
-    fn set_prototype(&self, prototype: Self) -> bool {
-        let p = prototype.value;
+    fn get_property(&self, key: Self) -> Option<Self> {
+        let v = unsafe {
+            let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
+            let v = qjs::JS_GetProperty(key.ctx, self.value, atom);
+            qjs::JS_FreeAtom(self.ctx, atom);
+            v
+        };
+        if unsafe { qjs::QJS_IsUndefined(self.ctx, v) != 0 } {
+            None
+        } else {
+            Some(QJSValue::from_owned_raw(key.ctx, v))
+        }
+    }
 
-        // JS_SetPrototype clone input prototype
-        let v = unsafe { qjs::JS_SetPrototype(self.ctx, self.value, p) };
+    fn instance_of(&self, constructor: Self) -> bool {
+        let constructor = constructor.value;
+        let v = unsafe { qjs::JS_IsInstanceOf(self.ctx, self.value, constructor) };
         v != 0
     }
 }
