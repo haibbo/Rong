@@ -60,11 +60,13 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - Regular methods
 /// - Property getters/setters
 /// - Static methods/properties
+/// - Async methods (automatically converted to JavaScript Promises)
 ///
 /// # Method Types
 /// - Instance methods: Take `&self` or `&mut self`
 /// - Static methods: No self parameter
 /// - Constructors: Marked with `#[js_method(constructor)]`
+/// - Async methods: Methods marked with `async` keyword
 ///
 /// # Example
 /// ```rust
@@ -85,7 +87,40 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     fn create(x: i32, y: i32) -> Self {
 ///         Self { x, y }
 ///     }
+///
+///     // Async instance method
+///     #[js_method]
+///     async fn move_by_async(&mut self, dx: i32, dy: i32) {
+///         // Async operation
+///         self.x += dx;
+///         self.y += dy;
+///     }
+///
+///     // Async static method
+///     #[js_method]
+///     async fn create_async(x: i32, y: i32) -> Self {
+///         // Async operation
+///         Self { x, y }
+///     }
 /// }
+/// ```
+///
+/// # Async Methods
+/// Async methods are automatically converted to JavaScript Promises:
+/// - Rust async methods become JavaScript async functions
+/// - Return values are wrapped in Promises
+/// - Can be used with JavaScript `async/await` syntax
+/// - Support both instance and static methods
+/// - Can be used as property getters/setters
+///
+/// JavaScript usage:
+/// ```javascript
+/// // Using async instance method
+/// let point = new Point(1, 2);
+/// await point.moveByAsync(10, 20);
+///
+/// // Using async static method
+/// let newPoint = await Point.createAsync(5, 6);
 /// ```
 #[proc_macro_attribute]
 pub fn js_methods(_attr: TokenStream, item: TokenStream) -> TokenStream {

@@ -115,6 +115,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
         let opts = MethodOpts::from_attrs(&method.attrs)?;
         let method_name = &method.sig.ident;
         let js_name = opts.rename.unwrap_or_else(|| method_name.to_string());
+        let is_async = method.sig.asyncness.is_some();
 
         // Check if this is a constructor
         if method.attrs.iter().any(|attr| {
@@ -159,13 +160,21 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                     // For &mut self methods, use ThisMut and map to Self::method_name
                     (
                         quote! { mut this: rusty_js::function::ThisMut<#impl_type> },
-                        quote! { Self::#method_name(&mut *this, #(#patterns),*) },
+                        if is_async {
+                            quote! { Self::#method_name(&mut *this, #(#patterns),*).await }
+                        } else {
+                            quote! { Self::#method_name(&mut *this, #(#patterns),*) }
+                        },
                     )
                 } else {
                     // For &self methods, use This and map to Self::method_name
                     (
                         quote! { this: rusty_js::function::This<#impl_type> },
-                        quote! { Self::#method_name(&*this, #(#patterns),*) },
+                        if is_async {
+                            quote! { Self::#method_name(&*this, #(#patterns),*).await }
+                        } else {
+                            quote! { Self::#method_name(&*this, #(#patterns),*) }
+                        },
                     )
                 }
             } else {
@@ -174,10 +183,18 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
 
             // Handle property getters/setters
             if opts.getter || opts.setter {
-                let func = quote! {
-                    class.new_func(move |#receiver_type #(, #patterns: #types)*| {
-                        #method_call
-                    })
+                let func = if is_async {
+                    quote! {
+                        class.new_func(|#receiver_type #(, #patterns: #types)*| async move {
+                            #method_call
+                        })
+                    }
+                } else {
+                    quote! {
+                        class.new_func(move |#receiver_type #(, #patterns: #types)*| {
+                            #method_call
+                        })
+                    }
                 };
 
                 let entry = instance_properties
@@ -192,14 +209,26 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                 entry.2 |= opts.enumerable;
             } else {
                 // Handle regular instance methods
-                instance_methods.push(quote! {
-                    class.method(
-                        #js_name,
-                        move |#receiver_type, #(#patterns: #types),*| {
-                            #method_call
-                        }
-                    );
-                });
+                let method_def = if is_async {
+                    quote! {
+                        class.method(
+                            #js_name,
+                            |#receiver_type, #(#patterns: #types),*| async move {
+                                #method_call
+                            }
+                        );
+                    }
+                } else {
+                    quote! {
+                        class.method(
+                            #js_name,
+                            move |#receiver_type, #(#patterns: #types),*| {
+                                #method_call
+                            }
+                        );
+                    }
+                };
+                instance_methods.push(method_def);
             }
         } else {
             let args: Vec<_> = params
@@ -217,10 +246,18 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
 
             // Handle static property accessors or regular static methods
             if opts.getter || opts.setter {
-                let func = quote! {
-                    class.new_func(move |#(#patterns: #types),*| {
-                        Self::#method_name(#(#patterns),*)
-                    })
+                let func = if is_async {
+                    quote! {
+                        class.new_func(|#(#patterns: #types),*| async move {
+                            Self::#method_name(#(#patterns),*).await
+                        })
+                    }
+                } else {
+                    quote! {
+                        class.new_func(move |#(#patterns: #types),*| {
+                            Self::#method_name(#(#patterns),*)
+                        })
+                    }
                 };
 
                 let entry = static_properties
@@ -235,14 +272,26 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                 entry.2 |= opts.enumerable;
             } else {
                 // Handle regular static method
-                static_methods.push(quote! {
-                    class.static_method(
-                        #js_name,
-                        move |#(#patterns: #types),*| {
-                            Self::#method_name(#(#patterns),*)
-                        }
-                    );
-                });
+                let method_def = if is_async {
+                    quote! {
+                        class.static_method(
+                            #js_name,
+                            |#(#patterns: #types),*| async move {
+                                Self::#method_name(#(#patterns),*).await
+                            }
+                        );
+                    }
+                } else {
+                    quote! {
+                        class.static_method(
+                            #js_name,
+                            move |#(#patterns: #types),*| {
+                                Self::#method_name(#(#patterns),*)
+                            }
+                        );
+                    }
+                };
+                static_methods.push(method_def);
             }
         }
     }
