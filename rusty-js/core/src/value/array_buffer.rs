@@ -191,4 +191,23 @@ where
     pub fn validate_alignment(&self, offset: usize) -> bool {
         offset % T::BYTES_PER_ELEMENT == 0
     }
+
+    /// Construct a JSArrayBuffer from a JSObject if it is an ArrayBuffer
+    ///
+    /// # Arguments
+    /// * `obj` - The JSObject to check and convert
+    ///
+    /// # Returns
+    /// - `Some(JSArrayBuffer)` if the object is an ArrayBuffer
+    /// - `None` if the object is not an ArrayBuffer
+    pub fn from_object(obj: JSObject<V>) -> Option<Self> {
+        if obj.as_value().is_array_buffer() {
+            Some(Self {
+                inner: obj,
+                _phantom: PhantomData,
+            })
+        } else {
+            None
+        }
+    }
 }

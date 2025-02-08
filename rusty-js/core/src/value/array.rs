@@ -194,6 +194,22 @@ where
 
         T::from_js_value(&self.get_ctx(), value).map(Some)
     }
+
+    /// Construct a JSArray from a JSObject if it is an array
+    ///
+    /// # Arguments
+    /// * `obj` - The JSObject to check and convert
+    ///
+    /// # Returns
+    /// - `Some(JSArray)` if the object is an array
+    /// - `None` if the object is not an array
+    pub fn from_object(obj: JSObject<V>) -> Option<Self> {
+        if obj.as_value().is_array() {
+            Some(Self(obj))
+        } else {
+            None
+        }
+    }
 }
 
 /// The iterator for JS Array

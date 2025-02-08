@@ -114,10 +114,8 @@ where
     fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         if value.is_object() {
             if value.get_kind().is_some() {
-                println!("line:{}", line!());
                 JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
             } else {
-                println!("line:{}", line!());
                 Err(RustyJSError::NotJSTypedArray)
             }
         } else {
@@ -266,6 +264,22 @@ where
     /// Get the number of bytes per element
     pub fn bytes_per_element(&self) -> usize {
         self.kind().bytes_per_element()
+    }
+
+    /// Construct a JSTypedArray from a JSObject if it is a TypedArray
+    ///
+    /// # Arguments
+    /// * `obj` - The JSObject to check and convert
+    ///
+    /// # Returns
+    /// - `Some(JSTypedArray)` if the object is a TypedArray
+    /// - `None` if the object is not a TypedArray
+    pub fn from_object(obj: JSObject<V>) -> Option<Self> {
+        if obj.as_value().get_kind().is_some() {
+            Some(Self(obj))
+        } else {
+            None
+        }
     }
 }
 
