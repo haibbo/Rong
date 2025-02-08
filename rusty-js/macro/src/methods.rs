@@ -32,7 +32,14 @@ use syn::{Expr, ImplItemFn, ItemImpl, Lit, Meta};
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```ignore
+/// use rusty_js_macro::{js_class, js_method, js_methods};
+///
+/// #[js_class]
+/// struct MyStruct {
+///     value: i32,
+/// }
+///
 /// #[js_methods]
 /// impl MyStruct {
 ///     // Public property with getter and setter

@@ -20,7 +20,9 @@ mod methods;
 /// - `JSParameterType`
 ///
 /// # Example
-/// ```rust
+/// ```ignore
+/// use rusty_js_macro::js_class;
+///
 /// #[js_class(rename = "Point2D")]
 /// struct Point {
 ///     x: i32,
@@ -69,7 +71,15 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - Async methods: Methods marked with `async` keyword
 ///
 /// # Example
-/// ```rust
+/// ```ignore
+/// use rusty_js_macro::{js_class, js_method, js_methods};
+///
+/// #[js_class]
+/// struct Point {
+///     x: i32,
+///     y: i32,
+/// }
+///
 /// #[js_methods]
 /// impl Point {
 ///     // Constructor
@@ -196,12 +206,19 @@ pub fn js_methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - Writable state is determined by the presence of a setter
 ///
 /// # Examples
-/// ```rust
+/// ```ignore
+/// use rusty_js_macro::{js_class, js_method, js_methods};
+///
+/// #[js_class]
+/// struct MyClass {
+///     value: i32,
+/// }
+///
 /// #[js_methods]  // Use js_methods for impl block
 /// impl MyClass {
 ///     // Constructor
 ///     #[js_method(constructor)]
-///     fn new() -> Self { Self {} }
+///     fn new() -> Self { Self { value: 0 } }
 ///
 ///     // Public property with custom name
 ///     #[js_method(getter, enumerable, rename = "value")]
