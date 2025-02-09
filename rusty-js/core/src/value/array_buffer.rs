@@ -211,3 +211,6 @@ where
         }
     }
 }
+
+// blanket implementing.
+impl<V: JSValueImpl> crate::function::JSParameterType for JSArrayBuffer<V> {}

@@ -259,7 +259,7 @@ where
 }
 
 // blanket implementing.
-// Type JSFunc can be as parameter of JS callback of rust function
+// Type JSArray can be as parameter of JS callback of rust function
 impl<V: JSValueImpl> crate::function::JSParameterType for JSArray<V> {}
 
 impl<V> fmt::Display for JSArray<V>
