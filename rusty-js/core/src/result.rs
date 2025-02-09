@@ -120,10 +120,7 @@ where
     V: JSObjectOps,
 {
     fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        let v = ctx.as_ref().new_error();
-        let obj = JSObject::from_js_value(ctx, v).unwrap();
-        obj.set("message", self.to_string());
-        obj.into_value()
+        self.into_js_error(ctx).into_js_value(ctx)
     }
 }
 

@@ -1,7 +1,8 @@
 use crate::JSException;
 use crate::{
-    function::JSParameterType, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSFunc,
-    JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl, RustyJSError,
+    function::JSParameterType, FromJSValue, IntoJSValue, JSContext, JSContextImpl,
+    JSExceptionHandler, JSFunc, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl,
+    RustyJSError,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -174,6 +175,27 @@ where
 {
     fn resolve_promise(self, resolve: JSFunc<V>, _reject: JSFunc<V>) {
         let _ = resolve.call::<_, ()>((self,));
+    }
+}
+
+// Implement for JSResult types
+impl<V, T> PromiseResolver<V> for JSResult<T>
+where
+    T: IntoJSValue<V> + JSParameterType,
+    V: JSObjectOps,
+    V::Context: JSExceptionHandler,
+{
+    fn resolve_promise(self, resolve: JSFunc<V>, reject: JSFunc<V>) {
+        match self {
+            Ok(value) => {
+                let _ = resolve.call::<_, ()>((value,));
+            }
+            Err(err) => {
+                let ctx = reject.get_ctx();
+                let js_error = err.into_js_error(&ctx);
+                let _ = reject.call::<_, ()>((js_error,));
+            }
+        }
     }
 }
 
