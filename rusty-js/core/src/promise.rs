@@ -255,30 +255,27 @@ where
 
             // resolved callback used to wake up future and save resolved value
             let resolve_state = state.clone();
-            let resolve = JSFunc::new(
-                ctx,
-                move |ctx: &JSContext<V::Context>, value: JSValue<V>| {
-                    //println!("resolve callback called");
-                    let mut state = resolve_state.borrow_mut();
+            let resolve = JSFunc::new(ctx, move |ctx: JSContext<V::Context>, value: JSValue<V>| {
+                //println!("resolve callback called");
+                let mut state = resolve_state.borrow_mut();
 
-                    if value.is_error() || value.is_exception() {
-                        let err = JSException::from_js_value(ctx, value.into_value()).unwrap();
-                        if let PromiseState::Pending(waker) = std::mem::replace(
-                            &mut *state,
-                            PromiseState::Resolved(Err(RustyJSError::Exception(err.into_error()))),
-                        ) {
-                            waker.wake_by_ref();
-                        }
-                    } else {
-                        let success = T::from_js_value(ctx, value.into_value()).unwrap();
-                        if let PromiseState::Pending(waker) =
-                            std::mem::replace(&mut *state, PromiseState::Resolved(Ok(success)))
-                        {
-                            waker.wake_by_ref();
-                        }
+                if value.is_error() || value.is_exception() {
+                    let err = JSException::from_js_value(&ctx, value.into_value()).unwrap();
+                    if let PromiseState::Pending(waker) = std::mem::replace(
+                        &mut *state,
+                        PromiseState::Resolved(Err(RustyJSError::Exception(err.into_error()))),
+                    ) {
+                        waker.wake_by_ref();
                     }
-                },
-            );
+                } else {
+                    let success = T::from_js_value(&ctx, value.into_value()).unwrap();
+                    if let PromiseState::Pending(waker) =
+                        std::mem::replace(&mut *state, PromiseState::Resolved(Ok(success)))
+                    {
+                        waker.wake_by_ref();
+                    }
+                }
+            });
 
             // rejected callback used to wake up future and save rejected value
             let reject_state = state.clone();

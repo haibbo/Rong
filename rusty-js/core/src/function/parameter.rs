@@ -261,17 +261,12 @@ where
     }
 }
 
-impl<'a, V: JSValueImpl> GetParam<V> for &'a JSContext<V::Context> {
+impl<V: JSValueImpl> GetParam<V> for JSContext<V::Context> {
     type Kind = JSContext<V::Context>;
 
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let ctx = accessor.context();
-
-        Ok(
-            unsafe {
-                std::mem::transmute::<&JSContext<V::Context>, &'a JSContext<V::Context>>(ctx)
-            },
-        )
+        Ok(ctx.clone())
     }
 }
 

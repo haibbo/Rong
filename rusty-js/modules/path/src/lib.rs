@@ -302,9 +302,9 @@ fn normalize(path: String) -> String {
 /// //    name: 'file'
 /// // }
 /// ```
-fn parse(ctx: &JSContext, path: String) -> JSResult<JSObject> {
+fn parse(ctx: JSContext, path: String) -> JSResult<JSObject> {
     let path = Path::new(&path);
-    let obj = JSObject::new(ctx);
+    let obj = JSObject::new(&ctx);
 
     // Handle root
     obj.set(
