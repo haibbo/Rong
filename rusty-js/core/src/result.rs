@@ -127,6 +127,20 @@ where
     }
 }
 
+impl<V, T> IntoJSValue<V> for JSResult<T>
+where
+    V: JSObjectOps,
+    V::Context: JSExceptionHandler,
+    T: IntoJSValue<V>,
+{
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+        match self {
+            Ok(value) => value.into_js_value(ctx),
+            Err(err) => err.into_js_value(ctx),
+        }
+    }
+}
+
 impl From<oneshot::error::RecvError> for RustyJSError {
     fn from(err: oneshot::error::RecvError) -> Self {
         RustyJSError::Error(format!("Tokio oneshot error: {}", err))
