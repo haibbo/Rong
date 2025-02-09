@@ -1,3 +1,30 @@
+//! Path module for RustyJS
+//!
+//! This module provides functionality for working with file and directory paths.
+//! It aims to be compatible with Node.js's path module API, providing similar
+//! functionality for path manipulation and normalization.
+//!
+//! # Features
+//!
+//! - Basic path operations (basename, dirname, extname)
+//! - Path combination and normalization (join, resolve, normalize)
+//! - Path parsing and formatting
+//! - Platform-specific path handling
+//!
+//! # Example
+//!
+//! ```javascript
+//! // Get the last portion of a path
+//! path.basename('/foo/bar/baz.html');     // Returns: 'baz.html'
+//! path.basename('/foo/bar/baz.html', '.html');  // Returns: 'baz'
+//!
+//! // Get directory name
+//! path.dirname('/foo/bar/baz');  // Returns: '/foo/bar'
+//!
+//! // Join path segments
+//! path.join('/foo', 'bar', 'baz');  // Returns: '/foo/bar/baz'
+//! ```
+
 use rusty_js::{function::*, *};
 use std::path::{Component, Path, PathBuf};
 
@@ -27,7 +54,21 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     Ok(())
 }
 
-/// Get the last portion of a path
+/// Returns the last portion of a path.
+///
+/// # Arguments
+///
+/// * `path` - The path to process
+/// * `suffix` - Optional suffix to remove from the result
+///
+/// # Examples
+///
+/// ```javascript
+/// path.basename('/foo/bar/baz.html')         // Returns: 'baz.html'
+/// path.basename('/foo/bar/baz.html', '.html') // Returns: 'baz'
+/// path.basename('/foo/bar/baz')              // Returns: 'baz'
+/// path.basename('/foo/bar/')                 // Returns: ''
+/// ```
 fn basename(path: String, suffix: Optional<String>) -> String {
     let path = Path::new(&path);
     let file_name = path.file_name().map(|s| s.to_string_lossy().into_owned());
@@ -44,7 +85,21 @@ fn basename(path: String, suffix: Optional<String>) -> String {
     }
 }
 
-/// Get the directory name of a path
+/// Returns the directory name of a path.
+///
+/// # Arguments
+///
+/// * `path` - The path to process
+///
+/// # Examples
+///
+/// ```javascript
+/// path.dirname('/foo/bar/baz')     // Returns: '/foo/bar'
+/// path.dirname('/foo/bar/baz/')    // Returns: '/foo/bar'
+/// path.dirname('/foo')             // Returns: '/'
+/// path.dirname('foo')              // Returns: '.'
+/// path.dirname('')                 // Returns: '.'
+/// ```
 fn dirname(path: String) -> String {
     if path.is_empty() {
         return ".".to_string();
@@ -65,7 +120,21 @@ fn dirname(path: String) -> String {
         .unwrap_or_else(|| String::from("."))
 }
 
-/// Get the extension of a path
+/// Returns the extension of a path.
+///
+/// # Arguments
+///
+/// * `path` - The path to process
+///
+/// # Examples
+///
+/// ```javascript
+/// path.extname('index.html')      // Returns: '.html'
+/// path.extname('index.coffee.md') // Returns: '.md'
+/// path.extname('index.')          // Returns: '.'
+/// path.extname('index')           // Returns: ''
+/// path.extname('.index')          // Returns: ''
+/// ```
 fn extname(path: String) -> String {
     let path = Path::new(&path);
     path.extension()
@@ -73,12 +142,32 @@ fn extname(path: String) -> String {
         .unwrap_or_default()
 }
 
-/// Check if a path is absolute
+/// Determines if a path is absolute.
+///
+/// # Arguments
+///
+/// * `path` - The path to check
+///
+/// # Examples
+///
+/// ```javascript
+/// path.isAbsolute('/foo/bar')    // Returns: true
+/// path.isAbsolute('foo/bar')     // Returns: false
+/// path.isAbsolute('./foo/bar')   // Returns: false
+/// ```
 fn is_absolute(path: String) -> bool {
     Path::new(&path).is_absolute()
 }
 
-/// Normalize path components
+/// Normalizes path components by resolving '..' and '.' segments.
+///
+/// # Arguments
+///
+/// * `path` - The path to normalize
+///
+/// # Returns
+///
+/// * `PathBuf` - A normalized path
 fn normalize_components(path: &Path) -> PathBuf {
     let mut components = Vec::new();
     for component in path.components() {
@@ -102,7 +191,19 @@ fn normalize_components(path: &Path) -> PathBuf {
     components.iter().collect()
 }
 
-/// Join path segments
+/// Joins all given path segments together.
+///
+/// # Arguments
+///
+/// * `args` - A list of path segments to join
+///
+/// # Examples
+///
+/// ```javascript
+/// path.join('/foo', 'bar', 'baz')    // Returns: '/foo/bar/baz'
+/// path.join('/foo', 'bar', '../baz')  // Returns: '/foo/baz'
+/// path.join('foo', 'bar', 'baz')      // Returns: 'foo/bar/baz'
+/// ```
 fn join(args: Rest<String>) -> JSResult<String> {
     if args.0.is_empty() {
         return Ok(".".to_string());
@@ -123,7 +224,19 @@ fn join(args: Rest<String>) -> JSResult<String> {
     }
 }
 
-/// Resolve a path
+/// Resolves a sequence of paths to an absolute path.
+///
+/// # Arguments
+///
+/// * `args` - A list of paths to resolve
+///
+/// # Examples
+///
+/// ```javascript
+/// // On UNIX:
+/// path.resolve('/foo/bar', './baz')   // Returns: '/foo/bar/baz'
+/// path.resolve('/foo/bar', '/baz')    // Returns: '/baz'
+/// ```
 fn resolve(args: Rest<String>) -> JSResult<String> {
     let mut path_buf = if cfg!(windows) {
         PathBuf::from("C:\\") // Default starting point for Windows
@@ -143,7 +256,18 @@ fn resolve(args: Rest<String>) -> JSResult<String> {
     Ok(path_buf.to_string_lossy().into_owned())
 }
 
-/// Normalize a path
+/// Normalizes a path by resolving '..' and '.' segments.
+///
+/// # Arguments
+///
+/// * `path` - The path to normalize
+///
+/// # Examples
+///
+/// ```javascript
+/// path.normalize('/foo/bar//baz/asdf/quux/..')  // Returns: '/foo/bar/baz/asdf'
+/// path.normalize('foo/bar//baz/asdf/quux/..')   // Returns: 'foo/bar/baz/asdf'
+/// ```
 fn normalize(path: String) -> String {
     if path.is_empty() {
         return ".".to_string();
@@ -158,7 +282,26 @@ fn normalize(path: String) -> String {
     }
 }
 
-/// Parse a path into an object
+/// Parses a path into an object with root, dir, base, ext, and name properties.
+///
+/// # Arguments
+///
+/// * `ctx` - The JavaScript context
+/// * `path` - The path to parse
+///
+/// # Examples
+///
+/// ```javascript
+/// path.parse('/home/user/dir/file.txt')
+/// // Returns:
+/// // {
+/// //    root: '/',
+/// //    dir: '/home/user/dir',
+/// //    base: 'file.txt',
+/// //    ext: '.txt',
+/// //    name: 'file'
+/// // }
+/// ```
 fn parse(ctx: &JSContext, path: String) -> JSResult<JSObject> {
     let path = Path::new(&path);
     let obj = JSObject::new(ctx);
@@ -189,34 +332,49 @@ fn parse(ctx: &JSContext, path: String) -> JSResult<JSObject> {
     Ok(obj)
 }
 
-/// Format a path from an object
-fn format(path_objecg: JSObject) -> JSResult<String> {
+/// Formats a path object into a path string.
+///
+/// # Arguments
+///
+/// * `path_object` - An object with path properties (root, dir, base, name, ext)
+///
+/// # Examples
+///
+/// ```javascript
+/// path.format({
+///     root: '/',
+///     dir: '/home/user/dir',
+///     base: 'file.txt'
+/// })
+/// // Returns: '/home/user/dir/file.txt'
+/// ```
+fn format(path_object: JSObject) -> JSResult<String> {
     let mut path_buf = PathBuf::new();
 
     // Process parts in priority order
-    if let Ok(root) = path_objecg.get::<_, String>("root") {
+    if let Ok(root) = path_object.get::<_, String>("root") {
         if !root.is_empty() {
             path_buf.push(root);
         }
     }
 
-    if let Ok(dir) = path_objecg.get::<_, String>("dir") {
+    if let Ok(dir) = path_object.get::<_, String>("dir") {
         if !dir.is_empty() {
             path_buf.push(dir);
         }
     }
 
-    if let Ok(base) = path_objecg.get::<_, String>("base") {
+    if let Ok(base) = path_object.get::<_, String>("base") {
         if !base.is_empty() {
             path_buf.push(base);
         }
     } else {
-        if let Ok(name) = path_objecg.get::<_, String>("name") {
+        if let Ok(name) = path_object.get::<_, String>("name") {
             if !name.is_empty() {
                 path_buf.push(name);
             }
         }
-        if let Ok(ext) = path_objecg.get::<_, String>("ext") {
+        if let Ok(ext) = path_object.get::<_, String>("ext") {
             if !ext.is_empty() {
                 let file_name = path_buf
                     .file_name()
