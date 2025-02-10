@@ -1,6 +1,7 @@
 use crate::qjs;
 use crate::QJSValue;
 use rusty_js_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
+use std::mem::MaybeUninit;
 
 impl JSObjectOps for QJSValue {
     fn new_object(ctx: &Self::Context) -> Self {
@@ -111,6 +112,45 @@ impl JSObjectOps for QJSValue {
         let constructor = constructor.value;
         let v = unsafe { qjs::JS_IsInstanceOf(self.ctx, self.value, constructor) };
         v != 0
+    }
+
+    fn get_own_property_names(&self) -> Option<Vec<Self>> {
+        unsafe {
+            let ctx = self.ctx;
+            let mut properties = Vec::new();
+
+            let mut enums = MaybeUninit::uninit();
+            let mut count = MaybeUninit::uninit();
+
+            // Get property names
+            let ret = qjs::JS_GetOwnPropertyNames(
+                ctx,
+                enums.as_mut_ptr(),
+                count.as_mut_ptr(),
+                self.value,
+                qjs::JS_GPN_STRING_MASK as i32
+                    | qjs::JS_GPN_ENUM_ONLY as i32
+                    | qjs::JS_GPN_SET_ENUM as i32,
+            );
+
+            if ret != 0 {
+                return None;
+            }
+
+            let enums = enums.assume_init();
+            let count = count.assume_init();
+
+            for i in 0..count {
+                let atom = *enums.add(i as usize);
+                let prop = qjs::JS_AtomToString(ctx, atom.atom);
+                if qjs::QJS_IsException(ctx, prop) == 0 {
+                    properties.push(QJSValue::from_owned_raw(ctx, prop));
+                }
+                qjs::JS_FreeAtom(ctx, atom.atom);
+            }
+
+            Some(properties)
+        }
     }
 }
 

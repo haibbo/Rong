@@ -250,6 +250,66 @@ impl JSObjectOps for JSCValue {
             exception.is_null() && result
         }
     }
+
+    fn get_own_property_names(&self) -> Option<Vec<Self>> {
+        unsafe {
+            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+
+            // Get the property names array
+            let names = jsc::JSObjectCopyPropertyNames(self.ctx, self.as_obj());
+            if names.is_null() {
+                return None;
+            }
+
+            let count = jsc::JSPropertyNameArrayGetCount(names);
+            let mut properties = Vec::with_capacity(count as usize);
+
+            // Get the Object constructor
+            let object_ctor = crate::context::get_constructor(self.ctx, c"Object".as_ptr());
+
+            // Get the prototype of the Object constructor
+            let prototype = jsc::JSObjectGetPrototype(self.ctx, object_ctor);
+            let prototype = jsc::JSValueToObject(self.ctx, prototype, &mut exception);
+
+            // Get the hasOwnProperty function
+            let has_own_str = jsc::JSStringCreateWithUTF8CString(c"hasOwnProperty".as_ptr());
+            let has_own =
+                jsc::JSObjectGetProperty(self.ctx, prototype as _, has_own_str, &mut exception);
+            jsc::JSStringRelease(has_own_str);
+
+            if !exception.is_null() {
+                return None;
+            }
+
+            // Collect all property names
+            for i in 0..count {
+                let name = jsc::JSPropertyNameArrayGetNameAtIndex(names, i);
+                let value = jsc::JSValueMakeString(self.ctx, name);
+
+                // Call hasOwnProperty on the current object
+                let args = [value];
+                let result = jsc::JSObjectCallAsFunction(
+                    self.ctx,
+                    has_own as jsc::JSObjectRef,
+                    self.as_obj(),
+                    args.len(),
+                    args.as_ptr(),
+                    &mut exception,
+                );
+
+                if exception.is_null() {
+                    let is_own = jsc::JSValueToBoolean(self.ctx, result);
+
+                    if is_own {
+                        properties.push(JSCValue::from_owned_raw(self.ctx, value));
+                    }
+                }
+            }
+
+            jsc::JSPropertyNameArrayRelease(names);
+            Some(properties)
+        }
+    }
 }
 
 fn to_jsc_attributes(attr: PropertyAttributes) -> u32 {
