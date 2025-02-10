@@ -19,7 +19,7 @@ const LINE_ENDING: &[u8] = b"\r\n";
 const LINE_ENDING: &[u8] = b"\n";
 
 #[js_class]
-struct Blob {
+pub struct Blob {
     mime_type: String,
     data: Vec<u8>,
 }
@@ -27,7 +27,7 @@ struct Blob {
 #[js_methods]
 impl Blob {
     #[js_method(constructor)]
-    fn new(parts: Optional<JSArray>, options: Optional<JSObject>) -> JSResult<Self> {
+    pub fn new(parts: Optional<JSArray>, options: Optional<JSObject>) -> JSResult<Self> {
         let mut blob_data = Vec::new();
         let mut blob_options = BlobOptions::default();
 
@@ -59,24 +59,24 @@ impl Blob {
     }
 
     #[js_method(getter, enumerable)]
-    fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.data.len()
     }
 
     #[js_method(getter, enumerable, rename = "type")]
-    fn type_(&self) -> String {
+    pub fn mime_type(&self) -> String {
         self.mime_type.clone()
     }
 
     /// Returns a promise that resolves with an ArrayBuffer containing the blob's data
     #[js_method(rename = "arrayBuffer")]
-    fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
+    pub async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
         JSArrayBuffer::from_bytes(&ctx, &self.data)
     }
 
     /// Returns a promise that resolves with a text representation of the blob's data
     #[js_method]
-    fn text(&self) -> JSResult<String> {
+    pub async fn text(&self) -> JSResult<String> {
         String::from_utf8(self.data.clone())
             .map_err(|e| RustyJSError::Error(format!("Invalid UTF-8 sequence: {}", e)))
     }
@@ -88,7 +88,7 @@ impl Blob {
     /// * `end` - Optional ending index where to end copying (exclusive)
     /// * `content_type` - Optional new content type for the new blob
     #[js_method]
-    fn slice(
+    pub fn slice(
         &self,
         start: Optional<i64>,
         end: Optional<i64>,
@@ -131,7 +131,7 @@ impl Blob {
 
     /// Returns a promise that resolves with a Uint8Array containing the blob's data
     #[js_method]
-    fn bytes(&self, ctx: JSContext) -> JSResult<JSTypedArray> {
+    pub async fn bytes(&self, ctx: JSContext) -> JSResult<JSTypedArray> {
         let buffer = JSArrayBuffer::from_bytes(&ctx, &self.data)?;
         JSTypedArray::from_array_buffer::<u8>(&ctx, buffer, 0, None)
     }
