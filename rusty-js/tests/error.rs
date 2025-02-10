@@ -25,6 +25,68 @@ fn test_throw_error() {
 }
 
 #[test]
+fn test_error_constructor() {
+    run(|ctx| {
+        // Register multiple error constructors
+        ctx.global().set(
+            "type_error",
+            ctx.register_function(|| -> JSResult<()> {
+                Err(RustyJSError::TypeError("this is typeError".to_string()))
+            }),
+        );
+
+        ctx.global().set(
+            "reference_error",
+            ctx.register_function(|| -> JSResult<()> { Err(RustyJSError::PropertyNotFound) }),
+        );
+
+        ctx.global().set(
+            "range_error",
+            ctx.register_function(|| -> JSResult<()> { Err(RustyJSError::TypedArrayRangeError) }),
+        );
+
+        // Test TypeError
+        let type_error = ctx
+            .eval::<String>(Source::from_bytes(
+                b"try {
+                    type_error();
+                } catch (e) {
+                    e.constructor.name + ': ' + e.message
+                }",
+            ))
+            .unwrap();
+        assert_eq!(type_error, "TypeError: this is typeError");
+
+        // Test ReferenceError
+        let reference_error = ctx
+            .eval::<String>(Source::from_bytes(
+                b"try {
+                    reference_error();
+                } catch (e) {
+                    e.constructor.name + ': ' + e.message
+                }",
+            ))
+            .unwrap();
+        assert_eq!(reference_error, "ReferenceError: Property Not Found");
+
+        // Test RangeError
+        let range_error = ctx
+            .eval::<String>(Source::from_bytes(
+                b"try {
+                    range_error();
+                } catch (e) {
+                    e.constructor.name + ': ' + e.message
+                }",
+            ))
+            .unwrap();
+        assert_eq!(
+            range_error,
+            "RangeError: Invalid TypedArray range: offset or length exceeds buffer size"
+        );
+    });
+}
+
+#[test]
 fn test_error_stack() {
     run(|ctx| {
         // test syntax error
