@@ -1,0 +1,11 @@
+[package]
+name = "http"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusty-js = { workspace = true }
+tokio = { version = "1.0", features = ["rt", "time", "macros"] }
+
+[dev-dependencies]
+rustyjs_test = { path = "../../utils/rustyjs_test" }
