@@ -1,5 +1,5 @@
 use crate::{
-    FromJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult, JSValueImpl,
+    FromJSValue, JSClass, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult, JSValueImpl,
     RustyJSError,
 };
 use std::cell::{Ref, RefMut};
@@ -273,7 +273,7 @@ impl<V: JSValueImpl> GetParam<V> for JSContext<V::Context> {
 impl<T, V> GetParam<V> for This<T>
 where
     V: JSObjectOps,
-    T: 'static,
+    T: JSClass<V>,
 {
     type Kind = ThisKind<T>;
 
@@ -292,7 +292,7 @@ where
 impl<T, V> GetParam<V> for ThisMut<T>
 where
     V: JSObjectOps,
-    T: 'static,
+    T: JSClass<V>,
 {
     type Kind = ThisMutKind<T>;
 

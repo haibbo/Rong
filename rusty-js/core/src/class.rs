@@ -67,7 +67,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     /// call object as function
     fn call(ctx: &V::Context, function: V, this: V, args: Vec<V>) -> V
     where
-        V: JSObjectOps,
+        V: JSObjectOps + 'static,
         V::Context: JSExceptionHandler,
     {
         let ctx = &JSContext::from_borrowed_raw_ptr(ctx.as_raw());
@@ -172,7 +172,13 @@ where
     V: JSValueImpl + JSObjectOps,
 {
     /// Borrow the underlying data from an instance
-    pub fn borrow<T>(&self) -> JSResult<Ref<'_, T>> {
+    pub fn borrow<T>(&self) -> JSResult<Ref<'_, T>>
+    where
+        T: JSClass<V>,
+    {
+        if !Class::instance_of::<T>(self) {
+            return Err(RustyJSError::Borrow(std::any::type_name::<T>()));
+        }
         let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
@@ -183,7 +189,13 @@ where
     }
 
     /// Mutably borrow the underlying data from an instance
-    pub fn borrow_mut<T>(&self) -> JSResult<RefMut<'_, T>> {
+    pub fn borrow_mut<T>(&self) -> JSResult<RefMut<'_, T>>
+    where
+        T: JSClass<V>,
+    {
+        if !Class::instance_of::<T>(self) {
+            return Err(RustyJSError::Borrow(std::any::type_name::<T>()));
+        }
         let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
