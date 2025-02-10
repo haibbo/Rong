@@ -91,3 +91,133 @@ fn test_object_display() {
         assert_eq!(format!("{:?}", obj), "JSObject(array)");
     });
 }
+
+#[test]
+fn test_object_properties() {
+    run(|ctx| {
+        // Create a test object
+        let source = Source::from_bytes(
+            r#"
+            let obj = {
+                name: "test",
+                age: 42,
+                greet: function() { return "Hello"; }
+            };
+            obj;
+            "#,
+        );
+
+        let obj: JSObject = ctx.eval(source).unwrap();
+
+        // Test basic property operations
+        assert_eq!(obj.get::<_, String>("name").unwrap(), "test");
+        assert_eq!(obj.get::<_, i32>("age").unwrap(), 42);
+        assert!(obj.has("greet"));
+
+        // Test entries
+        let entries = obj.entries().unwrap();
+        assert_eq!(entries.len(), 3);
+
+        // Test typed entries with flexible value types
+        let entries: Vec<(String, JSValue)> = obj.entries_as().unwrap();
+        assert!(entries.iter().any(|(k, _)| k == "name"));
+
+        // Test keys
+        let keys: Vec<String> = obj.keys_as().unwrap();
+        assert_eq!(keys.len(), 3);
+        assert!(keys.contains(&"name".to_string()));
+        assert!(keys.contains(&"age".to_string()));
+        assert!(keys.contains(&"greet".to_string()));
+
+        // Test values
+        let values = obj.values().unwrap();
+        assert_eq!(values.count(), 3);
+
+        // Test property modification
+        obj.set("name", "updated");
+        assert_eq!(obj.get::<_, String>("name").unwrap(), "updated");
+
+        // Test property deletion
+        assert!(obj.del("age"));
+        assert!(!obj.has("age"));
+
+        // Test non-existent property
+        assert!(obj.get::<_, String>("nonexistent").is_err());
+    });
+}
+
+#[test]
+fn test_object_property_attributes() {
+    run(|ctx| {
+        // Test property attributes
+        let source = Source::from_bytes(
+            r#"
+            let obj = {};
+            Object.defineProperty(obj, 'readOnly', {
+                value: 'constant',
+                writable: false,
+                enumerable: true
+            });
+            Object.defineProperty(obj, 'hidden', {
+                value: 'secret',
+                enumerable: false
+            });
+            obj;
+            "#,
+        );
+
+        let obj: JSObject = ctx.eval(source).unwrap();
+
+        // Test read-only property
+        assert_eq!(obj.get::<_, String>("readOnly").unwrap(), "constant");
+
+        // Test non-enumerable property
+        let keys: Vec<String> = obj.keys_as().unwrap();
+        assert!(keys.contains(&"readOnly".to_string()));
+        assert!(!keys.contains(&"hidden".to_string()));
+
+        // Test property existence
+        assert!(obj.has("hidden"));
+        assert!(obj.has("readOnly"));
+    });
+}
+
+#[test]
+fn test_object_prototype() {
+    run(|ctx| {
+        // Test prototype chain
+        let source = Source::from_bytes(
+            r#"
+            function Animal(name) {
+                this.name = name;
+            }
+            Animal.prototype.speak = function() {
+                return this.name + " makes a sound";
+            };
+
+            let dog = new Animal("Dog");
+            dog;
+            "#,
+        );
+
+        let obj: JSObject = ctx.eval(source).unwrap();
+
+        // Test instance property
+        assert_eq!(obj.get::<_, String>("name").unwrap(), "Dog");
+
+        // Test prototype method
+        let result: String = ctx
+            .eval(Source::from_bytes(
+                r#"
+                dog.speak();
+                "#,
+            ))
+            .unwrap();
+        assert_eq!(result, "Dog makes a sound");
+
+        // Test own properties
+        let own_keys: Vec<String> = obj.keys_as().unwrap();
+        assert!(own_keys.contains(&"name".to_string()));
+        assert!(!own_keys.contains(&"speak".to_string())); // speak is on the prototype
+    });
+}

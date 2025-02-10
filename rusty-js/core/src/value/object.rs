@@ -114,6 +114,10 @@ pub trait JSObjectOps: JSValueConversion + JSTypeOf {
     /// Returns Some(value) if the property exists, None otherwise.
     /// Returns EXCEPTION if the operation fails.
     fn get_property(&self, key: Self) -> Option<Self>;
+
+    /// Gets the names of all enumerable properties of the object.
+    /// Returns None if the operation fails.
+    fn get_own_property_names(&self) -> Option<Vec<Self>>;
 }
 
 impl<V> JSObject<V>
@@ -176,6 +180,119 @@ where
             .get_property(key)
             .ok_or(RustyJSError::PropertyNotFound) // check existence firstly
             .and_then(|value| T::from_js_value(ctx, value))
+    }
+}
+
+pub struct Entry<V: JSValueImpl> {
+    key: JSValue<V>,
+    value: JSValue<V>,
+}
+
+impl<V: JSValueImpl> Entry<V> {
+    pub fn key(&self) -> &JSValue<V> {
+        &self.key
+    }
+
+    pub fn value(&self) -> &JSValue<V> {
+        &self.value
+    }
+
+    pub fn into_tuple(self) -> (JSValue<V>, JSValue<V>) {
+        (self.key, self.value)
+    }
+
+    pub fn try_into<K, T>(self) -> JSResult<(K, T)>
+    where
+        K: FromJSValue<V>,
+        T: FromJSValue<V>,
+    {
+        let ctx = self.key.get_ctx();
+        Ok((
+            K::from_js_value(&ctx, self.key.into_value())?,
+            T::from_js_value(&ctx, self.value.into_value())?,
+        ))
+    }
+}
+
+impl<V> JSObject<V>
+where
+    V: JSObjectOps,
+{
+    /// Returns an iterator over the object's own enumerable string-keyed property [key, value] pairs.
+    pub fn entries(&self) -> JSResult<Vec<Entry<V>>> {
+        let ctx = &self.get_ctx();
+        let mut entries = Vec::new();
+
+        // Get all enumerable property names
+        let keys = self.own_keys()?;
+
+        // Iterate through property names to get corresponding values
+        for key in keys {
+            if let Some(value) = self.as_value().get_property(key.clone()) {
+                entries.push(Entry {
+                    key: JSValue::from_raw(ctx, key),
+                    value: JSValue::from_raw(ctx, value),
+                });
+            }
+        }
+
+        Ok(entries)
+    }
+
+    /// Returns entries with converted types
+    pub fn entries_as<K, V2>(&self) -> JSResult<Vec<(K, V2)>>
+    where
+        K: FromJSValue<V>,
+        V2: FromJSValue<V>,
+    {
+        self.entries()?
+            .into_iter()
+            .map(|entry| entry.try_into::<K, V2>())
+            .collect()
+    }
+
+    /// Returns an array of a given object's own enumerable property names
+    pub fn own_keys(&self) -> JSResult<Vec<V>> {
+        let mut keys = Vec::new();
+
+        // Get all enumerable property names of the object
+        if let Some(obj_keys) = self.as_value().get_own_property_names() {
+            keys.extend(obj_keys);
+        }
+
+        Ok(keys)
+    }
+
+    /// Returns an iterator over the object's own enumerable string-keyed property values.
+    pub fn values(&self) -> JSResult<impl Iterator<Item = JSValue<V>> + '_> {
+        Ok(self.entries()?.into_iter().map(|entry| entry.value))
+    }
+
+    /// Returns values with converted type
+    pub fn values_as<T>(&self) -> JSResult<Vec<T>>
+    where
+        T: FromJSValue<V>,
+    {
+        let ctx = &self.get_ctx();
+        self.values()?
+            .map(|v| T::from_js_value(ctx, v.into_value()))
+            .collect()
+    }
+
+    /// Returns an iterator over the object's own enumerable string-keyed property names.
+    pub fn keys(&self) -> JSResult<impl Iterator<Item = JSValue<V>> + '_> {
+        Ok(self.entries()?.into_iter().map(|entry| entry.key))
+    }
+
+    /// Returns keys with converted type
+    pub fn keys_as<K>(&self) -> JSResult<Vec<K>>
+    where
+        K: FromJSValue<V>,
+    {
+        let ctx = &self.get_ctx();
+        self.keys()?
+            .map(|k| K::from_js_value(ctx, k.into_value()))
+            .collect()
     }
 }
 
