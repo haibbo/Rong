@@ -47,8 +47,9 @@ impl Blob {
 
         // Process parts if provided
         if let Some(parts) = parts.0 {
-            blob_data = process_blob_part(&parts, &blob_options)
-                .map_err(|e| RustyJSError::Error(format!("Failed to process blob parts: {}", e)))?;
+            blob_data = process_blob_part(&parts, &blob_options).map_err(|e| {
+                RustyJSError::TypeError(format!("Failed to process blob parts: {}", e))
+            })?;
         }
 
         Ok(Self {
@@ -63,8 +64,8 @@ impl Blob {
     }
 
     #[js_method(getter, enumerable, rename = "type")]
-    fn type_(&self) -> JSResult<String> {
-        Ok(self.mime_type.clone())
+    fn type_(&self) -> String {
+        self.mime_type.clone()
     }
 
     /// Returns a promise that resolves with an ArrayBuffer containing the blob's data
@@ -211,6 +212,10 @@ fn process_blob_part(array: &JSArray, options: &BlobOptions) -> JSResult<Vec<u8>
             }
             continue;
         }
+
+        return Err(RustyJSError::TypeError(
+            "Unsupported Blob part type".to_string(),
+        ));
     }
 
     Ok(data)
