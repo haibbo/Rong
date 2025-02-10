@@ -223,3 +223,38 @@ fn test_typed_array_buffer_sharing() {
         assert_eq!(value, 100);
     });
 }
+
+#[test]
+fn test_typed_array_as_bytes() {
+    run(|ctx| {
+        // Create a buffer with test data
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes(ctx, &data).unwrap();
+
+        // Create TypedArray with offset
+        let array = JSTypedArray::from_array_buffer(
+            ctx,
+            buffer.clone(),
+            2,       // Start at byte offset 2
+            Some(3), // Take 3 bytes
+        )
+        .unwrap();
+
+        // Test as_bytes
+        let bytes = array.as_bytes().expect("Should return Some bytes");
+        assert_eq!(bytes, &[3, 4, 5]);
+
+        // Test with invalid offset
+        let invalid_array = JSTypedArray::from_array_buffer(
+            ctx,
+            buffer.clone(),
+            10, // Invalid offset beyond buffer size
+            None,
+        );
+        assert!(invalid_array.is_err());
+
+        // Test ArrayBuffer as_bytes
+        let buffer_bytes = buffer.as_bytes().expect("Should return Some bytes");
+        assert_eq!(buffer_bytes, &[1, 2, 3, 4, 5, 6, 7, 8]);
+    });
+}

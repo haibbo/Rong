@@ -162,6 +162,21 @@ where
         self.as_value().as_slice()
     }
 
+    /// Get a reference to the array buffer's data as bytes
+    ///
+    /// # Returns
+    /// Returns a slice of the data, or None if:
+    /// * The array buffer is detached
+    /// * There is any other error accessing the data
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        let slice = self.as_slice();
+        if slice.is_empty() {
+            None
+        } else {
+            Some(slice)
+        }
+    }
+
     /// Get a mutable slice view of the ArrayBuffer's data
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         self.as_mut_value().as_mut_slice()
@@ -170,11 +185,6 @@ where
     /// Get a slice of the ArrayBuffer from start to end
     pub fn slice(&self, start: usize, end: usize) -> &[u8] {
         &self.as_slice()[start..end]
-    }
-
-    /// Get the entire contents of the ArrayBuffer as a byte slice
-    pub fn to_bytes(&self) -> &[u8] {
-        self.as_slice()
     }
 
     /// Copy the contents of the ArrayBuffer into a new Vec

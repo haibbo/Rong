@@ -281,6 +281,30 @@ where
             None
         }
     }
+
+    /// Get a reference to the typed array's data
+    ///
+    /// # Returns
+    /// Returns a slice of the data, or None if:
+    /// * The array buffer is detached
+    /// * The typed array is out of bounds
+    /// * There is any other error accessing the data
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        let buffer = self.buffer().ok()?;
+        let offset = self.byte_offset();
+        let length = self.byte_length();
+
+        let buffer_data = buffer.as_bytes()?;
+        if offset + length > buffer_data.len() {
+            return None;
+        }
+
+        // SAFETY: We've verified that:
+        // 1. The offset and length are within bounds
+        // 2. The buffer is valid and not detached (through as_bytes())
+        // 3. The lifetime is tied to self through the buffer
+        Some(unsafe { std::slice::from_raw_parts(buffer_data.as_ptr().add(offset), length) })
+    }
 }
 
 // blanket implementing.
