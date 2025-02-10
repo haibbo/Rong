@@ -1,6 +1,6 @@
 use crate::jsc;
 use crate::JSCValue;
-use rusty_js_core::{JSTypedArrayKind, JSTypedArrayOps, JSValueImpl};
+use rusty_js_core::{JSExceptionHandler, JSTypedArrayKind, JSTypedArrayOps, JSValueImpl};
 use std::ptr;
 
 impl JSTypedArrayOps for JSCValue {
@@ -36,14 +36,14 @@ impl JSTypedArrayOps for JSCValue {
 
             // Validate byte_offset alignment
             if byte_offset % element_size != 0 {
-                return ctx.create_error("byte_offset must be aligned");
+                return ctx.throw_error("byte_offset must be aligned");
             }
 
             // Calculate available length
             let available_bytes = if buffer_size >= byte_offset {
                 buffer_size - byte_offset
             } else {
-                return ctx.create_error("byte_offset out of range");
+                return ctx.throw_error("byte_offset out of range");
             };
 
             let max_length = available_bytes / element_size;
@@ -51,7 +51,7 @@ impl JSTypedArrayOps for JSCValue {
 
             // Reject empty arrays
             if length == 0 {
-                return ctx.create_error("Empty TypedArrays are not supported");
+                return ctx.throw_error("Empty TypedArrays are not supported");
             }
 
             // Map kind to JSTypedArrayType

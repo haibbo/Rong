@@ -312,48 +312,69 @@ impl Clone for JSCContext {
 
 impl JSExceptionHandler for JSCContext {
     fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.create_error(message.as_ref())
+        self.throw_error_with_name("SyntaxError", message)
     }
 
     fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.create_error(message.as_ref())
+        self.throw_error_with_name("TypeError", message)
     }
 
     fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.create_error(message.as_ref())
+        self.throw_error_with_name("ReferenceError", message)
     }
 
     fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.create_error(message.as_ref())
+        self.throw_error_with_name("RangeError", message)
     }
 
     fn throw_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.create_error(message.as_ref())
+        self.throw_error_with_name("Error", message)
     }
 
     fn new_error(&self) -> Self::Value {
-        self.create_error("")
+        unsafe {
+            let args = [];
+            let error = jsc::JSObjectMakeError(self.raw, 0, args.as_ptr(), ptr::null_mut());
+            JSCValue::from_owned_obj(self.raw, error)
+        }
     }
 }
 
 impl JSCContext {
-    pub(crate) fn create_error(&self, message: &str) -> JSCValue {
+    /// Helper function to throw an error with a specific name
+    pub(crate) fn throw_error_with_name(
+        &self,
+        error_name: &str,
+        message: impl AsRef<str>,
+    ) -> JSCValue {
         unsafe {
-            let c_message = CString::new(message).unwrap();
-            let js_str = jsc::JSStringCreateWithUTF8CString(c_message.as_ptr());
+            // Escape single quotes in message
+            let message = message.as_ref().replace('\'', "\\'");
 
-            let args = [jsc::JSValueMakeString(self.raw, js_str)];
-            let exception: *mut jsc::JSValueRef = std::ptr::null_mut();
+            // Create simple eval string
+            let eval_str = format!(
+                "new {error_name}('{message}')",
+                error_name = error_name,
+                message = message
+            );
+            println!("xx: {}", eval_str);
+            let c_eval = CString::new(eval_str).unwrap();
+            let js_str = jsc::JSStringCreateWithUTF8CString(c_eval.as_ptr());
 
-            let error = jsc::JSObjectMakeError(self.raw, 1, args.as_ptr(), exception);
+            let mut exception: jsc::JSValueRef = ptr::null_mut();
+            let error = jsc::JSEvaluateScript(
+                self.raw,
+                js_str,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                1,
+                &mut exception,
+            );
 
             jsc::JSStringRelease(js_str);
 
-            if !exception.is_null() {
-                JSCValue::from_owned_raw(self.raw, *exception).with_exception()
-            } else {
-                JSCValue::from_owned_obj(self.raw, error).with_exception()
-            }
+            let error = JSCValue::from_owned_raw(self.raw, error);
+            error.with_exception()
         }
     }
 }
