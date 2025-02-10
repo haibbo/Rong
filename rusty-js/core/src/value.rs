@@ -75,7 +75,7 @@ where
         Self { inner: value }
     }
 
-    pub(crate) fn as_value(&self) -> &V {
+    pub fn as_value(&self) -> &V {
         &self.inner
     }
 
