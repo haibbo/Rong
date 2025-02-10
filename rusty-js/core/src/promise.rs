@@ -192,7 +192,7 @@ where
             }
             Err(err) => {
                 let ctx = reject.get_ctx();
-                let js_error = err.into_js_error(&ctx);
+                let js_error = JSValue::from_raw(&ctx, err.throw_js_exception(&ctx));
                 let _ = reject.call::<_, ()>((js_error,));
             }
         }

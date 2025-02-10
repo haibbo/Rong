@@ -47,19 +47,6 @@ where
     }
 }
 
-impl<C: JSContextImpl> JSContext<C> {
-    pub fn new_js_error(&self, message: &str) -> JSException<C::Value>
-    where
-        C: JSExceptionHandler,
-        C::Value: JSObjectOps,
-    {
-        let v = self.as_ref().new_error();
-        let obj = JSObject::from_js_value(self, v).unwrap();
-        obj.set("message", message);
-        JSException::from_object(obj)
-    }
-}
-
 impl<V> JSException<V>
 where
     V: JSObjectOps,

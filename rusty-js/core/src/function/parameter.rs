@@ -373,7 +373,7 @@ macro_rules! impl_from_params {
                     {
                         current_param += 1;
                         accessor.set_last_param(current_param == param_count);
-                        $T::get_param(accessor).expect(&format!("Failed to parse parameters for types: {}", std::any::type_name::<$T>()))
+                        $T::get_param(accessor)?
                     },
                 )*))
             }

@@ -22,11 +22,6 @@ fn test_throw_error() {
             error
         );
     });
-
-    run(|ctx| {
-        let e = ctx.new_js_error("hi");
-        assert_eq!(e.message().unwrap(), "hi");
-    });
 }
 
 #[test]

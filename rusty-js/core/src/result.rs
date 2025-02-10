@@ -58,6 +58,9 @@ pub enum RustyJSError {
     Error(String),
 
     #[error("{0}")]
+    TypeError(String),
+
+    #[error("{0}")]
     Exception(#[from] JSError),
 }
 
@@ -69,6 +72,7 @@ impl RustyJSError {
     {
         match self {
             RustyJSError::ConvertError(_, _)
+            | RustyJSError::TypeError(_)
             | RustyJSError::NotJSFunc
             | RustyJSError::NotJSArray
             | RustyJSError::NotJSArrayBuffer
@@ -92,14 +96,6 @@ impl RustyJSError {
             | RustyJSError::AlreadyTaken => ctx.as_ref().throw_error(self.to_string()),
         }
     }
-
-    pub fn into_js_error<V>(self, ctx: &JSContext<V::Context>) -> JSException<V>
-    where
-        V: JSValueImpl + JSObjectOps,
-        V::Context: JSExceptionHandler,
-    {
-        ctx.new_js_error(&self.to_string())
-    }
 }
 
 impl<V: JSValueImpl> FromJSValue<V> for RustyJSError
@@ -120,7 +116,7 @@ where
     V: JSObjectOps,
 {
     fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        self.into_js_error(ctx).into_js_value(ctx)
+        self.throw_js_exception(ctx)
     }
 }
 
