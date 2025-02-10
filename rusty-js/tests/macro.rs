@@ -5,7 +5,7 @@ use tokio::time::Duration;
 
 #[js_class(rename = "PointX")]
 #[derive(Debug, PartialEq)]
-pub struct Point {
+struct Point {
     x: i32,
     y: i32,
 }
@@ -15,7 +15,7 @@ static ORIGIN: OnceLock<Mutex<Point>> = OnceLock::new();
 #[js_methods]
 impl Point {
     #[js_method(constructor)]
-    pub fn new(x: i32, y: i32) -> Self {
+    fn new(x: i32, y: i32) -> Self {
         Self { x, y }
     }
 
@@ -56,7 +56,7 @@ impl Point {
     }
 
     #[js_method(rename = "Add")]
-    pub fn add(&self, other: Point) -> Self {
+    fn add(&self, other: Point) -> Self {
         Self {
             x: self.x + other.x,
             y: self.y + other.y,
@@ -64,25 +64,25 @@ impl Point {
     }
 
     #[js_method(rename = "create")]
-    pub fn create(x: i32, y: i32) -> Self {
+    fn create(x: i32, y: i32) -> Self {
         Self { x, y }
     }
 
     #[js_method(rename = "moveBy")]
-    pub fn move_by(&mut self, dx: i32, dy: i32) {
+    fn move_by(&mut self, dx: i32, dy: i32) {
         self.x += dx;
         self.y += dy;
     }
 
     #[js_method(rename = "moveByAsync")]
-    pub async fn move_by_async(&mut self, dx: i32, dy: i32) {
+    async fn move_by_async(&mut self, dx: i32, dy: i32) {
         tokio::time::sleep(Duration::from_millis(50)).await;
         self.x += dx;
         self.y += dy;
     }
 
     #[js_method(rename = "createAsync")]
-    pub async fn create_async(x: i32, y: i32) -> Self {
+    async fn create_async(x: i32, y: i32) -> Self {
         tokio::time::sleep(Duration::from_millis(50)).await;
         Self { x, y }
     }
