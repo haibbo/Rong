@@ -118,9 +118,9 @@ where
     /// * `value` - The value to set at the index
     ///
     /// # Returns
-    /// - `Ok(())` if successful
+    /// - `Ok(&Self)` if successful, allowing method chaining
     /// - `Err(RustyJSError)` if an exception occurred
-    pub fn set<T>(&self, index: u32, value: T) -> JSResult<()>
+    pub fn set<T>(&self, index: u32, value: T) -> JSResult<&Self>
     where
         T: IntoJSValue<V>,
     {
@@ -132,7 +132,7 @@ where
             let err = JSException::from_js_value(&ctx, result)?;
             Err(RustyJSError::Exception(err.into_error()))
         } else {
-            Ok(())
+            Ok(self)
         }
     }
 
