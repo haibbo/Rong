@@ -167,17 +167,10 @@ macro_rules! impl_js_converter {
                 let mut result: $out_type = Default::default();
                 if unsafe { $to_fn(*self.as_raw_context(), *self.as_raw_value(), &mut result) } < 0
                 {
-                    #[cfg(debug_assertions)]
-                    println!(
-                        "Failed convert from {} to {}",
-                        std::any::type_name::<$target>(),
+                    Err(RustyJSError::TypeError(format!(
+                        "JSValue must be type of {}",
                         std::any::type_name::<$out_type>()
-                    );
-
-                    Err(RustyJSError::ConvertError(
-                        std::any::type_name::<$target>(),
-                        std::any::type_name::<$out_type>(),
-                    ))
+                    )))
                 } else {
                     Ok(result)
                 }
