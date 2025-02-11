@@ -180,3 +180,17 @@ where
         V::from((ctx.as_ref(), self as u64))
     }
 }
+
+impl<V, T> IntoJSValue<V> for Option<T>
+where
+    V: JSValueImpl,
+    V: for<'a> From<(&'a V::Context, ())>,
+    T: IntoJSValue<V>,
+{
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+        match self {
+            Some(value) => value.into_js_value(ctx),
+            None => V::from((ctx.as_ref(), ())), // Returns undefined in JS when None
+        }
+    }
+}
