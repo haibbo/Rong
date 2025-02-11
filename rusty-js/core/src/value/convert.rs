@@ -1,5 +1,5 @@
 use super::JSValueImpl;
-use crate::{JSContext, JSResult, RustyJSError};
+use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
 
 /// The conversion between Rust primitive types, which implement the `JSCompatible`
 /// marker trait, and `JSValue` is facilitated using the standard `TryInto` and
@@ -190,7 +190,7 @@ where
     fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
         match self {
             Some(value) => value.into_js_value(ctx),
-            None => V::from((ctx.as_ref(), ())), // Returns undefined in JS when None
+            None => V::create_null(ctx.as_ref().as_raw()), // Returns null in JS when None
         }
     }
 }
