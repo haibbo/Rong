@@ -124,8 +124,8 @@ const results = {
       const valueWithNull = "test" + String.fromCharCode(0) + "value";
       console.log("JS test string length: " + valueWithNull.length);
       console.log(
-        "JS test string bytes: " +
-          Array.from(valueWithNull).map((c) => c.charCodeAt(0)),
+        "JS test string bytes:",
+        Array.from(valueWithNull).map((c) => c.charCodeAt(0)),
       );
 
       headers.set("test", valueWithNull);
@@ -196,14 +196,19 @@ const results = {
     results.total += 2;
     console.log("Testing forEach...");
     let count = 0;
+    let containerValid = true;
+
     iterHeaders.forEach((value, key, container) => {
       count++;
-      results.passed += assert(
-        container instanceof Headers,
-        "forEach should pass Headers instance as third argument",
-      );
+      containerValid = containerValid && container instanceof Headers;
     });
-    assert(count === 3, "forEach should iterate all headers");
+
+    results.passed += assert(
+      containerValid,
+      "forEach should pass Headers instance as third argument",
+    );
+
+    results.passed += assert(count === 3, "forEach should iterate all headers");
 
     // Test Set-Cookie handling
     results.total += 2;

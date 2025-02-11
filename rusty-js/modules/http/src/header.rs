@@ -197,8 +197,9 @@ impl Headers {
         let array = JSArray::new(&ctx)?;
         for (i, (name, value)) in self.headers.iter().enumerate() {
             let entry = JSArray::new(&ctx)?;
-            entry.set(0, name.as_str())?;
-            entry.set(1, value.to_str().unwrap_or_default())?;
+            entry
+                .set(0, name.as_str())?
+                .set(1, value.to_str().unwrap_or_default())?;
             array.set(i as u32, entry)?;
         }
         Ok(array)
@@ -238,12 +239,24 @@ impl Headers {
     }
 
     #[js_method(rename = "forEach")]
-    pub fn for_each(&self, callback: JSFunc) -> JSResult<()> {
+    pub fn for_each(
+        &self,
+        this: This<JSObject>, // Header Object
+        callback: JSFunc,
+        this_arg: Optional<JSObject>,
+    ) -> JSResult<()> {
         for (name, value) in self.headers.iter() {
-            let value = value.to_str().unwrap_or_default();
-            let name = name.as_str();
-            //TODO: call_with_this
-            callback.call::<_, ()>((value, name))?;
+            let value_str = value.to_str().unwrap_or_default();
+            let name_str = name.as_str();
+
+            if let Some(ref this_arg) = this_arg.0 {
+                callback.call_with_this::<_, ()>(
+                    this_arg.clone(),
+                    (value_str, name_str, this.0.clone()),
+                )?;
+            } else {
+                callback.call::<_, ()>((value_str, name_str, this.0.clone()))?;
+            }
         }
         Ok(())
     }
