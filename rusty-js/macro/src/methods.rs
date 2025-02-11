@@ -166,21 +166,21 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                 if receiver.mutability.is_some() {
                     // For &mut self methods, use ThisMut and map to Self::method_name
                     (
-                        quote! { mut this: rusty_js::function::ThisMut<#impl_type> },
+                        quote! { mut __self: rusty_js::function::ThisMut<#impl_type> },
                         if is_async {
-                            quote! { Self::#method_name(&mut *this, #(#patterns),*).await }
+                            quote! { Self::#method_name(&mut *__self, #(#patterns),*).await }
                         } else {
-                            quote! { Self::#method_name(&mut *this, #(#patterns),*) }
+                            quote! { Self::#method_name(&mut *__self, #(#patterns),*) }
                         },
                     )
                 } else {
                     // For &self methods, use This and map to Self::method_name
                     (
-                        quote! { this: rusty_js::function::This<#impl_type> },
+                        quote! { __self: rusty_js::function::This<#impl_type> },
                         if is_async {
-                            quote! { Self::#method_name(&*this, #(#patterns),*).await }
+                            quote! { Self::#method_name(&*__self, #(#patterns),*).await }
                         } else {
-                            quote! { Self::#method_name(&*this, #(#patterns),*) }
+                            quote! { Self::#method_name(&*__self, #(#patterns),*) }
                         },
                     )
                 }
