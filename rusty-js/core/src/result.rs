@@ -45,9 +45,6 @@ pub enum RustyJSError {
     #[error("Not JS Exception Object")]
     NotJSExcep,
 
-    #[error("This has already been taken")]
-    AlreadyTaken,
-
     #[error("Failed to compile JS code to bytecode")]
     CompileToByteErr,
 
@@ -92,8 +89,7 @@ impl RustyJSError {
             | RustyJSError::Error(_)
             | RustyJSError::Borrow(_)
             | RustyJSError::CompileToByteErr
-            | RustyJSError::NotSupportByteCode
-            | RustyJSError::AlreadyTaken => ctx.as_ref().throw_error(self.to_string()),
+            | RustyJSError::NotSupportByteCode => ctx.as_ref().throw_error(self.to_string()),
         }
     }
 }

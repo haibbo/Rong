@@ -1,15 +1,14 @@
 use crate::{
     FromJSValue, JSClass, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult, JSValueImpl,
-    RustyJSError,
 };
-use std::cell::{Ref, RefMut};
+use std::cell::RefMut;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
 /// Arguments retrieved from the JavaScript side for calling Rust functions.
 pub struct ParamsAccessor<'a, V: JSValueImpl> {
     ctx: &'a JSContext<V::Context>,
-    this: Option<V>,
+    this: V,
     args: Vec<V>,
     is_last_param: bool,
 }
@@ -18,7 +17,7 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
     pub fn new(ctx: &'a JSContext<V::Context>, this: V, args: Vec<V>) -> Self {
         Self {
             ctx,
-            this: Some(this),
+            this,
             args,
             is_last_param: false,
         }
@@ -36,8 +35,8 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
         }
     }
 
-    fn take_this(&mut self) -> Option<V> {
-        self.this.take()
+    fn get_this(&mut self) -> V {
+        self.this.clone()
     }
 
     pub(crate) fn context(&self) -> &JSContext<V::Context> {
@@ -65,7 +64,7 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
 ///     let my_struct: &MyStruct = &this;
 /// }
 /// ```
-pub struct This<T: 'static>(pub(crate) Ref<'static, T>);
+pub struct This<T>(pub T);
 
 /// Represents the `this` context in JavaScript function calls with mutable access
 pub struct ThisMut<T: 'static>(pub(crate) RefMut<'static, T>);
@@ -272,20 +271,15 @@ impl<V: JSValueImpl> GetParam<V> for JSContext<V::Context> {
 
 impl<T, V> GetParam<V> for This<T>
 where
-    V: JSObjectOps,
-    T: JSClass<V>,
+    V: JSValueImpl,
+    T: FromJSValue<V> + JSParameterType,
 {
     type Kind = ThisKind<T>;
 
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
-        let value = accessor.take_this().ok_or(RustyJSError::AlreadyTaken)?;
-
-        let obj = JSObject::from_js_value(accessor.context(), value)?;
-        let borrowed = obj.borrow::<T>()?;
-
-        // Safety: because JSObject ensures the object's lifecycle.
-        let static_ref: Ref<'static, T> = unsafe { std::mem::transmute(borrowed) };
-        Ok(This(static_ref))
+        let value = accessor.get_this();
+        let val = T::from_js_value(accessor.ctx, value)?;
+        Ok(Self(val))
     }
 }
 
@@ -297,7 +291,7 @@ where
     type Kind = ThisMutKind<T>;
 
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
-        let value = accessor.take_this().ok_or(RustyJSError::AlreadyTaken)?;
+        let value = accessor.get_this();
 
         let obj = JSObject::from_js_value(accessor.context(), value)?;
         let borrowed = obj.borrow_mut::<T>()?;
