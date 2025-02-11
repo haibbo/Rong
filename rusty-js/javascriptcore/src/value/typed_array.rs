@@ -49,11 +49,6 @@ impl JSTypedArrayOps for JSCValue {
             let max_length = available_bytes / element_size;
             let length = length.unwrap_or(max_length).min(max_length);
 
-            // Reject empty arrays
-            if length == 0 {
-                return ctx.throw_error("Empty TypedArrays are not supported");
-            }
-
             // Map kind to JSTypedArrayType
             let array_type = match kind {
                 JSTypedArrayKind::Int8 => jsc::JSTypedArrayType_kJSTypedArrayTypeInt8Array,

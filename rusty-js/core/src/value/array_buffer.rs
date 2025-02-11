@@ -169,12 +169,8 @@ where
     /// * The array buffer is detached
     /// * There is any other error accessing the data
     pub fn as_bytes(&self) -> Option<&[u8]> {
-        let slice = self.as_slice();
-        if slice.is_empty() {
-            None
-        } else {
-            Some(slice)
-        }
+        // Always return the slice, even if it's empty
+        Some(self.as_slice())
     }
 
     /// Get a mutable slice view of the ArrayBuffer's data

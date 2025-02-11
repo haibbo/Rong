@@ -193,7 +193,7 @@ where
 
         // Check if byte_offset is valid
         let buffer_size = buffer.len();
-        if byte_offset >= buffer_size {
+        if byte_offset > buffer_size {
             return Err(RustyJSError::TypedArrayRangeError);
         }
 
@@ -206,11 +206,7 @@ where
             return Err(RustyJSError::TypedArrayRangeError);
         }
 
-        // Reject empty arrays
-        if length == 0 {
-            return Err(RustyJSError::TypedArrayRangeError);
-        }
-
+        // Create TypedArray with buffer and offset
         let buffer_value = buffer.into_js_value(ctx);
         let value = V::from_array_buffer(
             ctx.as_ref(),

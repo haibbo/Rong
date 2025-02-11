@@ -90,15 +90,15 @@ fn test_typed_array_error_handling() {
         );
         assert!(result.is_err());
 
-        // Test empty array creation (should fail)
+        // Test empty array creation
         let buffer: JSArrayBuffer<i8> = JSArrayBuffer::from_bytes(ctx, &[1, 2, 3, 4]).unwrap();
         let result = JSTypedArray::from_array_buffer(
             ctx,
             buffer.clone(),
             0,
-            Some(0), // Empty array not supported
+            Some(0), // Empty array shoud be supported
         );
-        assert!(result.is_err());
+        assert!(result.is_ok());
     });
 }
 
