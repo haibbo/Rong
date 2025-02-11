@@ -82,6 +82,12 @@ JSValue QJS_NewUndefined(JSContext *ctx)
     return JS_MKVAL(JS_TAG_UNDEFINED, 0);
 }
 
+JSValue QJS_NewNull(JSContext *ctx)
+{
+    (void)&ctx;
+    return JS_MKVAL(JS_TAG_NULL, 0);
+}
+
 
 JS_BOOL QJS_IsException(JSContext *ctx, JSValue v)
 {

@@ -111,6 +111,18 @@ impl JSValueImpl for JSCValue {
     fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext {
         &self.ctx
     }
+
+    fn create_null(raw_ctx: &<Self::Context as JSContextImpl>::RawContext) -> Self {
+        let ctx = *raw_ctx;
+        let raw = unsafe { jsc::JSValueMakeNull(ctx) };
+        Self::from_owned_raw(ctx, raw)
+    }
+
+    fn create_undefined(raw_ctx: &<Self::Context as JSContextImpl>::RawContext) -> Self {
+        let ctx = *raw_ctx;
+        let raw = unsafe { jsc::JSValueMakeUndefined(ctx) };
+        Self::from_owned_raw(ctx, raw)
+    }
 }
 
 impl<T> From<(&T, ())> for JSCValue
