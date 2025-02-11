@@ -5,6 +5,7 @@ use rusty_js::{
 };
 
 #[js_class]
+#[derive(Default)]
 pub struct Headers {
     headers: HeaderMap<HeaderValue>,
 }
