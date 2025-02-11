@@ -103,3 +103,63 @@ fn test_display() {
         assert_eq!(format!("{}", jsvalue), "null");
     });
 }
+
+#[test]
+fn test_string_with_null() {
+    run(|ctx| {
+        // Test string containing null character
+        let result: String = ctx
+            .eval(Source::from_bytes(
+                br#"
+                "before" + String.fromCharCode(0) + "after"
+                "#,
+            ))
+            .unwrap();
+
+        // In JavaScript, the string is: "before\0after"
+        // "before" (6 chars) + "\0" (1 char) + "after" (5 chars) = 12 total
+        assert_eq!(result.len(), 12, "String length should be 12 (6 + 1 + 5)");
+
+        // Verify the string contains the null character
+        assert!(
+            result.contains('\0'),
+            "String should contain null character"
+        );
+
+        // Verify content before and after null character
+        let parts: Vec<&str> = result.split('\0').collect();
+        assert_eq!(parts[0], "before", "Content before null character");
+        assert_eq!(parts[1], "after", "Content after null character");
+
+        // Test empty string with only null character
+        let result: String = ctx
+            .eval(Source::from_bytes(
+                br#"
+                String.fromCharCode(0)
+                "#,
+            ))
+            .unwrap();
+        assert_eq!(
+            result.len(),
+            1,
+            "Single null character string length should be 1"
+        );
+        assert_eq!(result.as_bytes(), &[0], "Should be a single null byte");
+
+        // Test string with multiple null characters
+        let result: String = ctx
+            .eval(Source::from_bytes(
+                br#"
+                "a" + String.fromCharCode(0) + "b" + String.fromCharCode(0) + "c"
+                "#,
+            ))
+            .unwrap();
+        assert_eq!(
+            result.len(),
+            5,
+            "String length should be 5 (a + \0 + b + \0 + c)"
+        );
+        let parts: Vec<&str> = result.split('\0').collect();
+        assert_eq!(parts, &["a", "b", "c"], "Should split into three parts");
+    });
+}

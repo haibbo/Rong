@@ -1,6 +1,6 @@
 use crate::{qjs, QJSContext};
 use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl, RustyJSError};
-use std::ffi::CStr;
+use std::slice;
 
 mod array;
 mod array_buffer;
@@ -196,8 +196,17 @@ impl_js_converter!(
         if qjs::QJS_IsString(ctx, value) == 0 {
             return -1;
         }
-        let ptr = qjs::JS_ToCStringLen2(ctx, std::ptr::null_mut(), value, 0);
-        *result = CStr::from_ptr(ptr).to_string_lossy().into_owned();
+
+        let mut len: usize = 0;
+        let ptr = qjs::JS_ToCStringLen2(ctx, &mut len as _, value, 0);
+        if ptr.is_null() {
+            return -1;
+        }
+
+        // Use from_raw_parts to get the complete string including null characters
+        let slice = slice::from_raw_parts(ptr as *const u8, len);
+        *result = String::from_utf8_lossy(slice).into_owned();
+
         qjs::JS_FreeCString(ctx, ptr);
         0
     }
