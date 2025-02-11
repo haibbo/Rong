@@ -1,4 +1,6 @@
-use crate::{JSContext, JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
+use crate::{
+    JSContext, JSContextImpl, JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl,
+};
 
 // PropertyKey represents a key in a JavaScript object property
 // It can be a number (i32, u32, i64, u64) or a string reference
@@ -170,7 +172,7 @@ where
         V: JSObjectOps,
     {
         let ctx = &obj.get_ctx();
-        let undefined = V::from((ctx.as_ref(), ())); // UNDEFINED
+        let undefined = V::create_undefined(ctx.as_ref().as_raw()); // UNDEFINED
 
         let value = self
             .value

@@ -85,7 +85,7 @@ where
         &self.inner
     }
 
-    pub(crate) fn into_value(self) -> V {
+    pub fn into_value(self) -> V {
         self.inner
     }
 
@@ -116,19 +116,13 @@ where
     }
 
     /// create JS UNDEFINED Value
-    pub fn undefined(ctx: &JSContext<V::Context>) -> Self
-    where
-        V: for<'a> From<(&'a V::Context, ())>,
-    {
-        let value = V::from((ctx.as_ref(), ()));
+    pub fn undefined(ctx: &JSContext<V::Context>) -> Self {
+        let value = V::create_undefined(ctx.as_ref().as_raw());
         JSValue::from_raw(ctx, value)
     }
 
     /// create JS NULL Value
-    pub fn null(ctx: &JSContext<V::Context>) -> Self
-    where
-        V: for<'a> From<(&'a V::Context, ())>,
-    {
+    pub fn null(ctx: &JSContext<V::Context>) -> Self {
         let value = V::create_null(ctx.as_ref().as_raw());
         JSValue::from_raw(ctx, value)
     }

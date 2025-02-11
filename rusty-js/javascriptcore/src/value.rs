@@ -125,17 +125,6 @@ impl JSValueImpl for JSCValue {
     }
 }
 
-impl<T> From<(&T, ())> for JSCValue
-where
-    T: JSContextImpl<RawContext = <JSCValue as JSRawContext>::RawContext>,
-{
-    fn from(t: (&T, ())) -> Self {
-        let ctx = *t.0.as_raw();
-        let raw = unsafe { jsc::JSValueMakeUndefined(ctx) };
-        Self::from_owned_raw(ctx, raw)
-    }
-}
-
 impl_js_converter!(
     JSCValue,
     bool,

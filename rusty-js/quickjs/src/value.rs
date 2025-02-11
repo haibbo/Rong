@@ -122,17 +122,6 @@ impl JSValueImpl for QJSValue {
     }
 }
 
-impl<T> From<(&T, ())> for QJSValue
-where
-    T: JSContextImpl<RawContext = <QJSValue as JSRawContext>::RawContext>,
-{
-    fn from(t: (&T, ())) -> Self {
-        let ctx = *t.0.as_raw();
-        let raw = unsafe { qjs::QJS_NewUndefined(ctx) };
-        Self::from_owned_raw(ctx, raw)
-    }
-}
-
 impl QJSValue {
     // it's for debug only
     #![allow(unused)]

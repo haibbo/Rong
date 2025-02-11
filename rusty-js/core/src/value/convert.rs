@@ -21,7 +21,6 @@ use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
 /// it help simplify trait boud for upper caller
 pub trait JSValueConversion:
     JSValueImpl
-    + for<'a> From<(&'a Self::Context, ())>
     + for<'a> From<(&'a Self::Context, bool)>
     + for<'a> From<(&'a Self::Context, i32)>
     + for<'a> From<(&'a Self::Context, u32)>
@@ -42,7 +41,6 @@ pub trait JSValueConversion:
 // Automatically implement types that satisfy trait bound
 impl<T> JSValueConversion for T where
     T: JSValueImpl
-        + for<'a> From<(&'a T::Context, ())>
         + for<'a> From<(&'a T::Context, bool)>
         + for<'a> From<(&'a T::Context, i32)>
         + for<'a> From<(&'a T::Context, u32)>
@@ -94,7 +92,7 @@ where
 
 impl<V> FromJSValue<V> for ()
 where
-    V: JSValueConversion,
+    V: JSValueImpl,
 {
     fn from_js_value(_ctx: &JSContext<V::Context>, _value: V) -> JSResult<Self> {
         Ok(())
@@ -141,10 +139,10 @@ where
 
 impl<V> IntoJSValue<V> for ()
 where
-    V: JSValueConversion,
+    V: JSValueImpl,
 {
     fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        V::from((ctx.as_ref(), self))
+        V::create_undefined(ctx.as_ref().as_raw())
     }
 }
 
@@ -184,7 +182,6 @@ where
 impl<V, T> IntoJSValue<V> for Option<T>
 where
     V: JSValueImpl,
-    V: for<'a> From<(&'a V::Context, ())>,
     T: IntoJSValue<V>,
 {
     fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
