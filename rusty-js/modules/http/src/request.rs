@@ -500,37 +500,8 @@ mod tests {
             );
             let _ = ctx.eval::<()>(source);
 
-            ctx.eval::<()>(Source::from_bytes(
-                r#"
-                class TextDecoder {
-                    decode(arr) {
-                        let str = '';
-                        const len = arr.length;
-                        let i = 0;
-
-                        while (i < len) {
-                            let charCode;
-
-                            if (arr[i] < 0x80) {
-                                charCode = arr[i++];
-                            } else if (arr[i] < 0xE0) {
-                                charCode = ((arr[i++] & 0x1F) << 6) |
-                                         (arr[i++] & 0x3F);
-                            } else {
-                                charCode = ((arr[i++] & 0x0F) << 12) |
-                                         ((arr[i++] & 0x3F) << 6) |
-                                         (arr[i++] & 0x3F);
-                            }
-
-                            str += String.fromCharCode(charCode);
-                        }
-
-                        return str;
-                    }
-                }
-                "#,
-            ))
-            .unwrap();
+            // Initialize TextDecoder first
+            text::init(&ctx).unwrap();
 
             // Initialize Blob first
             crate::blob::init(&ctx).unwrap();

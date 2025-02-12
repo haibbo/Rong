@@ -269,36 +269,7 @@ mod tests {
             ))
             .unwrap();
 
-            // for blob.js
-            ctx.eval::<()>(Source::from_bytes(
-                r#"
-                class TextEncoder {
-                    encode(str) {
-                        const arr = new Uint8Array(str.length * 3);
-                        let pos = 0;
-
-                        for (let i = 0; i < str.length; i++) {
-                            let code = str.charCodeAt(i);
-
-                            if (code < 0x80) {
-                                arr[pos++] = code;
-                            } else if (code < 0x800) {
-                                arr[pos++] = 0xc0 | (code >> 6);
-                                arr[pos++] = 0x80 | (code & 0x3f);
-                            } else {
-                                arr[pos++] = 0xe0 | (code >> 12);
-                                arr[pos++] = 0x80 | ((code >> 6) & 0x3f);
-                                arr[pos++] = 0x80 | (code & 0x3f);
-                            }
-                        }
-
-                        return arr.slice(0, pos);
-                    }
-                }
-                "#,
-            ))
-            .unwrap();
-
+            text::init(&ctx).unwrap(); // load TextEncoder
             init(&ctx).unwrap();
 
             let source = Source::from_path("tests/blob.js").await.unwrap();
