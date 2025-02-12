@@ -347,34 +347,82 @@ impl JSCContext {
         error_name: &str,
         message: impl AsRef<str>,
     ) -> JSCValue {
+        #[cfg(debug_assertions)]
+        println!("{}: {}", error_name, message.as_ref());
+
+        let message_cstr = CString::new(message.as_ref()).unwrap();
+        let error_name_cstr = CString::new(error_name).unwrap();
+
         unsafe {
-            // Escape single quotes in message
-            let message = message.as_ref().replace('\'', "\\'");
+            let message_str = jsc::JSStringCreateWithUTF8CString(message_cstr.as_ptr());
+            let error_name_str = jsc::JSStringCreateWithUTF8CString(error_name_cstr.as_ptr());
+            let proto_key = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
+            let name_key = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
 
-            // Create simple eval string
-            let eval_str = format!(
-                "new {error_name}('{message}')",
-                error_name = error_name,
-                message = message
-            );
-            println!("xx: {}", eval_str);
-            let c_eval = CString::new(eval_str).unwrap();
-            let js_str = jsc::JSStringCreateWithUTF8CString(c_eval.as_ptr());
+            // Get constructor
+            let global = jsc::JSContextGetGlobalObject(self.raw);
+            let error_constructor =
+                jsc::JSObjectGetProperty(self.raw, global, error_name_str, ptr::null_mut());
 
-            let mut exception: jsc::JSValueRef = ptr::null_mut();
-            let error = jsc::JSEvaluateScript(
-                self.raw,
-                js_str,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                1,
-                &mut exception,
-            );
+            let error = if !error_constructor.is_null() {
+                let message_value = jsc::JSValueMakeString(self.raw, message_str);
+                let args = [message_value];
+                let error = jsc::JSObjectCallAsConstructor(
+                    self.raw,
+                    error_constructor as jsc::JSObjectRef,
+                    1,
+                    args.as_ptr(),
+                    ptr::null_mut(),
+                );
 
-            jsc::JSStringRelease(js_str);
+                if !error.is_null() {
+                    let error_proto = jsc::JSObjectGetProperty(
+                        self.raw,
+                        error_constructor as jsc::JSObjectRef,
+                        proto_key,
+                        ptr::null_mut(),
+                    );
+                    if !error_proto.is_null() {
+                        jsc::JSObjectSetPrototype(self.raw, error as jsc::JSObjectRef, error_proto);
+                    }
 
-            let error = JSCValue::from_owned_raw(self.raw, error);
-            error.with_exception()
+                    let name_value = jsc::JSValueMakeString(self.raw, error_name_str);
+                    jsc::JSObjectSetProperty(
+                        self.raw,
+                        error as jsc::JSObjectRef,
+                        name_key,
+                        name_value,
+                        jsc::kJSPropertyAttributeDontEnum,
+                        ptr::null_mut(),
+                    );
+                }
+                error
+            } else {
+                ptr::null_mut()
+            };
+
+            jsc::JSStringRelease(message_str);
+            jsc::JSStringRelease(error_name_str);
+            jsc::JSStringRelease(proto_key);
+            jsc::JSStringRelease(name_key);
+
+            if error.is_null() {
+                let generic_message = format!("{}: {}", error_name, message.as_ref());
+                let generic_cstr = CString::new(generic_message).unwrap();
+                let generic_str = jsc::JSStringCreateWithUTF8CString(generic_cstr.as_ptr());
+
+                let args = [jsc::JSValueMakeString(self.raw, generic_str)];
+                let error = jsc::JSObjectMakeError(
+                    self.raw,
+                    1,
+                    args.as_ptr(), // Pass pointer to array
+                    ptr::null_mut(),
+                );
+                jsc::JSStringRelease(generic_str);
+                JSCValue::from_owned_raw(self.raw, error).with_exception()
+            } else {
+                JSCValue::from_owned_raw(self.raw, error).with_exception()
+            }
         }
     }
 }
