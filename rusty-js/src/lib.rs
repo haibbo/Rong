@@ -3,7 +3,8 @@ pub use rusty_js_core::{
     JSArrayBuffer as CoreJSArrayBuffer, JSClass, JSContext as CoreJSContext, JSEngine,
     JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject, JSResult,
     JSRuntime as CoreJSRuntime, JSRuntimeService, JSTypedArray as CoreJSTypedArray,
-    JSTypedArrayKind, JSValue as CoreJSValue, Promise as CorePromise, RustyJSError, Source,
+    JSTypedArrayKind, JSValue as CoreJSValue, JsonToJsValue, Promise as CorePromise, RustyJSError,
+    Source,
 };
 
 pub use rusty_js_core::function;

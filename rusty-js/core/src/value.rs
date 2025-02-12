@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextImpl, JSResult};
+use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
 use std::fmt;
 
 mod convert;
@@ -59,6 +59,9 @@ pub trait JSValueImpl: Clone {
 
     /// Create JavaScript undefined value
     fn create_undefined(ctx: &Self::Context) -> Self;
+
+    /// Creates a JSValue by parsing a JSON string
+    fn from_json_str(ctx: &Self::Context, str: &str) -> Self;
 }
 
 pub struct JSValue<V: JSValueImpl> {
@@ -152,6 +155,30 @@ where
 {
     fn into_js_value(self, _ctx: &JSContext<V::Context>) -> V {
         self.into_value()
+    }
+}
+
+/// Converts a JSON string into a JSValue
+pub trait JsonToJsValue<V>
+where
+    V: JSValueImpl,
+{
+    /// Converts the JSON string into a JSValue using the provided context
+    fn to_js_value(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>>;
+}
+
+impl<V> JsonToJsValue<V> for &str
+where
+    V: JSObjectOps + JSTypeOf,
+{
+    fn to_js_value(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>> {
+        let result = V::from_json_str(ctx.as_ref(), self);
+        if result.is_exception() {
+            let err = JSException::from_js_value(ctx, result)?;
+            Err(RustyJSError::Exception(err.into_error()))
+        } else {
+            Ok(JSValue::from_raw(ctx, result))
+        }
     }
 }
 
