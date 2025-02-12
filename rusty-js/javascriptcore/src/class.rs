@@ -147,111 +147,87 @@ where
     JC: JSClass<JSCValue>,
 {
     let class_name_cstr = CString::new(class_name).unwrap();
-    let class_def = jsc::JSClassDefinition {
-        version: 0,
-        attributes: 0,
-        className: class_name_cstr.as_ptr(),
-        parentClass: ptr::null_mut(),
-        staticValues: ptr::null(),
-        staticFunctions: ptr::null(),
-        initialize: None,
-        finalize: Some(finalizer::<JC>),
-        hasProperty: None,
-        getProperty: None,
-        setProperty: None,
-        deleteProperty: None,
-        getPropertyNames: None,
-        callAsFunction: Some(call_as_function::<JC>),
-        callAsConstructor: Some(generic_constructor::<JC>),
-        hasInstance: Some(has_instance),
-        convertToType: None,
-    };
+    let ctx = ctx.to_raw();
 
     unsafe {
+        // It is not possible to use JS subclassing with objects created from
+        // a class definition that sets callAsConstructor by default.
+        // Subclassing is supported via the JSObjectMakeConstructor function, however.
+        let class_def = jsc::JSClassDefinition {
+            version: 0,
+            attributes: jsc::kJSClassAttributeNone,
+            className: class_name_cstr.as_ptr(),
+            parentClass: ptr::null_mut(),
+            staticValues: ptr::null(),
+            staticFunctions: ptr::null(),
+            initialize: None,
+            finalize: Some(finalizer::<JC>),
+            hasProperty: None,
+            getProperty: None,
+            setProperty: None,
+            deleteProperty: None,
+            getPropertyNames: None,
+            callAsFunction: Some(call_as_function::<JC>),
+            callAsConstructor: None,
+            hasInstance: Some(has_instance),
+            convertToType: None,
+        };
+
         let js_class = jsc::JSClassCreate(&class_def);
-        let js_class = jsc::JSClassRetain(js_class);
-        let constructor = jsc::JSObjectMake(ctx.to_raw(), js_class, ptr::null_mut());
+        let constructor =
+            jsc::JSObjectMakeConstructor(ctx, js_class, Some(generic_constructor::<JC>));
 
-        // Very Important!
-        // It's used to get JSClassRef from constructor's private data, then we can make
-        // instance
-        // memory is align, so we can set LSB bit to identify it's JSClass
-        let classid = js_class as usize | 1;
-        jsc::JSObjectSetPrivate(constructor, classid as _);
-
-        let class_name = CString::new(class_name).unwrap();
-        let class_name = jsc::JSStringCreateWithUTF8CString(class_name.as_ptr());
-        let constructor_name = jsc::JSStringCreateWithUTF8CString(c"constructor".as_ptr());
-        let proto_name = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
-
-        // setup constructor's attribute: name
-        let nameproperty = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
-        let namevalueref = jsc::JSValueMakeString(ctx.to_raw(), class_name);
-        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-
+        // set constructor'name to class name
+        let name_key = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
+        let class_name = jsc::JSStringCreateWithUTF8CString(class_name_cstr.as_ptr());
+        let name_value = jsc::JSValueMakeString(ctx, class_name);
         jsc::JSObjectSetProperty(
-            ctx.to_raw(),
+            ctx,
             constructor,
-            nameproperty,
-            namevalueref,
+            name_key,
+            name_value,
             jsc::kJSPropertyAttributeReadOnly | jsc::kJSPropertyAttributeDontEnum,
-            &mut exception,
-        );
-        jsc::JSStringRelease(nameproperty);
-
-        // Create prototype object
-        let prototypeobject = jsc::JSObjectMake(ctx.to_raw(), ptr::null_mut(), ptr::null_mut());
-
-        // Set JC::NAME.prototype
-        jsc::JSObjectSetProperty(
-            ctx.to_raw(),
-            constructor,
-            proto_name,
-            prototypeobject,
-            jsc::kJSPropertyAttributeDontEnum
-                | jsc::kJSPropertyAttributeReadOnly
-                | jsc::kJSPropertyAttributeDontDelete,
             ptr::null_mut(),
         );
-
-        // Set JC::NAME.prototype.constructor
-        jsc::JSObjectSetProperty(
-            ctx.to_raw(),
-            prototypeobject,
-            constructor_name,
-            constructor,
-            jsc::kJSPropertyAttributeDontEnum,
-            ptr::null_mut(),
-        );
-
-        // Get Function constructor using helper function
-        let functionconstructor = get_constructor(ctx.to_raw(), c"Function".as_ptr());
-
-        // Set JC::NAME.constructor to Function
-        jsc::JSObjectSetProperty(
-            ctx.to_raw(),
-            constructor,
-            constructor_name,
-            functionconstructor,
-            jsc::kJSPropertyAttributeDontEnum,
-            ptr::null_mut(),
-        );
-
-        // register constructor function to global object
-        let global = jsc::JSContextGetGlobalObject(ctx.to_raw());
-        jsc::JSObjectSetProperty(
-            ctx.to_raw(),
-            global,
-            class_name,
-            constructor,
-            jsc::kJSPropertyAttributeNone,
-            ptr::null_mut(),
-        );
+        jsc::JSStringRelease(name_key);
         jsc::JSStringRelease(class_name);
-        jsc::JSStringRelease(constructor_name);
-        jsc::JSStringRelease(proto_name);
 
-        JSCValue::from_owned_obj(ctx.to_raw(), constructor)
+        // set JC.constructor to Function
+        let function = get_constructor(ctx, c"Function".as_ptr());
+        let constructor_key = jsc::JSStringCreateWithUTF8CString(c"constructor".as_ptr());
+        jsc::JSObjectSetProperty(
+            ctx,
+            constructor,
+            constructor_key,
+            function,
+            jsc::kJSPropertyAttributeDontEnum,
+            ptr::null_mut(),
+        );
+
+        // set constructor's prototype.constructor to constructor
+        let prototype_key = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
+        let prototype = jsc::JSObjectGetProperty(ctx, constructor, prototype_key, ptr::null_mut());
+        let prototype = jsc::JSValueToObject(ctx, prototype, ptr::null_mut());
+        jsc::JSObjectSetProperty(
+            ctx,
+            prototype,
+            constructor_key,
+            constructor,
+            jsc::kJSPropertyAttributeDontEnum,
+            ptr::null_mut(),
+        );
+
+        jsc::JSStringRelease(prototype_key);
+        jsc::JSStringRelease(constructor_key);
+
+        // constructor built by JSObjectMakeConstructor does not support JSObjectSetProperty, we
+        // have to setup map ourelf
+        CLASS
+            .write()
+            .unwrap()
+            .insert(constructor as usize, js_class as usize);
+
+        JSCValue::from_owned_obj(ctx, constructor)
     }
 }
 
