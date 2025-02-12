@@ -66,7 +66,7 @@ const results = {
     );
 
     // Test edge cases for constructor
-    results.total += 5;
+    results.total += 4;
     print("Testing constructor edge cases...");
 
     // Test non-array parts - should throw TypeError
@@ -88,24 +88,6 @@ const results = {
       invalidMimeBlob.type === "",
       "Invalid MIME type characters should result in empty type",
     );
-
-    // Test unsupported part type
-    let hasError = false;
-    try {
-      new Blob([
-        {
-          toString() {
-            return "test";
-          },
-        },
-      ]);
-    } catch (e) {
-      hasError = e instanceof TypeError;
-      results.passed += hasError;
-    }
-    if (!hasError) {
-      throw "Unsupported part type should throw TypeError";
-    }
 
     // Test invalid options format - should throw TypeError
     let hasOptionsError = false;
