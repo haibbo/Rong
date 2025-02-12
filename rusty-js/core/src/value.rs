@@ -55,10 +55,10 @@ pub trait JSValueImpl: Clone {
     fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext;
 
     /// Create JavaScript null value
-    fn create_null(raw_ctx: &<Self::Context as JSContextImpl>::RawContext) -> Self;
+    fn create_null(ctx: &Self::Context) -> Self;
 
     /// Create JavaScript undefined value
-    fn create_undefined(raw_ctx: &<Self::Context as JSContextImpl>::RawContext) -> Self;
+    fn create_undefined(ctx: &Self::Context) -> Self;
 }
 
 pub struct JSValue<V: JSValueImpl> {
@@ -117,13 +117,13 @@ where
 
     /// create JS UNDEFINED Value
     pub fn undefined(ctx: &JSContext<V::Context>) -> Self {
-        let value = V::create_undefined(ctx.as_ref().as_raw());
+        let value = V::create_undefined(ctx.as_ref());
         JSValue::from_raw(ctx, value)
     }
 
     /// create JS NULL Value
     pub fn null(ctx: &JSContext<V::Context>) -> Self {
-        let value = V::create_null(ctx.as_ref().as_raw());
+        let value = V::create_null(ctx.as_ref());
         JSValue::from_raw(ctx, value)
     }
 

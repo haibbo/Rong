@@ -109,14 +109,14 @@ impl JSValueImpl for QJSValue {
         &self.ctx
     }
 
-    fn create_null(raw_ctx: &<Self::Context as JSContextImpl>::RawContext) -> Self {
-        let ctx = *raw_ctx;
+    fn create_null(ctx: &Self::Context) -> Self {
+        let ctx = ctx.to_raw();
         let raw = unsafe { qjs::QJS_NewNull(ctx) };
         Self::from_owned_raw(ctx, raw)
     }
 
-    fn create_undefined(raw_ctx: &<Self::Context as JSContextImpl>::RawContext) -> Self {
-        let ctx = *raw_ctx;
+    fn create_undefined(ctx: &Self::Context) -> Self {
+        let ctx = ctx.to_raw();
         let raw = unsafe { qjs::QJS_NewUndefined(ctx) };
         Self::from_owned_raw(ctx, raw)
     }
