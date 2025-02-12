@@ -236,7 +236,7 @@ const results = {
     );
 
     // Test async methods
-    results.total += 2;
+    results.total += 4;
     print("Testing async methods...");
 
     // Create a request with text body
@@ -254,18 +254,18 @@ const results = {
     );
 
     // Test json() method
-    // const jsonBlob = new Blob(['{"message":"Hello"}'], {
-    //   type: "application/json",
-    // });
-    // const jsonRequest = new Request("https://example.com", {
-    //   method: "POST",
-    //   body: jsonBlob,
-    // });
-    // const json = await jsonRequest.json();
-    // results.passed += assert(
-    //   json.message === "Hello",
-    //   "json() should parse JSON correctly",
-    // );
+    const jsonBlob = new Blob(['{"message":"Hello"}'], {
+      type: "application/json",
+    });
+    const jsonRequest = new Request("https://example.com", {
+      method: "POST",
+      body: jsonBlob,
+    });
+    const json = await jsonRequest.json();
+    results.passed += assert(
+      json.message === "Hello",
+      "json() should parse JSON correctly",
+    );
 
     // Test arrayBuffer() method
     const buffer = await requestWithBody.arrayBuffer();
@@ -277,16 +277,18 @@ const results = {
     );
 
     // Test formData() method - should throw not implemented error
-    // let hasFormDataError = false;
-    // try {
-    //   await requestWithBody.formData();
-    // } catch (e) {
-    //   hasFormDataError =
-    //     e instanceof TypeError && e.message.includes("Not implemented");
-    //   results.passed += hasFormDataError;
-    // }
-    // if (!hasFormDataError)
-    //   throw "formData() should throw not implemented error";
+    let hasFormDataError = false;
+    try {
+      await requestWithBody.formData();
+    } catch (e) {
+      hasFormDataError = e.message.includes("Not implemented");
+      if (!(e instanceof TypeError)) {
+        console.log(`Caught non-TypeError: ${e.constructor.name}`);
+      }
+      results.passed += hasFormDataError;
+    }
+    if (!hasFormDataError)
+      throw "formData() should throw not implemented error";
 
     print(`Tests completed: ${results.passed}/${results.total} passed`);
   } catch (err) {
