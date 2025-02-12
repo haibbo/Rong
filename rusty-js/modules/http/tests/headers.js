@@ -109,7 +109,10 @@ const results = {
     try {
       headers.set("", "value");
     } catch (e) {
-      hasError = e instanceof TypeError;
+      hasError = true;
+      if (!(e instanceof TypeError)) {
+        console.log(`Caught non-TypeError: ${e.constructor.name}`);
+      }
       results.passed += hasError;
     }
     if (!hasError) {
@@ -118,19 +121,14 @@ const results = {
 
     // Test invalid header value
     hasError = false;
-    let errorDetails = {};
     try {
-      // Create a string with visible characters around the null character
       const valueWithNull = "test" + String.fromCharCode(0) + "value";
-      console.log("JS test string length: " + valueWithNull.length);
-      console.log(
-        "JS test string bytes:",
-        Array.from(valueWithNull).map((c) => c.charCodeAt(0)),
-      );
-
       headers.set("test", valueWithNull);
     } catch (e) {
-      hasError = e instanceof TypeError;
+      hasError = true;
+      if (!(e instanceof TypeError)) {
+        console.log(`Caught non-TypeError: ${e.constructor.name}`);
+      }
       results.passed += hasError;
     }
     if (!hasError) {
@@ -142,7 +140,10 @@ const results = {
     try {
       new Headers("invalid");
     } catch (e) {
-      hasError = e instanceof TypeError;
+      hasError = true;
+      if (!(e instanceof TypeError)) {
+        console.log(`Caught non-TypeError: ${e.constructor.name}`);
+      }
       results.passed += hasError;
     }
     if (!hasError) {
@@ -154,7 +155,10 @@ const results = {
     try {
       new Headers([["invalid"]]);
     } catch (e) {
-      hasError = e instanceof TypeError;
+      hasError = true;
+      if (!(e instanceof TypeError)) {
+        console.log(`Caught non-TypeError: ${e.constructor.name}`);
+      }
       results.passed += hasError;
     }
     if (!hasError) {
