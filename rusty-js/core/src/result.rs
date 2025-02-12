@@ -108,7 +108,12 @@ where
     V: JSObjectOps,
 {
     fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        self.throw_js_exception(ctx)
+        // Quickjs does not support to use self.throw_js_exception, but jsc works.
+        // here, regradless of error type, new general error to return
+        let v = ctx.as_ref().new_error();
+        let obj = JSObject::from_js_value(ctx, v).unwrap();
+        obj.set("message", self.to_string());
+        obj.into_value()
     }
 }
 
