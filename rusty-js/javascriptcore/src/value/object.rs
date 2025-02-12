@@ -96,7 +96,7 @@ impl JSObjectOps for JSCValue {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
         // Get the Object constructor
-        let object_ctor = crate::context::get_constructor(self.ctx, c"Object".as_ptr());
+        let object_ctor = crate::class::get_constructor(self.ctx, c"Object".as_ptr());
 
         unsafe {
             // Create property descriptor
@@ -265,7 +265,7 @@ impl JSObjectOps for JSCValue {
             let mut properties = Vec::with_capacity(count as usize);
 
             // Get the Object constructor
-            let object_ctor = crate::context::get_constructor(self.ctx, c"Object".as_ptr());
+            let object_ctor = crate::class::get_constructor(self.ctx, c"Object".as_ptr());
 
             // Get the prototype of the Object constructor
             let prototype = jsc::JSObjectGetPrototype(self.ctx, object_ctor);
