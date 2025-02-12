@@ -123,6 +123,18 @@ impl JSValueImpl for JSCValue {
         let raw = unsafe { jsc::JSValueMakeUndefined(ctx) };
         Self::from_owned_raw(ctx, raw)
     }
+
+    fn from_json_str(ctx: &Self::Context, str: &str) -> Self {
+        let ctx = ctx.to_raw();
+        let c_str = CString::new(str).unwrap();
+        let raw = unsafe {
+            let js_string = jsc::JSStringCreateWithUTF8CString(c_str.as_ptr());
+            let raw = jsc::JSValueMakeFromJSONString(ctx, js_string);
+            jsc::JSStringRelease(js_string);
+            raw
+        };
+        Self::from_owned_raw(ctx, raw)
+    }
 }
 
 impl_js_converter!(
