@@ -232,7 +232,7 @@ const results = {
     );
 
     // Test async methods
-    results.total += 1;
+    results.total += 2;
     print("Testing async methods...");
 
     // Create a request with text body
@@ -264,13 +264,13 @@ const results = {
     // );
 
     // Test arrayBuffer() method
-    // const buffer = await requestWithBody.arrayBuffer();
-    // const view = new Uint8Array(buffer);
-    // const decoder = new TextDecoder();
-    // results.passed += assert(
-    //   decoder.decode(view) === "Hello World",
-    //   "arrayBuffer() should return correct content",
-    // );
+    const buffer = await requestWithBody.arrayBuffer();
+    const view = new Uint8Array(buffer);
+    const decoder = new TextDecoder();
+    results.passed += assert(
+      decoder.decode(view) === "Hello World",
+      "arrayBuffer() should return correct content",
+    );
 
     // Test formData() method - should throw not implemented error
     // let hasFormDataError = false;
