@@ -1,18 +1,6 @@
 use crate::{jsc, JSCValue};
 use rusty_js_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
 
-fn make_instance(
-    ctx: *mut jsc::OpaqueJSContext,
-    constructor: JSCValue,
-    data: *mut (),
-) -> jsc::JSObjectRef {
-    unsafe {
-        // must clear LSB bit
-        let classref = jsc::JSObjectGetPrivate(constructor.as_obj()) as usize & !0x1;
-        jsc::JSObjectMake(ctx, classref as jsc::JSClassRef, data as _)
-    }
-}
-
 impl JSObjectOps for JSCValue {
     fn new_object(ctx: &Self::Context) -> Self {
         unsafe {
@@ -22,7 +10,11 @@ impl JSObjectOps for JSCValue {
     }
 
     fn make_instance(ctx: &Self::Context, constructor: Self, data: *mut ()) -> Self {
-        let obj = make_instance(ctx.to_raw(), constructor, data);
+        let obj = unsafe {
+            let classref = crate::class::get_classref_by_constructor(constructor);
+            jsc::JSObjectMake(ctx.to_raw(), classref as jsc::JSClassRef, data as _)
+        };
+
         JSCValue::from_owned_obj(ctx.to_raw(), obj)
     }
 

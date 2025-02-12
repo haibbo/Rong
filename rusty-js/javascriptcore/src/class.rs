@@ -1,7 +1,33 @@
 use crate::{jsc, JSCContext, JSCValue};
 use rusty_js_core::{JSClass, JSClassExt, JSContextImpl, JSValueImpl};
+use std::collections::HashMap;
 use std::ffi::{c_char, CString};
 use std::ptr;
+use std::sync::{LazyLock, RwLock};
+
+/// Global storage mapping constructor objects to their corresponding class references
+///
+/// This maintains a mapping between:
+/// - Key: Constructor object pointer (as usize)
+/// - Value: Class reference pointer (as usize)
+///
+/// The mapping is thread-safe through RwLock and initialized lazily
+static CLASS: LazyLock<RwLock<HashMap<usize, usize>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// Retrieves the class reference associated with a given constructor
+//
+/// # Returns
+/// The corresponding class reference if found, otherwise null pointer
+pub(crate) fn get_classref_by_constructor(constructor: JSCValue) -> jsc::JSClassRef {
+    let constructor_ptr = constructor.as_value() as usize;
+    if let Ok(map) = CLASS.read() {
+        if let Some(&class_ref) = map.get(&constructor_ptr) {
+            return class_ref as jsc::JSClassRef;
+        }
+    }
+    ptr::null_mut()
+}
 
 unsafe extern "C" fn generic_constructor<JC>(
     ctx: jsc::JSContextRef,
