@@ -88,6 +88,19 @@ impl RustyJSError {
             | RustyJSError::NotSupportByteCode => ctx.as_ref().throw_error(self.to_string()),
         }
     }
+
+    pub fn into_js_error<V>(self, ctx: &JSContext<V::Context>) -> JSObject<V>
+    where
+        V: JSObjectOps + JSValueImpl,
+        V::Context: JSExceptionHandler,
+    {
+        // Quickjs does not support to receive exception on promise,  but jsc works.
+        // here, regradless of error type, new general error to return
+        let v = ctx.as_ref().new_error();
+        let obj = JSObject::from_js_value(ctx, v).unwrap();
+        obj.set("message", self.to_string());
+        obj
+    }
 }
 
 impl<V: JSValueImpl> FromJSValue<V> for RustyJSError
@@ -108,12 +121,7 @@ where
     V: JSObjectOps,
 {
     fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        // Quickjs does not support to use self.throw_js_exception, but jsc works.
-        // here, regradless of error type, new general error to return
-        let v = ctx.as_ref().new_error();
-        let obj = JSObject::from_js_value(ctx, v).unwrap();
-        obj.set("message", self.to_string());
-        obj.into_value()
+        self.throw_js_exception(ctx)
     }
 }
 

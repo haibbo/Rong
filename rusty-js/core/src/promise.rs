@@ -159,11 +159,13 @@ pub trait PromiseResolver<V: JSValueImpl> {
 // Implement for RustyJSError types
 impl<V> PromiseResolver<V> for RustyJSError
 where
-    RustyJSError: IntoJSValue<V>,
     V: JSObjectOps,
+    V::Context: JSExceptionHandler,
 {
     fn resolve_promise(self, _resolve: JSFunc<V>, reject: JSFunc<V>) {
-        let _ = reject.call::<_, ()>((self,));
+        let ctx = reject.get_ctx();
+        let js_err = self.into_js_error(&ctx);
+        let _ = reject.call::<_, ()>((js_err,));
     }
 }
 
@@ -192,7 +194,7 @@ where
             }
             Err(err) => {
                 let ctx = reject.get_ctx();
-                let js_error = JSValue::from_raw(&ctx, err.throw_js_exception(&ctx));
+                let js_error = err.into_js_error(&ctx);
                 let _ = reject.call::<_, ()>((js_error,));
             }
         }
