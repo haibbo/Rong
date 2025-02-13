@@ -47,7 +47,7 @@ where
 
 impl<V: JSObjectOps> JSFunc<V> {
     /// Create a new JS function from a Rust function or closure
-    pub fn new<C, F, P, K: 'static>(ctx: &JSContext<C>, f: F) -> Self
+    pub fn new<C, F, P, K: 'static>(ctx: &JSContext<C>, f: F) -> JSResult<Self>
     where
         C: JSContextImpl<Value = V>,
         F: IntoJSCallable<V, P, K> + 'static,
@@ -113,9 +113,9 @@ impl<V: JSObjectOps> JSFunc<V> {
     }
 
     /// set name of JS Function
-    pub fn name(self, name: &str) -> Self {
-        self.0.set("name", name);
-        self
+    pub fn name(self, name: &str) -> JSResult<Self> {
+        self.0.set("name", name)?;
+        Ok(self)
     }
 
     pub(crate) fn into_inner(self) -> V {
@@ -147,7 +147,7 @@ impl<C: JSContextImpl> JSContext<C>
 where
     C::Value: JSObjectOps + 'static,
 {
-    pub fn register_function<F, P, K>(&self, f: F) -> JSFunc<C::Value>
+    pub fn register_function<F, P, K>(&self, f: F) -> JSResult<JSFunc<C::Value>>
     where
         F: IntoJSCallable<C::Value, P, K> + 'static,
         P: FromParams<C::Value>,
@@ -157,10 +157,10 @@ where
         let length = func.parameter_required_count();
         let value = Class::get::<RustFunc<C::Value>>(self)
             .map(|class| class.instance::<RustFunc<C::Value>>(func))
-            .expect("Not Found RustFunc Class");
+            .ok_or(RustyJSError::Error("Not Found RustFunc Class".to_string()))?;
         let obj = JSObject::from_js_value(self, value).unwrap();
-        obj.set("length", length);
-        JSFunc(obj)
+        obj.set("length", length)?;
+        Ok(JSFunc(obj))
     }
 }
 

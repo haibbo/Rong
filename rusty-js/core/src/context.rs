@@ -266,7 +266,7 @@ impl<C: JSContextImpl> JSContext<C> {
     /// ```rust
     /// context.register_class::<MyClass>();
     /// ```
-    pub fn register_class<JC>(&self)
+    pub fn register_class<JC>(&self) -> JSResult<()>
     where
         JC: JSClass<C::Value>,
         C::Value: JSObjectOps,
@@ -281,8 +281,9 @@ impl<C: JSContextImpl> JSContext<C> {
 
         let obj = self.global();
         let constructor = JSValue::from_raw(self, constructor);
-        JC::class_setup(&ClassSetup::new(constructor.clone().into(), self));
-        obj.set(JC::NAME, constructor);
+        JC::class_setup(&ClassSetup::new(constructor.clone().into(), self))?;
+        obj.set(JC::NAME, constructor)?;
+        Ok(())
     }
 
     /// Get class registry from context

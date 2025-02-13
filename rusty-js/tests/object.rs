@@ -8,7 +8,7 @@ fn basic() {
         let obj = JSObject::new(ctx);
         assert!(obj.is_object());
 
-        assert!(obj.set(key, v));
+        assert!(obj.set(key, v).is_ok());
         assert!(obj.has(key));
 
         obj.del(key);
@@ -17,14 +17,15 @@ fn basic() {
         let value = JSValue::from(ctx, v);
 
         // JSValue as Property Value
-        assert!(obj.set(key, value.clone()));
+        assert!(obj.set(key, value.clone()).is_ok());
         assert_eq!(obj.get::<&str, i32>(key).unwrap(), v);
-        assert!(obj.set(9, value.clone()));
+        assert!(obj.set(9, value.clone()).is_ok());
         assert_eq!(obj.get::<i32, i32>(9).unwrap(), v);
 
         let objv = JSObject::new(ctx);
-        assert!(obj.set("obj", objv));
+        assert!(obj.set("obj", objv).is_ok());
         assert!(obj.has("obj"));
+        Ok(())
     });
 }
 
@@ -72,6 +73,7 @@ fn from_javascript() {
             Err(RustyJSError::PropertyNotFound) => (),
             _ => panic!("Expected PropertyNotFound error"),
         }
+        Ok(())
     })
 }
 
@@ -89,6 +91,7 @@ fn test_object_display() {
         let obj: JSObject = ctx.eval(Source::from_bytes(code)).unwrap();
         assert_eq!(format!("{}", obj), "array");
         assert_eq!(format!("{:?}", obj), "JSObject(array)");
+        Ok(())
     });
 }
 
@@ -134,7 +137,7 @@ fn test_object_properties() {
         assert_eq!(values.count(), 3);
 
         // Test property modification
-        obj.set("name", "updated");
+        assert!(obj.set("name", "updated").is_ok());
         assert_eq!(obj.get::<_, String>("name").unwrap(), "updated");
 
         // Test property deletion
@@ -143,6 +146,7 @@ fn test_object_properties() {
 
         // Test non-existent property
         assert!(obj.get::<_, String>("nonexistent").is_err());
+        Ok(())
     });
 }
 
@@ -179,6 +183,7 @@ fn test_object_property_attributes() {
         // Test property existence
         assert!(obj.has("hidden"));
         assert!(obj.has("readOnly"));
+        Ok(())
     });
 }
 
@@ -219,5 +224,6 @@ fn test_object_prototype() {
         let own_keys: Vec<String> = obj.keys_as().unwrap();
         assert!(own_keys.contains(&"name".to_string()));
         assert!(!own_keys.contains(&"speak".to_string())); // speak is on the prototype
+        Ok(())
     });
 }

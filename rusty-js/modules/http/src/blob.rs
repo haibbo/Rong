@@ -244,7 +244,7 @@ fn normalize_type(mime_type: String) -> String {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<Blob>();
+    ctx.register_class::<Blob>()?;
     Ok(())
 }
 
@@ -259,7 +259,7 @@ mod tests {
             ctx.global().set(
                 "print",
                 JSFunc::new(&ctx, |msg: String| println!("JS: {}", msg)),
-            );
+            )?;
 
             // for blob.js
             ctx.eval::<()>(Source::from_bytes(

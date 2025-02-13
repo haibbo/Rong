@@ -95,7 +95,7 @@ mod tests {
     fn setup() -> JSContext {
         let rt = RustyJS::runtime();
         let ctx = RustyJS::context(&rt);
-        ctx.register_class::<Point>();
+        ctx.register_class::<Point>().unwrap();
         ctx
     }
 
@@ -236,7 +236,7 @@ mod tests {
     #[test]
     fn test_async_instance_method() {
         async_run!(|ctx: JSContext| async move {
-            ctx.register_class::<Point>();
+            ctx.register_class::<Point>()?;
 
             let result: Point = ctx
                 .eval_async(Source::from_bytes(
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn test_async_static_method() {
         async_run!(|ctx: JSContext| async move {
-            ctx.register_class::<Point>();
+            ctx.register_class::<Point>()?;
 
             let result: Point = ctx
                 .eval_async(Source::from_bytes(

@@ -17,7 +17,7 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
     fn data_constructor() -> Constructor<V>;
 
     /// Configures the class prototype and constructor with methods and properties
-    fn class_setup(class: &ClassSetup<V>);
+    fn class_setup(class: &ClassSetup<V>) -> JSResult<()>;
 }
 
 pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
@@ -232,43 +232,49 @@ where
         }
     }
 
-    pub fn method<F, P, K: 'static>(&self, name: &str, f: F)
+    pub fn method<F, P, K: 'static>(&self, name: &str, f: F) -> JSResult<()>
     where
         F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
         V: JSObjectOps + 'static,
     {
-        let func = self.context.register_function(f);
-        self.prototype.set(name, func.name(name));
+        let func = self.context.register_function(f)?;
+        let func = func.name(name)?;
+        self.prototype.set(name, func)?;
+        Ok(())
     }
 
-    pub fn static_method<F, P, K: 'static>(&self, name: &str, f: F)
+    pub fn static_method<F, P, K: 'static>(&self, name: &str, f: F) -> JSResult<()>
     where
         F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
         V: JSObjectOps + 'static,
     {
-        let func = self.context.register_function(f);
-        self.constructor.set(name, func.name(name));
+        let func = self.context.register_function(f)?;
+        let func = func.name(name)?;
+        self.constructor.set(name, func)?;
+        Ok(())
     }
 
-    pub fn property<Fun, Key>(&self, k: Key, f: Fun)
+    pub fn property<Fun, Key>(&self, k: Key, f: Fun) -> JSResult<()>
     where
-        Fun: Fn(PropertyDescriptor<V>) -> PropertyDescriptor<V>,
+        Fun: Fn(PropertyDescriptor<V>) -> JSResult<PropertyDescriptor<V>>,
         Key: for<'b> Into<PropertyKey<'b>>,
     {
-        f(PropertyDescriptor::builder()).apply_to(&self.prototype, k);
+        f(PropertyDescriptor::builder())?.apply_to(&self.prototype, k);
+        Ok(())
     }
 
-    pub fn static_property<Fun, Key>(&self, k: Key, f: Fun)
+    pub fn static_property<Fun, Key>(&self, k: Key, f: Fun) -> JSResult<()>
     where
-        Fun: Fn(PropertyDescriptor<V>) -> PropertyDescriptor<V>,
+        Fun: Fn(PropertyDescriptor<V>) -> JSResult<PropertyDescriptor<V>>,
         Key: for<'b> Into<PropertyKey<'b>>,
     {
-        f(PropertyDescriptor::builder()).apply_to(&self.constructor, k);
+        f(PropertyDescriptor::builder())?.apply_to(&self.constructor, k);
+        Ok(())
     }
 
-    pub fn new_func<F, P, K: 'static>(&self, f: F) -> JSFunc<V>
+    pub fn new_func<F, P, K: 'static>(&self, f: F) -> JSResult<JSFunc<V>>
     where
         F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,

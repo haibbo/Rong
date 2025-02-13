@@ -78,6 +78,6 @@ impl File {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<File>();
+    ctx.register_class::<File>()?;
     Ok(())
 }

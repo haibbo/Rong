@@ -6,10 +6,12 @@ fn main() {
     let rt = RustyJS::runtime();
     let ctx = RustyJS::context(&rt);
 
-    ctx.global().set(
-        "print",
-        JSFunc::new(&ctx, |msg: String| println!("{}", msg)),
-    );
+    ctx.global()
+        .set(
+            "print",
+            JSFunc::new(&ctx, |msg: String| println!("{}", msg)),
+        )
+        .unwrap();
     timer::init(&ctx).unwrap();
 
     rt.block_on(async move {

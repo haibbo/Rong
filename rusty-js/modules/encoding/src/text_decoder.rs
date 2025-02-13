@@ -172,7 +172,7 @@ impl TextDecoder {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<TextDecoder>();
+    ctx.register_class::<TextDecoder>()?;
     Ok(())
 }
 

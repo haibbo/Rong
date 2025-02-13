@@ -194,13 +194,13 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                     quote! {
                         class.new_func(|#receiver_type #(, #patterns: #types)*| async move {
                             #method_call
-                        })
+                        })?
                     }
                 } else {
                     quote! {
                         class.new_func(move |#receiver_type #(, #patterns: #types)*| {
                             #method_call
-                        })
+                        })?
                     }
                 };
 
@@ -223,7 +223,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                             |#receiver_type, #(#patterns: #types),*| async move {
                                 #method_call
                             }
-                        );
+                        )?;
                     }
                 } else {
                     quote! {
@@ -232,7 +232,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                             move |#receiver_type, #(#patterns: #types),*| {
                                 #method_call
                             }
-                        );
+                        )?;
                     }
                 };
                 instance_methods.push(method_def);
@@ -257,13 +257,13 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                     quote! {
                         class.new_func(|#(#patterns: #types),*| async move {
                             Self::#method_name(#(#patterns),*).await
-                        })
+                        })?
                     }
                 } else {
                     quote! {
                         class.new_func(move |#(#patterns: #types),*| {
                             Self::#method_name(#(#patterns),*)
-                        })
+                        })?
                     }
                 };
 
@@ -286,7 +286,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                             |#(#patterns: #types),*| async move {
                                 Self::#method_name(#(#patterns),*).await
                             }
-                        );
+                        )?;
                     }
                 } else {
                     quote! {
@@ -295,7 +295,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                             move |#(#patterns: #types),*| {
                                 Self::#method_name(#(#patterns),*)
                             }
-                        );
+                        )?;
                     }
                 };
                 static_methods.push(method_def);
@@ -332,7 +332,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
         }
 
         let property = quote! {
-            class.property(#name, |builder| builder #(#parts)*);
+            class.property(#name, |builder| Ok(builder #(#parts)*))?;
         };
 
         instance_methods.push(property);
@@ -359,7 +359,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
         }
 
         static_methods.push(quote! {
-            class.static_property(#name, |builder| builder #(#parts)*);
+            class.static_property(#name, |builder| Ok(builder #(#parts)*))?;
         });
     }
 
@@ -369,9 +369,10 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
 
             #constructor
 
-            fn class_setup(class: &rusty_js::ClassSetup<rusty_js::JSEngineValue>) {
+            fn class_setup(class: &rusty_js::ClassSetup<rusty_js::JSEngineValue>) -> JSResult<()> {
                 #(#instance_methods)*
                 #(#static_methods)*
+                Ok(())
             }
         }
     };

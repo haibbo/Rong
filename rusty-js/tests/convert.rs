@@ -50,6 +50,7 @@ fn test_convert() {
         assert!(jsvalue.is_bigint());
         let output: usize = jsvalue.try_into().unwrap();
         assert_eq!(large_usize, output);
+        Ok(())
     });
 }
 
@@ -101,6 +102,7 @@ fn test_display() {
         let code = "null";
         let jsvalue: JSValue = ctx.eval(Source::from_bytes(code)).unwrap();
         assert_eq!(format!("{}", jsvalue), "null");
+        Ok(())
     });
 }
 
@@ -161,5 +163,6 @@ fn test_string_with_null() {
         );
         let parts: Vec<&str> = result.split('\0').collect();
         assert_eq!(parts, &["a", "b", "c"], "Should split into three parts");
+        Ok(())
     });
 }

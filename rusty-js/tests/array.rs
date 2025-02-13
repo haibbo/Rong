@@ -21,6 +21,7 @@ fn test_array_basic_operations() {
 
         // Test is_empty
         assert!(!array.is_empty());
+        Ok(())
     });
 }
 
@@ -48,6 +49,7 @@ fn test_array_iteration() {
         let mut empty_iter = empty_array.iter::<i32>();
         assert_eq!(empty_iter.len(), 0);
         assert!(empty_iter.next().is_none());
+        Ok(())
     });
 }
 
@@ -68,6 +70,7 @@ fn test_array_creation() {
         assert_eq!(array.get::<i32>(0).unwrap(), Some(1));
         assert_eq!(array.get::<i32>(1).unwrap(), Some(2));
         assert_eq!(array.get::<i32>(2).unwrap(), Some(3));
+        Ok(())
     });
 }
 
@@ -89,6 +92,7 @@ fn test_array_pop() {
 
         // Test pop on empty array
         assert!(array.pop::<i32>().unwrap().is_none());
+        Ok(())
     });
 }
 
@@ -101,7 +105,7 @@ fn test_array_from_rust() {
         array.push(42).unwrap();
         array.push(true).unwrap();
 
-        ctx.global().set("__rust_array", array);
+        ctx.global().set("__rust_array", array)?;
 
         // Verify contents in JavaScript
         let result: String = ctx
@@ -113,6 +117,7 @@ fn test_array_from_rust() {
             ))
             .unwrap();
         assert_eq!(result, "hello 42 true");
+        Ok(())
     });
 }
 
@@ -137,5 +142,6 @@ fn test_array_iterator_edge_cases() {
             Some("two".to_string())
         );
         assert_eq!(mixed_array.get::<bool>(2).unwrap(), Some(true));
+        Ok(())
     });
 }

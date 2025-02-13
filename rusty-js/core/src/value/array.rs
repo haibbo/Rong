@@ -174,7 +174,7 @@ where
 
         // delete the element and update its length
         self.0.del(index);
-        self.0.set("length", index);
+        self.0.set("length", index)?;
 
         T::from_js_value(&self.get_ctx(), value).map(Some)
     }

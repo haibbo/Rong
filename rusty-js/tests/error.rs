@@ -21,6 +21,7 @@ fn test_throw_error() {
             "Expected error message to contain 'throw-error', but got: {}",
             error
         );
+        Ok(())
     });
 }
 
@@ -32,18 +33,18 @@ fn test_error_constructor() {
             "type_error",
             ctx.register_function(|| -> JSResult<()> {
                 Err(RustyJSError::TypeError("this is typeError".to_string()))
-            }),
-        );
+            })?,
+        )?;
 
         ctx.global().set(
             "reference_error",
-            ctx.register_function(|| -> JSResult<()> { Err(RustyJSError::PropertyNotFound) }),
-        );
+            ctx.register_function(|| -> JSResult<()> { Err(RustyJSError::PropertyNotFound) })?,
+        )?;
 
         ctx.global().set(
             "range_error",
-            ctx.register_function(|| -> JSResult<()> { Err(RustyJSError::TypedArrayRangeError) }),
-        );
+            ctx.register_function(|| -> JSResult<()> { Err(RustyJSError::TypedArrayRangeError) })?,
+        )?;
 
         // Test TypeError
         let type_error = ctx
@@ -83,6 +84,7 @@ fn test_error_constructor() {
             range_error,
             "RangeError: Invalid TypedArray range: offset or length exceeds buffer size"
         );
+        Ok(())
     });
 }
 
@@ -133,6 +135,7 @@ fn test_error_stack() {
             error.message.unwrap().contains("null"),
             "Error message should mention null"
         );
+        Ok(())
     });
 }
 
@@ -164,6 +167,7 @@ fn test_custom_error() {
             "Stack should contain throwCustomError"
         );
         assert!(stack.contains("caller"), "Stack should contain caller");
+        Ok(())
     });
 }
 
@@ -186,6 +190,7 @@ fn test_error_conversion() {
             };
             assert_eq!(error.message.unwrap(), expected_msg);
         }
+        Ok(())
     });
 }
 
@@ -212,5 +217,6 @@ fn test_error_display() {
             error_str.contains("foo"),
             "Error string should contain stack trace"
         );
+        Ok(())
     });
 }

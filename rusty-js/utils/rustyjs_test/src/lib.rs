@@ -4,18 +4,18 @@ pub use rusty_js::function::{Constructor, Optional, Rest, This, ThisMut};
 
 // Helper function to run tests with JS context
 #[allow(dead_code)]
-pub fn run<F: FnOnce(&JSContext)>(f: F) {
+pub fn run<F: FnOnce(&JSContext) -> JSResult<()>>(f: F) {
     let rt = RustyJS::runtime();
     let ctx = RustyJS::context(&rt);
-    f(&ctx);
+    f(&ctx).unwrap();
 }
 
 // Helper function to run tests with both JS context and runtime
 #[allow(dead_code)]
-pub fn run2<F: FnOnce(&JSContext, &JSRuntime)>(f: F) {
+pub fn run2<F: FnOnce(&JSContext, &JSRuntime) -> JSResult<()>>(f: F) {
     let rt = RustyJS::runtime();
     let ctx = RustyJS::context(&rt);
-    f(&ctx, &rt);
+    f(&ctx, &rt).unwrap();
 }
 
 #[macro_export]

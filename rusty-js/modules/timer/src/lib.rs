@@ -182,10 +182,10 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
         registry.cancel_timer(id);
     });
 
-    global.set("setTimeout", set_timeout);
-    global.set("clearTimeout", clear_timeout);
-    global.set("setInterval", set_interval);
-    global.set("clearInterval", clear_interval);
+    global.set("setTimeout", set_timeout)?;
+    global.set("clearTimeout", clear_timeout)?;
+    global.set("setInterval", set_interval)?;
+    global.set("clearInterval", clear_interval)?;
 
     Ok(())
 }
@@ -233,7 +233,7 @@ mod tests {
             let increment = JSFunc::new(&ctx, move || {
                 counter_clone.fetch_add(1, Ordering::SeqCst);
             });
-            ctx.global().set("increment", increment);
+            ctx.global().set("increment", increment)?;
 
             ctx.eval::<()>(Source::from_bytes(
                 r#"
@@ -262,7 +262,7 @@ mod tests {
             let increment = JSFunc::new(&ctx, move || {
                 counter_clone.fetch_add(1, Ordering::SeqCst);
             });
-            ctx.global().set("increment", increment);
+            ctx.global().set("increment", increment)?;
 
             // Keep the interval handle in scope
             let _interval_id: u32 = ctx
@@ -294,7 +294,7 @@ mod tests {
             let increment = JSFunc::new(&ctx, move || {
                 counter_clone.fetch_add(1, Ordering::SeqCst);
             });
-            ctx.global().set("increment", increment);
+            ctx.global().set("increment", increment)?;
 
             // Use JavaScript APIs to set and clear interval
             ctx.eval::<()>(Source::from_bytes(

@@ -27,83 +27,73 @@ impl JSClass<JSEngineValue> for Point {
         Constructor::new(|x, y| Point { x, y })
     }
 
-    fn class_setup(class: &ClassSetup<JSEngineValue>) {
+    fn class_setup(class: &ClassSetup<JSEngineValue>) -> JSResult<()> {
         // Define instance property with getter and setter
         class.property("x", |builder| {
-            let getter = class.new_func(|this: This<Point>| this.x);
-            let setter = class.new_func(|mut this: ThisMut<Point>, x: i32| this.x = x);
-            builder
+            let getter = class.new_func(|this: This<Point>| this.x)?;
+            let setter = class.new_func(|mut this: ThisMut<Point>, x: i32| this.x = x)?;
+            Ok(builder
                 .getter(getter)
                 .setter(setter)
-                .with_default_method_attr()
-        });
+                .with_default_method_attr())
+        })?;
 
         class.property("y", |builder| {
-            let getter = class.new_func(|this: This<Point>| this.y);
-            let setter = class.new_func(|mut this: ThisMut<Point>, y: i32| this.y = y);
-            builder
+            let getter = class.new_func(|this: This<Point>| this.y)?;
+            let setter = class.new_func(|mut this: ThisMut<Point>, y: i32| this.y = y)?;
+            Ok(builder
                 .getter(getter)
                 .setter(setter)
-                .with_default_method_attr()
-        });
+                .with_default_method_attr())
+        })?;
 
         // Define static property with getter and setter
         class.static_property("origin", |builder| {
-            let getter = class.new_func(|| Point { x: 0x5a, y: 0xa5 });
+            let getter = class.new_func(|| Point { x: 0x5a, y: 0xa5 })?;
             let setter = class.new_func(|| {
                 // Read-only property, setter does nothing
-            });
-            builder.getter(getter).setter(setter).configurable()
-        });
+            })?;
+            Ok(builder.getter(getter).setter(setter).configurable())
+        })?;
 
-        class.method("add", |this: This<Point>, p: Point| this.add(p));
+        class.method("add", |this: This<Point>, p: Point| this.add(p))?;
 
         // Define static method
-        class.static_method("sadd", |x: i32, y: i32| Self::sadd(x, y));
+        class.static_method("sadd", |x: i32, y: i32| Self::sadd(x, y))?;
+        Ok(())
     }
 }
 
 #[test]
 fn constructor() {
     run(|ctx| {
-        ctx.register_class::<Point>();
-        let point = ctx
-            .eval::<Point>(Source::from_bytes(b"let point=new Point(2,3); point"))
-            .unwrap();
+        ctx.register_class::<Point>()?;
+        let point = ctx.eval::<Point>(Source::from_bytes(b"let point=new Point(2,3); point"))?;
         assert_eq!(point.x, 2);
         assert_eq!(point.y, 3);
 
         // Test instance_of with Point
-        let obj = ctx
-            .eval::<JSObject>(Source::from_bytes(b"new Point(2,3)"))
-            .unwrap();
+        let obj = ctx.eval::<JSObject>(Source::from_bytes(b"new Point(2,3)"))?;
         assert!(Class::instance_of::<Point>(&obj));
 
         // Test instance_of with non-Point object
-        let obj = ctx
-            .eval::<JSObject>(Source::from_bytes(b"let o = {}; o"))
-            .unwrap();
+        let obj = ctx.eval::<JSObject>(Source::from_bytes(b"let o = {}; o"))?;
         assert!(!Class::instance_of::<Point>(&obj));
 
         assert_eq!(
-            ctx.eval::<String>(Source::from_bytes(b"Point.constructor.name"))
-                .unwrap(),
+            ctx.eval::<String>(Source::from_bytes(b"Point.constructor.name"))?,
             "Function"
         );
 
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(b"Point.prototype.constructor==Point"))
-            .unwrap());
+        assert!(ctx.eval::<bool>(Source::from_bytes(b"Point.prototype.constructor==Point"))?);
 
         assert_eq!(
-            ctx.eval::<String>(Source::from_bytes(b"typeof Point"))
-                .unwrap(),
+            ctx.eval::<String>(Source::from_bytes(b"typeof Point"))?,
             "function"
         );
 
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(b"point instanceof Point"))
-            .unwrap());
+        assert!(ctx.eval::<bool>(Source::from_bytes(b"point instanceof Point"))?);
+        Ok(())
     });
 }
 
@@ -111,22 +101,20 @@ fn constructor() {
 fn rustfunc_class_registered() {
     run(|ctx| {
         assert_eq!(
-            ctx.eval::<String>(Source::from_bytes(b"RustFunc.name"))
-                .unwrap(),
+            ctx.eval::<String>(Source::from_bytes(b"RustFunc.name"))?,
             "RustFunc"
         );
 
         assert_eq!(
-            ctx.eval::<String>(Source::from_bytes("typeof RustFunc"))
-                .unwrap(),
+            ctx.eval::<String>(Source::from_bytes("typeof RustFunc"))?,
             "function"
         );
 
         assert_eq!(
-            ctx.eval::<String>(Source::from_bytes(b"RustFunc.constructor.name"))
-                .unwrap(),
+            ctx.eval::<String>(Source::from_bytes(b"RustFunc.constructor.name"))?,
             "Function"
         );
+        Ok(())
     });
 }
 
@@ -134,9 +122,9 @@ fn rustfunc_class_registered() {
 fn basic_add_fn() {
     run(|ctx| {
         let func = ctx
-            .register_function(|a: i32, b: i32, c: i32| a + b + c)
-            .name("add");
-        ctx.global().set("add", func);
+            .register_function(|a: i32, b: i32, c: i32| a + b + c)?
+            .name("add")?;
+        ctx.global().set("add", func)?;
 
         assert!(ctx.eval::<JSFunc>(Source::from_bytes(b"add")).is_ok());
         assert_eq!(
@@ -151,18 +139,17 @@ fn basic_add_fn() {
             ctx.eval::<String>(Source::from_bytes(b"add.name")).unwrap(),
             "add"
         );
+        Ok(())
     });
 }
 
 #[test]
 fn test_property_getter_setter() {
     run(|ctx| {
-        ctx.register_class::<Point>();
+        ctx.register_class::<Point>()?;
 
         // Test getter
-        let point = ctx
-            .eval::<Point>(Source::from_bytes(b"let p = new Point(5, 10); p"))
-            .unwrap();
+        let point = ctx.eval::<Point>(Source::from_bytes(b"let p = new Point(5, 10); p"))?;
         assert_eq!(point.x, 5);
 
         // Test setter
@@ -187,13 +174,14 @@ fn test_property_getter_setter() {
                 b"Object.getOwnPropertyDescriptor(Point.prototype, 'x').set !== undefined"
             ))
             .unwrap());
+        Ok(())
     });
 }
 
 #[test]
 fn test_instance_method() {
     run(|ctx| {
-        ctx.register_class::<Point>();
+        ctx.register_class::<Point>()?;
 
         // Test method call
         let result = ctx
@@ -213,13 +201,14 @@ fn test_instance_method() {
                 b"typeof Point.prototype.add === 'function'"
             ))
             .unwrap());
+        Ok(())
     });
 }
 
 #[test]
 fn test_static_method() {
     run(|ctx| {
-        ctx.register_class::<Point>();
+        ctx.register_class::<Point>()?;
 
         // Test static method call
         let result = ctx
@@ -235,13 +224,14 @@ fn test_static_method() {
         assert!(ctx
             .eval::<bool>(Source::from_bytes(b"typeof Point.sadd === 'function'"))
             .unwrap());
+        Ok(())
     });
 }
 
 #[test]
 fn test_static_property() {
     run(|ctx| {
-        ctx.register_class::<Point>();
+        ctx.register_class::<Point>()?;
 
         // Test static getter
         let origin = ctx
@@ -279,13 +269,14 @@ fn test_static_property() {
         assert!(!ctx
             .eval::<bool>(Source::from_bytes(b"'origin' in (new Point(0, 0))"))
             .unwrap());
+        Ok(())
     });
 }
 
 #[test]
 fn test_extend_class() {
     run(|ctx| {
-        ctx.register_class::<Point>();
+        ctx.register_class::<Point>()?;
 
         // Test class extension with method inheritance
         let result = ctx
@@ -324,5 +315,6 @@ fn test_extend_class() {
             .unwrap();
         eprintln!("JavaScripCore does not know get_color as a function, pls refer Bug note on its register_class");
         assert_eq!(result, 0x5fa5);
+        Ok(())
     });
 }

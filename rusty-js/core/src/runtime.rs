@@ -106,11 +106,12 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
 
 impl<C: JSContextImpl> JSContext<C> {
     /// used to create object instance as function
-    pub(crate) fn register_rustfunc_class(&self)
+    pub(crate) fn register_rustfunc_class(&self) -> JSResult<()>
     where
         C::Value: JSObjectOps + 'static,
     {
-        self.register_class::<RustFunc<C::Value>>();
+        self.register_class::<RustFunc<C::Value>>()?;
+        Ok(())
     }
 }
 
@@ -161,7 +162,7 @@ pub trait JSEngine: Sized {
         Self::Value: JSObjectOps + 'static,
     {
         let ctx = JSContext::<Self::Context>::new(rt);
-        ctx.register_rustfunc_class();
+        ctx.register_rustfunc_class().unwrap();
         ctx
     }
 }

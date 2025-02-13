@@ -12,7 +12,7 @@ fn test_rust_promise_with_callback() {
             // Directly resolve the promise with the input value
             resolve.call::<_, ()>((millis,)).unwrap();
             promise
-        });
+        })?;
 
         // Create a JS context to test the promise
         let js_code = r#"
@@ -22,7 +22,7 @@ fn test_rust_promise_with_callback() {
         "#;
 
         // Register the Rust function in JS context
-        ctx.global().set("rustTimeout", timeout_fn);
+        ctx.global().set("rustTimeout", timeout_fn)?;
 
         // Execute the JS code
         ctx.eval::<()>(Source::from_bytes(js_code.as_bytes()))
@@ -33,6 +33,7 @@ fn test_rust_promise_with_callback() {
         let result: i32 = ctx.eval(Source::from_bytes("result")).unwrap();
 
         assert_eq!(result, 101);
+        Ok(())
     });
 }
 
@@ -48,7 +49,7 @@ fn test_rust_promise_with_resolve() {
         let cb = ctx.register_function(move |value: String| {
             println!("Callback received value: {}", value);
             *result_clone.borrow_mut() = Some(value);
-        });
+        })?;
 
         let then = promise.then();
         then.call_with_this::<_, ()>(promise.into_object(), (cb,))
@@ -63,6 +64,7 @@ fn test_rust_promise_with_resolve() {
         // Now assert the result after jobs have run
         let final_result = result.borrow().clone().expect("Callback was not called");
         assert_eq!(final_result, "success!");
+        Ok(())
     });
 }
 
@@ -77,10 +79,10 @@ fn test_rust_future_in_js() {
                 format!("completed after {}ms", delay)
             };
             Promise::from_future(&ctx2, future).unwrap()
-        });
+        })?;
 
         // Register the function in JS context
-        ctx.global().set("rustAsync", async_fn);
+        ctx.global().set("rustAsync", async_fn)?;
 
         // Create JS code that uses the async function
         let js_code = r#"
@@ -119,10 +121,10 @@ fn test_rust_future_error_in_js() {
                 RustyJSError::Error("async operation failed".to_string())
             };
             Promise::from_future(&ctx2, future).unwrap()
-        });
+        })?;
 
         // Register the function in JS context
-        ctx.global().set("rustAsyncError", async_fn);
+        ctx.global().set("rustAsyncError", async_fn)?;
 
         // Create JS code that uses the async function with more debug info
         let js_code = br#"
@@ -169,8 +171,8 @@ fn test_promise_into_future_resolve() {
                 callback.call::<_, ()>(()).unwrap();
             };
             tokio::task::spawn_local(future);
-        });
-        ctx.global().set("setTimeout", set_timeout);
+        })?;
+        ctx.global().set("setTimeout", set_timeout)?;
 
         // Create Promise in JavaScript
         let js_code = r#"
@@ -200,8 +202,8 @@ fn test_promise_into_future_reject_error() {
                 callback.call::<_, ()>(()).unwrap();
             };
             tokio::task::spawn_local(future);
-        });
-        ctx.global().set("setTimeout", set_timeout);
+        })?;
+        ctx.global().set("setTimeout", set_timeout)?;
 
         let js_code = r#"
             new Promise((resolve, reject) => {
@@ -225,9 +227,9 @@ fn test_promise_into_future_reject_exception() {
         let set_timeout = JSFunc::new(&ctx, |callback: JSFunc, delay: u32| async move {
             tokio::time::sleep(Duration::from_millis(delay as u64)).await;
             let _ = callback.call::<_, ()>(());
-        });
+        })?;
 
-        ctx.global().set("setTimeout", set_timeout);
+        ctx.global().set("setTimeout", set_timeout)?;
 
         let js_code = r#"
             new Promise((resolve, reject) => {
@@ -261,9 +263,9 @@ fn test_rust_promise_with_mut_state() {
             counter += 1;
             resolve.call::<_, ()>((counter,)).unwrap();
             promise
-        });
+        })?;
 
-        ctx.global().set("getCounter", counter_fn);
+        ctx.global().set("getCounter", counter_fn)?;
 
         // Call the function multiple times and store results
         let js_code = r#"
@@ -282,6 +284,7 @@ fn test_rust_promise_with_mut_state() {
         let result2: i32 = ctx.eval(Source::from_bytes("result2")).unwrap();
         assert_eq!(result1, 1);
         assert_eq!(result2, 2);
+        Ok(())
     });
 }
 
@@ -300,9 +303,9 @@ fn test_rust_async_with_mut_state() {
                 format!("Counter: {}", count)
             };
             Promise::from_future(&ctx2, future).unwrap()
-        });
+        })?;
 
-        ctx.global().set("asyncCounter", async_fn);
+        ctx.global().set("asyncCounter", async_fn)?;
 
         let js_code = r#"
             let result1, result2;

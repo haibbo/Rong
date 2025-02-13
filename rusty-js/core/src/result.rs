@@ -98,7 +98,7 @@ impl RustyJSError {
         // here, regradless of error type, new general error to return
         let v = ctx.as_ref().new_error();
         let obj = JSObject::from_js_value(ctx, v).unwrap();
-        obj.set("message", self.to_string());
+        let _ = obj.set("message", self.to_string());
         obj
     }
 }

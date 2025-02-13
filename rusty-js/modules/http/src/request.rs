@@ -472,7 +472,7 @@ impl Default for Request {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<Request>();
+    ctx.register_class::<Request>()?;
     Ok(())
 }
 
@@ -487,7 +487,7 @@ mod tests {
             ctx.global().set(
                 "print",
                 JSFunc::new(&ctx, |msg: String| println!("JS: {}", msg)),
-            );
+            )?;
 
             // Register console.log for better test output
             let source = Source::from_bytes(
@@ -499,7 +499,7 @@ mod tests {
                 }
                 "#,
             );
-            let _ = ctx.eval::<()>(source);
+            ctx.eval::<()>(source)?;
 
             // Initialize TextDecoder first
             encoding::init(&ctx).unwrap();

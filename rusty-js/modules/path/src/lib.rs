@@ -32,25 +32,25 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     let path = JSObject::new(ctx);
 
     // Basic path operations
-    path.set("basename", ctx.register_function(basename));
-    path.set("dirname", ctx.register_function(dirname));
-    path.set("extname", ctx.register_function(extname));
-    path.set("isAbsolute", ctx.register_function(is_absolute));
+    path.set("basename", ctx.register_function(basename))?;
+    path.set("dirname", ctx.register_function(dirname))?;
+    path.set("extname", ctx.register_function(extname))?;
+    path.set("isAbsolute", ctx.register_function(is_absolute))?;
 
     // Path combination
-    path.set("join", ctx.register_function(join));
-    path.set("resolve", ctx.register_function(resolve));
-    path.set("normalize", ctx.register_function(normalize));
+    path.set("join", ctx.register_function(join))?;
+    path.set("resolve", ctx.register_function(resolve))?;
+    path.set("normalize", ctx.register_function(normalize))?;
 
     // Path parsing
-    path.set("parse", ctx.register_function(parse));
-    path.set("format", ctx.register_function(format));
+    path.set("parse", ctx.register_function(parse))?;
+    path.set("format", ctx.register_function(format))?;
 
     // Platform-specific
-    path.set("sep", std::path::MAIN_SEPARATOR.to_string());
-    path.set("delimiter", if cfg!(windows) { ";" } else { ":" });
+    path.set("sep", std::path::MAIN_SEPARATOR.to_string())?;
+    path.set("delimiter", if cfg!(windows) { ";" } else { ":" })?;
 
-    ctx.global().set("path", path);
+    ctx.global().set("path", path)?;
     Ok(())
 }
 
@@ -314,20 +314,20 @@ fn parse(ctx: JSContext, path: String) -> JSResult<JSObject> {
         } else {
             String::new()
         },
-    );
+    )?;
 
-    obj.set("dir", dirname(path.to_string_lossy().into_owned()));
+    obj.set("dir", dirname(path.to_string_lossy().into_owned()))?;
     obj.set(
         "base",
         basename(path.to_string_lossy().into_owned(), Optional(None)),
-    );
-    obj.set("ext", extname(path.to_string_lossy().into_owned()));
+    )?;
+    obj.set("ext", extname(path.to_string_lossy().into_owned()))?;
     obj.set(
         "name",
         path.file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default(),
-    );
+    )?;
 
     Ok(obj)
 }
@@ -400,7 +400,7 @@ mod tests {
             ctx.global().set(
                 "print",
                 JSFunc::new(&ctx, |msg: String| println!("JS: {}", msg)),
-            );
+            )?;
 
             init(&ctx).unwrap();
 

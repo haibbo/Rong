@@ -264,7 +264,7 @@ impl Headers {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<Headers>();
+    ctx.register_class::<Headers>()?;
     Ok(())
 }
 
@@ -281,7 +281,7 @@ mod tests {
             ctx.global().set(
                 "print",
                 JSFunc::new(&ctx, |msg: String| println!("JS: {}", msg)),
-            );
+            )?;
 
             let source = Source::from_bytes(
                 r#"
@@ -292,7 +292,7 @@ mod tests {
                     }
                 "#,
             );
-            let _ = ctx.eval::<()>(source);
+            ctx.eval::<()>(source)?;
 
             let source = Source::from_path("tests/headers.js").await.unwrap();
             let obj: JSObject = ctx.eval_async(source).await?;

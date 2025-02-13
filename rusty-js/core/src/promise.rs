@@ -277,7 +277,8 @@ where
                         waker.wake_by_ref();
                     }
                 }
-            });
+            })
+            .unwrap();
 
             // rejected callback used to wake up future and save rejected value
             let reject_state = state.clone();
@@ -290,7 +291,8 @@ where
                 ) {
                     waker.wake_by_ref();
                 }
-            });
+            })
+            .unwrap();
 
             // Register resolve handlers
             this.promise

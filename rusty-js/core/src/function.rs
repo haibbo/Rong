@@ -122,7 +122,9 @@ where
         panic!("Never 'new RustFunc()' in JS");
     }
 
-    fn class_setup(_class: &crate::ClassSetup<V>) {}
+    fn class_setup(_class: &crate::ClassSetup<V>) -> JSResult<()> {
+        Ok(())
+    }
 }
 
 macro_rules! impl_js_callable_func {

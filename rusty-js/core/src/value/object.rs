@@ -143,14 +143,16 @@ impl<V> JSObject<V>
 where
     V: JSObjectOps,
 {
-    pub fn set<'a, K, KV>(&'a self, k: K, kv: KV) -> bool
+    pub fn set<'a, K, KV>(&'a self, k: K, kv: KV) -> JSResult<&'a Self>
     where
         K: Into<PropertyKey<'a>>,
         KV: IntoJSValue<V>,
     {
         let ctx = &self.get_ctx();
         let key = k.into().into_key(ctx);
-        self.as_value().set_property(key, kv.into_js_value(ctx))
+        // TODO: handler other err
+        self.as_value().set_property(key, kv.into_js_value(ctx));
+        Ok(self)
     }
 
     pub fn del<'a, K>(&'a self, k: K) -> bool

@@ -1,9 +1,11 @@
 use rusty_js::*;
 
 mod blob;
+mod body;
 mod file;
 mod header;
 mod request;
+mod response;
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     blob::init(ctx)?;

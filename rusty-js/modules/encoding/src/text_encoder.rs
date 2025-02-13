@@ -93,8 +93,8 @@ impl TextEncoder {
 
                 // Create result object with read/written counts
                 let result = JSObject::new(&ctx);
-                result.set("read", bytes_to_write as f64);
-                result.set("written", bytes_to_write as f64);
+                result.set("read", bytes_to_write as f64)?;
+                result.set("written", bytes_to_write as f64)?;
 
                 return Ok(result);
             }
@@ -109,7 +109,7 @@ impl TextEncoder {
 
 /// Registers the `TextEncoder` class with the JavaScript context.
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<TextEncoder>();
+    ctx.register_class::<TextEncoder>()?;
     Ok(())
 }
 
