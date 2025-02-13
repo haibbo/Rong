@@ -3,12 +3,14 @@ use rusty_js_core::JSTypeOf;
 
 impl JSTypeOf for JSCValue {
     fn is_exception(&self) -> bool {
-        self.exception
+        // Limitation: can not verify exception as JSCValue is from JS
+        self._is_exception()
     }
 
     fn is_error(&self) -> bool {
-        if !self.is_object() {
-            return false;
+        // Limitation: can not verify error as JSCValue is from JS
+        if self._is_err() {
+            return true;
         }
 
         unsafe {
@@ -122,7 +124,7 @@ impl JSTypeOf for JSCValue {
     }
 
     fn is_object(&self) -> bool {
-        self.is_object || unsafe { jsc::JSValueIsObject(self.ctx, self.as_value()) }
+        self._is_object() || unsafe { jsc::JSValueIsObject(self.ctx, self.as_value()) }
     }
 
     fn is_constructor(&self) -> bool {

@@ -1,5 +1,5 @@
 use crate::{jsc, JSCContext, JSCValue};
-use rusty_js_core::{JSClass, JSClassExt, JSContextImpl, JSValueImpl};
+use rusty_js_core::{JSClass, JSClassExt, JSContextImpl, JSTypeOf, JSValueImpl};
 
 pub(crate) unsafe extern "C" fn generic_constructor<JC>(
     ctx: jsc::JSContextRef,
@@ -20,7 +20,7 @@ where
 
     let ctx = JSCContext::from_borrowed_raw(raw);
     let value = <JC as JSClassExt<JSCValue>>::constructor(&ctx, this, args);
-    if value.exception {
+    if value.is_exception() {
         if !exception.is_null() {
             *exception = value.into_raw_value();
         }
@@ -74,7 +74,7 @@ where
 
     // Call the function implementation
     let value = <JC as JSClassExt<JSCValue>>::call(&ctx, function, this, args);
-    if value.exception {
+    if value.is_exception() {
         if !exception.is_null() {
             *exception = value.into_raw_value();
         }

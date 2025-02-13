@@ -8,11 +8,18 @@ mod object;
 mod typed_array;
 mod valuetype;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum JSCValueType {
+    Object,
+    Error,
+    Exception,
+    Other,
+}
+
 pub struct JSCValue {
     value: *const jsc::OpaqueJSValue,
     ctx: *mut jsc::OpaqueJSContext,
-    pub(crate) exception: bool,
-    is_object: bool,
+    value_type: JSCValueType,
 }
 
 impl JSCValue {
@@ -20,13 +27,12 @@ impl JSCValue {
         Self {
             ctx,
             value,
-            exception: false,
-            is_object: false,
+            value_type: JSCValueType::Other,
         }
     }
 
     pub(crate) fn as_obj(&self) -> jsc::JSObjectRef {
-        if self.is_object {
+        if self.value_type == JSCValueType::Object {
             self.value as jsc::JSObjectRef
         } else {
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();
@@ -47,13 +53,30 @@ impl JSCValue {
     }
 
     pub(crate) fn with_exception(mut self) -> Self {
-        self.exception = true;
+        self.value_type = JSCValueType::Exception;
         self
     }
 
     pub(crate) fn with_object(mut self) -> Self {
-        self.is_object = true;
+        self.value_type = JSCValueType::Object;
         self
+    }
+
+    pub(crate) fn with_error(mut self) -> Self {
+        self.value_type = JSCValueType::Error;
+        self
+    }
+
+    pub(crate) fn _is_err(&self) -> bool {
+        self.value_type == JSCValueType::Error
+    }
+
+    pub(crate) fn _is_exception(&self) -> bool {
+        self.value_type == JSCValueType::Exception
+    }
+
+    pub(crate) fn _is_object(&self) -> bool {
+        self.value_type == JSCValueType::Object
     }
 
     pub(crate) fn from_borrowed_obj(ctx: *mut jsc::OpaqueJSContext, obj: jsc::JSObjectRef) -> Self {
@@ -281,8 +304,10 @@ impl_js_converter!(
 impl Clone for JSCValue {
     fn clone(&self) -> Self {
         let mut cloned = JSCValue::new(self.ctx, self.value);
-        cloned.exception = self.exception;
-        cloned.is_object = self.is_object;
+        cloned.value_type = self.value_type;
+        if cloned.value_type == JSCValueType::Error {
+            println!(".........");
+        }
         cloned.protect()
     }
 }

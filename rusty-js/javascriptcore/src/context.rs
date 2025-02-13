@@ -332,10 +332,10 @@ impl JSExceptionHandler for JSCContext {
     }
 
     fn new_error(&self) -> Self::Value {
+        let args = [];
         unsafe {
-            let args = [];
             let error = jsc::JSObjectMakeError(self.raw, 0, args.as_ptr(), ptr::null_mut());
-            JSCValue::from_owned_obj(self.raw, error)
+            JSCValue::from_owned_obj(self.raw, error).with_error()
         }
     }
 }
