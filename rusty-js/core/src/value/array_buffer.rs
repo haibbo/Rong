@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSException, JSObject, JSObjectOps, JSResult, JSTypeOf,
-    JSValueImpl, RustyJSError, TypedArrayElement,
+    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValueImpl,
+    JSValueMapper, RustyJSError, TypedArrayElement,
 };
 
 use std::marker::PhantomData;
@@ -103,12 +103,7 @@ where
         }
 
         let value = V::from_bytes(ctx.as_ref(), bytes);
-        if value.is_exception() {
-            let err = JSException::from_js_value(ctx, value)?;
-            Err(RustyJSError::Exception(err.into_error()))
-        } else {
-            Self::from_js_value(ctx, value)
-        }
+        value.try_map(|value| Self::from_js_value(ctx, value))?
     }
 
     /// Create a new ArrayBuffer from owned bytes
@@ -139,12 +134,7 @@ where
         }
 
         let value = V::from_vec(ctx.as_ref(), vec);
-        if value.is_exception() {
-            let err = JSException::from_js_value(ctx, value)?;
-            Err(RustyJSError::Exception(err.into_error()))
-        } else {
-            Self::from_js_value(ctx, value)
-        }
+        value.try_map(|value| Self::from_js_value(ctx, value))?
     }
 
     /// Get the byte length of the ArrayBuffer

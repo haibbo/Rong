@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSException, JSObject, JSObjectOps, JSResult, JSTypeOf,
-    JSValueConversion, JSValueImpl, RustyJSError,
+    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf,
+    JSValueConversion, JSValueImpl, JSValueMapper, RustyJSError,
 };
 use std::fmt;
 use std::marker::PhantomData;
@@ -70,12 +70,7 @@ where
     /// Create a new empty JavaScript array
     pub fn new(ctx: &JSContext<V::Context>) -> JSResult<Self> {
         let value = V::new(ctx.as_ref());
-        if value.is_exception() {
-            let err = JSException::from_js_value(ctx, value)?;
-            Err(RustyJSError::Exception(err.into_error()))
-        } else {
-            Self::from_js_value(ctx, value)
-        }
+        value.try_map(|v| Self::from_js_value(ctx, v))?
     }
 
     /// Get the length of the JavaScript array
@@ -103,12 +98,7 @@ where
         }
         let value = self.as_value().get(index);
         let ctx = &self.get_ctx();
-        if value.is_exception() {
-            let err = JSException::from_js_value(ctx, value)?;
-            Err(RustyJSError::Exception(err.into_error()))
-        } else {
-            T::from_js_value(ctx, value).map(Some)
-        }
+        value.try_map(|v| T::from_js_value(ctx, v).map(Some))?
     }
 
     /// Set element at specified index
@@ -127,13 +117,7 @@ where
         let ctx = self.get_ctx();
         let v = value.into_js_value(&ctx);
         let result = self.as_value().set(index, v);
-
-        if result.is_exception() {
-            let err = JSException::from_js_value(&ctx, result)?;
-            Err(RustyJSError::Exception(err.into_error()))
-        } else {
-            Ok(self)
-        }
+        result.try_map(|_| self)
     }
 
     /// Create an iterator over the array elements

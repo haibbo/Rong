@@ -1,9 +1,9 @@
-use crate::JSRuntime;
 use crate::{
     source::{Source, SourceKind},
     ClassSetup, FromJSValue, JSClass, JSException, JSObject, JSObjectOps, JSResult, JSRuntimeImpl,
     JSTypeOf, JSValue, JSValueImpl, Promise, RustyJSError,
 };
+use crate::{JSRuntime, JSValueMapper};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -234,13 +234,7 @@ impl<C: JSContextImpl> JSContext<C> {
             SourceKind::ByteCode(code) => self.rc.inner.run_bytecode(code),
             SourceKind::JavaScript(code) => self.rc.inner.eval(Source::from_bytes(code.clone())),
         };
-
-        if result.is_exception() {
-            let err = JSException::from_js_value(self, result)?;
-            Err(RustyJSError::Exception(err.into_error()))
-        } else {
-            T::from_js_value(self, result)
-        }
+        result.try_convert::<T>()
     }
 
     /// Get the global object of the JavaScript context

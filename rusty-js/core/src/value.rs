@@ -173,11 +173,50 @@ where
 {
     fn json_to_jsvalue(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>> {
         let result = V::from_json_str(ctx.as_ref(), self);
-        if result.is_exception() {
-            let err = JSException::from_js_value(ctx, result)?;
+        result.try_map(|v| JSValue::from_raw(ctx, v))
+    }
+}
+
+/// Provides safe conversion and mapping operations for JS values
+pub trait JSValueMapper<V: JSValueImpl> {
+    /// Attempts to convert the value using FromJSValue, returns error if it's an exception
+    fn try_convert<T>(self) -> JSResult<T>
+    where
+        T: FromJSValue<V>;
+
+    /// Maps the value using the provided closure if it's not an exception,
+    /// otherwise returns the error
+    fn try_map<T, F>(self, f: F) -> JSResult<T>
+    where
+        F: FnOnce(Self) -> T,
+        Self: Sized;
+}
+
+impl<V> JSValueMapper<V> for V
+where
+    V: JSTypeOf,
+    V: JSObjectOps,
+{
+    fn try_convert<T>(self) -> JSResult<T>
+    where
+        T: FromJSValue<V>,
+    {
+        self.try_map(|value| {
+            let ctx = JSContext::from_borrowed_raw_ptr(value.as_raw_context());
+            T::from_js_value(&ctx, value)
+        })?
+    }
+
+    fn try_map<T, F>(self, f: F) -> JSResult<T>
+    where
+        F: FnOnce(Self) -> T,
+    {
+        if self.is_exception() {
+            let ctx = JSContext::from_borrowed_raw_ptr(self.as_raw_context());
+            let err = JSException::from_js_value(&ctx, self)?;
             Err(RustyJSError::Exception(err.into_error()))
         } else {
-            Ok(JSValue::from_raw(ctx, result))
+            Ok(f(self))
         }
     }
 }

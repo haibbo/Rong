@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSArrayBuffer, JSArrayBufferOps, JSContext, JSException, JSObject,
-    JSObjectOps, JSResult, JSTypeOf, JSValueImpl, RustyJSError,
+    FromJSValue, IntoJSValue, JSArrayBuffer, JSArrayBufferOps, JSContext, JSObject, JSObjectOps,
+    JSResult, JSTypeOf, JSValueImpl, JSValueMapper, RustyJSError,
 };
 use std::ops::Deref;
 
@@ -215,12 +215,7 @@ where
             byte_offset,
             Some(length),
         );
-        if value.is_exception() {
-            let err = JSException::from_js_value(ctx, value)?;
-            Err(RustyJSError::Exception(err.into_error()))
-        } else {
-            Self::from_js_value(ctx, value)
-        }
+        value.try_map(|value| Self::from_js_value(ctx, value))?
     }
 
     /// Get the kind of typed array
