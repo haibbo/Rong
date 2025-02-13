@@ -428,7 +428,7 @@ impl Request {
     pub async fn json(&self, ctx: JSContext) -> JSResult<JSValue> {
         let text = self.text().await?;
         // Use the to_js_value() trait method to convert the string to JSValue
-        text.as_str().to_js_value(&ctx)
+        text.as_str().json_to_jsvalue(&ctx)
     }
 
     #[js_method(rename = "arrayBuffer")]

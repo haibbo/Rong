@@ -164,14 +164,14 @@ where
     V: JSValueImpl,
 {
     /// Converts the JSON string into a JSValue using the provided context
-    fn to_js_value(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>>;
+    fn json_to_jsvalue(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>>;
 }
 
 impl<V> JsonToJsValue<V> for &str
 where
     V: JSObjectOps + JSTypeOf,
 {
-    fn to_js_value(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>> {
+    fn json_to_jsvalue(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>> {
         let result = V::from_json_str(ctx.as_ref(), self);
         if result.is_exception() {
             let err = JSException::from_js_value(ctx, result)?;
