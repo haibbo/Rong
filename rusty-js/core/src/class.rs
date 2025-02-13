@@ -93,6 +93,10 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
 // Blanket implementation
 impl<T, V: JSValueImpl> JSClassExt<V> for T where T: JSClass<V> {}
 
+/// Represents a JavaScript class constructor
+///
+/// This struct encapsulates a JavaScript object that serves as a class constructor.
+/// It is used to create class instances and manage class lifecycle.
 pub struct Class<V: JSValueImpl>(pub(crate) JSObject<V>);
 
 impl<V> Class<V>
@@ -107,8 +111,10 @@ where
         let instance = V::make_instance(context.as_ref(), self.0.clone().into_value(), ptr as _);
 
         // instance object inherits Constructor's prototype
-        self.get_prototype()
-            .map(|proto| instance.set_prototype(proto.as_value().clone()));
+        let _ = self
+            .0
+            .get::<_, JSObject<V>>("prototype")
+            .map(|proto| instance.set_prototype(proto.into_value()));
         instance
     }
 
@@ -146,8 +152,8 @@ where
         }
     }
 
-    pub fn get_prototype(&self) -> Option<JSObject<V>> {
-        self.0.get("prototype").ok()
+    pub fn prototype<JC: JSClass<V>>(context: &JSContext<V::Context>) -> Option<JSObject<V>> {
+        Class::get::<JC>(context).map(|class| class.0.get("prototype").ok())?
     }
 
     /// Construct a Class from a JSObject if it is an instance of the specified class
@@ -223,7 +229,8 @@ where
     pub(crate) fn new(constructor: JSObject<V>, context: &'a JSContext<V::Context>) -> Self {
         let constructor = Class(constructor);
         let prototype = constructor
-            .get_prototype()
+            .0
+            .get::<_, JSObject<V>>("prototype")
             .expect("Class prototype not found");
         Self {
             constructor: constructor.0,
