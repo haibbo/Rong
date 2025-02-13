@@ -10,4 +10,4 @@ http_crate = { package = "http", version = "1.2" }
 
 [dev-dependencies]
 rustyjs_test = { path = "../../utils/rustyjs_test" }
-text={path="../text"}
+encoding={path="../encoding"}

@@ -502,7 +502,7 @@ mod tests {
             let _ = ctx.eval::<()>(source);
 
             // Initialize TextDecoder first
-            text::init(&ctx).unwrap();
+            encoding::init(&ctx).unwrap();
 
             // Initialize Blob first
             crate::blob::init(&ctx).unwrap();

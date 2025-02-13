@@ -269,7 +269,7 @@ mod tests {
             ))
             .unwrap();
 
-            text::init(&ctx).unwrap(); // load TextEncoder
+            encoding::init(&ctx).unwrap(); // load TextEncoder
             init(&ctx).unwrap();
 
             let source = Source::from_path("tests/blob.js").await.unwrap();

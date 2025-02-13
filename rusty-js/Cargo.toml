@@ -9,7 +9,7 @@ members = [
     "modules/timer",
     "modules/navigator",
     "modules/path",
-    "modules/http", "modules/text",
+    "modules/http", "modules/encoding",
 ]
 
 [workspace.dependencies]
