@@ -261,13 +261,16 @@ mod tests {
                 JSFunc::new(&ctx, |msg: String| println!("JS: {}", msg)),
             )?;
 
-            // for blob.js
             ctx.eval::<()>(Source::from_bytes(
                 r#"
                 const process = { platform: "darwin" };
+                    const console={
+                        log: function(...args){
+                            print(args.join(' '))
+                        }
+                    }
                 "#,
-            ))
-            .unwrap();
+            ))?;
 
             encoding::init(&ctx).unwrap(); // load TextEncoder
             init(&ctx).unwrap();

@@ -1,7 +1,7 @@
 // Simple assertion functions
 function assert(condition, message) {
   if (!condition) {
-    print("Assertion failed: " + message);
+    console.log("Assertion failed: " + message);
     throw message || "Assertion failed";
   }
   return true;
@@ -10,7 +10,7 @@ function assert(condition, message) {
 function assertEqual(actual, expected, message) {
   if (actual != expected) {
     let error = `Expected value "${expected}" but got "${actual}"${message ? ": " + message : ""}`;
-    print("Assertion failed: " + error);
+    console.log("Assertion failed: " + error);
     throw error;
   }
   return true;
@@ -28,7 +28,7 @@ const results = {
   try {
     // Test constructor with URL string
     results.total += 3;
-    print("Testing constructor with URL string...");
+    console.log("Testing constructor with URL string...");
     const request = new Request("https://example.com");
     results.passed += assert(
       request.method === "GET",
@@ -45,7 +45,7 @@ const results = {
 
     // Test constructor with init options
     results.total += 5;
-    print("Testing constructor with init options...");
+    console.log("Testing constructor with init options...");
     const requestWithInit = new Request("https://example.com", {
       method: "POST",
       mode: "no-cors",
@@ -80,7 +80,7 @@ const results = {
 
     // Test constructor with Request object
     results.total += 3;
-    print("Testing constructor with Request object...");
+    console.log("Testing constructor with Request object...");
     const original = new Request("https://example.com", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -99,7 +99,7 @@ const results = {
 
     // Test clone method
     results.total += 3;
-    print("Testing clone method...");
+    console.log("Testing clone method...");
     const cloned = original.clone();
     results.passed += assert(
       cloned.method === original.method,
@@ -117,7 +117,7 @@ const results = {
 
     // Test invalid inputs
     results.total += 6;
-    print("Testing invalid inputs...");
+    console.log("Testing invalid inputs...");
     let hasError = false;
 
     try {
@@ -166,7 +166,7 @@ const results = {
 
     // Test getters
     results.total += 13;
-    print("Testing getters...");
+    console.log("Testing getters...");
     const requestWithAllProps = new Request("https://example.com", {
       method: "POST",
       mode: "no-cors",
@@ -237,7 +237,7 @@ const results = {
 
     // Test async methods
     results.total += 4;
-    print("Testing async methods...");
+    console.log("Testing async methods...");
 
     // Create a request with text body
     const textBlob = new Blob(["Hello World"], { type: "text/plain" });
@@ -290,10 +290,10 @@ const results = {
     if (!hasFormDataError)
       throw "formData() should throw not implemented error";
 
-    print(`Tests completed: ${results.passed}/${results.total} passed`);
+    console.log(`Tests completed: ${results.passed}/${results.total} passed`);
   } catch (err) {
-    print("Test failed with error: " + err);
-    print(
+    console.log("Test failed with error: " + err);
+    console.log(
       "Error details:",
       err instanceof Error ? err.stack : "No stack trace available",
     );
