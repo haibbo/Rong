@@ -8,6 +8,7 @@ members = [
     "examples/point",
     "modules/timer", "modules/navigator", "modules/path",
     "modules/http", "modules/encoding", "modules/event",
+    "modules/assert",
 ]
 
 [workspace.dependencies]
