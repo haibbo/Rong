@@ -55,6 +55,19 @@ fn test_convert() {
 }
 
 #[test]
+fn test_equal() {
+    run(|ctx| {
+        let boolean = JSValue::from(ctx, false);
+        let integer = JSValue::from(ctx, i32::MAX);
+        let integer2 = JSValue::from(ctx, i32::MAX);
+        assert!(boolean != integer);
+        assert!(integer == integer.clone());
+        assert!(integer == integer2);
+        Ok(())
+    });
+}
+
+#[test]
 fn test_display() {
     run(|ctx| {
         // Test undefined

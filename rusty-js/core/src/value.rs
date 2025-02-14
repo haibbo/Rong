@@ -25,7 +25,7 @@ pub use typed_array::*;
 mod function;
 pub use function::*;
 
-pub trait JSValueImpl: Clone {
+pub trait JSValueImpl: Clone + PartialEq {
     /// the JS engine specific type of JavaScript Value
     type RawValue: Copy;
 
@@ -75,6 +75,14 @@ impl<V: JSValueImpl> Clone for JSValue<V> {
         }
     }
 }
+
+impl<V: JSValueImpl> PartialEq for JSValue<V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner.eq(&other.inner)
+    }
+}
+
+impl<V: JSValueImpl> Eq for JSValue<V> {}
 
 impl<V> JSValue<V>
 where

@@ -10,6 +10,7 @@ pub use property::{PropertyAttributes, PropertyDescriptor, PropertyKey};
 
 use super::IntoJSValue;
 
+#[derive(PartialEq, Eq)]
 pub struct JSObject<V: JSValueImpl>(JSValue<V>);
 
 impl<V: JSValueImpl> Clone for JSObject<V> {

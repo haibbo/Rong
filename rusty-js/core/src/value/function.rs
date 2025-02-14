@@ -8,6 +8,7 @@ use std::ops::Deref;
 mod args;
 pub use args::IntoJSArgs;
 
+#[derive(PartialEq, Eq)]
 pub struct JSFunc<V: JSValueImpl>(JSObject<V>);
 
 impl<V: JSValueImpl> Deref for JSFunc<V> {
