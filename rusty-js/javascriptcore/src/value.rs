@@ -22,6 +22,12 @@ pub struct JSCValue {
     value_type: JSCValueType,
 }
 
+impl PartialEq for JSCValue {
+    fn eq(&self, other: &Self) -> bool {
+        unsafe { jsc::JSValueIsEqual(self.ctx, self.value, other.value, std::ptr::null_mut()) }
+    }
+}
+
 impl JSCValue {
     pub(crate) fn new(ctx: *mut jsc::OpaqueJSContext, value: *const jsc::OpaqueJSValue) -> Self {
         Self {
