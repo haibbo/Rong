@@ -20,7 +20,13 @@ mod tests {
             let rt = JS_NewRuntime();
             let ctx = JS_NewContext(rt);
             let c_string = CString::new(js).unwrap();
-            let jsvalue = QJS_RunScript(ctx, c_string.as_ptr(), js.len() as i32);
+            let jsvalue = JS_Eval(
+                ctx,
+                c_string.as_ptr(),
+                js.len() as _,
+                c"eval".as_ptr(),
+                0 as _,
+            );
             JS_ToInt64(ctx, &mut number, jsvalue);
             JS_FreeValue(ctx, jsvalue);
             JS_FreeContext(ctx);
