@@ -6,10 +6,8 @@ members = [
     "javascriptcore",
     "utils/rustyjs_test",
     "examples/point",
-    "modules/timer",
-    "modules/navigator",
-    "modules/path",
-    "modules/http", "modules/encoding",
+    "modules/timer", "modules/navigator", "modules/path",
+    "modules/http", "modules/encoding", "modules/event",
 ]
 
 [workspace.dependencies]
@@ -30,7 +28,7 @@ tokio = { version = "1.0", features = ["rt", "time", "macros"] }
 [features]
 quickjs = ["rusty-js-quickjs"]
 jscore = ["rusty-js-jscore"]
-default = ["quickjs"]
+default = ["jscore"]
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["rt", "time", "macros"] }
