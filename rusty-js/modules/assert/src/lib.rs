@@ -12,19 +12,19 @@
 use rusty_js::{function::*, *};
 
 /// Handles assertion errors with optional custom message
-fn handle_assertion_error(message: Optional<JSValue>, default_message: &str) -> JSResult<bool> {
+fn handle_assertion_error(message: Optional<JSValue>, default_message: &str) -> RustyJSError {
     if let Some(value) = message.0 {
         if let Ok(msg) = value.clone().try_into::<String>() {
-            return Err(RustyJSError::Error(msg));
+            return RustyJSError::Error(msg);
         }
 
         if let Some(obj) = value.into_object() {
             // safe to unwrap, since it's Object
             let exception = JSException::from_object(obj).unwrap();
-            return Err(RustyJSError::Error(exception.into_error().to_string()));
+            return RustyJSError::Error(exception.into_error().to_string());
         }
     }
-    Err(RustyJSError::Error(default_message.to_string()))
+    RustyJSError::Error(default_message.to_string())
 }
 
 /// Asserts that two values are equal.
@@ -32,7 +32,10 @@ fn equal(left: JSValue, right: JSValue, message: Optional<JSValue>) -> JSResult<
     if left == right {
         Ok(true)
     } else {
-        handle_assertion_error(message, "AssertionError: It's not equal!")
+        Err(handle_assertion_error(
+            message,
+            "AssertionError: It's not equal!",
+        ))
     }
 }
 
@@ -66,19 +69,46 @@ fn ok(value: JSValue, message: Optional<JSValue>) -> JSResult<()> {
         _ => {}
     }
 
-    handle_assertion_error(
+    Err(handle_assertion_error(
         message,
         "AssertionError: The expression was evaluated to a falsy value",
-    )?;
-    Ok(())
+    ))
+}
+
+/// Forces a test to fail with a custom message
+fn fail(ctx: JSContext, message: Optional<JSValue>) -> JSValue {
+    if let Some(msg) = message.0 {
+        msg
+    } else {
+        ctx.throw_error("Failed")
+    }
+}
+
+/// Asserts that a function does not throw an error
+fn does_not_throw(ctx: JSContext, func: JSFunc, message: Optional<JSValue>) -> JSValue {
+    // Call the function and check if it throws an error
+    if func.call::<_, ()>((JSValue::undefined(&ctx),)).is_err() {
+        if let Some(msg) = message.0 {
+            return msg;
+        }
+    }
+    // If no error was thrown, return undefined
+    JSValue::undefined(&ctx)
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     let ok = ctx.register_function(ok)?.name("ok")?;
-    let equal = ctx.register_function(equal)?;
+    let equal = ctx.register_function(equal)?.name("equal")?;
+    let fail = ctx.register_function(fail)?.name("fail")?;
+    let does_not_throw = ctx
+        .register_function(does_not_throw)?
+        .name("doesNotThrow")?;
+
     ok.set("ok", ok.clone())?
         .set("default", ok.clone())?
-        .set("equal", equal)?;
+        .set("equal", equal)?
+        .set("fail", fail)?
+        .set("doesNotThrow", does_not_throw)?;
     ctx.global().set("assert", ok)?;
 
     Ok(())

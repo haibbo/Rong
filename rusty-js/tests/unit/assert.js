@@ -54,4 +54,86 @@ describe("assert module", () => {
       }
     });
   });
+
+  describe("assert.fail()", () => {
+    it("should always throw", () => {
+      expect(() => assert.fail()).toThrow();
+    });
+
+    it("should include custom message in error", () => {
+      const message = "Custom fail message";
+      try {
+        assert.fail(message);
+      } catch (e) {
+        expect(e.message).toContain(message);
+      }
+    });
+  });
+
+  describe("assert.doesNotThrow()", () => {
+    it("should pass for functions that don't throw", () => {
+      assert.doesNotThrow(() => {
+        // This function doesn't throw
+        return true;
+      });
+    });
+
+    it("should throw for non-function arguments", () => {
+      expect(() => assert.doesNotThrow("not a function")).toThrow();
+      expect(() => assert.doesNotThrow(123)).toThrow();
+      expect(() => assert.doesNotThrow({})).toThrow();
+    });
+
+    it("should include custom message in error", () => {
+      const message = "Custom doesNotThrow message";
+      try {
+        assert.doesNotThrow(() => {
+          throw new Error("Test error");
+        }, message);
+      } catch (e) {
+        expect(e.message).toContain(message);
+      }
+    });
+  });
+
+  describe("assert.fail()", () => {
+    it("should always throw", () => {
+      expect(() => assert.fail()).toThrow();
+    });
+
+    it("should include custom message in error", () => {
+      const message = "Custom fail message";
+      try {
+        assert.fail(message);
+      } catch (e) {
+        expect(e.message).toContain(message);
+      }
+    });
+
+    it("should throw with default message when no args", () => {
+      try {
+        assert.fail();
+      } catch (e) {
+        expect(e.message).toBe("Failed");
+      }
+    });
+
+    it("should throw with provided error object", () => {
+      const error = new Error("Custom error");
+      try {
+        assert.fail(error);
+      } catch (e) {
+        expect(e).toBe(error);
+      }
+    });
+
+    it("should throw with message and operator", () => {
+      try {
+        assert.fail("Actual", "Expected", "Message", "!=");
+      } catch (e) {
+        expect(e.message).toContain("Message");
+        expect(e.message).toContain("Actual != Expected");
+      }
+    });
+  });
 });
