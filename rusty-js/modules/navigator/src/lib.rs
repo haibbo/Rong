@@ -7,8 +7,8 @@ fn get_user_agent() -> &'static str {
 pub fn init(ctx: &JSContext, ua: Option<&str>) -> JSResult<()> {
     let navigator = JSObject::new(ctx);
 
-    navigator.set("userAgent", ua.unwrap_or(get_user_agent()));
-    ctx.global().set("navigator", navigator);
+    navigator.set("userAgent", ua.unwrap_or(get_user_agent()))?;
+    ctx.global().set("navigator", navigator)?;
 
     Ok(())
 }
@@ -22,18 +22,16 @@ mod tests {
     fn test_user_agent() {
         run(|ctx| {
             init(ctx, None).unwrap();
-            let ua: String = ctx
-                .eval(Source::from_bytes(b"navigator.userAgent"))
-                .unwrap();
+            let ua: String = ctx.eval(Source::from_bytes(b"navigator.userAgent"))?;
             assert!(ua.contains("RustyJS"));
+            Ok(())
         });
 
         run(|ctx| {
             init(ctx, Some("UserAgent")).unwrap();
-            let ua: String = ctx
-                .eval(Source::from_bytes(b"navigator.userAgent"))
-                .unwrap();
+            let ua: String = ctx.eval(Source::from_bytes(b"navigator.userAgent"))?;
             assert!(ua.contains("UserAgent"));
+            Ok(())
         });
     }
 }
