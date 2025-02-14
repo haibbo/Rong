@@ -110,7 +110,9 @@ where
     fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         let obj = JSObject::from_js_value(ctx, value)?;
         Ok(RustyJSError::Exception(
-            JSException::from_object(obj).into_error(),
+            JSException::from_object(obj)
+                .ok_or(RustyJSError::NotObject)?
+                .into_error(),
         ))
     }
 }

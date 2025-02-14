@@ -27,10 +27,13 @@ where
 
 impl<V> JSException<V>
 where
-    V: JSValueImpl,
+    V: JSValueImpl + JSTypeOf,
 {
-    pub(crate) fn from_object(v: JSObject<V>) -> Self {
-        Self(v)
+    pub fn from_object(value: JSObject<V>) -> Option<Self> {
+        if value.is_exception() || value.is_error() {
+            return Some(Self(value));
+        }
+        None
     }
 }
 
