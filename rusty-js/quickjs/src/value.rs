@@ -14,6 +14,12 @@ pub struct QJSValue {
     exception: bool,
 }
 
+impl PartialEq for QJSValue {
+    fn eq(&self, other: &Self) -> bool {
+        unsafe { qjs::JS_IsEqual(self.ctx, self.value, other.value) != 0 }
+    }
+}
+
 impl Clone for QJSValue {
     fn clone(&self) -> Self {
         let value = unsafe { qjs::JS_DupValue(self.ctx, self.value) };
