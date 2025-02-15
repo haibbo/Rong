@@ -12,49 +12,46 @@
 use rusty_js::{function::*, *};
 
 /// Handles assertion errors with optional custom message
-fn handle_assertion_error(message: Optional<JSValue>, default_message: &str) -> RustyJSError {
-    if let Some(value) = message.0 {
-        if let Ok(msg) = value.clone().try_into::<String>() {
-            return RustyJSError::Error(msg);
-        }
-
-        if let Some(obj) = value.into_object() {
-            // safe to unwrap, since it's Object
-            let exception = JSException::from_object(obj).unwrap();
-            return RustyJSError::Error(exception.into_error().to_string());
-        }
-    }
-    RustyJSError::Error(default_message.to_string())
+fn handle_assertion_error(
+    ctx: &JSContext,
+    message: Optional<JSValue>,
+    default_message: &str,
+) -> JSValue {
+    message
+        .0
+        .map_or_else(|| ctx.throw_error(default_message), |value| value)
 }
 
 /// Asserts that two values are equal.
-fn equal(left: JSValue, right: JSValue, message: Optional<JSValue>) -> JSResult<bool> {
+fn equal(ctx: JSContext, left: JSValue, right: JSValue, message: Optional<JSValue>) -> JSValue {
     if left == right {
-        Ok(true)
+        JSValue::from(&ctx, true)
     } else {
-        Err(handle_assertion_error(
-            message,
-            "AssertionError: It's not equal!",
-        ))
+        handle_assertion_error(&ctx, message, "AssertionError: It's not equal!")
     }
 }
 
 /// Asserts that a value is truthy.
-fn ok(value: JSValue, message: Optional<JSValue>) -> JSResult<()> {
+fn ok(ctx: JSContext, value: JSValue, message: Optional<JSValue>) -> JSValue {
+    let undefined = JSValue::undefined(&ctx);
     match value.type_of() {
         JSValueType::Boolean => {
-            if value.try_into()? {
-                return Ok(());
+            if value.try_into::<bool>().unwrap_or(false) {
+                return undefined;
             }
         }
         JSValueType::Number => {
-            if value.try_into::<i32>()? != 0 {
-                return Ok(());
+            if value.try_into::<i32>().map(|b| b != 0).unwrap_or(false) {
+                return undefined;
             }
         }
         JSValueType::String => {
-            if !value.try_into::<String>()?.is_empty() {
-                return Ok(());
+            if value
+                .try_into::<String>()
+                .map(|s| !s.is_empty())
+                .unwrap_or(false)
+            {
+                return undefined;
             }
         }
         JSValueType::Array
@@ -64,15 +61,16 @@ fn ok(value: JSValue, message: Optional<JSValue>) -> JSResult<()> {
         | JSValueType::Function
         | JSValueType::Symbol
         | JSValueType::Object => {
-            return Ok(());
+            return undefined;
         }
         _ => {}
     }
 
-    Err(handle_assertion_error(
+    handle_assertion_error(
+        &ctx,
         message,
         "AssertionError: The expression was evaluated to a falsy value",
-    ))
+    )
 }
 
 /// Forces a test to fail with a custom message
