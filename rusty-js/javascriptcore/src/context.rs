@@ -1,6 +1,8 @@
 use crate::{jsc, JSCRuntime, JSCValue};
-use rusty_js_core::{JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, RustyJSError};
-use std::ffi::{c_char, CString};
+use rusty_js_core::{
+    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, RustyJSError,
+};
+use std::ffi::CString;
 use std::ptr;
 
 pub struct JSCContext {
@@ -72,133 +74,15 @@ impl JSContextImpl for JSCContext {
         }
     }
 
-    /// Bug:
-    ///
-    /// It is not possible to use JS subclassing with objects created from a class
-    /// definition that sets callAsConstructor by default. The callAsConstructor's
-    /// constructor is not changed to extended class constructor.
-    ///
-    /// Subclassing is supported via the JSObjectMakeConstructor function, but it has
-    /// disadvantages:
-    /// - can not set private data to constructor object. WeakMap is alternative solution.
-    /// - typeof constructor is 'object' not 'function'(nodejs, bun, quickjs etc)
-    ///
-    /// Because the crate is specially desigend for mini-program, we shoud not avoid
-    /// to use subclass/extend-class, in other word, directly extend feature at native
-    /// side.
+    /// Registers a JavaScript class in the context.
     fn register_class<JC>(&self) -> Self::Value
     where
-        JC: rusty_js_core::JSClass<Self::Value>,
+        JC: JSClass<Self::Value>,
     {
-        unsafe {
-            let class_name = CString::new(JC::NAME).unwrap();
-            let class_name = class_name.as_ptr();
-            let class_def = jsc::JSClassDefinition {
-                version: 0,
-                attributes: 0,
-                className: class_name,
-                parentClass: ptr::null_mut(),
-                staticValues: ptr::null(),
-                staticFunctions: ptr::null(),
-                initialize: None,
-                finalize: Some(crate::class::finalizer::<JC>),
-                hasProperty: None,
-                getProperty: None,
-                setProperty: None,
-                deleteProperty: None,
-                getPropertyNames: None,
-                callAsFunction: Some(crate::class::call_as_function::<JC>),
-                callAsConstructor: Some(crate::class::generic_constructor::<JC>),
-                hasInstance: Some(crate::class::has_instance),
-                convertToType: None,
-            };
-
-            let js_class = jsc::JSClassCreate(&class_def);
-            let js_class = jsc::JSClassRetain(js_class);
-            let constructor = jsc::JSObjectMake(self.raw, js_class, ptr::null_mut());
-
-            // Very Important!
-            // It's used to get JSClassRef from constructor's private data, then we can make
-            // instance
-            // memory is align, so we can set LSB bit to identify it's JSClass
-            let classid = js_class as usize | 1;
-            jsc::JSObjectSetPrivate(constructor, classid as _);
-
-            let class_name = jsc::JSStringCreateWithUTF8CString(class_name);
-            let constructor_name = jsc::JSStringCreateWithUTF8CString(c"constructor".as_ptr());
-            let proto_name = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
-
-            // setup constructor's attribute: name
-            let nameproperty = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
-            let namevalueref = jsc::JSValueMakeString(self.raw, class_name);
-            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-
-            jsc::JSObjectSetProperty(
-                self.raw,
-                constructor,
-                nameproperty,
-                namevalueref,
-                jsc::kJSPropertyAttributeReadOnly | jsc::kJSPropertyAttributeDontEnum,
-                &mut exception,
-            );
-            jsc::JSStringRelease(nameproperty);
-
-            // Create prototype object
-            let prototypeobject = jsc::JSObjectMake(self.raw, ptr::null_mut(), ptr::null_mut());
-
-            // Set JC::NAME.prototype
-            jsc::JSObjectSetProperty(
-                self.raw,
-                constructor,
-                proto_name,
-                prototypeobject,
-                jsc::kJSPropertyAttributeDontEnum
-                    | jsc::kJSPropertyAttributeReadOnly
-                    | jsc::kJSPropertyAttributeDontDelete,
-                ptr::null_mut(),
-            );
-
-            // Set JC::NAME.prototype.constructor
-            jsc::JSObjectSetProperty(
-                self.raw,
-                prototypeobject,
-                constructor_name,
-                constructor,
-                jsc::kJSPropertyAttributeDontEnum,
-                ptr::null_mut(),
-            );
-
-            // Get Function constructor using helper function
-            let functionconstructor = get_constructor(self.raw, c"Function".as_ptr());
-
-            // Set JC::NAME.constructor to Function
-            jsc::JSObjectSetProperty(
-                self.raw,
-                constructor,
-                constructor_name,
-                functionconstructor,
-                jsc::kJSPropertyAttributeDontEnum,
-                ptr::null_mut(),
-            );
-
-            // register constructor function to global object
-            let global = jsc::JSContextGetGlobalObject(self.raw);
-            jsc::JSObjectSetProperty(
-                self.raw,
-                global,
-                class_name,
-                constructor,
-                jsc::kJSPropertyAttributeNone,
-                ptr::null_mut(),
-            );
-            jsc::JSStringRelease(class_name);
-            jsc::JSStringRelease(constructor_name);
-            jsc::JSStringRelease(proto_name);
-
-            JSCValue::from_owned_obj(self.raw, constructor)
-        }
+        crate::class::register_class_internal::<JC>(self, JC::NAME)
     }
 
+    /// Calls a JavaScript function with the specified `this` value and arguments.
     fn call(
         &self,
         function: &Self::Value,
@@ -424,18 +308,5 @@ impl JSCContext {
                 JSCValue::from_owned_raw(self.raw, error).with_exception()
             }
         }
-    }
-}
-
-pub(crate) fn get_constructor(
-    ctx: *mut jsc::OpaqueJSContext,
-    name: *const c_char,
-) -> jsc::JSObjectRef {
-    unsafe {
-        let global = jsc::JSContextGetGlobalObject(ctx);
-        let js_name = jsc::JSStringCreateWithUTF8CString(name);
-        let value = jsc::JSObjectGetProperty(ctx, global, js_name, ptr::null_mut());
-        jsc::JSStringRelease(js_name);
-        jsc::JSValueToObject(ctx, value, ptr::null_mut())
     }
 }

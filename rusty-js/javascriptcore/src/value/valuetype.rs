@@ -14,7 +14,7 @@ impl JSTypeOf for JSCValue {
         }
 
         unsafe {
-            let error_ctor = crate::context::get_constructor(self.ctx, c"Error".as_ptr());
+            let error_ctor = crate::class::get_constructor(self.ctx, c"Error".as_ptr());
             jsc::JSValueIsInstanceOfConstructor(
                 self.ctx,
                 self.as_value(),
@@ -36,7 +36,7 @@ impl JSTypeOf for JSCValue {
             return false;
         }
         unsafe {
-            let error_ctor = crate::context::get_constructor(self.ctx, c"ArrayBuffer".as_ptr());
+            let error_ctor = crate::class::get_constructor(self.ctx, c"ArrayBuffer".as_ptr());
             jsc::JSValueIsInstanceOfConstructor(
                 self.ctx,
                 self.as_value(),
