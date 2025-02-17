@@ -164,6 +164,18 @@ impl JSValueImpl for JSCValue {
         };
         Self::from_owned_raw(ctx, raw)
     }
+
+    fn create_symbol(ctx: &Self::Context, description: &str) -> Self {
+        let ctx = ctx.to_raw();
+        let c_str = CString::new(description).unwrap();
+        let raw = unsafe {
+            let js_string = jsc::JSStringCreateWithUTF8CString(c_str.as_ptr());
+            let symbol = jsc::JSValueMakeSymbol(ctx, js_string);
+            jsc::JSStringRelease(js_string);
+            symbol
+        };
+        Self::from_owned_raw(ctx, raw)
+    }
 }
 
 impl_js_converter!(
