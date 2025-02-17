@@ -1,6 +1,7 @@
 use crate::{qjs, QJSContext};
 use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl, RustyJSError};
 use std::ffi::CString;
+use std::hash::Hash;
 use std::slice;
 
 mod array;
@@ -18,6 +19,17 @@ pub struct QJSValue {
 impl PartialEq for QJSValue {
     fn eq(&self, other: &Self) -> bool {
         unsafe { qjs::JS_IsEqual(self.ctx, self.value, other.value) != 0 }
+    }
+}
+
+impl Hash for QJSValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // the size of JSValueUnion is the size of u64
+        let raw_value = unsafe { std::mem::transmute::<qjs::JSValueUnion, u64>(self.value.u) };
+        raw_value.hash(state);
+
+        self.value.tag.hash(state);
+        self.ctx.hash(state);
     }
 }
 
