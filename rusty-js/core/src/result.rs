@@ -18,8 +18,11 @@ pub enum RustyJSError {
     #[error("Property Not Found")]
     PropertyNotFound,
 
-    #[error("Not an JS Object")]
+    #[error("Not JS Object")]
     NotObject,
+
+    #[error("Not JS Symbol")]
+    NotSymbol,
 
     #[error("Not JS Function")]
     NotJSFunc,
@@ -72,6 +75,7 @@ impl RustyJSError {
             | RustyJSError::NotJSTypedArray
             | RustyJSError::TypedArrayAlignmentError
             | RustyJSError::NotObject
+            | RustyJSError::NotSymbol
             | RustyJSError::NotJSExcep
             | RustyJSError::InvalidParameter { .. } => {
                 ctx.as_ref().throw_type_error(self.to_string())

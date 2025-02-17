@@ -25,6 +25,9 @@ pub use typed_array::*;
 mod function;
 pub use function::*;
 
+mod symbol;
+pub use symbol::*;
+
 pub trait JSValueImpl: Clone + PartialEq {
     /// the JS engine specific type of JavaScript Value
     type RawValue: Copy;
@@ -138,12 +141,6 @@ where
     /// create JS NULL Value
     pub fn null(ctx: &JSContext<V::Context>) -> Self {
         let value = V::create_null(ctx.as_ref());
-        JSValue::from_raw(ctx, value)
-    }
-
-    /// create JS Symbol Value
-    pub fn symbol(ctx: &JSContext<V::Context>, descripiton: impl AsRef<str>) -> Self {
-        let value = V::create_symbol(ctx.as_ref(), descripiton.as_ref());
         JSValue::from_raw(ctx, value)
     }
 

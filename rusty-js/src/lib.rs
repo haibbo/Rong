@@ -2,9 +2,9 @@ pub use rusty_js_core::{
     call, Class, ClassSetup, FromJSValue, IntoJSValue, JSArray as CoreJSArray,
     JSArrayBuffer as CoreJSArrayBuffer, JSClass, JSContext as CoreJSContext, JSEngine,
     JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject, JSResult,
-    JSRuntime as CoreJSRuntime, JSRuntimeService, JSTypedArray as CoreJSTypedArray,
-    JSTypedArrayKind, JSValue as CoreJSValue, JSValueType, JsonToJsValue, Promise as CorePromise,
-    RustyJSError, Source,
+    JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
+    JSTypedArray as CoreJSTypedArray, JSTypedArrayKind, JSValue as CoreJSValue, JSValueType,
+    JsonToJsValue, Promise as CorePromise, RustyJSError, Source,
 };
 
 pub use rusty_js_core::function;
@@ -31,6 +31,7 @@ pub type JSRuntime = CoreJSRuntime<<RustyJS as JSEngine>::Runtime>;
 
 pub type JSValue = CoreJSValue<JSEngineValue>;
 pub type JSObject = CoreJSObject<JSEngineValue>;
+pub type JSSymbol = CoreJSSymbol<JSEngineValue>;
 pub type JSFunc = CoreJSFunc<JSEngineValue>;
 pub type Promise = CorePromise<JSEngineValue>;
 pub type JSException = CoreJSException<JSEngineValue>;
