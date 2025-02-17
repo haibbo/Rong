@@ -188,6 +188,29 @@ impl QJSContext {
     pub(crate) fn to_raw(&self) -> *mut qjs::JSContext {
         self.ctx
     }
+
+    /// Converts a raw JSValue to QJSValue, handling exceptions gracefully.
+    ///
+    /// This function takes a raw JSValue from QuickJS and converts it into a QJSValue.
+    /// If the input value represents an exception, it will be extracted and returned
+    /// as a QJSValue with the exception flag set. Otherwise, a normal QJSValue will
+    /// be returned.
+    ///
+    /// # Safety
+    /// - The input `raw` must be a valid JSValue obtained from QuickJS
+    /// - The context (`self`) must be valid and match the context where `raw` was created
+    ///
+    /// # Returns
+    /// - QJSValue containing either the converted value or the exception
+    pub(crate) fn to_owned_value(&self, raw: qjs::JSValue) -> QJSValue {
+        let ctx = self.to_raw();
+        if unsafe { qjs::QJS_IsException(ctx, raw) != 0 } {
+            let exception = unsafe { qjs::JS_GetException(ctx) };
+            QJSValue::from_owned_raw(ctx, exception).with_exception()
+        } else {
+            QJSValue::from_owned_raw(ctx, raw)
+        }
+    }
 }
 
 // eval option assiciated with JS_EVAL_*

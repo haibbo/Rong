@@ -126,13 +126,25 @@ impl JSValueImpl for QJSValue {
         let raw = unsafe { qjs::QJS_NewUndefined(ctx) };
         Self::from_owned_raw(ctx, raw)
     }
+
     fn from_json_str(ctx: &Self::Context, str: &str) -> Self {
-        let ctx = ctx.to_raw();
         // Create a C string from Rust string slice
         let c_str = std::ffi::CString::new(str).unwrap();
         // Parse JSON string into JS value
-        let raw = unsafe { qjs::JS_ParseJSON(ctx, c_str.as_ptr(), str.len(), c"JSON".as_ptr()) };
-        Self::from_owned_raw(ctx, raw)
+        let raw =
+            unsafe { qjs::JS_ParseJSON(ctx.to_raw(), c_str.as_ptr(), str.len(), c"JSON".as_ptr()) };
+        ctx.to_owned_value(raw)
+    }
+
+    fn create_symbol(ctx: &Self::Context, description: &str) -> Self {
+        let raw = unsafe {
+            qjs::JS_NewSymbol(
+                ctx.to_raw(),
+                description.as_ptr() as _,
+                description.len() as _,
+            )
+        };
+        ctx.to_owned_value(raw)
     }
 }
 
