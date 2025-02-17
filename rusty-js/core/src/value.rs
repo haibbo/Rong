@@ -1,5 +1,6 @@
 use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
 use std::fmt;
+use std::hash::Hash;
 
 mod convert;
 pub use convert::*;
@@ -28,7 +29,7 @@ pub use function::*;
 mod symbol;
 pub use symbol::*;
 
-pub trait JSValueImpl: Clone + PartialEq {
+pub trait JSValueImpl: Clone + PartialEq + Hash {
     /// the JS engine specific type of JavaScript Value
     type RawValue: Copy;
 
@@ -89,6 +90,12 @@ impl<V: JSValueImpl> PartialEq for JSValue<V> {
 }
 
 impl<V: JSValueImpl> Eq for JSValue<V> {}
+
+impl<V: JSValueImpl> Hash for JSValue<V> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner.hash(state);
+    }
+}
 
 impl<V> JSValue<V>
 where

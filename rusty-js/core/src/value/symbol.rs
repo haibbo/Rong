@@ -4,7 +4,7 @@ use crate::{
 };
 use std::ops::Deref;
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(Hash, PartialEq, Eq, Clone)]
 pub struct JSSymbol<V: JSValueImpl>(JSObject<V>);
 
 impl<V> JSSymbol<V>
