@@ -1,6 +1,7 @@
 use crate::{jsc, JSCContext};
 use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl, RustyJSError};
 use std::ffi::CString;
+use std::hash::Hash;
 
 mod array;
 mod array_buffer;
@@ -8,7 +9,7 @@ mod object;
 mod typed_array;
 mod valuetype;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub(crate) enum JSCValueType {
     Object,
     Error,
@@ -25,6 +26,14 @@ pub struct JSCValue {
 impl PartialEq for JSCValue {
     fn eq(&self, other: &Self) -> bool {
         unsafe { jsc::JSValueIsEqual(self.ctx, self.value, other.value, std::ptr::null_mut()) }
+    }
+}
+
+impl Hash for JSCValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+        self.ctx.hash(state);
+        self.value_type.hash(state);
     }
 }
 
