@@ -1,5 +1,6 @@
 use crate::{qjs, QJSContext};
 use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl, RustyJSError};
+use std::ffi::CString;
 use std::slice;
 
 mod array;
@@ -137,13 +138,9 @@ impl JSValueImpl for QJSValue {
     }
 
     fn create_symbol(ctx: &Self::Context, description: &str) -> Self {
-        let raw = unsafe {
-            qjs::JS_NewSymbol(
-                ctx.to_raw(),
-                description.as_ptr() as _,
-                description.len() as _,
-            )
-        };
+        let len = description.len();
+        let description = CString::new(description).unwrap();
+        let raw = unsafe { qjs::JS_NewSymbol(ctx.to_raw(), description.as_ptr(), len as _) };
         ctx.to_owned_value(raw)
     }
 }
