@@ -50,6 +50,10 @@ fn test_convert() {
         assert!(jsvalue.is_bigint());
         let output: usize = jsvalue.try_into().unwrap();
         assert_eq!(large_usize, output);
+
+        // Test symbol
+        let symbol = JSValue::symbol(ctx, "this is symbol");
+        assert!(symbol.is_symbol());
         Ok(())
     });
 }
