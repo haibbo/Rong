@@ -1,5 +1,5 @@
 pub use rusty_js_core::{
-    call, Class, ClassSetup, FromJSValue, IntoJSValue, JSArray as CoreJSArray,
+    call, Class as CoreClass, ClassSetup, FromJSValue, IntoJSValue, JSArray as CoreJSArray,
     JSArrayBuffer as CoreJSArrayBuffer, JSClass, JSContext as CoreJSContext, JSEngine,
     JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject, JSResult,
     JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
@@ -33,6 +33,7 @@ pub type JSValue = CoreJSValue<JSEngineValue>;
 pub type JSObject = CoreJSObject<JSEngineValue>;
 pub type JSSymbol = CoreJSSymbol<JSEngineValue>;
 pub type JSFunc = CoreJSFunc<JSEngineValue>;
+pub type Class = CoreClass<JSEngineValue>;
 pub type Promise = CorePromise<JSEngineValue>;
 pub type JSException = CoreJSException<JSEngineValue>;
 pub type JSArray = CoreJSArray<JSEngineValue>;
