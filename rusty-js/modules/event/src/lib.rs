@@ -27,16 +27,22 @@
 
 mod custom_event;
 mod event;
+mod event_emitter;
 mod event_target;
 
 pub use custom_event::CustomEvent;
 pub use event::Event;
+pub use event_emitter::{Emitter, EmitterExt, EventEmitter, Events};
 pub use event_target::EventTarget;
 
 use rusty_js::*;
 
 /// Register event-related classes with the JavaScript engine
 pub fn init(ctx: &JSContext) -> JSResult<()> {
+    ctx.register_class::<EventEmitter>()?;
+    EventEmitter::add_node_event_target_prototype(ctx)?;
+    EventEmitter::add_web_event_target_prototype(ctx)?;
+
     ctx.register_class::<Event>()?;
     ctx.register_class::<CustomEvent>()?;
     ctx.register_class::<EventTarget>()?;

@@ -1,0 +1,404 @@
+use rusty_js::{function::*, *};
+use std::collections::{HashMap, VecDeque};
+use std::hash::Hash;
+use std::rc::Rc;
+use std::sync::Mutex;
+
+#[derive(Clone)]
+pub enum EventKey {
+    String(String),
+    Symbol(JSSymbol),
+}
+
+impl PartialEq for EventKey {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::String(l), Self::String(r)) => l == r,
+            (Self::Symbol(l), Self::Symbol(r)) => l == r,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for EventKey {}
+
+impl Hash for EventKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+    }
+}
+
+impl FromJSValue<JSEngineValue> for EventKey {
+    fn from_js_value(ctx: &JSContext, value: JSEngineValue) -> JSResult<Self> {
+        if let Ok(key) = String::from_js_value(ctx, value.clone()) {
+            return Ok(EventKey::String(key));
+        }
+        if let Ok(symbol) = JSSymbol::from_js_value(ctx, value) {
+            return Ok(EventKey::Symbol(symbol));
+        }
+        Err(RustyJSError::TypeError(
+            "EventKey must be Symbol or String!".to_string(),
+        ))
+    }
+}
+
+impl IntoJSValue<JSEngineValue> for EventKey {
+    fn into_js_value(self, ctx: &JSContext) -> JSEngineValue {
+        match self {
+            EventKey::String(k) => JSValue::from(ctx, k).into_value(),
+            EventKey::Symbol(k) => k.into_value(),
+        }
+    }
+}
+
+// blanket implementing to make EventKey can be as extracted from JSFunc
+impl rusty_js::function::JSParameterType for EventKey {}
+
+/// Represents an event listener
+#[derive(Clone, PartialEq)]
+pub struct EventListener {
+    listener: JSFunc,
+    // A boolean indicating the listener should be invoked at most once
+    once: bool,
+}
+
+pub trait Emitter
+where
+    Self: JSClass<JSEngineValue>,
+{
+    fn get_events(&self) -> &Events;
+    fn get_events_mut(&mut self) -> &mut Events;
+    fn on_event_changed(&mut self, _key: EventKey, _added: bool) -> JSResult<()> {
+        Ok(())
+    }
+}
+
+// Automatically implement EmitterExt for all types that implement Emitter
+impl<T> EmitterExt for T where T: Emitter + IntoJSValue<JSEngineValue> {}
+
+pub trait EmitterExt
+where
+    Self: Emitter + IntoJSValue<JSEngineValue>,
+{
+    /// Inherits the prototype of the nodejs EventEmitter class constructor, adding node
+    /// event emitter related prototype methods to the JavaScript environment
+    fn add_node_event_target_prototype(ctx: &JSContext) -> JSResult<()> {
+        let proto = Class::prototype::<Self>(ctx)
+            .ok_or_else(|| RustyJSError::Error("Failed to get prototype".to_string()))?;
+
+        // method: on and addListener
+        let on = ctx
+            .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
+                Self::add_event_listener(this, key, listener, false, false)
+            })?
+            .name("on")?;
+        proto.set("on", on.clone())?.set("addListener", on)?;
+
+        // method: once
+        let once = ctx
+            .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
+                Self::add_event_listener(this, key, listener, false, true)
+            })?
+            .name("once")?;
+        proto.set("once", once)?;
+
+        // method: off and removeListener
+        let off = ctx
+            .register_function(Self::remove_event_listener)?
+            .name("off")?;
+        proto.set("off", off.clone())?.set("removeListener", off)?;
+
+        // methods: prependListener, prependOnceListener
+        let prepend = ctx
+            .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
+                Self::add_event_listener(this, key, listener, true, false)
+            })?
+            .name("prependListener")?;
+        let prepend_once = ctx
+            .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
+                Self::add_event_listener(this, key, listener, true, true)
+            })?
+            .name("prependOnceListener")?;
+        proto
+            .set("prependListener", prepend)?
+            .set("prependOnceListener", prepend_once)?;
+
+        // method: eventNames
+        let event_names = ctx
+            .register_function(Self::event_names)?
+            .name("eventNames")?;
+        proto.set("eventNames", event_names)?;
+
+        // method: emit
+        let emit = ctx.register_function(Self::do_emit)?.name("emit")?;
+        proto.set("emit", emit)?;
+
+        // method: getMaxListeners
+        let emit = ctx
+            .register_function(Self::get_max_listeners)?
+            .name("getMaxListeners")?;
+        proto.set("getMaxListeners", emit)?;
+
+        // method: setMaxListeners
+        let emit = ctx
+            .register_function(Self::set_max_listeners)?
+            .name("setMaxListeners")?;
+        proto.set("setMaxListeners", emit)?;
+
+        // method: removeAllListeners
+        let remove_all = ctx
+            .register_function(Self::remove_all_listeners)?
+            .name("removeAllListeners")?;
+        proto.set("removeAllListeners", remove_all)?;
+
+        Ok(())
+    }
+
+    /// Inherits the prototype of the Web EventTarget class constructor, adding Web
+    /// event target related prototype methods to the JavaScript environment
+    fn add_web_event_target_prototype(ctx: &JSContext) -> JSResult<()> {
+        let proto = Class::prototype::<Self>(ctx)
+            .ok_or_else(|| RustyJSError::Error("Failed to get prototype".to_string()))?;
+
+        let on = ctx
+            .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
+                Self::add_event_listener(this, key, listener, false, false)
+            })?
+            .name("addEventListener")?;
+        proto.set("addEventListener", on)?;
+
+        let off = ctx
+            .register_function(Self::remove_event_listener)?
+            .name("removeEventListener")?;
+        proto.set("removeEventListener", off)?;
+
+        let dispatch = ctx
+            .register_function(Self::dispatch_event)?
+            .name("dispatchEvent")?;
+        proto.set("dispatchEvent", dispatch)?;
+
+        Ok(())
+    }
+
+    fn add_event_listener(
+        this: This<JSObject>,
+        key: EventKey,
+        listener: JSFunc,
+        prepend: bool,
+        once: bool,
+    ) -> JSResult<JSObject> {
+        let mut target = this.borrow_mut::<Self>()?;
+        let events = target.get_events();
+        let listener = EventListener { listener, once };
+        let is_new = events.add_listener(key.clone(), listener, prepend, once)?;
+        if is_new {
+            target.on_event_changed(key, true)?;
+        }
+        Ok(this.0.clone())
+    }
+
+    fn remove_event_listener(
+        this: This<JSObject>,
+        key: EventKey,
+        listener: JSFunc,
+    ) -> JSResult<JSObject> {
+        let target = this.borrow::<Self>()?;
+        let events = target.get_events();
+        events.remove_listener(key, listener);
+        Ok(this.0.clone())
+    }
+
+    fn event_names(this: This<JSObject>) -> JSResult<Vec<EventKey>> {
+        let target = this.borrow::<Self>()?;
+        let events = target.get_events();
+        events.event_names()
+    }
+
+    fn do_emit(this: This<JSObject>, key: EventKey, args: Rest<JSValue>) -> JSResult<bool> {
+        let mut target = this.borrow_mut::<Self>()?;
+        let events = target.get_events();
+        let mut is_empty = false;
+        let ret = events.do_emit(this.0.clone(), key.clone(), args.0, &mut is_empty);
+        if is_empty {
+            target.on_event_changed(key, false)?;
+        }
+        ret
+    }
+
+    fn dispatch_event(this: This<JSObject>, event: JSValue) -> JSResult<bool> {
+        if let Some(obj) = event.clone().into_object() {
+            let event_type = match obj.get::<_, String>("type") {
+                Ok(t) => t,
+                Err(_) => return Ok(true),
+            };
+
+            let key = EventKey::String(event_type);
+            Self::do_emit(this, key, Rest(vec![event]))?;
+        }
+        Ok(true)
+    }
+
+    fn get_max_listeners(this: This<JSObject>) -> JSResult<u32> {
+        let target = this.borrow::<Self>()?;
+        let events = target.get_events();
+        Ok(events.max_listener)
+    }
+
+    fn set_max_listeners(this: This<JSObject>, num: u32) -> JSResult<JSObject> {
+        let mut target = this.borrow_mut::<Self>()?;
+        let events = target.get_events_mut();
+        events.max_listener = num;
+        Ok(this.0.clone())
+    }
+
+    fn remove_all_listeners(this: This<JSObject>, key: Optional<EventKey>) -> JSResult<JSObject> {
+        let target = this.borrow::<Self>()?;
+        let events = target.get_events();
+        events.remove_all_listeners(key.0)?;
+        Ok(this.0.clone())
+    }
+}
+
+/// Represents a map of event keys to their listeners
+#[derive(Clone)]
+pub struct Events {
+    inner: Rc<Mutex<HashMap<EventKey, VecDeque<EventListener>>>>,
+    max_listener: u32,
+}
+
+impl Events {
+    fn new() -> Self {
+        Self {
+            inner: Rc::new(Mutex::new(HashMap::new())),
+            max_listener: 10,
+        }
+    }
+
+    fn add_listener(
+        &self,
+        key: EventKey,
+        listener: EventListener,
+        prepend: bool,
+        once: bool,
+    ) -> JSResult<bool> {
+        let mut events = self.inner.lock().unwrap();
+        let is_new = !events.contains_key(&key);
+        let listeners = events.entry(key).or_default();
+
+        // Check max_listener
+        if listeners.len() as u32 >= self.max_listener {
+            let warning = format!(
+                "EventEmitter overflow: {} listeners added. Use emitter.setMaxListeners() to increase limit",
+                listeners.len() + 1,
+            );
+            return Err(RustyJSError::Error(warning));
+        }
+
+        let listener = EventListener {
+            listener: listener.listener,
+            once,
+        };
+        if prepend {
+            listeners.push_front(listener);
+        } else {
+            listeners.push_back(listener);
+        }
+        Ok(is_new)
+    }
+
+    fn remove_listener(&self, key: EventKey, listener: JSFunc) {
+        let mut events = self.inner.lock().unwrap();
+        events.entry(key).and_modify(|listeners| {
+            listeners.retain(|l| l.listener != listener);
+        });
+    }
+
+    fn event_names(&self) -> JSResult<Vec<EventKey>> {
+        let events = self.inner.lock().into_result()?;
+        Ok(events.keys().cloned().collect::<Vec<_>>())
+    }
+
+    fn do_emit(
+        &self,
+        this: JSObject,
+        key: EventKey,
+        args: Vec<JSValue>,
+        is_empty: &mut bool,
+    ) -> JSResult<bool> {
+        let mut events = self.inner.lock().into_result()?;
+        if let Some(listeners) = events.get_mut(&key) {
+            // Clone listeners to avoid mutable borrow issues
+            let mut listeners_to_remove = Vec::new();
+            let listeners_clone: Vec<_> = listeners.iter().cloned().collect();
+
+            // Process listeners in order (changed from reverse)
+            for listener in listeners_clone.iter() {
+                // Call the listener with provided args
+                let _ = listener
+                    .listener
+                    .call_with_this::<_, ()>(this.clone(), (args.clone(),));
+                // Mark for removal if it's a once listener
+                if listener.once {
+                    listeners_to_remove.push(listener.listener.clone());
+                }
+            }
+
+            // Remove once listeners after iteration
+            if !listeners_to_remove.is_empty() {
+                listeners.retain(|l| !listeners_to_remove.contains(&l.listener));
+                // Call on_event_changed if all listeners were removed
+                if listeners.is_empty() {
+                    *is_empty = true;
+                }
+            }
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn remove_all_listeners(&self, key: Option<EventKey>) -> JSResult<()> {
+        let mut events = self.inner.lock().into_result()?;
+        match key {
+            Some(key) => {
+                events.remove(&key);
+            }
+            None => {
+                events.clear();
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Represents an event emitter
+#[js_class]
+pub struct EventEmitter {
+    events: Events,
+}
+
+impl Default for EventEmitter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[js_methods]
+impl EventEmitter {
+    #[js_method(constructor)]
+    pub fn new() -> Self {
+        Self {
+            events: Events::new(),
+        }
+    }
+}
+
+impl Emitter for EventEmitter {
+    fn get_events(&self) -> &Events {
+        &self.events
+    }
+
+    fn get_events_mut(&mut self) -> &mut Events {
+        &mut self.events
+    }
+}
