@@ -1,16 +1,29 @@
-use crate::{IntoJSValue, JSContext, JSValueImpl};
+use crate::{function::JSParameterType, IntoJSValue, JSContext, JSValueImpl};
 
 pub trait IntoJSArg<V: JSValueImpl> {
     fn push_js_arg(self, ctx: &JSContext<V::Context>, vec: &mut Vec<V>);
 }
 
+// Generic implementation for all types that implement JSParameterType
 impl<V, T> IntoJSArg<V> for T
+where
+    V: JSValueImpl,
+    T: IntoJSValue<V>,
+    T: JSParameterType,
+{
+    fn push_js_arg(self, ctx: &JSContext<V::Context>, vec: &mut Vec<V>) {
+        vec.push(self.into_js_value(ctx));
+    }
+}
+
+// Special handling for Rest parameters
+impl<V, T> IntoJSArg<V> for Vec<T>
 where
     V: JSValueImpl,
     T: IntoJSValue<V>,
 {
     fn push_js_arg(self, ctx: &JSContext<V::Context>, vec: &mut Vec<V>) {
-        vec.push(self.into_js_value(ctx));
+        vec.extend(self.into_iter().map(|item| item.into_js_value(ctx)));
     }
 }
 

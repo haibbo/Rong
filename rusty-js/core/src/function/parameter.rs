@@ -351,6 +351,10 @@ impl JSParameterType for bool {}
 impl JSParameterType for String {}
 impl JSParameterType for usize {}
 
+/// for IntoJSArg
+/// &str does not implement FromJSValue
+impl JSParameterType for &str {}
+
 macro_rules! impl_from_params {
     ($($T:ident),*) => {
         impl<V: JSValueImpl, $($T,)*> FromParams<V> for ($($T,)*)
