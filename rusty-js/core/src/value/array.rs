@@ -242,6 +242,39 @@ where
     }
 }
 
+/// Converts a Rust Vec into a JavaScript array
+impl<V, T> IntoJSValue<V> for Vec<T>
+where
+    V: JSObjectOps + JSArrayOps,
+    T: IntoJSValue<V>,
+{
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+        let array = JSArray::new(ctx).unwrap();
+        for item in self {
+            array.push(item).expect("Failed to set value in array");
+        }
+        array.into_js_value(ctx)
+    }
+}
+
+/// Converts a JavaScript array to a Rust Vec
+impl<V, T> FromJSValue<V> for Vec<T>
+where
+    V: JSTypeOf,
+    V: JSObjectOps + JSArrayOps,
+    T: FromJSValue<V>,
+{
+    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+        if value.is_array() {
+            let array = JSArray::from_js_value(ctx, value)?;
+            let vec = array.iter::<T>().collect::<JSResult<Vec<_>>>()?;
+            Ok(vec)
+        } else {
+            Err(RustyJSError::NotJSArray)
+        }
+    }
+}
+
 // blanket implementing.
 // Type JSArray can be as parameter of JS callback of rust function
 impl<V: JSValueImpl> crate::function::JSParameterType for JSArray<V> {}

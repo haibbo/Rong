@@ -145,3 +145,34 @@ fn test_array_iterator_edge_cases() {
         Ok(())
     });
 }
+
+#[test]
+fn test_vec_to_js_array() {
+    run(|ctx| {
+        let vec = vec![1, 2, 3];
+        let js_array = JSArray::from_js_value(ctx, vec.into_js_value(ctx))?;
+        assert!(js_array.is_array());
+        assert_eq!(js_array.len(), 3);
+        Ok(())
+    });
+}
+
+#[test]
+fn test_js_array_to_vec() {
+    run(|ctx| {
+        let vec = ctx
+            .eval::<Vec<i32>>(Source::from_bytes("[1, 2, 3]"))
+            .unwrap();
+        assert_eq!(vec, vec![1, 2, 3]);
+        Ok(())
+    });
+}
+
+#[test]
+fn test_empty_js_array_to_vec() {
+    run(|ctx| {
+        let vec = ctx.eval::<Vec<i32>>(Source::from_bytes("[]")).unwrap();
+        assert!(vec.is_empty());
+        Ok(())
+    });
+}
