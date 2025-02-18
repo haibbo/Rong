@@ -4,6 +4,7 @@ class TestRunner {
     this.passed = 0;
     this.failed = 0;
     this.afterEachCallbacks = [];
+    this.beforeEachCallbacks = [];
   }
 
   describe(name, fn) {
@@ -15,6 +16,9 @@ class TestRunner {
     let testNumber = this.passed + this.failed + 1;
     console.log(`${testNumber}. ${name}... `);
     try {
+      if (this.beforeEachCallbacks) {
+        this.beforeEachCallbacks.forEach((callback) => callback());
+      }
       fn();
       this.passed++;
       console.log("    ✓ Passed");
@@ -32,6 +36,11 @@ class TestRunner {
 
   afterEach(fn) {
     this.afterEachCallbacks.push(fn);
+  }
+
+  beforeEach(fn) {
+    this.beforeEachCallbacks = this.beforeEachCallbacks || [];
+    this.beforeEachCallbacks.push(fn);
   }
 
   expect(value) {
@@ -70,19 +79,13 @@ class TestRunner {
         }
       },
       toThrow: (expectedError) => {
-        let threw = false;
         try {
           value();
+          throw new Error('Expected function to throw an error but it did not');
         } catch (e) {
-          threw = true;
-          if (expectedError && !(e instanceof expectedError)) {
-            throw new Error(
-              `Expected ${expectedError.name} but got ${e.constructor.name}`,
-            );
+          if (e.message !== expectedError) {
+            throw new Error(`Expected error message "${expectedError}" but got "${e.message}"`);
           }
-        }
-        if (!threw) {
-          throw new Error("Expected function to throw but it did not");
         }
       },
     };
@@ -106,3 +109,4 @@ globalThis.describe = (name, fn) => runner.describe(name, fn);
 globalThis.it = (name, fn) => runner.it(name, fn);
 globalThis.expect = (value) => runner.expect(value);
 globalThis.afterEach = (fn) => runner.afterEach(fn);
+globalThis.beforeEach = (fn) => runner.beforeEach(fn);
