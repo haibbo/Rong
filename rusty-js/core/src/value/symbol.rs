@@ -20,6 +20,10 @@ where
     pub fn descripiton(&self) -> JSResult<String> {
         self.0.get::<_, String>("description")
     }
+
+    pub fn into_value(self) -> V {
+        self.0.into_value()
+    }
 }
 
 impl<V: JSValueImpl> Deref for JSSymbol<V> {
