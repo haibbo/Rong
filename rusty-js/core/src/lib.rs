@@ -11,7 +11,7 @@ mod value;
 pub use class::*;
 pub use context::*;
 pub use promise::*;
-pub use result::{JSResult, RustyJSError};
+pub use result::{IntoJSResult, JSResult, RustyJSError};
 pub use runtime::*;
 pub use source::Source;
 pub use value::*;

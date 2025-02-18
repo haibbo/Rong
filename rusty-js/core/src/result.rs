@@ -150,3 +150,21 @@ impl From<oneshot::error::RecvError> for RustyJSError {
         RustyJSError::Error(format!("Tokio oneshot error: {}", err))
     }
 }
+
+pub trait IntoJSResult<T> {
+    fn into_result(self) -> JSResult<T>;
+    fn into_type_result(self) -> JSResult<T>;
+}
+
+impl<T, E> IntoJSResult<T> for std::result::Result<T, E>
+where
+    E: ToString,
+{
+    fn into_result(self) -> JSResult<T> {
+        self.map_err(|e| RustyJSError::Error(e.to_string()))
+    }
+
+    fn into_type_result(self) -> JSResult<T> {
+        self.map_err(|e| RustyJSError::TypeError(e.to_string()))
+    }
+}
