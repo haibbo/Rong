@@ -8,3 +8,4 @@ rusty-js = { workspace = true }
 
 [dev-dependencies]
 rustyjs_test = { path = "../../utils/rustyjs_test" }
+assert = { path="../../modules/assert" }

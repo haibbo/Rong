@@ -59,7 +59,7 @@ mod tests {
         async_run!(|ctx: JSContext| async move {
             ctx.global().set(
                 "print",
-                JSFunc::new(&ctx, |msg: String| println!("JS: {}", msg)),
+                JSFunc::new(&ctx, |msg: String| println!("{}", msg)),
             )?;
 
             ctx.eval::<()>(Source::from_bytes(
@@ -67,30 +67,40 @@ mod tests {
                     const console={
                         log: function(...args){
                             print(args.join(' '))
+                        },
+                        error: function(...args){
+                            print(args.join(' '))
                         }
                     }
                 "#,
             ))?;
 
             init(&ctx)?;
+            assert::init(&ctx)?;
 
-            let source = Source::from_path("tests/event.js").await.unwrap();
-            let obj: JSObject = ctx.eval_async(source).await?;
+            let current_dir = std::env::current_dir().unwrap();
 
-            let total: i32 = obj.get("total")?;
-            let passed: i32 = obj.get("passed")?;
-            let success: bool = obj.get("success")?;
+            let runner = current_dir.join("../../tests/unit/test-runner.js");
+            let source = Source::from_path(runner).await.unwrap();
+            ctx.eval_async::<()>(source).await?;
 
-            if !success {
-                let failed: JSArray = obj.get("failed")?;
-                let error_messages: Vec<String> = failed.iter().collect::<JSResult<_>>()?;
-                panic!(
-                    "Path tests failed:\nPassed {}/{}\nFailures:\n{}",
-                    passed,
-                    total,
-                    error_messages.join("\n")
-                );
-            }
+            let test = current_dir.join("../../tests/unit/event.js");
+            let source = Source::from_path(test).await.unwrap();
+            ctx.eval_async::<()>(source).await?;
+
+            let result: JSObject = ctx
+                .eval_async(Source::from_bytes("runner.report()"))
+                .await?;
+
+            let failed: u32 = result.get("failed")?;
+            let passed: u32 = result.get("passed")?;
+
+            assert!(
+                failed == 0,
+                "Path tests passed: {}, failed: {}",
+                failed,
+                passed
+            );
             Ok(())
         });
     }
