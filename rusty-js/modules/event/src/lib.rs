@@ -11,6 +11,7 @@
 //! ## Node.js APIs:
 //! - [`EventEmitter`]: Node.js style event emitter with extended functionality
 //! - [`Emitter`] and [`EmitterExt`]: Traits for implementing custom event emitters
+//! - [`EmitError`]: Trait for converting Rust errors to JavaScript error events
 //!
 //! # Event Handling Patterns
 //!
@@ -34,6 +35,12 @@
 //!   - `eventNames`: Get all registered event types
 //!   - `setMaxListeners`/`getMaxListeners`: Configure listener limits
 //!
+//! ## Error Handling:
+//! The module provides a seamless way to handle Rust errors in JavaScript:
+//! - Automatic conversion of Rust errors to JavaScript error events
+//! - Node.js-style error event emission
+//! - Fallback to throwing errors when no error listeners are present
+//!
 //! # Event Object Properties
 //!
 //! Event objects have the following read-only properties:
@@ -55,6 +62,7 @@
 //! - Automatic cleanup of one-time listeners
 //! - Configurable listener limits per event type
 //! - Order-preserving listener execution
+//! - Integrated error handling with event emission
 
 mod custom_event;
 mod event;
@@ -63,7 +71,7 @@ mod event_target;
 
 pub use custom_event::CustomEvent;
 pub use event::Event;
-pub use event_emitter::{Emitter, EmitterExt, EventEmitter, Events};
+pub use event_emitter::{EmitError, Emitter, EmitterExt, EventEmitter, EventKey, Events};
 pub use event_target::EventTarget;
 
 use rusty_js::*;
@@ -86,6 +94,69 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 mod tests {
     use super::*;
     use rustyjs_test::*;
+
+    #[test]
+    fn test_emit_error() {
+        async_run!(|ctx: JSContext| async move {
+            // Create a test error emitter
+            #[js_class]
+            struct TestEmitter {
+                events: Events,
+            }
+
+            #[js_methods]
+            impl TestEmitter {
+                #[js_method(constructor)]
+                fn new() -> Self {
+                    Self {
+                        events: Events::new(),
+                    }
+                }
+
+                #[js_method]
+                fn do_operation(&self, this: This<JSObject>, ctx: JSContext) -> JSResult<bool> {
+                    let result: Result<(), String> = Err("Test error message".to_string());
+                    result.emit_error::<Self>(this, &ctx, "do_operation")
+                }
+            }
+
+            impl Emitter for TestEmitter {
+                fn get_events(&self) -> &Events {
+                    &self.events
+                }
+
+                fn get_events_mut(&mut self) -> &mut Events {
+                    &mut self.events
+                }
+            }
+
+            ctx.global().set(
+                "print",
+                JSFunc::new(&ctx, |msg: String| println!("{}", msg)),
+            )?;
+
+            // Register the test emitter
+            ctx.register_class::<TestEmitter>()?;
+            TestEmitter::add_node_event_target_prototype(&ctx)?;
+
+            let result = ctx.eval::<bool>(Source::from_bytes(
+                r#"
+                let errorCaught = false;
+                const testEmitter=new TestEmitter();
+                testEmitter.on('error', (err) => {
+                    print("Got:"+err);
+                    errorCaught = err === "Test error message";
+                });
+                testEmitter.do_operation();
+                errorCaught;
+            "#,
+            ))?;
+
+            assert!(result, "Error event should have been caught by listener");
+
+            Ok(())
+        });
+    }
 
     #[test]
     fn test_event() {

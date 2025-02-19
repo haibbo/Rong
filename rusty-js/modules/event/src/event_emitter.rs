@@ -117,6 +117,61 @@ where
     }
 }
 
+/// A trait for converting Rust errors into JavaScript event emissions.
+///
+/// This trait provides a convenient way to handle Rust errors by converting them into
+/// JavaScript 'error' events, following the Node.js error handling pattern.
+///
+/// When an error occurs, it will:
+/// 1. Try to emit an 'error' event with the error message
+/// 2. If there are error listeners, the error will be handled by them
+/// 3. If there are no error listeners, the error will be thrown as a JavaScript error
+///
+// # Returns
+/// - `Ok(true)` if the error was emitted and handled by listeners
+/// - `Ok(false)` if there was no error to emit
+/// - `Err(...)` if there was an error but no listeners to handle it
+pub trait EmitError {
+    fn emit_error<M>(
+        self,
+        this: This<JSObject>,
+        ctx: &JSContext,
+        id: &'static str,
+    ) -> JSResult<bool>
+    where
+        M: EmitterExt;
+}
+
+impl<T, E> EmitError for std::result::Result<T, E>
+where
+    E: ToString,
+{
+    fn emit_error<M>(
+        self,
+        this: This<JSObject>,
+        ctx: &JSContext,
+        id: &'static str,
+    ) -> JSResult<bool>
+    where
+        M: EmitterExt,
+    {
+        let _ = id;
+        match self {
+            Err(err) => {
+                let key = EventKey::String(String::from("error"));
+                let err = err.to_string();
+                let value = JSValue::from(ctx, err.as_str());
+
+                match M::do_emit(This(this.0.clone()), key.clone(), Rest(vec![value])) {
+                    Ok(has) if has => Ok(true),
+                    _ => Err(RustyJSError::Error(err)),
+                }
+            }
+            Ok(_) => Ok(false),
+        }
+    }
+}
+
 // Automatically implement EmitterExt for all types that implement Emitter
 impl<T> EmitterExt for T where T: Emitter + IntoJSValue<JSEngineValue> {}
 
@@ -258,15 +313,21 @@ where
         events.event_names()
     }
 
+    /// Emits an event with the given key and arguments.
+    ///
+    /// Returns `JSResult<bool>` where:
+    /// - `true` if the event was successfully emitted
+    /// - `false` if there were no listeners for the event
+    /// - `Err` if an error occurred during emission
     fn do_emit(this: This<JSObject>, key: EventKey, args: Rest<JSValue>) -> JSResult<bool> {
         let mut target = this.borrow_mut::<Self>()?;
         let events = target.get_events();
         let mut is_empty = false;
-        let ret = events.do_emit(this.0.clone(), key.clone(), args.0, &mut is_empty);
+        let has = events.do_emit(this.0.clone(), key.clone(), args.0, &mut is_empty);
         if is_empty {
             target.on_event_changed(key, false)?;
         }
-        ret
+        has
     }
 
     fn dispatch_event(this: This<JSObject>, event: JSValue) -> JSResult<bool> {
