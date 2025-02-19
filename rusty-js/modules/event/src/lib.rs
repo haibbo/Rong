@@ -45,7 +45,9 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 
     ctx.register_class::<Event>()?;
     ctx.register_class::<CustomEvent>()?;
+
     ctx.register_class::<EventTarget>()?;
+    EventTarget::add_web_event_target_prototype(ctx)?;
     Ok(())
 }
 

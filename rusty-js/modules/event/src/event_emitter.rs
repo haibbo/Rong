@@ -267,7 +267,7 @@ pub struct Events {
 }
 
 impl Events {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             inner: Rc::new(Mutex::new(HashMap::new())),
             max_listener: 10,
