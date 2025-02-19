@@ -200,8 +200,7 @@ where
     /// Inherits the prototype of the nodejs EventEmitter class constructor, adding node
     /// event emitter related prototype methods to the JavaScript environment
     fn add_node_event_target_prototype(ctx: &JSContext) -> JSResult<()> {
-        let proto = Class::prototype::<Self>(ctx)
-            .ok_or_else(|| RustyJSError::Error("Failed to get prototype".to_string()))?;
+        let proto = Class::prototype::<Self>(ctx)?;
 
         // method: on and addListener
         let on = ctx
@@ -274,8 +273,7 @@ where
     /// Inherits the prototype of the Web EventTarget class constructor, adding Web
     /// event target related prototype methods to the JavaScript environment
     fn add_web_event_target_prototype(ctx: &JSContext) -> JSResult<()> {
-        let proto = Class::prototype::<Self>(ctx)
-            .ok_or_else(|| RustyJSError::Error("Failed to get prototype".to_string()))?;
+        let proto = Class::prototype::<Self>(ctx)?;
 
         let on = ctx
             .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
