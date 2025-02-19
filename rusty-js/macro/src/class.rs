@@ -80,8 +80,8 @@ pub fn class_impl(input: &DeriveInput, opts: &ClassOpts) -> syn::Result<TokenStr
         impl rusty_js::IntoJSValue<rusty_js::JSEngineValue> for #type_name {
             fn into_js_value(self, context: &rusty_js::JSContext) -> rusty_js::JSEngineValue {
                 rusty_js::Class::get::<Self>(context)
-                    .map(|class| class.instance(self))
-                    .unwrap_or_else(|| context.throw_error("Failed to make Class Instance").into_value())
+                    .map(|class| class.instance(self).into_value())
+                    .unwrap_or_else(|_| context.throw_error("Failed to make Class Instance").into_value())
             }
         }
 

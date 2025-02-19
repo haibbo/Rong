@@ -104,7 +104,7 @@ where
     V: JSValueImpl + JSObjectOps,
 {
     /// Create a new instance of the class
-    pub fn instance<JC: JSClass<V>>(self, value: JC) -> V {
+    pub fn instance<JC: JSClass<V>>(self, value: JC) -> JSObject<V> {
         let context = self.0.get_ctx();
         let ptr = Box::into_raw(Box::new(RefCell::new(value)));
 
@@ -115,13 +115,13 @@ where
             .0
             .get::<_, JSObject<V>>("prototype")
             .map(|proto| instance.set_prototype(proto.into_value()));
-        instance
+        JSObject::from_raw(&context, instance)
     }
 
     /// Check if the object is an instance of the specified class
     pub fn instance_of<JC: JSClass<V>>(object: &JSObject<V>) -> bool {
         let context = object.get_ctx();
-        if let Some(class) = Class::<V>::get::<JC>(&context) {
+        if let Ok(class) = Class::<V>::get::<JC>(&context) {
             object.as_value().instance_of(class.0.into_value())
         } else {
             false
@@ -141,19 +141,21 @@ where
     }
 
     /// Get class constructor by type
-    pub fn get<JC: JSClass<V>>(context: &JSContext<V::Context>) -> Option<Self> {
+    pub fn get<JC: JSClass<V>>(context: &JSContext<V::Context>) -> JSResult<Self> {
         let constructor = context
             .get_class_registry()
-            .and_then(|registry| registry.borrow().get(&TypeId::of::<JC>()).cloned())?;
+            .and_then(|registry| registry.borrow().get(&TypeId::of::<JC>()).cloned())
+            .ok_or(RustyJSError::Error(format!(
+                "JS Class {} is not registered",
+                std::any::type_name::<JC>()
+            )))?;
 
-        match JSObject::from_js_value(context, constructor) {
-            Ok(obj) => Some(Self(obj)),
-            Err(_) => None,
-        }
+        Ok(Self(JSObject::from_raw(context, constructor)))
     }
 
-    pub fn prototype<JC: JSClass<V>>(context: &JSContext<V::Context>) -> Option<JSObject<V>> {
-        Class::get::<JC>(context).map(|class| class.0.get("prototype").ok())?
+    pub fn prototype<JC: JSClass<V>>(context: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
+        let class = Class::get::<JC>(context)?;
+        class.0.get::<_, JSObject<V>>("prototype")
     }
 
     /// Construct a Class from a JSObject if it is an instance of the specified class

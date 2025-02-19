@@ -156,10 +156,8 @@ where
     {
         let func = RustFunc::new(f);
         let length = func.parameter_required_count();
-        let value = Class::get::<RustFunc<C::Value>>(self)
-            .map(|class| class.instance::<RustFunc<C::Value>>(func))
-            .ok_or(RustyJSError::Error("Not Found RustFunc Class".to_string()))?;
-        let obj = JSObject::from_js_value(self, value).unwrap();
+        let class = Class::get::<RustFunc<C::Value>>(self)?;
+        let obj = class.instance::<RustFunc<C::Value>>(func);
         obj.set("length", length)?;
         Ok(JSFunc(obj))
     }
