@@ -78,19 +78,19 @@ pub struct EventListener {
 /// # Example
 /// ```ignore
 /// use rusty_js::js_class;
-/// use event::Events;
+/// use event::EventEmitter;
 ///
 /// #[js_class]
 /// struct MyEmitter {
-///     events: Events,
+///     events: EventEmitter,
 /// }
 ///
 /// impl Emitter for MyEmitter {
-///     fn get_events(&self) -> &Events {
+///     fn get_events(&self) -> &EventEmitter {
 ///         &self.events
 ///     }
 ///
-///     fn get_events_mut(&mut self) -> &mut Events {
+///     fn get_events_mut(&mut self) -> &mut EventEmitter {
 ///         &mut self.events
 ///     }
 /// }
@@ -103,10 +103,10 @@ where
     Self: JSClass<JSEngineValue>,
 {
     /// Get a reference to the internal events container
-    fn get_events(&self) -> &Events;
+    fn get_event_emitter(&self) -> &EventEmitter;
 
     /// Get a mutable reference to the internal events container
-    fn get_events_mut(&mut self) -> &mut Events;
+    fn get_mut_event_emitter(&mut self) -> &mut EventEmitter;
 
     /// Callback triggered when an event listener is added or removed
     ///
@@ -287,7 +287,7 @@ where
         once: bool,
     ) -> JSResult<JSObject> {
         let mut target = this.borrow_mut::<Self>()?;
-        let events = target.get_events();
+        let events = target.get_event_emitter();
         let listener = EventListener { listener, once };
         let is_new = events.add_listener(key.clone(), listener, prepend, once)?;
         if is_new {
@@ -302,14 +302,14 @@ where
         listener: JSFunc,
     ) -> JSResult<JSObject> {
         let target = this.borrow::<Self>()?;
-        let events = target.get_events();
+        let events = target.get_event_emitter();
         events.remove_listener(key, listener);
         Ok(this.0.clone())
     }
 
     fn event_names(this: This<JSObject>) -> JSResult<Vec<EventKey>> {
         let target = this.borrow::<Self>()?;
-        let events = target.get_events();
+        let events = target.get_event_emitter();
         events.event_names()
     }
 
@@ -321,7 +321,7 @@ where
     /// - `Err` if an error occurred during emission
     fn do_emit(this: This<JSObject>, key: EventKey, args: Rest<JSValue>) -> JSResult<bool> {
         let mut target = this.borrow_mut::<Self>()?;
-        let events = target.get_events();
+        let events = target.get_event_emitter();
         let mut is_empty = false;
         let has = events.do_emit(this.0.clone(), key.clone(), args.0, &mut is_empty);
         if is_empty {
@@ -345,46 +345,26 @@ where
 
     fn get_max_listeners(this: This<JSObject>) -> JSResult<u32> {
         let target = this.borrow::<Self>()?;
-        let events = target.get_events();
+        let events = target.get_event_emitter();
         Ok(events.max_listener)
     }
 
     fn set_max_listeners(this: This<JSObject>, num: u32) -> JSResult<JSObject> {
         let mut target = this.borrow_mut::<Self>()?;
-        let events = target.get_events_mut();
+        let events = target.get_mut_event_emitter();
         events.max_listener = num;
         Ok(this.0.clone())
     }
 
     fn remove_all_listeners(this: This<JSObject>, key: Optional<EventKey>) -> JSResult<JSObject> {
         let target = this.borrow::<Self>()?;
-        let events = target.get_events();
+        let events = target.get_event_emitter();
         events.remove_all_listeners(key.0)?;
         Ok(this.0.clone())
     }
 }
 
-/// Represents a map of event keys to their listeners
-#[derive(Clone)]
-pub struct Events {
-    inner: Rc<Mutex<HashMap<EventKey, VecDeque<EventListener>>>>,
-    max_listener: u32,
-}
-
-impl Default for Events {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Events {
-    pub fn new() -> Self {
-        Self {
-            inner: Rc::new(Mutex::new(HashMap::new())),
-            max_listener: 10,
-        }
-    }
-
+impl EventEmitter {
     fn add_listener(
         &self,
         key: EventKey,
@@ -482,15 +462,32 @@ impl Events {
     }
 }
 
-/// Represents an event emitter
+/// Represents an event emitter that follows the Node.js EventEmitter pattern.
+///
+/// This struct provides an implementation of the event emitter pattern,
+/// allowing objects to emit named events that cause listener functions to be called.
+///
+/// # Key Features
+/// - Thread-safe event handling through internal Mutex
+/// - Support for multiple listeners per event
+/// - Configurable maximum number of listeners
+/// - Once-only event listeners
+///
+/// # Internal Structure
+/// - `inner`: A thread-safe HashMap storing event keys and their associated listeners
+/// - `max_listener`: Maximum number of listeners allowed per event (default: 10)
 #[js_class]
 pub struct EventEmitter {
-    events: Events,
+    inner: Rc<Mutex<HashMap<EventKey, VecDeque<EventListener>>>>,
+    max_listener: u32,
 }
 
 impl Default for EventEmitter {
     fn default() -> Self {
-        Self::new()
+        Self {
+            inner: Rc::new(Mutex::new(HashMap::new())),
+            max_listener: 10,
+        }
     }
 }
 
@@ -498,18 +495,16 @@ impl Default for EventEmitter {
 impl EventEmitter {
     #[js_method(constructor)]
     pub fn new() -> Self {
-        Self {
-            events: Events::new(),
-        }
+        Self::default()
     }
 }
 
 impl Emitter for EventEmitter {
-    fn get_events(&self) -> &Events {
-        &self.events
+    fn get_event_emitter(&self) -> &EventEmitter {
+        self
     }
 
-    fn get_events_mut(&mut self) -> &mut Events {
-        &mut self.events
+    fn get_mut_event_emitter(&mut self) -> &mut EventEmitter {
+        self
     }
 }

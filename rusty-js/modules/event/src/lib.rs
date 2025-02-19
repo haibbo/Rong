@@ -1,7 +1,7 @@
 //! Event handling implementation combining Web and Node.js patterns
 //!
 //! This module provides event handling functionality inspired by both Web APIs and Node.js,
-//! with a unified underlying implementation through the `Events` structure.
+//! with a unified implementation through the `EventEmitter` structure.
 //!
 //! ## Web Standard APIs:
 //! - [`Event`]: The base event object
@@ -56,7 +56,7 @@
 //!
 //! # Implementation Details
 //!
-//! The module uses a unified `Events` structure internally, which provides:
+//! The module uses a unified `EventEmitter` structure, which provides:
 //! - Thread-safe event listener management through `Mutex`
 //! - Support for both string and symbol event types via `EventKey`
 //! - Automatic cleanup of one-time listeners
@@ -71,7 +71,7 @@ mod event_target;
 
 pub use custom_event::CustomEvent;
 pub use event::Event;
-pub use event_emitter::{EmitError, Emitter, EmitterExt, EventEmitter, EventKey, Events};
+pub use event_emitter::{EmitError, Emitter, EmitterExt, EventEmitter, EventKey};
 pub use event_target::EventTarget;
 
 use rusty_js::*;
@@ -101,7 +101,7 @@ mod tests {
             // Create a test error emitter
             #[js_class]
             struct TestEmitter {
-                events: Events,
+                events: EventEmitter,
             }
 
             #[js_methods]
@@ -109,7 +109,7 @@ mod tests {
                 #[js_method(constructor)]
                 fn new() -> Self {
                     Self {
-                        events: Events::new(),
+                        events: EventEmitter::new(),
                     }
                 }
 
@@ -121,11 +121,11 @@ mod tests {
             }
 
             impl Emitter for TestEmitter {
-                fn get_events(&self) -> &Events {
+                fn get_event_emitter(&self) -> &EventEmitter {
                     &self.events
                 }
 
-                fn get_events_mut(&mut self) -> &mut Events {
+                fn get_mut_event_emitter(&mut self) -> &mut EventEmitter {
                     &mut self.events
                 }
             }
