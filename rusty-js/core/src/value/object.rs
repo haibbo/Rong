@@ -131,11 +131,15 @@ where
         JSObject::from_js_value(ctx, value).unwrap()
     }
 
-    pub(crate) fn into_value(self) -> V {
+    pub fn into_value(self) -> V {
         self.0.into_value()
     }
 
-    pub(crate) fn as_mut_value(&mut self) -> &mut V {
+    pub fn from_raw(ctx: &JSContext<V::Context>, value: V) -> Self {
+        JSValue::from_raw(ctx, value).into()
+    }
+
+    pub fn as_mut_value(&mut self) -> &mut V {
         &mut self.0.inner
     }
 }
