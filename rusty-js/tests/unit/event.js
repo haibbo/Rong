@@ -15,6 +15,25 @@ describe("EventEmitter", () => {
       emitter.emit("test", data);
     });
 
+    it("should handle Symbol event keys", () => {
+      const sym = Symbol("test");
+      let received = false;
+      emitter.on(sym, () => (received = true));
+      emitter.emit(sym);
+      expect(received).toBeTruthy();
+    });
+
+    it("should remove Symbol event listeners", () => {
+      const sym = Symbol("test");
+      let count = 0;
+      const listener = () => count++;
+      emitter.on(sym, listener);
+      emitter.emit(sym);
+      emitter.removeListener(sym, listener);
+      emitter.emit(sym);
+      expect(count).toBe(1);
+    });
+
     it("should call multiple listeners in registration order", () => {
       const calls = [];
       emitter.on("test", () => calls.push(1));
