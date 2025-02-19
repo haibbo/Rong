@@ -6,6 +6,7 @@ use crate::{
 
 use std::any::TypeId;
 use std::cell::{Ref, RefCell, RefMut};
+use std::ops::Deref;
 
 /// JSClass trait for rust type that supports TypeId
 /// `TypeId` is currently only available for types which ascribe to `'static`,
@@ -98,6 +99,17 @@ impl<T, V: JSValueImpl> JSClassExt<V> for T where T: JSClass<V> {}
 /// This struct encapsulates a JavaScript object that serves as a class constructor.
 /// It is used to create class instances and manage class lifecycle.
 pub struct Class<V: JSValueImpl>(pub(crate) JSObject<V>);
+
+impl<V> Deref for Class<V>
+where
+    V: JSValueImpl,
+{
+    type Target = JSObject<V>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl<V> Class<V>
 where

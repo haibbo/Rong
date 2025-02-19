@@ -1,4 +1,4 @@
-use crate::{JSContext, JSFunc, JSObject, JSObjectOps, JSValueConversion, JSValueImpl};
+use crate::{JSContext, JSFunc, JSObject, JSObjectOps, JSValue, JSValueConversion, JSValueImpl};
 
 // PropertyKey represents a key in a JavaScript object property
 // It can be a number (i32, u32, i64, u64) or a string reference
@@ -110,13 +110,19 @@ where
     V: JSObjectOps,
 {
     #[must_use]
-    pub(crate) fn builder() -> Self {
+    pub fn builder() -> Self {
         Self {
             value: None,
             getter: None,
             setter: None,
             attributes: PropertyAttributes::default(),
         }
+    }
+
+    #[must_use]
+    pub fn value(mut self, value: JSValue<V>) -> Self {
+        self.value = Some(value.into_value());
+        self
     }
 
     #[must_use]
@@ -164,7 +170,7 @@ where
     }
 
     // apply PropertyDescriptor to JS Object with key
-    pub(crate) fn apply_to<K>(mut self, obj: &JSObject<V>, k: K)
+    pub fn apply_to<K>(mut self, obj: &JSObject<V>, k: K)
     where
         K: for<'a> Into<PropertyKey<'a>>,
         V: JSObjectOps,
