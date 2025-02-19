@@ -1,16 +1,38 @@
-//! Event handling implementation following the Web standard.
+//! Event handling implementation combining Web and Node.js patterns
 //!
-//! This module provides event handling functionality that matches the behavior of Web APIs:
+//! This module provides event handling functionality inspired by both Web APIs and Node.js,
+//! with a unified underlying implementation through the `Events` structure.
+//!
+//! ## Web Standard APIs:
 //! - [`Event`]: The base event object
 //! - [`CustomEvent`]: For custom events with additional data
 //! - [`EventTarget`]: Interface for objects that can receive events
 //!
-//! # Event Listener Behavior
+//! ## Node.js APIs:
+//! - [`EventEmitter`]: Node.js style event emitter with extended functionality
+//! - [`Emitter`] and [`EmitterExt`]: Traits for implementing custom event emitters
 //!
+//! # Event Handling Patterns
+//!
+//! ## Web Style (EventTarget):
 //! - Event listeners are called in the order they were registered
-//! - The same listener function is only registered once per event type and options
-//! - Listeners with different options (e.g. capture) are treated as distinct
-//! - Once listeners are automatically removed after being called
+//! - Events are dispatched through the `dispatchEvent` method
+//! - Basic event listener management with `addEventListener` and `removeEventListener`
+//! - Note: The capture phase is currently not implemented
+//!
+//! ## Node.js Style (EventEmitter):
+//! - Supports both string and symbol event types
+//! - Configurable maximum number of listeners per event (default: 10)
+//! - Rich API for event handling:
+//!   - `on`/`addListener`: Add a listener
+//!   - `once`: Add a one-time listener
+//!   - `off`/`removeListener`: Remove a listener
+//!   - `removeAllListeners`: Remove all listeners
+//!   - `prependListener`: Add listener to the beginning
+//!   - `prependOnceListener`: Add one-time listener to the beginning
+//!   - `emit`: Trigger an event
+//!   - `eventNames`: Get all registered event types
+//!   - `setMaxListeners`/`getMaxListeners`: Configure listener limits
 //!
 //! # Event Object Properties
 //!
@@ -24,6 +46,15 @@
 //! CustomEvent objects additionally have:
 //!
 //! - `detail`: Custom data passed when creating the event
+//!
+//! # Implementation Details
+//!
+//! The module uses a unified `Events` structure internally, which provides:
+//! - Thread-safe event listener management through `Mutex`
+//! - Support for both string and symbol event types via `EventKey`
+//! - Automatic cleanup of one-time listeners
+//! - Configurable listener limits per event type
+//! - Order-preserving listener execution
 
 mod custom_event;
 mod event;

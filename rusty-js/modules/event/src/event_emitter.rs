@@ -4,6 +4,14 @@ use std::hash::Hash;
 use std::rc::Rc;
 use std::sync::Mutex;
 
+/// Represents a key that can be used to identify an event type.
+///
+/// This enum supports both string and symbol event types, allowing for
+/// flexible event identification similar to Node.js's EventEmitter.
+///
+/// # Variants
+/// - `String(String)`: A string-based event type identifier
+/// - `Symbol(JSSymbol)`: A symbol-based event type identifier
 #[derive(Clone)]
 pub enum EventKey {
     String(String),
@@ -62,12 +70,48 @@ pub struct EventListener {
     once: bool,
 }
 
+/// Trait for objects that can emit events
+///
+/// When implementing this trait, users can use `EmitterExt` to add
+/// Node.js style event emitter prototype methods to their class.
+///
+/// # Example
+/// ```ignore
+/// use rusty_js::js_class;
+/// use event::Events;
+///
+/// #[js_class]
+/// struct MyEmitter {
+///     events: Events,
+/// }
+///
+/// impl Emitter for MyEmitter {
+///     fn get_events(&self) -> &Events {
+///         &self.events
+///     }
+///
+///     fn get_events_mut(&mut self) -> &mut Events {
+///         &mut self.events
+///     }
+/// }
+///
+/// // Then use EmitterExt to add prototype methods
+/// MyEmitter::add_node_event_target_prototype(ctx)?;
+/// ```
 pub trait Emitter
 where
     Self: JSClass<JSEngineValue>,
 {
+    /// Get a reference to the internal events container
     fn get_events(&self) -> &Events;
+
+    /// Get a mutable reference to the internal events container
     fn get_events_mut(&mut self) -> &mut Events;
+
+    /// Callback triggered when an event listener is added or removed
+    ///
+    /// This can be overridden to implement custom behavior when
+    /// listeners change. The default implementation does nothing.
     fn on_event_changed(&mut self, _key: EventKey, _added: bool) -> JSResult<()> {
         Ok(())
     }
@@ -264,6 +308,12 @@ where
 pub struct Events {
     inner: Rc<Mutex<HashMap<EventKey, VecDeque<EventListener>>>>,
     max_listener: u32,
+}
+
+impl Default for Events {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Events {
