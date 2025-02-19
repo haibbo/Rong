@@ -18,6 +18,24 @@ pub enum EventKey {
     Symbol(JSSymbol),
 }
 
+impl From<String> for EventKey {
+    fn from(s: String) -> Self {
+        EventKey::String(s)
+    }
+}
+
+impl From<&str> for EventKey {
+    fn from(s: &str) -> Self {
+        EventKey::String(s.to_string())
+    }
+}
+
+impl From<JSSymbol> for EventKey {
+    fn from(s: JSSymbol) -> Self {
+        EventKey::Symbol(s)
+    }
+}
+
 impl PartialEq for EventKey {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -288,7 +306,6 @@ where
     ) -> JSResult<JSObject> {
         let mut target = this.borrow_mut::<Self>()?;
         let events = target.get_event_emitter();
-        let listener = EventListener { listener, once };
         let is_new = events.add_listener(key.clone(), listener, prepend, once)?;
         if is_new {
             target.on_event_changed(key, true)?;
@@ -365,10 +382,32 @@ where
 }
 
 impl EventEmitter {
+    /// Returns the first listener function for the given event key, or None if no listeners exist
+    pub fn get_listener(&self, key: &EventKey) -> Option<JSFunc> {
+        self.inner.lock().ok().and_then(|inner| {
+            inner
+                .get(key)
+                .and_then(|listeners| listeners.front().map(|l| l.listener.clone()))
+        })
+    }
+
+    /// Adds an event listener
+    ///
+    /// # Arguments
+    /// - `key`: The event key
+    /// - `listener`: The event listener of JS Function
+    /// - `prepend`: Whether to add to the beginning of the listener list
+    /// - `once`: Whether the listener should only execute once
+    ///
+    /// # Returns
+    /// Returns a JSResult<bool> indicating if this is a new event type
+    ///
+    /// # Errors
+    /// Returns an error if the listener count exceeds the maximum limit
     fn add_listener(
         &self,
         key: EventKey,
-        listener: EventListener,
+        listener: JSFunc,
         prepend: bool,
         once: bool,
     ) -> JSResult<bool> {
@@ -385,10 +424,7 @@ impl EventEmitter {
             return Err(RustyJSError::Error(warning));
         }
 
-        let listener = EventListener {
-            listener: listener.listener,
-            once,
-        };
+        let listener = EventListener { listener, once };
         if prepend {
             listeners.push_front(listener);
         } else {
