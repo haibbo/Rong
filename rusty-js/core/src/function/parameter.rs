@@ -341,6 +341,10 @@ where
 pub trait JSParameterType {}
 
 impl JSParameterType for () {}
+impl JSParameterType for i8 {}
+impl JSParameterType for u8 {}
+impl JSParameterType for i16 {}
+impl JSParameterType for u16 {}
 impl JSParameterType for i32 {}
 impl JSParameterType for u32 {}
 impl JSParameterType for i64 {}
@@ -349,6 +353,7 @@ impl JSParameterType for f32 {}
 impl JSParameterType for f64 {}
 impl JSParameterType for bool {}
 impl JSParameterType for String {}
+impl JSParameterType for isize {}
 impl JSParameterType for usize {}
 
 /// for IntoJSArg

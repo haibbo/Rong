@@ -158,27 +158,6 @@ where
     }
 }
 
-impl<V> FromJSValue<V> for usize
-where
-    V: JSValueImpl,
-    V: TryInto<u64, Error = RustyJSError>,
-{
-    fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        let u64_val = TryInto::<u64>::try_into(value)?;
-        Ok(u64_val as usize)
-    }
-}
-
-impl<V> IntoJSValue<V> for usize
-where
-    V: JSValueImpl,
-    V: for<'a> From<(&'a V::Context, u64)>,
-{
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        V::from((ctx.as_ref(), self as u64))
-    }
-}
-
 impl<V, T> IntoJSValue<V> for Option<T>
 where
     V: JSValueImpl,
@@ -190,4 +169,42 @@ where
             None => V::create_null(ctx.as_ref()), // Returns null in JS when None
         }
     }
+}
+
+/// Macro to implement FromJSValue and IntoJSValue for integer types
+macro_rules! impl_js_converter_for_int {
+    ($($type:ty => $intermediate:ty),*) => {
+        $(
+            impl<V> FromJSValue<V> for $type
+            where
+                V: JSValueImpl,
+                V: TryInto<$intermediate, Error = RustyJSError>,
+            {
+                fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+                    let intermediate = TryInto::<$intermediate>::try_into(value)?;
+                    Ok(intermediate as $type)
+                }
+            }
+
+            impl<V> IntoJSValue<V> for $type
+            where
+                V: JSValueImpl,
+                V: for<'a> From<(&'a V::Context, $intermediate)>,
+            {
+                fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+                    V::from((ctx.as_ref(), self as $intermediate))
+                }
+            }
+        )*
+    };
+}
+
+// Implement for i8, u8, i16, u16, usize, isize
+impl_js_converter_for_int! {
+    i8 => i32,
+    u8 => u32,
+    i16 => i32,
+    u16 => u32,
+    usize => u64,
+    isize => i64
 }
