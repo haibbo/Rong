@@ -31,19 +31,23 @@ fn test_error_constructor() {
         // Register multiple error constructors
         ctx.global().set(
             "type_error",
-            ctx.register_function(|| -> JSResult<()> {
+            JSFunc::new(ctx, || -> JSResult<()> {
                 Err(RustyJSError::TypeError("this is typeError".to_string()))
             })?,
         )?;
 
         ctx.global().set(
             "reference_error",
-            ctx.register_function(|| -> JSResult<()> { Err(RustyJSError::PropertyNotFound) })?,
+            JSFunc::new(ctx, || -> JSResult<()> {
+                Err(RustyJSError::PropertyNotFound)
+            })?,
         )?;
 
         ctx.global().set(
             "range_error",
-            ctx.register_function(|| -> JSResult<()> { Err(RustyJSError::TypedArrayRangeError) })?,
+            JSFunc::new(ctx, || -> JSResult<()> {
+                Err(RustyJSError::TypedArrayRangeError)
+            })?,
         )?;
 
         // Test TypeError

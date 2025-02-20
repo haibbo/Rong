@@ -4,12 +4,11 @@ use tokio::time::{sleep, Duration};
 #[test]
 fn function_with_optional() {
     run(|ctx| {
-        let func = ctx
-            .register_function(|a: i32, b: Optional<i32>| match *b {
-                Some(val) => a + val,
-                None => a,
-            })?
-            .name("add_optional")?;
+        let func = JSFunc::new(ctx, |a: i32, b: Optional<i32>| match *b {
+            Some(val) => a + val,
+            None => a,
+        })?
+        .name("add_optional")?;
         ctx.global().set("add_optional", func)?;
 
         assert_eq!(
@@ -34,12 +33,11 @@ fn function_with_optional() {
 #[test]
 fn function_with_rest() {
     run(|ctx| {
-        let func = ctx
-            .register_function(|init: i32, rest: Rest<i32>| {
-                let sum: i32 = rest.iter().sum();
-                init + sum
-            })?
-            .name("add")?;
+        let func = JSFunc::new(ctx, |init: i32, rest: Rest<i32>| {
+            let sum: i32 = rest.iter().sum();
+            init + sum
+        })?
+        .name("add")?;
         ctx.global().set("add_rest", func)?;
 
         assert_eq!(
@@ -68,16 +66,15 @@ fn function_with_rest() {
 #[test]
 fn function_with_optional_and_rest() {
     run(|ctx| {
-        let func = ctx
-            .register_function(|a: i32, b: Optional<i32>, rest: Rest<i32>| {
-                let base = match *b {
-                    Some(val) => a + val,
-                    None => a,
-                };
-                let sum: i32 = rest.iter().sum();
-                base + sum
-            })?
-            .name("complex_add")?;
+        let func = JSFunc::new(ctx, |a: i32, b: Optional<i32>, rest: Rest<i32>| {
+            let base = match *b {
+                Some(val) => a + val,
+                None => a,
+            };
+            let sum: i32 = rest.iter().sum();
+            base + sum
+        })?
+        .name("complex_add")?;
         ctx.global().set("complex_add", func)?;
 
         assert_eq!(
@@ -151,13 +148,12 @@ fn test_jsfunc_call_macro() {
 fn test_jsfunc_as_argument() {
     run(|ctx| {
         // Register a function that takes a JS function as argument
-        let func = ctx
-            .register_function(|callback: JSFunc| {
-                // Call the JS function with some arguments
-                let result: i32 = callback.call((2, 3)).unwrap();
-                result * 2
-            })?
-            .name("call_and_double")?;
+        let func = JSFunc::new(ctx, |callback: JSFunc| {
+            // Call the JS function with some arguments
+            let result: i32 = callback.call((2, 3)).unwrap();
+            result * 2
+        })?
+        .name("call_and_double")?;
 
         ctx.global().set("call_and_double", func)?;
 

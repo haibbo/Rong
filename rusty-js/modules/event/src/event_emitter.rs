@@ -203,68 +203,67 @@ where
         let proto = Class::prototype::<Self>(ctx)?;
 
         // method: on and addListener
-        let on = ctx
-            .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
+        let on = JSFunc::new(
+            ctx,
+            |this: This<JSObject>, key: EventKey, listener: JSFunc| {
                 Self::add_event_listener(this, key, listener, false, false)
-            })?
-            .name("on")?;
+            },
+        )?
+        .name("on")?;
         proto.set("on", on.clone())?.set("addListener", on)?;
 
         // method: once
-        let once = ctx
-            .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
+        let once = JSFunc::new(
+            ctx,
+            |this: This<JSObject>, key: EventKey, listener: JSFunc| {
                 Self::add_event_listener(this, key, listener, false, true)
-            })?
-            .name("once")?;
+            },
+        )?
+        .name("once")?;
         proto.set("once", once)?;
 
         // method: off and removeListener
-        let off = ctx
-            .register_function(Self::remove_event_listener)?
-            .name("off")?;
+        let off = JSFunc::new(ctx, Self::remove_event_listener)?.name("off")?;
         proto.set("off", off.clone())?.set("removeListener", off)?;
 
         // methods: prependListener, prependOnceListener
-        let prepend = ctx
-            .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
+        let prepend = JSFunc::new(
+            ctx,
+            |this: This<JSObject>, key: EventKey, listener: JSFunc| {
                 Self::add_event_listener(this, key, listener, true, false)
-            })?
-            .name("prependListener")?;
-        let prepend_once = ctx
-            .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
+            },
+        )?
+        .name("prependListener")?;
+        let prepend_once = JSFunc::new(
+            ctx,
+            |this: This<JSObject>, key: EventKey, listener: JSFunc| {
                 Self::add_event_listener(this, key, listener, true, true)
-            })?
-            .name("prependOnceListener")?;
+            },
+        )?
+        .name("prependOnceListener")?;
         proto
             .set("prependListener", prepend)?
             .set("prependOnceListener", prepend_once)?;
 
         // method: eventNames
-        let event_names = ctx
-            .register_function(Self::event_names)?
-            .name("eventNames")?;
+        let event_names = JSFunc::new(ctx, Self::event_names)?.name("eventNames")?;
         proto.set("eventNames", event_names)?;
 
         // method: emit
-        let emit = ctx.register_function(Self::do_emit)?.name("emit")?;
+        let emit = JSFunc::new(ctx, Self::do_emit)?.name("emit")?;
         proto.set("emit", emit)?;
 
         // method: getMaxListeners
-        let emit = ctx
-            .register_function(Self::get_max_listeners)?
-            .name("getMaxListeners")?;
+        let emit = JSFunc::new(ctx, Self::get_max_listeners)?.name("getMaxListeners")?;
         proto.set("getMaxListeners", emit)?;
 
         // method: setMaxListeners
-        let emit = ctx
-            .register_function(Self::set_max_listeners)?
-            .name("setMaxListeners")?;
+        let emit = JSFunc::new(ctx, Self::set_max_listeners)?.name("setMaxListeners")?;
         proto.set("setMaxListeners", emit)?;
 
         // method: removeAllListeners
-        let remove_all = ctx
-            .register_function(Self::remove_all_listeners)?
-            .name("removeAllListeners")?;
+        let remove_all =
+            JSFunc::new(ctx, Self::remove_all_listeners)?.name("removeAllListeners")?;
         proto.set("removeAllListeners", remove_all)?;
 
         Ok(())
@@ -275,21 +274,19 @@ where
     fn add_web_event_target_prototype(ctx: &JSContext) -> JSResult<()> {
         let proto = Class::prototype::<Self>(ctx)?;
 
-        let on = ctx
-            .register_function(|this: This<JSObject>, key: EventKey, listener: JSFunc| {
+        let on = JSFunc::new(
+            ctx,
+            |this: This<JSObject>, key: EventKey, listener: JSFunc| {
                 Self::add_event_listener(this, key, listener, false, false)
-            })?
-            .name("addEventListener")?;
+            },
+        )?
+        .name("addEventListener")?;
         proto.set("addEventListener", on)?;
 
-        let off = ctx
-            .register_function(Self::remove_event_listener)?
-            .name("removeEventListener")?;
+        let off = JSFunc::new(ctx, Self::remove_event_listener)?.name("removeEventListener")?;
         proto.set("removeEventListener", off)?;
 
-        let dispatch = ctx
-            .register_function(Self::dispatch_event)?
-            .name("dispatchEvent")?;
+        let dispatch = JSFunc::new(ctx, Self::dispatch_event)?.name("dispatchEvent")?;
         proto.set("dispatchEvent", dispatch)?;
 
         Ok(())

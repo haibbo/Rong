@@ -32,19 +32,19 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     let path = JSObject::new(ctx);
 
     // Basic path operations
-    path.set("basename", ctx.register_function(basename))?;
-    path.set("dirname", ctx.register_function(dirname))?;
-    path.set("extname", ctx.register_function(extname))?;
-    path.set("isAbsolute", ctx.register_function(is_absolute))?;
+    path.set("basename", JSFunc::new(ctx, basename))?;
+    path.set("dirname", JSFunc::new(ctx, dirname))?;
+    path.set("extname", JSFunc::new(ctx, extname))?;
+    path.set("isAbsolute", JSFunc::new(ctx, is_absolute))?;
 
     // Path combination
-    path.set("join", ctx.register_function(join))?;
-    path.set("resolve", ctx.register_function(resolve))?;
-    path.set("normalize", ctx.register_function(normalize))?;
+    path.set("join", JSFunc::new(ctx, join))?;
+    path.set("resolve", JSFunc::new(ctx, resolve))?;
+    path.set("normalize", JSFunc::new(ctx, normalize))?;
 
     // Path parsing
-    path.set("parse", ctx.register_function(parse))?;
-    path.set("format", ctx.register_function(format))?;
+    path.set("parse", JSFunc::new(ctx, parse))?;
+    path.set("format", JSFunc::new(ctx, format))?;
 
     // Platform-specific
     path.set("sep", std::path::MAIN_SEPARATOR.to_string())?;

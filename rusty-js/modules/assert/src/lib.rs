@@ -95,12 +95,10 @@ fn does_not_throw(ctx: JSContext, func: JSFunc, message: Optional<JSValue>) -> J
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    let ok = ctx.register_function(ok)?.name("ok")?;
-    let equal = ctx.register_function(equal)?.name("equal")?;
-    let fail = ctx.register_function(fail)?.name("fail")?;
-    let does_not_throw = ctx
-        .register_function(does_not_throw)?
-        .name("doesNotThrow")?;
+    let ok = JSFunc::new(ctx, ok)?.name("ok")?;
+    let equal = JSFunc::new(ctx, equal)?.name("equal")?;
+    let fail = JSFunc::new(ctx, fail)?.name("fail")?;
+    let does_not_throw = JSFunc::new(ctx, does_not_throw)?.name("doesNotThrow")?;
 
     ok.set("ok", ok.clone())?
         .set("default", ok.clone())?

@@ -117,9 +117,7 @@ fn rustfunc_class_registered() {
 #[test]
 fn basic_add_fn() {
     run(|ctx| {
-        let func = ctx
-            .register_function(|a: i32, b: i32, c: i32| a + b + c)?
-            .name("add")?;
+        let func = JSFunc::new(ctx, |a: i32, b: i32, c: i32| a + b + c)?.name("add")?;
         ctx.global().set("add", func)?;
 
         assert!(ctx.eval::<JSFunc>(Source::from_bytes(b"add")).is_ok());

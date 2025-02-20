@@ -170,20 +170,6 @@ macro_rules! call {
     };
 }
 
-impl<C: JSContextImpl> JSContext<C>
-where
-    C::Value: JSObjectOps + 'static,
-{
-    pub fn register_function<F, P, K>(&self, f: F) -> JSResult<JSFunc<C::Value>>
-    where
-        F: IntoJSCallable<C::Value, P, K> + 'static,
-        P: FromParams<C::Value>,
-        K: 'static,
-    {
-        RustFunc::new(f).into_js(self)
-    }
-}
-
 impl<V> RustFunc<V>
 where
     V: JSObjectOps + 'static,

@@ -6,7 +6,7 @@ fn test_rust_promise_with_callback() {
     run2(|ctx, rt| {
         let ctx_clone = ctx.clone();
         // Register a Rust function that returns a promise
-        let timeout_fn = ctx.register_function(move |millis: i32| {
+        let timeout_fn = JSFunc::new(ctx, move |millis: i32| {
             let (promise, resolve, _reject) = ctx_clone.promise().unwrap();
 
             // Directly resolve the promise with the input value
@@ -46,7 +46,7 @@ fn test_rust_promise_with_resolve() {
         let result = std::rc::Rc::new(std::cell::RefCell::new(None));
         let result_clone = result.clone();
 
-        let cb = ctx.register_function(move |value: String| {
+        let cb = JSFunc::new(ctx, move |value: String| {
             println!("Callback received value: {}", value);
             *result_clone.borrow_mut() = Some(value);
         })?;
@@ -73,7 +73,7 @@ fn test_rust_future_in_js() {
     async_run!(|ctx: JSContext| async move {
         let ctx2 = ctx.clone();
         // Register a Rust async function that returns a promise
-        let async_fn = ctx.register_function(move |delay: i32| {
+        let async_fn = JSFunc::new(&ctx, move |delay: i32| {
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
                 format!("completed after {}ms", delay)
@@ -115,7 +115,7 @@ fn test_rust_future_error_in_js() {
     async_run!(|ctx: JSContext| async move {
         let ctx2 = ctx.clone();
         // Register a Rust async function that returns a rejected promise
-        let async_fn = ctx.register_function(move |_: i32| {
+        let async_fn = JSFunc::new(&ctx, move |_: i32| {
             let future = async {
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 RustyJSError::Error("async operation failed".to_string())
@@ -165,7 +165,7 @@ fn test_rust_future_error_in_js() {
 #[test]
 fn test_promise_into_future_resolve() {
     async_run!(|ctx: JSContext| async move {
-        let set_timeout = ctx.register_function(|callback: JSFunc, delay: u32| {
+        let set_timeout = JSFunc::new(&ctx, |callback: JSFunc, delay: u32| {
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
                 callback.call::<_, ()>(()).unwrap();
@@ -196,7 +196,7 @@ fn test_promise_into_future_resolve() {
 #[test]
 fn test_promise_into_future_reject_error() {
     async_run!(|ctx: JSContext| async move {
-        let set_timeout = ctx.register_function(|callback: JSFunc, delay: u32| {
+        let set_timeout = JSFunc::new(&ctx, |callback: JSFunc, delay: u32| {
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
                 callback.call::<_, ()>(()).unwrap();
@@ -258,7 +258,7 @@ fn test_rust_promise_with_mut_state() {
         let mut counter = 0;
 
         // Register a function that captures mutable state
-        let counter_fn = ctx.register_function(move || {
+        let counter_fn = JSFunc::new(ctx, move || {
             let (promise, resolve, _) = ctx_clone.promise().unwrap();
             counter += 1;
             resolve.call::<_, ()>((counter,)).unwrap();
@@ -294,7 +294,7 @@ fn test_rust_async_with_mut_state() {
         let ctx2 = ctx.clone();
         let mut counter = 0;
 
-        let async_fn = ctx.register_function(move || {
+        let async_fn = JSFunc::new(&ctx, move || {
             counter += 1;
             let count = counter;
 

@@ -259,7 +259,7 @@ where
         P: FromParams<V>,
         V: JSObjectOps + 'static,
     {
-        let func = self.context.register_function(f)?;
+        let func = JSFunc::new(self.context, f)?;
         let func = func.name(name)?;
         self.prototype.set(name, func)?;
         Ok(())
@@ -271,7 +271,7 @@ where
         P: FromParams<V>,
         V: JSObjectOps + 'static,
     {
-        let func = self.context.register_function(f)?;
+        let func = JSFunc::new(self.context, f)?;
         let func = func.name(name)?;
         self.constructor.set(name, func)?;
         Ok(())
@@ -301,6 +301,6 @@ where
         P: FromParams<V>,
         V: JSObjectOps + 'static,
     {
-        self.context.register_function(f)
+        JSFunc::new(self.context, f)
     }
 }
