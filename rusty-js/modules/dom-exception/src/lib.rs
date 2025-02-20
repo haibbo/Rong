@@ -55,6 +55,16 @@ macro_rules! define_error_names {
             pub fn iter() -> impl Iterator<Item = &'static str> {
                 Self::ERROR_NAMES.iter().copied()
             }
+
+            /// Convert string to corresponding DOMExceptionName variant
+            /// Default to ERROR variant if no match found
+            #[inline]
+            pub fn find_or_default(s: &str) -> Self {
+                match s {
+                $(stringify!($name) => DOMExceptionName::$name,)*
+                _ => DOMExceptionName::ERROR,
+                }
+            }
         }
     }
 }
@@ -85,13 +95,31 @@ define_error_names! {
     QUOTA_EXCEEDED_ERR,
     TIMEOUT_ERR,
     INVALID_NODE_TYPE_ERR,
-    DATA_CLONE_ERR
+    DATA_CLONE_ERR,
+    ERROR
+}
+
+// Implement From<&str> to replace from_str
+impl From<&str> for DOMExceptionName {
+    fn from(s: &str) -> Self {
+        DOMExceptionName::find_or_default(s)
+    }
+}
+
+// Implement From<Option<String>> using From<&str>
+impl From<Option<String>> for DOMExceptionName {
+    fn from(value: Option<String>) -> Self {
+        match value {
+            Some(s) => s.as_str().into(),
+            None => DOMExceptionName::ERROR,
+        }
+    }
 }
 
 /// DOMException implementation following Node.js error types
 #[js_class]
 pub struct DOMException {
-    name: String,
+    name: DOMExceptionName,
     message: String,
 }
 
@@ -99,15 +127,15 @@ pub struct DOMException {
 impl DOMException {
     #[js_method(constructor)]
     pub fn new(message: Optional<String>, name: Optional<String>) -> Self {
-        let message = message.0.unwrap_or_default();
-        let name = name.0.unwrap_or_else(|| "Error".to_string());
-
-        Self { name, message }
+        Self {
+            message: message.0.unwrap_or_default(),
+            name: name.0.into(),
+        }
     }
 
     #[js_method(getter)]
     pub fn name(&self) -> String {
-        self.name.clone()
+        self.name.as_str().to_string()
     }
 
     #[js_method(getter)]
@@ -124,17 +152,16 @@ impl DOMException {
     ///
     /// # Arguments
     /// * `message` - Error message
-    /// * `name` - Error name
+    /// * `name` - DOMExceptionName
     ///
     /// # Returns
     /// Returns a JSObject containing the new DOMException instance
-    pub fn create(ctx: JSContext, message: &str, name: &str) -> JSResult<JSObject> {
-        let constructor = Class::get::<DOMException>(&ctx)?;
-        let dom = DOMException::new(
-            Optional(Some(message.to_string())),
-            Optional(Some(name.to_string())),
-        );
-        Ok(constructor.instance::<DOMException>(dom))
+    pub fn create(ctx: &JSContext, message: &str, name: DOMExceptionName) -> JSResult<JSObject> {
+        let dom = DOMException {
+            message: message.to_string(),
+            name,
+        };
+        Ok(Class::get::<DOMException>(ctx)?.instance(dom))
     }
 }
 
