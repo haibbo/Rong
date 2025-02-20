@@ -47,15 +47,41 @@ where
 }
 
 impl<V: JSObjectOps> JSFunc<V> {
-    /// Create a new JS function from a Rust function or closure
-    pub fn new<C, F, P, K: 'static>(ctx: &JSContext<C>, f: F) -> JSResult<Self>
+    /// Create a new JavaScript function from a Rust function or closure
+    ///
+    /// # Arguments
+    /// * `ctx` - The JavaScript context to create the function in
+    /// * `f` - The Rust function or closure to wrap
+    ///
+    /// # Type Parameters
+    /// * `F` - The function type implementing `IntoJSCallable`
+    /// * `P` - The parameter type implementing `FromParams`
+    /// * `K` - The function kind (SyncFunc or AsyncFunc)
+    ///
+    /// # Returns
+    /// Returns `JSResult<Self>` containing the new JS function if successful
+    ///
+    /// # Example
+    /// ```rust
+    /// let func = JSFunc::new(ctx, |x: i32| x + 1)?;
+    /// ```
+    pub fn new<F, P, K: 'static>(ctx: &JSContext<V::Context>, f: F) -> JSResult<Self>
     where
-        C: JSContextImpl<Value = V>,
         F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
         V: 'static,
     {
-        ctx.register_function(f)
+        RustFunc::new(f).into_js(ctx)
+    }
+
+    /// Same as `new`, but creates a function that can only be called once
+    pub fn new_once<F, P, K: 'static>(ctx: &JSContext<V::Context>, f: F) -> JSResult<Self>
+    where
+        F: IntoJSCallable<V, P, K> + 'static,
+        P: FromParams<V>,
+        V: 'static,
+    {
+        RustFunc::new(f).with_once().into_js(ctx)
     }
 
     #[inline]
@@ -154,10 +180,18 @@ where
         P: FromParams<C::Value>,
         K: 'static,
     {
-        let func = RustFunc::new(f);
-        let length = func.parameter_required_count();
-        let class = Class::get::<RustFunc<C::Value>>(self)?;
-        let obj = class.instance::<RustFunc<C::Value>>(func);
+        RustFunc::new(f).into_js(self)
+    }
+}
+
+impl<V> RustFunc<V>
+where
+    V: JSObjectOps + 'static,
+{
+    fn into_js(self, ctx: &JSContext<V::Context>) -> JSResult<JSFunc<V>> {
+        let length = self.parameter_required_count();
+        let class = Class::get::<RustFunc<V>>(ctx)?;
+        let obj = class.instance::<RustFunc<V>>(self);
         obj.set("length", length)?;
         Ok(JSFunc(obj))
     }

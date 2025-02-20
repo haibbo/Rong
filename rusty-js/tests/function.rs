@@ -228,3 +228,23 @@ fn test_async_rust_fn_reject() {
         Ok(())
     });
 }
+
+#[test]
+fn test_new_once() {
+    run(|ctx| {
+        // Create a function that can only be called once
+        let func = JSFunc::new_once(ctx, |x: i32| x + 1)?;
+        ctx.global().set("once", func)?;
+
+        // catch trigger rust resolver callback
+        let result = ctx.eval::<i32>(Source::from_bytes("once(2); once(3)"));
+
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Function can only be called once"));
+
+        Ok(())
+    });
+}
+

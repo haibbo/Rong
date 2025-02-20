@@ -43,6 +43,18 @@ where
 pub(crate) struct RustFunc<V: JSValueImpl> {
     func: Box<dyn JSCallable<V>>,
     required_params: u32,
+    state: CallState, // Tracks the call state
+}
+
+/// Tracks the call state of a function.
+#[derive(Debug, PartialEq, Eq)]
+enum CallState {
+    /// The function can be called multiple times (default behavior).
+    Multiple,
+    /// The function can only be called once and has not been called yet.
+    OnceNotCalled,
+    /// The function can only be called once and has already been called.
+    OnceCalled,
 }
 
 /// Marker types for function kinds
@@ -67,7 +79,7 @@ where
 }
 
 impl<V: JSValueImpl> RustFunc<V> {
-    pub fn new<F, P, K>(mut f: F) -> Self
+    pub(crate) fn new<F, P, K>(mut f: F) -> Self
     where
         F: IntoJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
@@ -79,10 +91,25 @@ impl<V: JSValueImpl> RustFunc<V> {
         Self {
             func,
             required_params,
+            state: CallState::Multiple, // Default to multiple calls
         }
     }
 
-    pub fn call(&mut self, accessor: &mut ParamsAccessor<V>) -> JSResult<V> {
+    /// Marks the function as callable only once.
+    pub fn with_once(mut self) -> Self {
+        self.state = CallState::OnceNotCalled;
+        self
+    }
+
+    pub(crate) fn call(&mut self, accessor: &mut ParamsAccessor<V>) -> JSResult<V> {
+        // Check if the function has already been called in "Once" mode
+        if self.state == CallState::OnceCalled {
+            return Err(RustyJSError::Error(
+                "Function can only be called once".to_string(),
+            ));
+        }
+
+        // Validate the number of arguments
         let num_args = accessor.args_len() as u32;
         if num_args < self.required_params {
             return Err(RustyJSError::InvalidParameter {
@@ -90,6 +117,13 @@ impl<V: JSValueImpl> RustFunc<V> {
                 got: num_args,
             });
         }
+
+        // Mark the function as called if in "Once" mode
+        if self.state == CallState::OnceNotCalled {
+            self.state = CallState::OnceCalled;
+        }
+
+        // Call the underlying function
         self.func.call(accessor)
     }
 
