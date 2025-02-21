@@ -117,12 +117,7 @@ where
     pub fn get_ctx(&self) -> JSContext<V::Context> {
         JSContext::from_borrowed_raw_ptr(self.as_value().as_raw_context())
     }
-}
 
-impl<V> JSValue<V>
-where
-    V: JSValueImpl + JSTypeOf,
-{
     /// Converts  Rust value into a `JSValue`.
     pub fn from<T>(ctx: &JSContext<V::Context>, val: T) -> Self
     where
@@ -150,7 +145,12 @@ where
         let value = V::create_null(ctx.as_ref());
         JSValue::from_raw(ctx, value)
     }
+}
 
+impl<V> JSValue<V>
+where
+    V: JSValueImpl + JSTypeOf,
+{
     /// Convert JSValue into JSObject if it is an object
     ///
     /// # Returns
