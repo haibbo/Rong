@@ -81,11 +81,28 @@ class TestRunner {
       toThrow: (expectedError) => {
         try {
           value();
-          throw new Error('Expected function to throw an error but it did not');
+          throw new Error("Expected function to throw an error but it did not");
         } catch (e) {
-          if (e.message !== expectedError) {
-            throw new Error(`Expected error message "${expectedError}" but got "${e.message}"`);
+          if (
+            typeof expectedError === "function" &&
+            !(e instanceof expectedError)
+          ) {
+            throw new Error(
+              `Expected error to be instance of ${expectedError.name}, but got ${e.constructor.name}`,
+            );
+          } else if (
+            typeof expectedError === "string" &&
+            e.message !== expectedError
+          ) {
+            throw new Error(
+              `Expected error message "${expectedError}" but got "${e.message}"`,
+            );
           }
+        }
+      },
+      toBeUndefined: () => {
+        if (value !== undefined) {
+          throw new Error(`Expected value to be undefined, got ${value}`);
         }
       },
     };
