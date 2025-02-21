@@ -7,7 +7,7 @@ use tokio::sync::oneshot;
 
 pub type JSResult<T> = Result<T, RustyJSError>;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum RustyJSError {
     #[error("Failed to borrow for type {0}")]
     Borrow(&'static str),
@@ -51,6 +51,9 @@ pub enum RustyJSError {
     #[error("Does not support bytecode")]
     NotSupportByteCode,
 
+    #[error("OnceFn had been called")]
+    OnceFnCalled,
+
     #[error("{0}")]
     Error(String),
 
@@ -89,6 +92,7 @@ impl RustyJSError {
             | RustyJSError::Error(_)
             | RustyJSError::Borrow(_)
             | RustyJSError::CompileToByteErr
+            | RustyJSError::OnceFnCalled
             | RustyJSError::NotSupportByteCode => ctx.as_ref().throw_error(self.to_string()),
         }
     }

@@ -87,7 +87,7 @@ where
 }
 
 /// Represents a JavaScript error with message and stack trace
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct JSError {
     pub message: Option<String>,
     pub stack: Option<String>,

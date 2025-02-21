@@ -238,9 +238,44 @@ fn test_new_once() {
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("Function can only be called once"));
+            .contains("OnceFn had been called"));
 
         Ok(())
     });
 }
 
+#[test]
+fn test_new_once_async() {
+    async_run!(|ctx: JSContext| async move {
+        let set_timeout = JSFunc::new_once(&ctx, |callback: JSFunc, delay: u32| async move {
+            tokio::time::sleep(Duration::from_millis(delay as u64)).await;
+            callback.call::<_, ()>(()).unwrap();
+        })?;
+        ctx.global().set("setTimeout", set_timeout)?;
+
+        // Create Promise in JavaScript
+        let js_code = r#"
+            new Promise((resolve) => {
+                setTimeout(() => {
+                    resolve(42);
+                }, 100);
+                setTimeout(() => {
+                   resolve(42);
+                }, 100);
+
+            })
+        "#;
+
+        let promise = ctx
+            .eval::<Promise>(Source::from_bytes(js_code.as_bytes()))
+            .unwrap();
+
+        let result: JSResult<i32> = promise.into_future().await;
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("OnceFn had been called"));
+
+        Ok(())
+    })
+}

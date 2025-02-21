@@ -1,4 +1,4 @@
-use crate::function::{FromParams, IntoJSCallable, JSParameterType, RustFunc};
+use crate::function::{FromParams, IntoJSCallable, IntoOnceJSCallable, JSParameterType, RustFunc};
 use crate::{
     Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
     JSTypeOf, JSValueImpl, JSValueMapper, RustyJSError,
@@ -77,11 +77,11 @@ impl<V: JSObjectOps> JSFunc<V> {
     /// Same as `new`, but creates a function that can only be called once
     pub fn new_once<F, P, K: 'static>(ctx: &JSContext<V::Context>, f: F) -> JSResult<Self>
     where
-        F: IntoJSCallable<V, P, K> + 'static,
+        F: IntoOnceJSCallable<V, P, K> + 'static,
         P: FromParams<V>,
         V: 'static,
     {
-        RustFunc::new(f).with_once().into_js(ctx)
+        RustFunc::new_once(f).into_js(ctx)
     }
 
     #[inline]
