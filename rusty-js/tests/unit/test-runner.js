@@ -74,8 +74,34 @@ class TestRunner {
         }
       },
       toEqual: (expected) => {
-        if (value !== expected) {
-          throw new Error(`Expected ${expected}, got ${value}`);
+        if (value instanceof Uint8Array && expected instanceof Uint8Array) {
+          if (value.length !== expected.length) {
+            throw new Error(
+              `Expected Uint8Array length ${expected.length}, but got ${value.length}`
+            );
+          }
+          for (let i = 0; i < value.length; i++) {
+            if (value[i] !== expected[i]) {
+              throw new Error(
+                `Expected Uint8Array element at index ${i} to be ${expected[i]}, but got ${value[i]}`
+              );
+            }
+          }
+        } else if (Array.isArray(value) && Array.isArray(expected)) {
+          if (value.length !== expected.length) {
+            throw new Error(
+              `Expected array length ${expected.length}, but got ${value.length}`
+            );
+          }
+          for (let i = 0; i < value.length; i++) {
+            if (value[i] !== expected[i]) {
+              throw new Error(
+                `Expected array element at index ${i} to be ${expected[i]}, but got ${value[i]}`
+              );
+            }
+          }
+        } else if (value !== expected) {
+          throw new Error(`Expected ${expected}, but got ${value}`);
         }
       },
       toThrow: (expectedError) => {
@@ -103,6 +129,13 @@ class TestRunner {
       toBeUndefined: () => {
         if (value !== undefined) {
           throw new Error(`Expected value to be undefined, got ${value}`);
+        }
+      },
+      toBeInstanceOf(expected) {
+        if (!(value instanceof expected)) {
+          throw new Error(
+            `Expected value to be an instance of ${expected.name}, but got ${value.constructor.name}`,
+          );
         }
       },
     };
