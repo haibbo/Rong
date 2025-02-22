@@ -402,25 +402,30 @@ mod tests {
                 JSFunc::new(&ctx, |msg: String| println!("JS: {}", msg)),
             )?;
 
+            ctx.eval::<()>(Source::from_bytes(
+                r#"
+                    const console={
+                        log: function(...args){
+                            print(args.join(' '))
+                        },
+                        error: function(...args){
+                            print(args.join(' '))
+                        }
+                    }
+                "#,
+            ))?;
             init(&ctx).unwrap();
 
-            let source = Source::from_path("tests/path.js").await.unwrap();
-            let obj: JSObject = ctx.eval_async(source).await?;
-
-            let total: i32 = obj.get("total").unwrap();
-            let passed: i32 = obj.get("passed").unwrap();
-            let success: bool = obj.get("success").unwrap();
-
-            if !success {
-                let failed: JSArray = obj.get("failed").unwrap();
-                let error_messages: Vec<String> = failed.iter().collect::<JSResult<_>>()?;
-                panic!(
-                    "Path tests failed:\nPassed {}/{}\nFailures:\n{}",
-                    passed,
-                    total,
-                    error_messages.join("\n")
-                );
-            }
+            let (failed, passed) = UnitJSRunner::load_script(&ctx, "path.js")
+                .await?
+                .run()
+                .await?;
+            assert!(
+                failed == 0,
+                "Path tests passed: {}, failed: {}",
+                failed,
+                passed
+            );
             Ok(())
         });
     }
