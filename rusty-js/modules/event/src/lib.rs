@@ -182,29 +182,12 @@ mod tests {
             init(&ctx)?;
             assert::init(&ctx)?;
 
-            let current_dir = std::env::current_dir().unwrap();
-
-            let runner = current_dir.join("../../tests/unit/test-runner.js");
-            let source = Source::from_path(runner).await.unwrap();
-            ctx.eval_async::<()>(source).await?;
-
-            let test = current_dir.join("../../tests/unit/event.js");
-            let source = Source::from_path(test).await.unwrap();
-            ctx.eval_async::<()>(source).await?;
-
-            let result: JSObject = ctx
-                .eval_async(Source::from_bytes("runner.report()"))
+            let passed = UnitJSRunner::load_script(&ctx, "event.js")
+                .await?
+                .run()
                 .await?;
+            assert!(passed);
 
-            let failed: u32 = result.get("failed")?;
-            let passed: u32 = result.get("passed")?;
-
-            assert!(
-                failed == 0,
-                "Path tests passed: {}, failed: {}",
-                failed,
-                passed
-            );
             Ok(())
         });
     }

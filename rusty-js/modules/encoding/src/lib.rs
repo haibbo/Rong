@@ -37,16 +37,11 @@ mod tests {
             ))?;
             init(&ctx).unwrap();
 
-            let (failed, passed) = UnitJSRunner::load_script(&ctx, "encoding.js")
+            let passed = UnitJSRunner::load_script(&ctx, "encoding.js")
                 .await?
                 .run()
                 .await?;
-            assert!(
-                failed == 0,
-                "Path tests passed: {}, failed: {}",
-                failed,
-                passed
-            );
+            assert!(passed);
             Ok(())
         });
     }

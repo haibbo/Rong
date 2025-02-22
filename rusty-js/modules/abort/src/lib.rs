@@ -100,16 +100,11 @@ mod tests {
             dom_exception::init(&ctx)?;
             timer::init(&ctx)?;
 
-            let (failed, passed) = UnitJSRunner::load_script(&ctx, "abort.js")
+            let passed = UnitJSRunner::load_script(&ctx, "abort.js")
                 .await?
                 .run()
                 .await?;
-            assert!(
-                failed == 0,
-                "Path tests passed: {}, failed: {}",
-                failed,
-                passed
-            );
+            assert!(passed);
             Ok(())
         });
     }

@@ -416,16 +416,11 @@ mod tests {
             ))?;
             init(&ctx).unwrap();
 
-            let (failed, passed) = UnitJSRunner::load_script(&ctx, "path.js")
+            let passed = UnitJSRunner::load_script(&ctx, "path.js")
                 .await?
                 .run()
                 .await?;
-            assert!(
-                failed == 0,
-                "Path tests passed: {}, failed: {}",
-                failed,
-                passed
-            );
+            assert!(passed);
             Ok(())
         });
     }
