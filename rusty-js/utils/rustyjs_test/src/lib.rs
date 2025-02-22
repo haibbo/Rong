@@ -27,3 +27,35 @@ macro_rules! async_run {
         rt.block_on(future).unwrap()
     }};
 }
+
+pub struct UnitJSRunner<'a> {
+    ctx: &'a JSContext,
+}
+
+impl<'a> UnitJSRunner<'a> {
+    pub async fn load_script(ctx: &'a JSContext, unit: &str) -> JSResult<Self> {
+        let current_dir = std::env::current_dir().unwrap();
+
+        let runner = current_dir.join("../../tests/unit/test-runner.js");
+        let source = Source::from_path(runner).await.unwrap();
+        ctx.eval_async::<()>(source).await?;
+
+        let test = current_dir.join("../../tests/unit/").join(unit);
+        let source = Source::from_path(test).await.unwrap();
+        ctx.eval_async::<()>(source).await?;
+
+        Ok(Self { ctx })
+    }
+
+    pub async fn run(&self) -> JSResult<(u32, u32)> {
+        let result: JSObject = self
+            .ctx
+            .eval_async(Source::from_bytes("runner.report()"))
+            .await?;
+
+        let failed: u32 = result.get("failed")?;
+        let passed: u32 = result.get("passed")?;
+
+        Ok((failed, passed))
+    }
+}
