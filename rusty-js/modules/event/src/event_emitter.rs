@@ -130,7 +130,7 @@ where
     ///
     /// This can be overridden to implement custom behavior when
     /// listeners change. The default implementation does nothing.
-    fn on_event_changed(&mut self, _key: EventKey, _added: bool) -> JSResult<()> {
+    fn on_event_changed(&self, _key: EventKey, _added: bool) -> JSResult<()> {
         Ok(())
     }
 }
@@ -299,7 +299,7 @@ where
         prepend: bool,
         once: bool,
     ) -> JSResult<JSObject> {
-        let mut target = this.borrow_mut::<Self>()?;
+        let target = this.borrow::<Self>()?;
         let events = target.get_event_emitter();
         let is_new = events.add_listener(key.clone(), listener, prepend, once)?;
         if is_new {
@@ -332,7 +332,7 @@ where
     /// - `false` if there were no listeners for the event
     /// - `Err` if an error occurred during emission
     fn do_emit(this: This<JSObject>, key: EventKey, args: Rest<JSValue>) -> JSResult<bool> {
-        let mut target = this.borrow_mut::<Self>()?;
+        let target = this.borrow::<Self>()?;
         let events = target.get_event_emitter();
         let mut is_empty = false;
         let has = events.do_emit(this.0.clone(), key.clone(), args.0, &mut is_empty);
