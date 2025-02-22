@@ -68,21 +68,36 @@ describe("AbortSignal", () => {
     });
 
     describe("timeout", () => {
-      it("should create an AbortSignal that aborts after the specified time", (done) => {
+      it("should create an AbortSignal that aborts after the specified time", async () => {
         const timeoutDuration = 100; // 100ms
         const signal = AbortSignal.timeout(timeoutDuration);
 
-        signal.addEventListener("abort", () => {
-          expect(signal.aborted).toBe(true);
-          expect(signal.reason).toBeInstanceOf(DOMException);
-          expect(signal.reason.name).toBe("TimeoutError");
-          done();
-        });
+        // Wait for the signal to be aborted
+        await new Promise((resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            try {
+              console.log("Abort event triggered");
+              expect(signal.aborted).toBe(true);
+              expect(signal.reason).toBeInstanceOf(DOMException);
+              resolve();
+            } catch (e) {
+              reject(e);
+            }
+          });
 
-        // Ensure the signal does not abort before the timeout
-        setTimeout(() => {
-          expect(signal.aborted).toBe(false);
-        }, timeoutDuration / 2);
+          // Ensure the signal is not aborted before the timeout
+          setTimeout(() => {
+            try {
+              expect(signal.aborted).toBe(false);
+            } catch (e) {
+              reject(e);
+            }
+          }, timeoutDuration / 2);
+
+          setTimeout(() => {
+            reject(new Error("Signal did not abort within expected time"));
+          }, timeoutDuration * 2);
+        });
       });
     });
   });

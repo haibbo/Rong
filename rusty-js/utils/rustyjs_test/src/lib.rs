@@ -33,13 +33,16 @@ pub struct UnitJSRunner<'a> {
 }
 
 impl<'a> UnitJSRunner<'a> {
+    /// Load and execute the specified JavaScript test script, returning a UnitJSRunner instance
     pub async fn load_script(ctx: &'a JSContext, unit: &str) -> JSResult<Self> {
         let current_dir = std::env::current_dir().unwrap();
 
+        // First, load the test runner
         let runner = current_dir.join("../../tests/unit/test-runner.js");
         let source = Source::from_path(runner).await.unwrap();
         ctx.eval_async::<()>(source).await?;
 
+        // Then, load the test file
         let test = current_dir.join("../../tests/unit/").join(unit);
         let source = Source::from_path(test).await.unwrap();
         ctx.eval_async::<()>(source).await?;
@@ -47,15 +50,14 @@ impl<'a> UnitJSRunner<'a> {
         Ok(Self { ctx })
     }
 
-    pub async fn run(&self) -> JSResult<(u32, u32)> {
-        let result: JSObject = self
+    /// Run all tests and return true if all tests passed
+    pub async fn run(&self) -> JSResult<bool> {
+        // Execute the test and wait for completion
+        let result: bool = self
             .ctx
-            .eval_async(Source::from_bytes("runner.report()"))
+            .eval_async(Source::from_bytes("runner.runTests()"))
             .await?;
 
-        let failed: u32 = result.get("failed")?;
-        let passed: u32 = result.get("passed")?;
-
-        Ok((failed, passed))
+        Ok(result)
     }
 }
