@@ -98,6 +98,7 @@ mod tests {
             assert::init(&ctx)?;
             event::init(&ctx)?;
             dom_exception::init(&ctx)?;
+            timer::init(&ctx)?;
 
             let current_dir = std::env::current_dir().unwrap();
 

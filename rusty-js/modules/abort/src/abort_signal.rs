@@ -167,8 +167,8 @@ impl AbortSignal {
         Ok(new_signal)
     }
 
-    // static method returns an AbortSignal that is already set as aborted, and
-    // which does not trigger an abort event
+    /// static method returns an AbortSignal that is already set as aborted, and
+    /// which does not trigger an abort event
     #[js_method]
     pub fn abort(ctx: JSContext, reason: Optional<JSValue>) -> JSResult<JSObject> {
         let mut signal = Self::new();
@@ -178,7 +178,36 @@ impl AbortSignal {
         Ok(instance)
     }
 
-    // send abort signal to this
+    /// static method returns an AbortSignal that will automatically abort after a specified time
+    /// The signal aborts with a TimeoutError DOMException on timeout.
+    /// The "active" time in milliseconds before the returned AbortSignal will abort
+    #[js_method]
+    pub fn timeout(ctx: JSContext, time: u64) -> JSResult<JSObject> {
+        let mut signal = Self::new();
+        let timeout_error = get_reason_or_dom_exception(&ctx, None, DOMExceptionName::TIMEOUT_ERR)?;
+        signal.reason = Some(timeout_error);
+
+        let instance = Class::get::<AbortSignal>(&ctx)?.instance(signal);
+
+        // Clone necessary values for the async block
+        let instance_clone = instance.clone();
+
+        // Spawn a new task that will abort the signal after the timeout
+        ctx.spawn_local(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(time)).await;
+
+            let mut borrow = instance_clone.borrow_mut::<AbortSignal>()?;
+            borrow.aborted = true;
+            drop(borrow);
+
+            let _ = Self::do_emit(This(instance_clone), EventKey::from("abort"), Rest(vec![]));
+            Ok(())
+        });
+
+        Ok(instance)
+    }
+
+    /// send abort signal to this
     pub fn send_aborted(ctx: &JSContext, this: This<JSObject>) -> JSResult<()> {
         let mut borrow = this.borrow_mut::<AbortSignal>()?;
         borrow.aborted = true;

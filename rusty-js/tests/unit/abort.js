@@ -66,6 +66,25 @@ describe("AbortSignal", () => {
       expect(combinedSignal.aborted).toBeTruthy();
       expect(combinedSignal.reason).toBe("Already aborted");
     });
+
+    describe("timeout", () => {
+      it("should create an AbortSignal that aborts after the specified time", (done) => {
+        const timeoutDuration = 100; // 100ms
+        const signal = AbortSignal.timeout(timeoutDuration);
+
+        signal.addEventListener("abort", () => {
+          expect(signal.aborted).toBe(true);
+          expect(signal.reason).toBeInstanceOf(DOMException);
+          expect(signal.reason.name).toBe("TimeoutError");
+          done();
+        });
+
+        // Ensure the signal does not abort before the timeout
+        setTimeout(() => {
+          expect(signal.aborted).toBe(false);
+        }, timeoutDuration / 2);
+      });
+    });
   });
 
   describe("Error handling", () => {

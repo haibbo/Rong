@@ -16,3 +16,4 @@ rustyjs_test = { path = "../../utils/rustyjs_test" }
 assert = { path="../../modules/assert" }
 event = { path="../../modules/event" }
 dom-exception = { path="../../modules/dom-exception" }
+timer = { path="../../modules/timer" }
