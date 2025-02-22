@@ -44,10 +44,23 @@ macro_rules! define_error_names {
         impl DOMExceptionName {
             const ERROR_NAMES: &'static [&'static str] = &[$(stringify!($name)),*];
 
-            /// Get the name as string
+            /// Get the name as string with automatic conversion
             #[inline]
-            pub const fn as_str(&self) -> &'static str {
-                Self::ERROR_NAMES[*self as usize]
+            pub fn as_str(&self) -> &'static str {
+                let name = Self::ERROR_NAMES[*self as usize];
+                // Convert "ERR" suffix to "Error" and remove underscores
+                if let Some(base) = name.strip_suffix("_ERR") {
+                    let mut result = String::with_capacity(base.len() + 5);
+                    for part in base.split('_') {
+                        if !part.is_empty() {
+                            result.push_str(&part[0..1].to_uppercase());
+                            result.push_str(&part[1..].to_lowercase());
+                        }
+                    }
+                    result.push_str("Error");
+                    return Box::leak(result.into_boxed_str());
+                }
+                name
             }
 
             /// Iterate over all error names efficiently
@@ -69,8 +82,8 @@ macro_rules! define_error_names {
     }
 }
 
-// This enum DOMExceptionName  represents all standard DOM exception names supported by Node.js
-// Each variant corresponds to a specific error type in the DOM specification
+// This enum DOMExceptionName represents all standard DOM exception names supported by Node.js
+// https://webidl.spec.whatwg.org/#idl-DOMException-error-names
 define_error_names! {
     INDEX_SIZE_ERR,
     DOMSTRING_SIZE_ERR,
@@ -200,7 +213,7 @@ mod tests {
                 "#,
             ))?;
 
-            assert_eq!(result.get::<_, String>("name")?, "ABORT_ERR");
+            assert_eq!(result.get::<_, String>("name")?, "AbortError");
             assert_eq!(result.get::<_, String>("message")?, "Operation failed");
 
             Ok(())
