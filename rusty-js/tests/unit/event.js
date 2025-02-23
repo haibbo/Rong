@@ -214,6 +214,57 @@ describe("EventEmitter", () => {
       expect(callCount).toEqual(1);
     });
   });
+
+  describe("listenerCount", () => {
+    it("should return 0 when no listeners exist", () => {
+      const emitter = new EventEmitter();
+      expect(emitter.listenerCount("test")).toBe(0);
+    });
+
+    it("should return correct count for event listeners", () => {
+      const emitter = new EventEmitter();
+      const fn1 = () => {};
+      const fn2 = () => {};
+
+      emitter.on("test", fn1);
+      emitter.on("test", fn2);
+
+      expect(emitter.listenerCount("test")).toBe(2);
+    });
+
+    it("should return 1 when checking specific listener", () => {
+      const emitter = new EventEmitter();
+      const fn1 = () => {};
+      const fn2 = () => {};
+
+      emitter.on("test", fn1);
+      emitter.on("test", fn2);
+
+      expect(emitter.listenerCount("test", fn1)).toBe(1);
+    });
+
+    it("should return 0 when checking non-existent listener", () => {
+      const emitter = new EventEmitter();
+      const fn1 = () => {};
+      const fn2 = () => {};
+
+      emitter.on("test", fn1);
+
+      expect(emitter.listenerCount("test", fn2)).toBe(0);
+    });
+
+    it("should return correct count after removing listeners", () => {
+      const emitter = new EventEmitter();
+      const fn1 = () => {};
+      const fn2 = () => {};
+
+      emitter.on("test", fn1);
+      emitter.on("test", fn2);
+      emitter.off("test", fn1);
+
+      expect(emitter.listenerCount("test")).toBe(1);
+    });
+  });
 });
 
 describe("Event", () => {

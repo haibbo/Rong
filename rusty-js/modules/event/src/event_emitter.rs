@@ -254,17 +254,21 @@ where
         proto.set("emit", emit)?;
 
         // method: getMaxListeners
-        let emit = JSFunc::new(ctx, Self::get_max_listeners)?.name("getMaxListeners")?;
-        proto.set("getMaxListeners", emit)?;
+        let max_listener = JSFunc::new(ctx, Self::get_max_listeners)?.name("getMaxListeners")?;
+        proto.set("getMaxListeners", max_listener)?;
 
         // method: setMaxListeners
-        let emit = JSFunc::new(ctx, Self::set_max_listeners)?.name("setMaxListeners")?;
-        proto.set("setMaxListeners", emit)?;
+        let max_listener = JSFunc::new(ctx, Self::set_max_listeners)?.name("setMaxListeners")?;
+        proto.set("setMaxListeners", max_listener)?;
 
         // method: removeAllListeners
         let remove_all =
             JSFunc::new(ctx, Self::remove_all_listeners)?.name("removeAllListeners")?;
         proto.set("removeAllListeners", remove_all)?;
+
+        // method: listenerCount
+        let listener_count = JSFunc::new(ctx, Self::listener_count)?.name("listenerCount")?;
+        proto.set("listenerCount", listener_count)?;
 
         Ok(())
     }
@@ -373,6 +377,16 @@ where
         let events = target.get_event_emitter();
         events.remove_all_listeners(key.0)?;
         Ok(this.0.clone())
+    }
+
+    fn listener_count(
+        this: This<JSObject>,
+        key: EventKey,
+        listener: Optional<JSFunc>,
+    ) -> JSResult<u32> {
+        let target = this.borrow::<Self>()?;
+        let events = target.get_event_emitter();
+        events.listener_count(key, listener.0)
     }
 }
 
@@ -490,6 +504,20 @@ impl EventEmitter {
             }
         }
         Ok(())
+    }
+
+    fn listener_count(&self, key: EventKey, listener: Option<JSFunc>) -> JSResult<u32> {
+        let events = self.inner.lock().into_result()?;
+        let count = if let Some(listeners) = events.get(&key) {
+            if let Some(listener) = listener {
+                listeners.iter().filter(|l| l.listener == listener).count()
+            } else {
+                listeners.len()
+            }
+        } else {
+            0
+        };
+        Ok(count as _)
     }
 }
 
