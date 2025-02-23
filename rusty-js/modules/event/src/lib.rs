@@ -181,6 +181,7 @@ mod tests {
 
             init(&ctx)?;
             assert::init(&ctx)?;
+            timer::init(&ctx)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "event.js")
                 .await?
