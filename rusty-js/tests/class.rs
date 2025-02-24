@@ -32,19 +32,13 @@ impl JSClass<JSEngineValue> for Point {
         class.property("x", |builder| {
             let getter = class.new_func(|this: This<Point>| this.x)?;
             let setter = class.new_func(|mut this: ThisMut<Point>, x: i32| this.x = x)?;
-            Ok(builder
-                .getter(getter)
-                .setter(setter)
-                .with_default_method_attr())
+            Ok(builder.getter(getter).setter(setter).configurable(true))
         })?;
 
         class.property("y", |builder| {
             let getter = class.new_func(|this: This<Point>| this.y)?;
             let setter = class.new_func(|mut this: ThisMut<Point>, y: i32| this.y = y)?;
-            Ok(builder
-                .getter(getter)
-                .setter(setter)
-                .with_default_method_attr())
+            Ok(builder.getter(getter).setter(setter).configurable(true))
         })?;
 
         // Define static property with getter and setter
@@ -53,7 +47,7 @@ impl JSClass<JSEngineValue> for Point {
             let setter = class.new_func(|| {
                 // Read-only property, setter does nothing
             })?;
-            Ok(builder.getter(getter).setter(setter).configurable())
+            Ok(builder.getter(getter).setter(setter).configurable(true))
         })?;
 
         class.method("add", |this: This<Point>, p: Point| this.add(p))?;

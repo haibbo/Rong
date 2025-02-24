@@ -324,11 +324,11 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
         }
 
         // Always set configurable by default
-        parts.push(quote! { .configurable() });
+        parts.push(quote! { .configurable(true) });
 
         // Set enumerable if specified
         if enumerable {
-            parts.push(quote! { .enumerable() });
+            parts.push(quote! { .enumerable(true) });
         }
 
         let property = quote! {
@@ -351,11 +351,11 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
         }
 
         // Always set configurable by default
-        parts.push(quote! { .configurable() });
+        parts.push(quote! { .configurable(true) });
 
         // Set enumerable if specified
         if enumerable {
-            parts.push(quote! { .enumerable() });
+            parts.push(quote! { .enumerable(true) });
         }
 
         static_methods.push(quote! {

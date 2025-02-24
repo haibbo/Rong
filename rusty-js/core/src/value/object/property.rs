@@ -138,34 +138,32 @@ where
     }
 
     #[must_use]
-    pub fn writable(mut self) -> Self {
-        self.attributes.0 |= PropertyAttributes::WRITABLE;
+    pub fn writable(mut self, status: bool) -> Self {
+        if status {
+            self.attributes.0 |= PropertyAttributes::WRITABLE;
+        } else {
+            self.attributes.0 &= !PropertyAttributes::WRITABLE;
+        }
         self
     }
 
     #[must_use]
-    pub fn enumerable(mut self) -> Self {
-        self.attributes.0 |= PropertyAttributes::ENUMERABLE;
+    pub fn enumerable(mut self, status: bool) -> Self {
+        if status {
+            self.attributes.0 |= PropertyAttributes::ENUMERABLE;
+        } else {
+            self.attributes.0 &= !PropertyAttributes::ENUMERABLE;
+        }
         self
     }
 
     #[must_use]
-    pub fn configurable(mut self) -> Self {
-        self.attributes.0 |= PropertyAttributes::CONFIGURABLE;
-        self
-    }
-
-    #[must_use]
-    pub fn with_default_method_attr(mut self) -> Self {
-        self.attributes.0 = PropertyAttributes::WRITABLE | PropertyAttributes::CONFIGURABLE;
-        self
-    }
-
-    #[must_use]
-    pub fn wth_default_property_attr(mut self) -> Self {
-        self.attributes.0 = PropertyAttributes::WRITABLE
-            | PropertyAttributes::CONFIGURABLE
-            | PropertyAttributes::ENUMERABLE;
+    pub fn configurable(mut self, status: bool) -> Self {
+        if status {
+            self.attributes.0 |= PropertyAttributes::CONFIGURABLE;
+        } else {
+            self.attributes.0 &= !PropertyAttributes::CONFIGURABLE;
+        }
         self
     }
 
