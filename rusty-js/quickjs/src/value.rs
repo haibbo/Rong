@@ -1,5 +1,7 @@
 use crate::{qjs, QJSContext};
-use rusty_js_core::{impl_js_converter, JSContextImpl, JSRawContext, JSValueImpl, RustyJSError};
+use rusty_js_core::{
+    impl_js_converter, JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RustyJSError,
+};
 use std::ffi::CString;
 use std::hash::Hash;
 use std::slice;

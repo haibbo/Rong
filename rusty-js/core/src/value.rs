@@ -247,7 +247,7 @@ macro_rules! impl_js_converter {
     ($target:ty, $in_type:ty, $out_type:ty, $create_fn:expr, $to_fn:expr) => {
         impl TryInto<$out_type> for $target
         where
-            $target: JSValueImpl,
+            Self: JSValueImpl,
         {
             type Error = RustyJSError;
             fn try_into(self) -> Result<$out_type, Self::Error> {
@@ -255,8 +255,9 @@ macro_rules! impl_js_converter {
                 if unsafe { $to_fn(*self.as_raw_context(), *self.as_raw_value(), &mut result) } < 0
                 {
                     Err(RustyJSError::TypeError(format!(
-                        "JSValue must be type of {}",
-                        std::any::type_name::<$out_type>()
+                        "Expected JSValue to be type {}, but got {:?}",
+                        std::any::type_name::<$out_type>(),
+                        self.type_of()
                     )))
                 } else {
                     Ok(result)
