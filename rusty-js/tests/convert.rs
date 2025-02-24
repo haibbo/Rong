@@ -34,8 +34,6 @@ fn test_convert() {
 
         let jsvalue = JSValue::undefined(ctx);
         assert!(jsvalue.is_undefined());
-        let output: String = jsvalue.try_into().unwrap();
-        assert_eq!(String::from("UNDEFINED"), output);
 
         // Test usize conversion
         let test_usize: usize = 42;
@@ -50,6 +48,39 @@ fn test_convert() {
         assert!(jsvalue.is_bigint());
         let output: usize = jsvalue.try_into().unwrap();
         assert_eq!(large_usize, output);
+
+        Ok(())
+    });
+}
+
+#[test]
+fn test_convert_from_js() {
+    run(|ctx| {
+        let result: u64 = ctx.eval(Source::from_bytes(b"16"))?;
+        assert_eq!(16, result);
+
+        let result: u32 = ctx.eval(Source::from_bytes(b"16"))?;
+        assert_eq!(16, result);
+
+        let result: i32 = ctx.eval(Source::from_bytes(b"-16"))?;
+        assert_eq!(-16, result);
+
+        let result: i64 = ctx.eval(Source::from_bytes(b"-16"))?;
+        assert_eq!(-16, result);
+
+        let result: f64 = ctx.eval(Source::from_bytes(b"-0.89"))?;
+        assert_eq!(-0.89, result);
+
+        let result = ctx.eval::<i32>(Source::from_bytes(b"null"));
+        assert!(result.is_err());
+        let result = ctx.eval::<i64>(Source::from_bytes(b"null"));
+        assert!(result.is_err());
+        let result = ctx.eval::<u32>(Source::from_bytes(b"string"));
+        assert!(result.is_err());
+        let result = ctx.eval::<u64>(Source::from_bytes(b"undefined"));
+        assert!(result.is_err());
+        let result = ctx.eval::<f64>(Source::from_bytes(b"undefined"));
+        assert!(result.is_err());
 
         Ok(())
     });

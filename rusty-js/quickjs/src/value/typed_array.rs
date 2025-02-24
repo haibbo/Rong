@@ -26,9 +26,12 @@ impl JSTypedArrayOps for QJSValue {
             };
 
             // Create arguments for the new typed array
-            let offset_val = qjs::QJS_NewInt64(ctx, byte_offset as i64);
+            //
+            // Important:
+            // quickjs JS_NewTypedArray does not support u64 as offset_val
+            let offset_val = qjs::QJS_NewUint32(ctx, byte_offset as u32);
             let length_val = match length {
-                Some(len) => qjs::QJS_NewInt64(ctx, len as i64),
+                Some(len) => qjs::QJS_NewUint32(ctx, len as u32),
                 None => qjs::QJS_NewUndefined(ctx),
             };
 

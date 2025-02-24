@@ -23,17 +23,6 @@ JSValue QJS_NewFloat64(JSContext *ctx, double val)
     return __JS_NewFloat64(val);
 }
 
-JSValue QJS_NewInt64(JSContext *ctx, int64_t val)
-{
-    JSValue v;
-    if (val >= INT32_MIN && val <= INT32_MAX) {
-        v = JS_NewInt32(ctx, (int32_t)val);
-    } else {
-        v = JS_NewFloat64(ctx, (double)val);
-    }
-    return v;
-}
-
 JSValue QJS_NewUint32(JSContext *ctx, uint32_t val)
 {
     JSValue v;

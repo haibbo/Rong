@@ -204,35 +204,81 @@ impl_js_converter!(
     QJSValue,
     i32,
     |ctx, value| { qjs::QJS_NewInt32(ctx, value) },
-    |ctx, value, result| { qjs::JS_ToInt32(ctx, result, value) }
+    |ctx, value, result| {
+        // not number
+        if qjs::QJS_IsNumber(ctx, value) == 0 {
+            return -1;
+        }
+
+        qjs::JS_ToInt32(ctx, result, value)
+    }
 );
 
 impl_js_converter!(
     QJSValue,
     u32,
     |ctx, value| { qjs::QJS_NewUint32(ctx, value) },
-    |ctx, value, result| { qjs::QJS_ToUint32(ctx, result, value) }
+    |ctx, value, result| {
+        // not number
+        if qjs::QJS_IsNumber(ctx, value) == 0 {
+            return -1;
+        }
+
+        qjs::QJS_ToUint32(ctx, result, value)
+    }
 );
 
 impl_js_converter!(
     QJSValue,
     i64,
-    |ctx, value| { qjs::QJS_NewInt64(ctx, value) },
-    |ctx, value, result| { qjs::JS_ToInt64(ctx, result, value) }
+    |ctx, value| { qjs::JS_NewBigInt64(ctx, value) },
+    |ctx, value, result: &mut i64| {
+        if qjs::QJS_IsBigInt(ctx, value) == 0 {
+            // not number
+            if qjs::QJS_IsNumber(ctx, value) == 0 {
+                return -1;
+            }
+
+            let mut temp: i32 = 0;
+            let ret = qjs::JS_ToInt32(ctx, &mut temp, value);
+            *result = temp as _;
+            ret
+        } else {
+            qjs::JS_ToBigInt64(ctx, result, value)
+        }
+    }
 );
 
 impl_js_converter!(
     QJSValue,
     u64,
     |ctx, value| { qjs::JS_NewBigUint64(ctx, value) },
-    |ctx, value, result| { qjs::JS_ToBigUint64(ctx, result, value) }
+    |ctx, value, result| {
+        // not big int
+        if qjs::QJS_IsBigInt(ctx, value) == 0 {
+            // not number
+            if qjs::QJS_IsNumber(ctx, value) == 0 {
+                return -1;
+            }
+
+            qjs::QJS_ToUint32(ctx, result as _, value)
+        } else {
+            qjs::JS_ToBigUint64(ctx, result, value)
+        }
+    }
 );
 
 impl_js_converter!(
     QJSValue,
     f64,
-    |ctx, val| qjs::QJS_NewFloat64(ctx, val),
-    |ctx, val, result| { qjs::JS_ToFloat64(ctx, result, val) }
+    |ctx, value| qjs::QJS_NewFloat64(ctx, value),
+    |ctx, value, result| {
+        // not number
+        if qjs::QJS_IsNumber(ctx, value) == 0 {
+            return -1;
+        }
+        qjs::JS_ToFloat64(ctx, result, value)
+    }
 );
 
 impl_js_converter!(
@@ -244,11 +290,6 @@ impl_js_converter!(
         qjs::JS_NewStringLen(ctx, value.as_ptr() as _, len as _)
     },
     |ctx, value, result: *mut String| {
-        if qjs::QJS_IsUndefined(ctx, value) != 0 {
-            *result = String::from("UNDEFINED");
-            return 0;
-        }
-
         if qjs::QJS_IsString(ctx, value) == 0 {
             return -1;
         }

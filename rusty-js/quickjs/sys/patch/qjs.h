@@ -10,7 +10,6 @@ int QJS_ToUint32(JSContext *ctx, uint32_t *pres, JSValue val);
 
 JSValue QJS_NewFloat64(JSContext *ctx, double val);
 
-JSValue QJS_NewInt64(JSContext *ctx, int64_t val);
 JSValue QJS_NewUint32(JSContext *ctx, uint32_t val);
 JSValue QJS_NewUndefined(JSContext *ctx);
 JSValue QJS_NewNull(JSContext *ctx);
