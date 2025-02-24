@@ -103,9 +103,20 @@ describe("AbortSignal", () => {
   });
 
   describe("Error handling", () => {
-    it("should throw if aborted", () => {
+    it("should throw if aborted with string reason", () => {
       const signal = AbortSignal.abort("Test reason");
       expect(() => signal.throwIfAborted()).toThrow("Test reason");
+    });
+
+    it("should throw if aborted with object reason", () => {
+      const reason = { message: "Test reason" };
+      const signal = AbortSignal.abort(reason);
+      expect(() => signal.throwIfAborted()).toThrow(reason);
+    });
+
+    it("should throw TypeError if aborted with TypeError", () => {
+      const signal = AbortSignal.abort(new TypeError("Type error"));
+      expect(() => signal.throwIfAborted()).toThrow(TypeError);
     });
 
     it("should not throw if not aborted", () => {

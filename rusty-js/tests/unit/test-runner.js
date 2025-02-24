@@ -112,7 +112,9 @@ class TestRunner {
           }
         } else if (typeof value === "string") {
           if (!value.includes(expected)) {
-            throw new Error(`Expected string to contain "${expected}"`);
+            throw new Error(
+              `Expected string to contain "${expected}", got "${value}"`,
+            );
           }
         } else {
           throw new Error("toContain can only be used with arrays or strings");
@@ -159,26 +161,54 @@ class TestRunner {
           throw new Error(`Expected ${expected}, but got ${value}`);
         }
       },
-      toThrow: (expectedError) => {
+      toThrow: (expectedReasonOrType) => {
         try {
           value();
-          throw new Error("Expected function to throw an error but it did not");
-        } catch (e) {
+          return {
+            pass: false,
+            message: () => `Expected function to throw, but it did not.`,
+          };
+        } catch (error) {
+          // If the input is an Error type (e.g. TypeError)
           if (
-            typeof expectedError === "function" &&
-            !(e instanceof expectedError)
+            typeof expectedReasonOrType === "function" &&
+            expectedReasonOrType.prototype instanceof Error
           ) {
-            throw new Error(
-              `Expected error to be instance of ${expectedError.name}, but got ${e.constructor.name}`,
-            );
-          } else if (
-            typeof expectedError === "string" &&
-            e.message !== expectedError
-          ) {
-            throw new Error(
-              `Expected error message "${expectedError}" but got "${e.message}"`,
-            );
+            const pass = error instanceof expectedReasonOrType;
+            return {
+              pass,
+              message: () =>
+                pass
+                  ? `Expected function not to throw ${expectedReasonOrType.name}, but it threw: ${error}`
+                  : `Expected function to throw ${expectedReasonOrType.name}, but it threw: ${error}`,
+            };
           }
+
+          // If no reason or type is specified, just check if an error was thrown
+          if (expectedReasonOrType === undefined) {
+            return {
+              pass: true,
+              message: () =>
+                `Expected function not to throw, but it threw: ${error}`,
+            };
+          }
+
+          // Use assert.equal for shallow comparison
+          let pass = false;
+          try {
+            assert.equal(error, expectedReasonOrType);
+            pass = true;
+          } catch (e) {
+            pass = false;
+          }
+
+          return {
+            pass,
+            message: () =>
+              pass
+                ? `Expected function not to throw ${expectedReasonOrType}, but it threw: ${error}`
+                : `Expected function to throw ${expectedReasonOrType}, but it threw: ${error}`,
+          };
         }
       },
       toBeUndefined: () => {

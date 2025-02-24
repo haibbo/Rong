@@ -115,8 +115,8 @@ impl AbortSignal {
     #[js_method(rename = "throwIfAborted")]
     pub fn throw_if_aborted(&self, ctx: JSContext) -> JSValue {
         if self.aborted && self.reason.is_some() {
-            // BUGFix: convert to exception
-            return self.reason.clone().unwrap();
+            // throw reason as exception
+            return ctx.throw(self.reason.clone().unwrap());
         }
         JSValue::undefined(&ctx)
     }
