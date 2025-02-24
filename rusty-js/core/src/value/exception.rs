@@ -106,12 +106,32 @@ impl fmt::Display for JSError {
 
 impl std::error::Error for JSError {}
 
+/// JavaScript Exception Handling Trait
+///
+/// This trait defines methods for handling various types of exceptions in JavaScript engines
+///
+/// Note:
+/// This only creates the exception, it still needs to be thrown to the JS engine.
 pub trait JSExceptionHandler: JSContextImpl {
+    /// Throws a SyntaxError
     fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value;
+
+    /// Throws a TypeError
     fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value;
+
+    /// Throws a ReferenceError
     fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value;
+
+    /// Throws a RangeError
     fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value;
+
+    /// Throws a generic Error
     fn throw_error(&self, message: impl AsRef<str>) -> Self::Value;
+
+    /// Throws any JavaScript value as an exception
+    fn throw(&self, value: Self::Value) -> Self::Value;
+
+    /// Creates a new Error object
     fn new_error(&self) -> Self::Value;
 }
 
@@ -142,6 +162,11 @@ where
 
     pub fn throw_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw_error(message);
+        JSValue::from_raw(self, raw)
+    }
+
+    pub fn throw(&self, value: JSValue<C::Value>) -> JSValue<C::Value> {
+        let raw = self.as_ref().throw(value.into_value());
         JSValue::from_raw(self, raw)
     }
 }
