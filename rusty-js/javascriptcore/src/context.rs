@@ -222,6 +222,10 @@ impl JSExceptionHandler for JSCContext {
             JSCValue::from_owned_obj(self.raw, error).with_error()
         }
     }
+
+    fn throw(&self, value: Self::Value) -> Self::Value {
+        value.with_exception()
+    }
 }
 
 impl JSCContext {

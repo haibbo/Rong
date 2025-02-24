@@ -52,8 +52,7 @@ where
         if !exception.is_null() {
             *exception = value.into_raw_value();
         }
-        // Return null to indicate an exception occurred
-        return ptr::null_mut();
+        return jsc::JSValueMakeUndefined(ctx.to_raw()) as _;
     }
 
     value.into_raw_value() as jsc::JSObjectRef
@@ -106,8 +105,7 @@ where
         if !exception.is_null() {
             *exception = value.into_raw_value();
         }
-        // Return null to indicate an exception occurred
-        return std::ptr::null_mut();
+        return jsc::JSValueMakeUndefined(ctx.to_raw());
     }
     value.into_raw_value()
 }

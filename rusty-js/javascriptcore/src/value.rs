@@ -332,9 +332,6 @@ impl Clone for JSCValue {
     fn clone(&self) -> Self {
         let mut cloned = JSCValue::new(self.ctx, self.value);
         cloned.value_type = self.value_type;
-        if cloned.value_type == JSCValueType::Error {
-            println!(".........");
-        }
         cloned.protect()
     }
 }
