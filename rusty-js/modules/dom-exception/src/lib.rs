@@ -66,7 +66,9 @@ macro_rules! define_error_names {
             /// Iterate over all error names efficiently
             #[inline]
             pub fn iter() -> impl Iterator<Item = &'static str> {
-                Self::ERROR_NAMES.iter().copied()
+                Self::ERROR_NAMES.iter().map(|&name| {
+                    Self::find_or_default(name).as_str()
+                })
             }
 
             /// Convert string to corresponding DOMExceptionName variant
@@ -185,9 +187,12 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 
     // Add all error names as static properties
     for name in DOMExceptionName::iter() {
-        let desc = PropertyDescriptor::builder().value(JSValue::from(ctx, name));
-
-        desc.apply_to(&constructor, name);
+        PropertyDescriptor::builder()
+            .value(JSValue::from(ctx, name))
+            .enumerable(true)
+            .writable(false)
+            .configurable(false)
+            .apply_to(&constructor, name);
     }
     Ok(())
 }
