@@ -13,7 +13,14 @@ mod valuetype;
 pub struct QJSValue {
     value: qjs::JSValue,
     ctx: *mut qjs::JSContext,
-    exception: bool,
+    value_type: QJSValueType,
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub(crate) enum QJSValueType {
+    Error,
+    Exception,
+    Other,
 }
 
 impl PartialEq for QJSValue {
@@ -39,7 +46,7 @@ impl Clone for QJSValue {
         Self {
             value,
             ctx: self.ctx,
-            exception: self.exception,
+            value_type: self.value_type,
         }
     }
 }
@@ -69,7 +76,7 @@ impl QJSValue {
         Self {
             value,
             ctx,
-            exception: false,
+            value_type: QJSValueType::Other,
         }
     }
 
@@ -77,7 +84,7 @@ impl QJSValue {
         Self {
             value,
             ctx,
-            exception: false,
+            value_type: QJSValueType::Other,
         }
     }
 
@@ -91,8 +98,21 @@ impl QJSValue {
     }
 
     pub(crate) fn with_exception(mut self) -> Self {
-        self.exception = true;
+        self.value_type = QJSValueType::Exception;
         self
+    }
+
+    pub(crate) fn with_error(mut self) -> Self {
+        self.value_type = QJSValueType::Error;
+        self
+    }
+
+    pub(crate) fn _is_err(&self) -> bool {
+        self.value_type == QJSValueType::Error
+    }
+
+    pub(crate) fn _is_exception(&self) -> bool {
+        self.value_type == QJSValueType::Exception
     }
 }
 

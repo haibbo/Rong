@@ -283,7 +283,7 @@ impl QJSContext {
         }
     }
 
-    fn throw_error_internal<F>(&self, message: &str, throw_fn: F) -> QJSValue
+    fn throw_excep_internal<F>(&self, message: &str, throw_fn: F) -> QJSValue
     where
         F: FnOnce(*mut qjs::JSContext, *const c_char, *const c_char) -> qjs::JSValue,
     {
@@ -295,36 +295,42 @@ impl QJSContext {
 
 impl JSExceptionHandler for QJSContext {
     fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
+        self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
             qjs::JS_ThrowSyntaxError(ctx, fmt, msg)
         })
     }
 
     fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
+        self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
             qjs::JS_ThrowTypeError(ctx, fmt, msg)
         })
     }
 
     fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
+        self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
             qjs::JS_ThrowReferenceError(ctx, fmt, msg)
         })
     }
 
     fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
+        self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
             qjs::JS_ThrowRangeError(ctx, fmt, msg)
         })
     }
 
     fn throw_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
+        self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
             qjs::JS_ThrowPlainError(ctx, fmt, msg)
         })
+        .with_error()
     }
 
     fn new_error(&self) -> Self::Value {
-        unsafe { QJSValue::from_owned_raw(self.ctx, qjs::JS_NewError(self.ctx)) }
+        QJSValue::from_owned_raw(self.ctx, unsafe { qjs::JS_NewError(self.ctx) })
+    }
+
+    fn throw(&self, value: Self::Value) -> Self::Value {
+        let raw_value = unsafe { qjs::JS_Throw(self.ctx, value.into_raw_value()) };
+        QJSValue::from_owned_raw(self.ctx, raw_value).with_exception()
     }
 }

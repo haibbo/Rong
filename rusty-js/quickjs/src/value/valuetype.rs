@@ -8,11 +8,15 @@ impl JSTypeOf for QJSValue {
     }
 
     fn is_exception(&self) -> bool {
-        self.exception
+        self._is_exception()
     }
 
     fn is_error(&self) -> bool {
-        unsafe { qjs::JS_IsError(self.ctx, self.value) != 0 }
+        if self._is_err() {
+            return true;
+        } else {
+            unsafe { qjs::JS_IsError(self.ctx, self.value) != 0 }
+        }
     }
 
     fn is_array(&self) -> bool {
