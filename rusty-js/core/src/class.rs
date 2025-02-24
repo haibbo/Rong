@@ -31,7 +31,13 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
 
         let instance = match Self::data_constructor().0.call(&mut accessor) {
-            Ok(v) => v,
+            // come back JS engine at once if it's exception or error
+            Ok(v) => {
+                if v.is_exception() || v.is_error() {
+                    return v;
+                }
+                v
+            }
             Err(e) => return e.throw_js_exception(ctx),
         };
 
@@ -84,6 +90,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
             Err(_) => return RustyJSError::NotJSFunc.throw_js_exception(ctx),
         };
 
+        // ignore checking whether v is exception or error, sicne no one use it again here
         match func.call(&mut accessor) {
             Ok(v) => v,
             Err(e) => e.throw_js_exception(ctx),
