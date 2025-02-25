@@ -52,8 +52,6 @@ pub trait JSTypeOf: JSValueImpl {
             JSValueType::Function
         } else if self.is_constructor() {
             JSValueType::Constructor
-        } else if self.is_object() {
-            JSValueType::Object
         } else if self.is_undefined() {
             JSValueType::Undefined
         } else if self.is_null() {
@@ -68,6 +66,9 @@ pub trait JSTypeOf: JSValueImpl {
             JSValueType::String
         } else if self.is_symbol() {
             JSValueType::Symbol
+        } else if self.is_object() {
+            // check is_object at last stage, since such as function etc is also object
+            JSValueType::Object
         } else {
             JSValueType::Unknown
         }
