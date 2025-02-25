@@ -1,0 +1,10 @@
+[package]
+name = "console"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rusty-js = { workspace = true }
+
+[dev-dependencies]
+rustyjs_test = { path = "../../utils/rustyjs_test" }
