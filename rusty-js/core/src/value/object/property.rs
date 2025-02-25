@@ -185,7 +185,7 @@ where
             .getter
             .map(|g| {
                 self.attributes.0 |= PropertyAttributes::HAS_GET;
-                g.into_inner()
+                g.into_value()
             })
             .unwrap_or(undefined.clone());
 
@@ -193,7 +193,7 @@ where
             .setter
             .map(|s| {
                 self.attributes.0 |= PropertyAttributes::HAS_SET;
-                s.into_inner()
+                s.into_value()
             })
             .unwrap_or(undefined.clone());
 

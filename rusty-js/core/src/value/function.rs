@@ -145,7 +145,7 @@ impl<V: JSObjectOps> JSFunc<V> {
         Ok(self)
     }
 
-    pub(crate) fn into_inner(self) -> V {
+    pub(crate) fn into_value(self) -> V {
         self.0.into_value()
     }
 }
