@@ -10,3 +10,4 @@ rusty-js = { workspace = true }
 rustyjs_test = { path = "../../utils/rustyjs_test" }
 assert = { path="../../modules/assert" }
 timer = { path="../../modules/timer" }
+console = { path="../../modules/console" }

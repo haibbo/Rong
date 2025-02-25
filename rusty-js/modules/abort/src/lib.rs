@@ -76,29 +76,12 @@ mod tests {
     #[test]
     fn test_abort() {
         async_run!(|ctx: JSContext| async move {
-            ctx.global().set(
-                "print",
-                JSFunc::new(&ctx, |msg: String| println!("{}", msg)),
-            )?;
-
-            ctx.eval::<()>(Source::from_bytes(
-                r#"
-                    const console={
-                        log: function(...args){
-                            print(args.join(' '))
-                        },
-                        error: function(...args){
-                            print(args.join(' '))
-                        }
-                    }
-                "#,
-            ))?;
-
             init(&ctx)?;
             assert::init(&ctx)?;
             event::init(&ctx)?;
             dom_exception::init(&ctx)?;
             timer::init(&ctx)?;
+            console::init(&ctx, None)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "abort.js")
                 .await?

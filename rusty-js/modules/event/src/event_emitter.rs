@@ -427,7 +427,7 @@ impl EventEmitter {
         // Check max_listener
         if listeners.len() as u32 >= self.max_listener {
             let warning = format!(
-                "EventEmitter overflow: {} listeners added. Use emitter.setMaxListeners() to increase limit",
+                "EventEmitter overflow: {} listeners added. Use setMaxListeners() to increase limit",
                 listeners.len() + 1,
             );
             return Err(RustyJSError::Error(warning));

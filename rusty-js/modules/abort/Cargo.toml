@@ -17,3 +17,4 @@ assert = { path="../../modules/assert" }
 event = { path="../../modules/event" }
 dom-exception = { path="../../modules/dom-exception" }
 timer = { path="../../modules/timer" }
+console = { path="../../modules/console" }
