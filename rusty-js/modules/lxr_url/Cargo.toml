@@ -1,0 +1,14 @@
+[package]
+name = "lxr_url"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rusty-js = { workspace = true }
+url = "2.5.4"
+
+
+[dev-dependencies]
+rustyjs_test = { path = "../../utils/rustyjs_test" }
+assert = { path="../../modules/assert" }
+console = { path="../../modules/console" }
