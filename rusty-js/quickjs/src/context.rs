@@ -125,15 +125,9 @@ impl JSContextImpl for QJSContext {
     fn call(
         &self,
         function: &Self::Value,
-        this: Option<Self::Value>,
+        this: Self::Value,
         argv: Vec<Self::Value>,
     ) -> Self::Value {
-        // Convert this to JSValue or undefined
-        let this_val = this.map_or_else(
-            || unsafe { qjs::QJS_NewUndefined(self.ctx) },
-            |v| *v.as_raw_value(),
-        );
-
         // Convert argv to raw JSValues
         let mut args: Vec<qjs::JSValue> = argv.iter().map(|v| *v.as_raw_value()).collect();
 
@@ -141,7 +135,7 @@ impl JSContextImpl for QJSContext {
             qjs::JS_Call(
                 self.ctx,
                 *function.as_raw_value(),
-                this_val,
+                this.into_raw_value(),
                 args.len() as std::ffi::c_int,
                 args.as_mut_ptr(),
             )

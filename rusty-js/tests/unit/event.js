@@ -180,7 +180,7 @@ describe("EventEmitter", () => {
         error = e;
       }
       expect(error.message).toContain("EventEmitter overflow");
-      expect(error.message).toContain("Use emitter.setMaxListeners()");
+      expect(error.message).toContain("Use setMaxListeners()");
     });
   });
 

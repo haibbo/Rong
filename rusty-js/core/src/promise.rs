@@ -165,7 +165,7 @@ where
     fn resolve_promise(self, _resolve: JSFunc<V>, reject: JSFunc<V>) {
         let ctx = reject.get_ctx();
         let js_err = self.into_js_error(&ctx);
-        let _ = reject.call::<_, ()>((js_err,));
+        let _ = reject.call::<_, ()>(None, (js_err,));
     }
 }
 
@@ -176,7 +176,7 @@ where
     V: JSObjectOps,
 {
     fn resolve_promise(self, resolve: JSFunc<V>, _reject: JSFunc<V>) {
-        let _ = resolve.call::<_, ()>((self,));
+        let _ = resolve.call::<_, ()>(None, (self,));
     }
 }
 
@@ -190,12 +190,12 @@ where
     fn resolve_promise(self, resolve: JSFunc<V>, reject: JSFunc<V>) {
         match self {
             Ok(value) => {
-                let _ = resolve.call::<_, ()>((value,));
+                let _ = resolve.call::<_, ()>(None, (value,));
             }
             Err(err) => {
                 let ctx = reject.get_ctx();
                 let js_error = err.into_js_error(&ctx);
-                let _ = reject.call::<_, ()>((js_error,));
+                let _ = reject.call::<_, ()>(None, (js_error,));
             }
         }
     }
@@ -297,12 +297,12 @@ where
             // Register resolve handlers
             this.promise
                 .then()
-                .call_with_this::<_, ()>(this.promise.obj.clone(), (resolve,))?;
+                .call::<_, ()>(Some(this.promise.obj.clone()), (resolve,))?;
 
             // Also register catch handler for unhandled rejections
             this.promise
                 .catch()
-                .call_with_this::<_, ()>(this.promise.obj.clone(), (reject,))?;
+                .call::<_, ()>(Some(this.promise.obj.clone()), (reject,))?;
 
             return Poll::Pending;
         }

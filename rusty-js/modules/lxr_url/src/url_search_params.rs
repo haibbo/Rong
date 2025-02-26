@@ -199,9 +199,9 @@ impl URLSearchParams {
             let key = key.as_str();
             let value = value.as_str();
             if let Some(ref this) = this_arg.0 {
-                callback.call_with_this::<_, ()>(this.clone(), (value, key))?;
+                callback.call::<_, ()>(Some(this.clone()), (value, key))?;
             } else {
-                callback.call::<_, ()>((value, key))?;
+                callback.call::<_, ()>(None, (value, key))?;
             }
         }
 

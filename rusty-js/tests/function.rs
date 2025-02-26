@@ -111,18 +111,18 @@ fn test_jsfunc_call() {
     run(|ctx| {
         // Test 1: Rust-created JS function
         let rust_func = JSFunc::new(ctx, |a: i32, b: i32| a + b)?;
-        let result: i32 = rust_func.call((2, 3)).unwrap();
+        let result: i32 = rust_func.call(None, (2, 3)).unwrap();
         assert_eq!(result, 5);
 
         // Test 2: JavaScript-created function
         let js_func: JSFunc = ctx
             .eval(Source::from_bytes(b"(function(a, b) { return a * b; })"))
             .unwrap();
-        let result: i32 = js_func.call((4, 5)).unwrap();
+        let result: i32 = js_func.call(None, (4, 5)).unwrap();
         assert_eq!(result, 20);
 
         // Test 3: error. Rust clousre set the lenght of function.
-        let result: Result<i32, _> = rust_func.call(());
+        let result: Result<i32, _> = rust_func.call(None, ());
         assert!(result.is_err());
         Ok(())
     });
@@ -133,12 +133,12 @@ fn test_jsfunc_call_macro() {
     run(|ctx| {
         // Test 1: 2 arguments
         let rust_func = JSFunc::new(ctx, |a: i32, b: i32| a + b)?;
-        let result: i32 = call!(rust_func, 2, 3).unwrap();
+        let result: i32 = rust_func.call(None, (2, 3)).unwrap();
         assert_eq!(result, 5);
 
         // Test 2: 0 argument
         let rust_func = JSFunc::new(ctx, || 8)?;
-        let result: i32 = call!(rust_func).unwrap();
+        let result: i32 = rust_func.call(None, ()).unwrap();
         assert_eq!(result, 8);
         Ok(())
     });
@@ -150,7 +150,7 @@ fn test_jsfunc_as_argument() {
         // Register a function that takes a JS function as argument
         let func = JSFunc::new(ctx, |callback: JSFunc| {
             // Call the JS function with some arguments
-            let result: i32 = callback.call((2, 3)).unwrap();
+            let result: i32 = callback.call(None, (2, 3)).unwrap();
             result * 2
         })?
         .name("call_and_double")?;
@@ -249,7 +249,7 @@ fn test_new_once_async() {
     async_run!(|ctx: JSContext| async move {
         let set_timeout = JSFunc::new_once(&ctx, |callback: JSFunc, delay: u32| async move {
             tokio::time::sleep(Duration::from_millis(delay as u64)).await;
-            callback.call::<_, ()>(()).unwrap();
+            callback.call::<_, ()>(None, ()).unwrap();
         })?;
         ctx.global().set("setTimeout", set_timeout)?;
 

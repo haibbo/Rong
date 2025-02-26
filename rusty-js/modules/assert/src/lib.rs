@@ -85,7 +85,10 @@ fn fail(ctx: JSContext, message: Optional<JSValue>) -> JSValue {
 /// Asserts that a function does not throw an error
 fn does_not_throw(ctx: JSContext, func: JSFunc, message: Optional<JSValue>) -> JSValue {
     // Call the function and check if it throws an error
-    if func.call::<_, ()>((JSValue::undefined(&ctx),)).is_err() {
+    if func
+        .call::<_, ()>(None, (JSValue::undefined(&ctx),))
+        .is_err()
+    {
         if let Some(msg) = message.0 {
             return msg;
         }

@@ -132,7 +132,7 @@ fn set_timeout_with_repeat(
         }
 
         // First execution
-        if registry.is_timer_active(id) && callback.call::<_, ()>(()).is_ok() && !repeat {
+        if registry.is_timer_active(id) && callback.call::<_, ()>(None, ()).is_ok() && !repeat {
             return Ok(());
         }
 
@@ -140,7 +140,7 @@ fn set_timeout_with_repeat(
         while registry.is_timer_active(id) {
             tokio::select! {
                 _ = interval.tick() => {
-                    if callback.call::<_, ()>(()).is_err() {
+                    if callback.call::<_, ()>(None,()).is_err() {
                         break;
                     }
                 }

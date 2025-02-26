@@ -86,18 +86,10 @@ impl JSContextImpl for JSCContext {
     fn call(
         &self,
         function: &Self::Value,
-        this: Option<Self::Value>,
+        this: Self::Value,
         argv: Vec<Self::Value>,
     ) -> Self::Value {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-
-        let this_obj = this.map_or_else(
-            || unsafe { jsc::JSValueMakeUndefined(self.raw) },
-            |v| {
-                let raw = *v.as_raw_value();
-                raw.cast()
-            },
-        );
 
         // Convert argv to raw JSValues
         let args: Vec<jsc::JSValueRef> = argv
@@ -112,7 +104,7 @@ impl JSContextImpl for JSCContext {
             jsc::JSObjectCallAsFunction(
                 self.raw,
                 function.as_obj(),
-                this_obj as jsc::JSObjectRef,
+                this.as_obj(),
                 args.len(),
                 args.as_ptr(),
                 &mut exception,

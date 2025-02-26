@@ -80,7 +80,7 @@ pub trait JSContextImpl {
     fn call(
         &self,
         function: &Self::Value,
-        this: Option<Self::Value>,
+        this: Self::Value,
         argv: Vec<Self::Value>,
     ) -> Self::Value;
 

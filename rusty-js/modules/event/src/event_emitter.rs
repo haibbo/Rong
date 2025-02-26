@@ -472,7 +472,7 @@ impl EventEmitter {
                 // Call the listener with provided args
                 let _ = listener
                     .listener
-                    .call_with_this::<_, ()>(this.clone(), (args.clone(),));
+                    .call::<_, ()>(Some(this.clone()), (args.clone(),));
                 // Mark for removal if it's a once listener
                 if listener.once {
                     listeners_to_remove.push(listener.listener.clone());

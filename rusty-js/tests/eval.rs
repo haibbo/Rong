@@ -40,7 +40,7 @@ fn test_eval_async() {
         let set_timeout = JSFunc::new(&ctx, |callback: JSFunc, delay: u32| {
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
-                callback.call::<_, ()>(()).unwrap()
+                callback.call::<_, ()>(None, ()).unwrap()
             };
             tokio::task::spawn_local(future);
             Ok(())

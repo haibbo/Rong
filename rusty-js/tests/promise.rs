@@ -10,7 +10,7 @@ fn test_rust_promise_with_callback() {
             let (promise, resolve, _reject) = ctx_clone.promise().unwrap();
 
             // Directly resolve the promise with the input value
-            resolve.call::<_, ()>((millis,)).unwrap();
+            resolve.call::<_, ()>(None, (millis,)).unwrap();
             promise
         })?;
 
@@ -52,11 +52,11 @@ fn test_rust_promise_with_resolve() {
         })?;
 
         let then = promise.then();
-        then.call_with_this::<_, ()>(promise.into_object(), (cb,))
+        then.call::<_, ()>(Some(promise.into_object()), (cb,))
             .unwrap();
 
         // Resolve the promise
-        resolve.call::<_, ()>(("success!",)).unwrap();
+        resolve.call::<_, ()>(None, ("success!",)).unwrap();
 
         // Run pending jobs to trigger the callback
         rt.run_pending_jobs();
@@ -168,7 +168,7 @@ fn test_promise_into_future_resolve() {
         let set_timeout = JSFunc::new(&ctx, |callback: JSFunc, delay: u32| {
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
-                callback.call::<_, ()>(()).unwrap();
+                callback.call::<_, ()>(None, ()).unwrap();
             };
             tokio::task::spawn_local(future);
         })?;
@@ -199,7 +199,7 @@ fn test_promise_into_future_reject_error() {
         let set_timeout = JSFunc::new(&ctx, |callback: JSFunc, delay: u32| {
             let future = async move {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
-                callback.call::<_, ()>(()).unwrap();
+                callback.call::<_, ()>(None, ()).unwrap();
             };
             tokio::task::spawn_local(future);
         })?;
@@ -226,7 +226,7 @@ fn test_promise_into_future_reject_exception() {
     async_run!(|ctx: JSContext| async move {
         let set_timeout = JSFunc::new(&ctx, |callback: JSFunc, delay: u32| async move {
             tokio::time::sleep(Duration::from_millis(delay as u64)).await;
-            let _ = callback.call::<_, ()>(());
+            let _ = callback.call::<_, ()>(None, ());
         })?;
 
         ctx.global().set("setTimeout", set_timeout)?;
@@ -261,7 +261,7 @@ fn test_rust_promise_with_mut_state() {
         let counter_fn = JSFunc::new(ctx, move || {
             let (promise, resolve, _) = ctx_clone.promise().unwrap();
             counter += 1;
-            resolve.call::<_, ()>((counter,)).unwrap();
+            resolve.call::<_, ()>(None, (counter,)).unwrap();
             promise
         })?;
 
