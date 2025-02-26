@@ -31,7 +31,6 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
 
         let instance = match Self::data_constructor().0.call(&mut accessor) {
-            // come back JS engine at once if it's exception or error
             Ok(v) => {
                 if v.is_exception() || v.is_error() {
                     return v;
@@ -287,7 +286,7 @@ where
     pub fn property<Fun, Key>(&self, k: Key, f: Fun) -> JSResult<()>
     where
         Fun: Fn(PropertyDescriptor<V>) -> JSResult<PropertyDescriptor<V>>,
-        Key: for<'b> Into<PropertyKey<'b>>,
+        Key: for<'b> Into<PropertyKey<'b, V>>,
     {
         f(PropertyDescriptor::builder())?.apply_to(&self.prototype, k);
         Ok(())
@@ -296,7 +295,7 @@ where
     pub fn static_property<Fun, Key>(&self, k: Key, f: Fun) -> JSResult<()>
     where
         Fun: Fn(PropertyDescriptor<V>) -> JSResult<PropertyDescriptor<V>>,
-        Key: for<'b> Into<PropertyKey<'b>>,
+        Key: for<'b> Into<PropertyKey<'b, V>>,
     {
         f(PropertyDescriptor::builder())?.apply_to(&self.constructor, k);
         Ok(())

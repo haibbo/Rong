@@ -21,10 +21,6 @@ where
         self.0.get::<_, String>("description")
     }
 
-    pub fn into_value(self) -> V {
-        self.0.into_value()
-    }
-
     /// Construct a JSSymbol from a JSObject if it is a JS Symbol
     pub fn from_object(obj: JSObject<V>) -> Option<Self> {
         if obj.is_symbol() {
@@ -32,6 +28,15 @@ where
         } else {
             None
         }
+    }
+}
+
+impl<V> JSSymbol<V>
+where
+    V: JSValueImpl,
+{
+    pub fn into_value(self) -> V {
+        self.0.into_value()
     }
 }
 

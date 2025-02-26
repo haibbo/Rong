@@ -131,34 +131,14 @@ where
         JSObject::from_js_value(ctx, value).unwrap()
     }
 
-    /// Converts the JSObject into its underlying/raw JSValue implementation
-    pub fn into_value(self) -> V {
-        self.0.into_value()
-    }
-
-    /// Converts the JSObject into a JSValue
-    pub fn into_jsvalue(self) -> JSValue<V> {
-        self.0
-    }
-
     /// Creates a JSObject from a raw JSValue and context
     pub fn from_raw(ctx: &JSContext<V::Context>, value: V) -> Self {
         JSValue::from_raw(ctx, value).into()
     }
 
-    /// Returns a mutable reference to the underlying/raw JSValue
-    pub fn as_mut_value(&mut self) -> &mut V {
-        &mut self.0.inner
-    }
-}
-
-impl<V> JSObject<V>
-where
-    V: JSObjectOps,
-{
     pub fn set<'a, K, KV>(&'a self, k: K, kv: KV) -> JSResult<&'a Self>
     where
-        K: Into<PropertyKey<'a>>,
+        K: Into<PropertyKey<'a, V>>,
         KV: IntoJSValue<V>,
     {
         let ctx = &self.get_ctx();
@@ -170,7 +150,7 @@ where
 
     pub fn del<'a, K>(&'a self, k: K) -> bool
     where
-        K: Into<PropertyKey<'a>>,
+        K: Into<PropertyKey<'a, V>>,
     {
         let key = k.into().into_key(&self.get_ctx());
         self.as_value().del_property(key)
@@ -178,7 +158,7 @@ where
 
     pub fn has<'a, K>(&self, k: K) -> bool
     where
-        K: Into<PropertyKey<'a>>,
+        K: Into<PropertyKey<'a, V>>,
     {
         let key = k.into().into_key(&self.get_ctx());
         self.as_value().has_property(key)
@@ -186,7 +166,7 @@ where
 
     pub fn get<'a, K, T>(&'a self, k: K) -> JSResult<T>
     where
-        K: Into<PropertyKey<'a>>,
+        K: Into<PropertyKey<'a, V>>,
         T: FromJSValue<V>,
     {
         let ctx = &self.get_ctx();
@@ -195,6 +175,23 @@ where
             .get_property(key)
             .ok_or(RustyJSError::PropertyNotFound) // check existence firstly
             .and_then(|value| T::from_js_value(ctx, value))
+    }
+}
+
+impl<V: JSValueImpl> JSObject<V> {
+    /// Converts the JSObject into its underlying/raw JSValue implementation
+    pub fn into_value(self) -> V {
+        self.0.into_value()
+    }
+
+    /// Converts the JSObject into a JSValue
+    pub fn into_jsvalue(self) -> JSValue<V> {
+        self.0
+    }
+
+    /// Returns a mutable reference to the underlying/raw JSValue
+    pub fn as_mut_value(&mut self) -> &mut V {
+        &mut self.0.inner
     }
 }
 

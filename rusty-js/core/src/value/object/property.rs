@@ -1,44 +1,52 @@
-use crate::{JSContext, JSFunc, JSObject, JSObjectOps, JSValue, JSValueConversion, JSValueImpl};
+use crate::{
+    JSContext, JSFunc, JSObject, JSObjectOps, JSSymbol, JSValue, JSValueConversion, JSValueImpl,
+};
 
 // PropertyKey represents a key in a JavaScript object property
 // It can be a number (i32, u32, i64, u64) or a string reference
-pub enum PropertyKey<'a> {
+pub enum PropertyKey<'a, V: JSValueImpl> {
     Int32(i32),
     Uint32(u32),
     Int64(i64),
     Uint64(u64),
     Str(&'a str),
-    // Symbol(Symbol),
+    Symbol(JSSymbol<V>),
 }
 
-impl From<i32> for PropertyKey<'_> {
+impl<V: JSValueImpl> From<i32> for PropertyKey<'_, V> {
     fn from(value: i32) -> Self {
         PropertyKey::Int32(value)
     }
 }
 
-impl From<u32> for PropertyKey<'_> {
+impl<V: JSValueImpl> From<u32> for PropertyKey<'_, V> {
     fn from(value: u32) -> Self {
         PropertyKey::Uint32(value)
     }
 }
 
-impl From<i64> for PropertyKey<'_> {
+impl<V: JSValueImpl> From<i64> for PropertyKey<'_, V> {
     fn from(value: i64) -> Self {
         PropertyKey::Int64(value)
     }
 }
 
-impl From<u64> for PropertyKey<'_> {
+impl<V: JSValueImpl> From<u64> for PropertyKey<'_, V> {
     fn from(value: u64) -> Self {
         PropertyKey::Uint64(value)
+    }
+}
+
+impl<V: JSValueImpl> From<JSSymbol<V>> for PropertyKey<'_, V> {
+    fn from(value: JSSymbol<V>) -> Self {
+        PropertyKey::Symbol(value)
     }
 }
 
 // The key implementation for handling string property keys
 // 'b: 'a means the input string's lifetime ('b) must outlive or equal the PropertyKey's lifetime ('a)
 // This ensures the string reference stored in PropertyKey remains valid throughout PropertyKey's lifetime
-impl<'a, 'b: 'a> From<&'b str> for PropertyKey<'a> {
+impl<'a, 'b: 'a, V: JSValueImpl> From<&'b str> for PropertyKey<'a, V> {
     fn from(value: &'b str) -> Self {
         PropertyKey::Str(value)
     }
@@ -46,8 +54,8 @@ impl<'a, 'b: 'a> From<&'b str> for PropertyKey<'a> {
 
 // Convert PropertyKey into the actual JavaScript value type
 // No lifetime bound needed here as we're consuming self
-impl PropertyKey<'_> {
-    pub(crate) fn into_key<V>(self, context: &JSContext<V::Context>) -> V
+impl<V: JSValueImpl> PropertyKey<'_, V> {
+    pub(crate) fn into_key(self, context: &JSContext<V::Context>) -> V
     where
         V: JSValueConversion,
     {
@@ -58,6 +66,7 @@ impl PropertyKey<'_> {
             Self::Int64(i) => (ctx, i).into(),
             Self::Uint64(i) => (ctx, i).into(),
             Self::Str(s) => (ctx, s).into(),
+            Self::Symbol(s) => JSSymbol::into_value(s),
         }
     }
 }
@@ -170,7 +179,7 @@ where
     // apply PropertyDescriptor to JS Object with key
     pub fn apply_to<K>(mut self, obj: &JSObject<V>, k: K)
     where
-        K: for<'a> Into<PropertyKey<'a>>,
+        K: for<'a> Into<PropertyKey<'a, V>>,
         V: JSObjectOps,
     {
         let ctx = &obj.get_ctx();

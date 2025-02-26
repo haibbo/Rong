@@ -15,6 +15,12 @@ fn test_symbol() {
         let symbol = JSSymbol::new(ctx, "a b c")?;
         assert!(symbol.is_symbol());
         assert_eq!(symbol.descripiton()?, "a b c");
+
+        let symbol = JSSymbol::new(ctx, "test")?;
+        let obj = JSObject::new(ctx);
+        assert!(obj.set(symbol.clone(), 5).is_ok());
+        assert_eq!(obj.get::<_, u32>(symbol).unwrap(), 5);
+
         Ok(())
     });
 }
