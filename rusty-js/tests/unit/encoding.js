@@ -68,3 +68,46 @@ describe("TextDecoder", () => {
     expect(decoded).toBe("\uFFFD\uFFFD"); // Replacement characters
   });
 });
+
+describe("Base64 Encoding", () => {
+    it("should encode a string to base64", () => {
+        const input = "Hello, World!";
+        const encoded = btoa(input);
+        expect(encoded).toBe("SGVsbG8sIFdvcmxkIQ==");
+    });
+
+    it("should decode a base64 string", () => {
+        const input = "SGVsbG8sIFdvcmxkIQ==";
+        const decoded = atob(input);
+        expect(decoded).toBe("Hello, World!");
+    });
+
+    it("should handle empty string encoding", () => {
+        const input = "";
+        const encoded = btoa(input);
+        expect(encoded).toBe("");
+    });
+
+    it("should handle empty string decoding", () => {
+        const input = "";
+        const decoded = atob(input);
+        expect(decoded).toBe("");
+    });
+
+    it("should throw error when decoding invalid base64", () => {
+        const input = "InvalidBase64!";
+        expect(() => atob(input)).toThrow(/Failed to decode base64/);
+    });
+
+    it("should handle non-ASCII characters in encoding", () => {
+        const input = "你好";
+        const encoded = btoa(input);
+        expect(encoded).toBe("5L2g5aW9");
+    });
+
+    it("should handle non-ASCII characters in decoding", () => {
+        const input = "5L2g5aW9";
+        const decoded = atob(input);
+        expect(decoded).toBe("你好");
+    });
+});
