@@ -271,18 +271,23 @@ impl<C: JSContextImpl> JSContext<C> {
         JC: JSClass<C::Value>,
         C::Value: JSObjectOps,
     {
-        let constructor = self.rc.inner.register_class::<JC>();
+        let registry = self
+            .get_class_registry()
+            .ok_or(RustyJSError::Error("No Class registry!".to_string()))?;
 
-        if let Some(registry) = self.get_class_registry() {
-            registry
-                .borrow_mut()
-                .insert(TypeId::of::<JC>(), constructor.clone());
+        if registry.borrow().contains_key(&TypeId::of::<JC>()) {
+            return Ok(());
         }
 
+        let value = self.rc.inner.register_class::<JC>();
+
         let obj = self.global();
-        let constructor = JSValue::from_raw(self, constructor);
+        let constructor = JSValue::from_raw(self, value.clone());
         JC::class_setup(&ClassSetup::new(constructor.clone().into(), self))?;
         obj.set(JC::NAME, constructor)?;
+
+        registry.borrow_mut().insert(TypeId::of::<JC>(), value);
+
         Ok(())
     }
 
