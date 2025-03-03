@@ -65,19 +65,18 @@ impl<V: JSObjectOps> JSFunc<V> {
     /// ```rust
     /// let func = JSFunc::new(ctx, |x: i32| x + 1)?;
     /// ```
-    pub fn new<F, P, K: 'static>(ctx: &JSContext<V::Context>, f: F) -> JSResult<Self>
+    pub fn new<F, P, K>(ctx: &JSContext<V::Context>, f: F) -> JSResult<Self>
     where
-        F: IntoJSCallable<V, P, K> + 'static,
+        F: IntoJSCallable<V, P, K>,
         P: FromParams<V>,
         V: 'static,
     {
         RustFunc::new(f).into_js(ctx)
     }
 
-    /// Same as `new`, but creates a function that can only be called once
-    pub fn new_once<F, P, K: 'static>(ctx: &JSContext<V::Context>, f: F) -> JSResult<Self>
+    pub fn new_once<F, P, K>(ctx: &JSContext<V::Context>, f: F) -> JSResult<Self>
     where
-        F: IntoOnceJSCallable<V, P, K> + 'static,
+        F: IntoOnceJSCallable<V, P, K>,
         P: FromParams<V>,
         V: 'static,
     {
