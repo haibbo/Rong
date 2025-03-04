@@ -70,7 +70,7 @@ fn from_javascript() {
         let result: Result<String, RustyJSError> = obj.get("None");
         assert!(result.is_err());
         match result {
-            Err(RustyJSError::PropertyNotFound) => (),
+            Err(RustyJSError::PropertyNotFound(_)) => (),
             _ => panic!("Expected PropertyNotFound error"),
         }
         Ok(())

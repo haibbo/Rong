@@ -39,7 +39,7 @@ fn test_error_constructor() {
         ctx.global().set(
             "reference_error",
             JSFunc::new(ctx, || -> JSResult<()> {
-                Err(RustyJSError::PropertyNotFound)
+                Err(RustyJSError::PropertyNotFound("dummy".to_string()))
             })?,
         )?;
 
@@ -72,7 +72,10 @@ fn test_error_constructor() {
                 }",
             ))
             .unwrap();
-        assert_eq!(reference_error, "ReferenceError: Property Not Found");
+        assert_eq!(
+            reference_error,
+            "ReferenceError: Property 'dummy' Not Found"
+        );
 
         // Test RangeError
         let range_error = ctx
