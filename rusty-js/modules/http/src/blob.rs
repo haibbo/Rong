@@ -1,4 +1,4 @@
-use rusty_js::{function::Optional, js_class, js_method, js_methods, *};
+use rusty_js::{function::Optional, js_export, js_method, js_methods, *};
 
 #[derive(Default)]
 struct BlobOptions {
@@ -18,7 +18,7 @@ const LINE_ENDING: &[u8] = b"\r\n";
 #[cfg(not(windows))]
 const LINE_ENDING: &[u8] = b"\n";
 
-#[js_class]
+#[js_export]
 pub struct Blob {
     mime_type: String,
     data: Vec<u8>,

@@ -20,7 +20,7 @@ use rusty_js::*;
 
 /// Implementation of the JavaScript `TextEncoder` interface.
 /// Encodes strings into UTF-8 byte sequences. Currently supports only UTF-8 encoding.
-#[js_class]
+#[js_export]
 pub struct TextEncoder {}
 
 #[js_methods]

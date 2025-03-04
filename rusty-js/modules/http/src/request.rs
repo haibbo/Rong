@@ -3,7 +3,7 @@ use rusty_js::{function::Optional, *};
 
 use crate::{blob::Blob, header::Headers};
 
-#[js_class]
+#[js_export]
 pub struct Request {
     method: Method,
     url: Uri,

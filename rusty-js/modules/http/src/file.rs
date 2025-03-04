@@ -2,7 +2,7 @@ use super::blob::Blob;
 use rusty_js::{function::Optional, *};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[js_class]
+#[js_export]
 pub struct File {
     blob: Blob,
     filename: String,

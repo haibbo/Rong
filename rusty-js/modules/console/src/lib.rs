@@ -460,7 +460,7 @@ fn escape_string(s: &str) -> String {
     result
 }
 
-#[js_class]
+#[js_export]
 pub struct Console {}
 
 #[js_methods]

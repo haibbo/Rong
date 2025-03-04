@@ -95,10 +95,10 @@ pub struct EventListener {
 ///
 /// # Example
 /// ```ignore
-/// use rusty_js::js_class;
+/// use rusty_js::js_export;
 /// use event::EventEmitter;
 ///
-/// #[js_class]
+/// #[js_export]
 /// struct MyEmitter {
 ///     events: EventEmitter,
 /// }
@@ -535,7 +535,7 @@ impl EventEmitter {
 /// # Internal Structure
 /// - `inner`: A thread-safe HashMap storing event keys and their associated listeners
 /// - `max_listener`: Maximum number of listeners allowed per event (default: 10)
-#[js_class]
+#[js_export]
 pub struct EventEmitter {
     inner: Rc<Mutex<HashMap<EventKey, VecDeque<EventListener>>>>,
     max_listener: u32,

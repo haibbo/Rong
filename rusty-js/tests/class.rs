@@ -1,7 +1,7 @@
-use rusty_js_macro::js_class;
+use rusty_js_macro::js_export;
 use rustyjs_test::*;
 
-#[js_class]
+#[js_export]
 struct Point {
     x: i32,
     y: i32,

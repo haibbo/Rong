@@ -1,10 +1,10 @@
 use http_crate::header::{self, HeaderMap, HeaderName, HeaderValue};
 use rusty_js::{
     function::{Optional, This},
-    js_class, js_method, js_methods, *,
+    js_export, js_method, js_methods, *,
 };
 
-#[js_class]
+#[js_export]
 #[derive(Default)]
 pub struct Headers {
     headers: HeaderMap<HeaderValue>,

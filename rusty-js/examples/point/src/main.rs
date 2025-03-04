@@ -1,8 +1,8 @@
 use rusty_js::*;
-use rusty_js::{js_class, js_method, js_methods};
+use rusty_js::{js_export, js_method, js_methods};
 
-// Define the Point struct with js_class macro
-#[js_class(rename = "Point2D")]
+// Define the Point struct with js_export macro
+#[js_export(rename = "Point2D")]
 #[derive(Debug)]
 struct Point {
     x: i32,

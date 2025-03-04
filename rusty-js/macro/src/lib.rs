@@ -3,14 +3,14 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput, ItemImpl};
 
-mod class;
 mod deserialize;
 mod methods;
+mod object;
 
-/// Expose a Rust struct as a JavaScript class.
+/// Expose a Rust struct as a JavaScript object.
 ///
-/// This macro generates the necessary code to make a Rust struct usable as a JavaScript class,
-/// including type conversions and class registration.
+/// This macro generates the necessary code to make a Rust struct usable as a JavaScript object,
+/// including type conversions and object registration.
 ///
 /// # Generated Implementations
 /// - `IntoJSValue<JSEngineValue>`
@@ -19,29 +19,29 @@ mod methods;
 ///
 /// # Example
 /// ```ignore
-/// use rusty_js_macro::js_class;
+/// use rusty_js_macro::js_export;
 ///
-/// #[js_class]
+/// #[js_export]
 /// struct Point {
 ///     x: i32,
 ///     y: i32,
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn js_export(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let attr2: TokenStream2 = attr.into();
 
     // Create a new class attribute with the original attribute parameters.
     // This is necessary because the original attribute is consumed during macro expansion,
     // but we need to parse it again in class_impl to extract options like rename.
-    let class_attr = syn::parse_quote!(#[js_class(#attr2)]);
+    let object_attr = syn::parse_quote!(#[js_export(#attr2)]);
 
     // Create a new DeriveInput with all original attributes plus the reconstructed class attribute
     let mut new_input = input.clone();
-    new_input.attrs.push(class_attr);
+    new_input.attrs.push(object_attr);
 
-    match class::class_impl(&new_input) {
+    match object::object_impl(&new_input) {
         Ok(expanded) => expanded.into(),
         Err(err) => err.to_compile_error().into(),
     }
@@ -68,9 +68,9 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Example
 /// ```ignore
-/// use rusty_js_macro::{js_class, js_method, js_methods};
+/// use rusty_js_macro::{js_export, js_method, js_methods};
 ///
-/// #[js_class]
+/// #[js_export]
 /// struct Point {
 ///     x: i32,
 ///     y: i32,
@@ -183,9 +183,9 @@ pub fn js_methods(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 /// ```ignore
-/// use rusty_js_macro::{js_class, js_method, js_methods};
+/// use rusty_js_macro::{js_export, js_method, js_methods};
 ///
-/// #[js_class]
+/// #[js_export]
 /// struct MyClass {
 ///     value: i32,
 /// }

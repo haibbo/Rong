@@ -1,7 +1,7 @@
 use crate::AbortSignal;
 use rusty_js::{function::*, *};
 
-#[js_class]
+#[js_export]
 pub struct AbortController {
     abort_signal: JSObject, // AbortSignal
 }

@@ -1,7 +1,7 @@
 use rusty_js::{function::*, *};
 
 /// Represents an event object
-#[js_class]
+#[js_export]
 #[derive(Default)]
 pub struct Event {
     pub(crate) type_: String,

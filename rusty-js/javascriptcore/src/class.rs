@@ -171,9 +171,9 @@ where
             convertToType: None,
         };
 
-        let js_class = jsc::JSClassCreate(&class_def);
+        let js_export = jsc::JSClassCreate(&class_def);
         let constructor =
-            jsc::JSObjectMakeConstructor(ctx, js_class, Some(generic_constructor::<JC>));
+            jsc::JSObjectMakeConstructor(ctx, js_export, Some(generic_constructor::<JC>));
 
         // set constructor'name to class name
         let name_key = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
@@ -223,7 +223,7 @@ where
         CLASS
             .write()
             .unwrap()
-            .insert(constructor as usize, js_class as usize);
+            .insert(constructor as usize, js_export as usize);
 
         JSCValue::from_owned_obj(ctx, constructor)
     }

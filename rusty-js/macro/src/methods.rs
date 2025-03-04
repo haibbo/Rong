@@ -33,9 +33,9 @@ use syn::{Expr, ItemImpl, Lit, Meta};
 /// # Examples
 ///
 /// ```ignore
-/// use rusty_js_macro::{js_class, js_method, js_methods};
+/// use rusty_js_macro::{js_export, js_method, js_methods};
 ///
-/// #[js_class]
+/// #[js_export]
 /// struct MyStruct {
 ///     value: i32,
 /// }
@@ -67,7 +67,7 @@ pub fn methods_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStr
     let impl_type = &input.self_ty;
 
     // Get class name from js_methods attribute if present
-    let mut js_class_name = quote!(#impl_type).to_string();
+    let mut js_export_name = quote!(#impl_type).to_string();
 
     // Parse the rename attribute from the macro arguments
     if !attr.is_empty() {
@@ -76,14 +76,14 @@ pub fn methods_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStr
             if nv.path.is_ident("rename") {
                 if let Expr::Lit(expr_lit) = nv.value {
                     if let Lit::Str(s) = expr_lit.lit {
-                        js_class_name = s.value();
+                        js_export_name = s.value();
                     }
                 }
             }
         }
     }
 
-    let js_class_name = syn::LitStr::new(&js_class_name, proc_macro2::Span::call_site());
+    let js_export_name = syn::LitStr::new(&js_export_name, proc_macro2::Span::call_site());
 
     let mut instance_methods = Vec::new();
     let mut static_methods = Vec::new();
@@ -104,7 +104,11 @@ pub fn methods_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStr
         };
 
         // Skip methods that don't have #[js_method] attribute
-        if !method.attrs.iter().any(|attr| attr.path().is_ident("js_method")) {
+        if !method
+            .attrs
+            .iter()
+            .any(|attr| attr.path().is_ident("js_method"))
+        {
             continue;
         }
 
@@ -391,7 +395,7 @@ pub fn methods_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStr
 
     let output = quote! {
         impl rusty_js::JSClass<rusty_js::JSEngineValue> for #impl_type {
-            const NAME: &'static str = #js_class_name;
+            const NAME: &'static str = #js_export_name;
 
             #constructor
 

@@ -6,7 +6,7 @@ use url::{Url, form_urlencoded};
 
 /// URLSearchParams implementation following the Web spec
 /// https://url.spec.whatwg.org/#interface-urlsearchparams
-#[js_class]
+#[js_export]
 pub struct URLSearchParams {
     // Use Vec instead of HashMap to maintain insertion order
     params: RefCell<Vec<(String, String)>>,

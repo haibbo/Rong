@@ -2,18 +2,18 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::DeriveInput;
 
-/// Main implementation of the class macro
-pub fn class_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
+/// Main implementation of the object macro
+pub fn object_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
     let type_name = &input.ident;
     let vis = &input.vis;
     let generics = &input.generics;
     let data = &input.data;
 
-    // Filter out class attributes
+    // Filter out object attributes
     let filtered_attrs: Vec<_> = input
         .attrs
         .iter()
-        .filter(|attr| !attr.path().is_ident("js_class"))
+        .filter(|attr| !attr.path().is_ident("js_export"))
         .collect();
 
     // Rebuild type definition with filtered attributes

@@ -3,7 +3,7 @@ use rusty_js::{function::*, *};
 use super::Event;
 
 /// Represents a custom event object
-#[js_class]
+#[js_export]
 pub struct CustomEvent {
     detail: Option<JSValue>,
     event: Event,

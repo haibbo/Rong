@@ -43,4 +43,4 @@ pub type JSTypedArray = CoreJSTypedArray<JSEngineValue>;
 pub type PropertyDescriptor = CorePropertyDescriptor<JSEngineValue>;
 
 // re-export macro public symbols to rusty_js
-pub use rusty_js_macro::{js_class, js_method, js_methods, FromJSObj};
+pub use rusty_js_macro::{js_export, js_method, js_methods, FromJSObj};

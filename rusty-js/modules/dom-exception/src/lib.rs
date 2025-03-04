@@ -132,7 +132,7 @@ impl From<Option<String>> for DOMExceptionName {
 }
 
 /// DOMException implementation following Node.js error types
-#[js_class]
+#[js_export]
 pub struct DOMException {
     name: DOMExceptionName,
     message: String,

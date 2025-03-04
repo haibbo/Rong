@@ -2,7 +2,7 @@ use crate::event_emitter::{Emitter, EventEmitter};
 use rusty_js::*;
 
 /// Represents an event target that can receive events and may have listeners for them.
-#[js_class]
+#[js_export]
 pub struct EventTarget {
     events: EventEmitter,
 }

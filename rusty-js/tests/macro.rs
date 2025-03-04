@@ -1,9 +1,9 @@
-use rusty_js_macro::{js_class, js_method, js_methods, FromJSObj};
+use rusty_js_macro::{js_method, js_methods, js_export, FromJSObj};
 use rustyjs_test::*;
 use std::sync::{Mutex, OnceLock};
 use tokio::time::Duration;
 
-#[js_class]
+#[js_export]
 #[derive(Debug, PartialEq)]
 struct Point {
     x: i32,

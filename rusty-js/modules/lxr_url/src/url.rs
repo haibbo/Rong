@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use url::Url;
 
-#[js_class]
+#[js_export]
 pub struct URL {
     shared_data: Rc<SharedUrlData>,
     search_params: Option<URLSearchParams>,
