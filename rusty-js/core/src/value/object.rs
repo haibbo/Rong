@@ -142,7 +142,7 @@ where
         KV: IntoJSValue<V>,
     {
         let ctx = &self.get_ctx();
-        let key = k.into().into_key(ctx);
+        let key = k.into().into_value(ctx);
         // TODO: handler other err
         self.as_value().set_property(key, kv.into_js_value(ctx));
         Ok(self)
@@ -152,7 +152,7 @@ where
     where
         K: Into<PropertyKey<'a, V>>,
     {
-        let key = k.into().into_key(&self.get_ctx());
+        let key = k.into().into_value(&self.get_ctx());
         self.as_value().del_property(key)
     }
 
@@ -160,7 +160,7 @@ where
     where
         K: Into<PropertyKey<'a, V>>,
     {
-        let key = k.into().into_key(&self.get_ctx());
+        let key = k.into().into_value(&self.get_ctx());
         self.as_value().has_property(key)
     }
 
@@ -170,10 +170,11 @@ where
         T: FromJSValue<V>,
     {
         let ctx = &self.get_ctx();
-        let key = k.into().into_key(ctx);
+        let key = k.into();
+        let kv = key.clone().into_value(ctx);
         self.as_value()
-            .get_property(key)
-            .ok_or(RustyJSError::PropertyNotFound) // check existence firstly
+            .get_property(kv)
+            .ok_or(RustyJSError::PropertyNotFound(key.to_string())) // check existence firstly
             .and_then(|value| T::from_js_value(ctx, value))
     }
 }

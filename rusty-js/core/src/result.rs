@@ -15,8 +15,8 @@ pub enum RustyJSError {
     #[error("invalid parameters, expected {expected} arguments, got {got}")]
     InvalidParameter { expected: u32, got: u32 },
 
-    #[error("Property Not Found")]
-    PropertyNotFound,
+    #[error("Property '{0}' Not Found")]
+    PropertyNotFound(String),
 
     #[error("Not JS Object")]
     NotObject,
@@ -84,7 +84,9 @@ impl RustyJSError {
                 ctx.as_ref().throw_type_error(self.to_string())
             }
 
-            RustyJSError::PropertyNotFound => ctx.as_ref().throw_reference_error(self.to_string()),
+            RustyJSError::PropertyNotFound(_) => {
+                ctx.as_ref().throw_reference_error(self.to_string())
+            }
 
             RustyJSError::TypedArrayRangeError => ctx.as_ref().throw_range_error(self.to_string()),
 

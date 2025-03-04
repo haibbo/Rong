@@ -4,6 +4,7 @@ use crate::{
 
 // PropertyKey represents a key in a JavaScript object property
 // It can be a number (i32, u32, i64, u64) or a string reference
+#[derive(Clone)]
 pub enum PropertyKey<'a, V: JSValueImpl> {
     Int32(i32),
     Uint32(u32),
@@ -55,7 +56,7 @@ impl<'a, 'b: 'a, V: JSValueImpl> From<&'b str> for PropertyKey<'a, V> {
 // Convert PropertyKey into the actual JavaScript value type
 // No lifetime bound needed here as we're consuming self
 impl<V: JSValueImpl> PropertyKey<'_, V> {
-    pub(crate) fn into_key(self, context: &JSContext<V::Context>) -> V
+    pub(crate) fn into_value(self, context: &JSContext<V::Context>) -> V
     where
         V: JSValueConversion,
     {
@@ -67,6 +68,23 @@ impl<V: JSValueImpl> PropertyKey<'_, V> {
             Self::Uint64(i) => (ctx, i).into(),
             Self::Str(s) => (ctx, s).into(),
             Self::Symbol(s) => JSSymbol::into_value(s),
+        }
+    }
+}
+
+impl<V: JSObjectOps> std::fmt::Display for PropertyKey<'_, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PropertyKey::Int32(i) => write!(f, "{}", i),
+            PropertyKey::Uint32(i) => write!(f, "{}", i),
+            PropertyKey::Int64(i) => write!(f, "{}", i),
+            PropertyKey::Uint64(i) => write!(f, "{}", i),
+            PropertyKey::Str(s) => write!(f, "{}", s),
+            PropertyKey::Symbol(s) => write!(
+                f,
+                "Symbol({})",
+                s.descripiton().unwrap_or_else(|_| "".to_string())
+            ),
         }
     }
 }
@@ -206,7 +224,7 @@ where
             })
             .unwrap_or(undefined.clone());
 
-        let key = k.into().into_key(ctx);
+        let key = k.into().into_value(ctx);
 
         obj.as_value()
             .define_property(key, value, getter, setter, self.attributes);
