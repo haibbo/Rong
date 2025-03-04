@@ -4,6 +4,7 @@ use quote::quote;
 use syn::{parse_macro_input, DeriveInput, ItemImpl};
 
 mod class;
+mod deserialize;
 mod methods;
 
 /// Expose a Rust struct as a JavaScript class.
@@ -16,7 +17,7 @@ mod methods;
 ///
 /// # Generated Implementations
 /// - `IntoJSValue<JSEngineValue>`
-/// - `FromJSValue<JSEngineValue>`
+/// - `FromJSObj<JSEngineValue>`
 /// - `JSParameterType`
 ///
 /// # Example
@@ -243,4 +244,54 @@ pub fn js_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Just pass through the original item if it's not an impl block
     item
+}
+
+/// Derive macro for implementing deserialization from JavaScript values to Rust structs.
+///
+/// This macro automatically implements the `FromJSObj` trait for a struct, allowing it
+/// to be deserialized from JavaScript objects. Fields can be renamed using the `rename`
+/// attribute to match different JavaScript property names.
+///
+/// # Attributes
+/// - `rename = "name"`: Use a different name for the field in JavaScript
+///
+/// # Field Types
+/// - Required fields must exist in the JavaScript object
+/// - Optional fields should use `Option<T>` type
+/// - All field types must implement `FromJSValue`
+///
+/// # Example
+/// ```ignore
+/// #[derive(FromJSObj)]
+/// struct Person {
+///     #[rename = "firstName"]
+///     first_name: String,
+///     #[rename = "lastName"]
+///     last_name: String,
+///     age: i32,
+///     // Optional field
+///     nickname: Option<String>,
+/// }
+/// ```
+///
+/// # JavaScript Usage
+/// ```javascript
+/// // This will successfully deserialize
+/// const complete = {
+///     firstName: "John",
+///     lastName: "Doe",
+///     age: 30,
+///     nickname: "Johnny"
+/// };
+///
+/// // This will fail because required field 'age' is missing
+/// const incomplete = {
+///     firstName: "John",
+///     lastName: "Doe"
+/// };
+/// ```
+#[proc_macro_derive(FromJSObj, attributes(rename))]
+pub fn derive_from_js_value(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    TokenStream::from(deserialize::impl_deserialize(input))
 }

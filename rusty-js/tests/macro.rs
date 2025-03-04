@@ -1,4 +1,4 @@
-use rusty_js_macro::{js_class, js_method, js_methods};
+use rusty_js_macro::{js_class, js_method, js_methods, FromJSObj};
 use rustyjs_test::*;
 use std::sync::{Mutex, OnceLock};
 use tokio::time::Duration;
@@ -86,6 +86,17 @@ impl Point {
         tokio::time::sleep(Duration::from_millis(50)).await;
         Self { x, y }
     }
+}
+
+#[derive(FromJSObj)]
+struct Person {
+    #[rename = "firstName"]
+    first_name: String,
+    #[rename = "lastName"]
+    last_name: String,
+    age: i32,
+    nickname: Option<String>,
+    required_field: String,
 }
 
 #[cfg(test)]
@@ -269,6 +280,71 @@ mod tests {
                 ))
                 .await?;
             assert_eq!(result, Point { x: 5, y: 6 });
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_rename_attribute() {
+        run(|ctx| {
+            // Test deserialization with renamed fields
+            let person: Person = ctx.eval(Source::from_bytes(
+                r#"
+                ({
+                    firstName: "John",
+                    lastName: "Doe",
+                    age: 30,
+                    required_field: "test"
+                })
+            "#,
+            ))?;
+            assert_eq!(person.first_name, "John");
+            assert_eq!(person.last_name, "Doe");
+            assert_eq!(person.age, 30);
+            assert_eq!(person.nickname, None);
+            assert_eq!(person.required_field, "test");
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_missing_required_field() {
+        run(|ctx| {
+            // Test deserialization with missing required field
+            let result = ctx.eval::<Person>(Source::from_bytes(
+                r#"
+                ({
+                    firstName: "John",
+                    lastName: "Doe",
+                    age: 30
+                })
+            "#,
+            ));
+            assert!(result.is_err());
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_get_method_syntax() {
+        run(|ctx| {
+            let result: Person = ctx.eval(Source::from_bytes(
+                r#"
+                ({
+                    firstName: "John",
+                    lastName: "Doe",
+                    age: 30,
+                    required_field: "test",
+                    nickname: "Johnny"
+                })
+            "#,
+            ))?;
+
+            assert_eq!(result.first_name, "John");
+            assert_eq!(result.last_name, "Doe");
+            assert_eq!(result.age, 30);
+            assert_eq!(result.required_field, "test");
+            assert_eq!(result.nickname, Some("Johnny".to_string()));
             Ok(())
         });
     }
