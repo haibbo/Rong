@@ -3,7 +3,7 @@ use rustyjs_test::*;
 use std::sync::{Mutex, OnceLock};
 use tokio::time::Duration;
 
-#[js_class(rename = "PointX")]
+#[js_class]
 #[derive(Debug, PartialEq)]
 struct Point {
     x: i32,
@@ -12,7 +12,7 @@ struct Point {
 
 static ORIGIN: OnceLock<Mutex<Point>> = OnceLock::new();
 
-#[js_methods]
+#[js_methods(rename = "PointX")]
 impl Point {
     #[js_method(constructor)]
     fn new(x: i32, y: i32) -> Self {

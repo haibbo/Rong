@@ -12,9 +12,6 @@ mod methods;
 /// This macro generates the necessary code to make a Rust struct usable as a JavaScript class,
 /// including type conversions and class registration.
 ///
-/// # Attributes
-/// - `rename = "name"`: Use a different name for the class in JavaScript
-///
 /// # Generated Implementations
 /// - `IntoJSValue<JSEngineValue>`
 /// - `FromJSObj<JSEngineValue>`
@@ -24,7 +21,7 @@ mod methods;
 /// ```ignore
 /// use rusty_js_macro::js_class;
 ///
-/// #[js_class(rename = "Point2D")]
+/// #[js_class]
 /// struct Point {
 ///     x: i32,
 ///     y: i32,
@@ -44,13 +41,7 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut new_input = input.clone();
     new_input.attrs.push(class_attr);
 
-    // Parse options from attributes
-    let opts = match class::ClassOpts::from_attrs(&new_input.attrs) {
-        Ok(opts) => opts,
-        Err(err) => return TokenStream::from(err.to_compile_error()),
-    };
-
-    match class::class_impl(&new_input, &opts) {
+    match class::class_impl(&new_input) {
         Ok(expanded) => expanded.into(),
         Err(err) => err.to_compile_error().into(),
     }
@@ -64,6 +55,10 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - Property getters/setters
 /// - Static methods/properties
 /// - Async methods (automatically converted to JavaScript Promises)
+///
+/// # Attributes
+/// - `rename = "name"`: Use a different name for the class in JavaScript
+///   If not specified, the impl block type name will be used
 ///
 /// # Method Types
 /// - Instance methods: Take `&self` or `&mut self`
@@ -81,7 +76,7 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     y: i32,
 /// }
 ///
-/// #[js_methods]
+/// #[js_methods(rename = "PointX")]  // Class will be named "PointX" in JavaScript
 /// impl Point {
 ///     // Constructor
 ///     #[js_method(constructor)]
@@ -127,14 +122,14 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// JavaScript usage:
 /// ```javascript
 /// // Using async instance method
-/// let point = new Point(1, 2);
+/// let point = new PointX(1, 2);
 /// await point.moveByAsync(10, 20);
 ///
 /// // Using async static method
-/// let newPoint = await Point.createAsync(5, 6);
+/// let newPoint = await PointX.createAsync(5, 6);
 /// ```
 #[proc_macro_attribute]
-pub fn js_methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn js_methods(attr: TokenStream, item: TokenStream) -> TokenStream {
     // First try to parse as impl block
     let result = syn::parse::<ItemImpl>(item.clone());
 
@@ -149,31 +144,11 @@ pub fn js_methods(_attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let input = result.unwrap();
+    let attr2: TokenStream2 = attr.into();
 
-    // Process methods as before
-    let methods: Vec<_> = input
-        .items
-        .iter()
-        .filter_map(|item| {
-            if let syn::ImplItem::Fn(method) = item {
-                if method
-                    .attrs
-                    .iter()
-                    .any(|attr| attr.path().is_ident("js_method"))
-                {
-                    Some(method.clone())
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let impl_tokens = match methods::methods_impl(&input, &methods) {
+    let impl_tokens = match methods::methods_impl(&input, attr2) {
         Ok(tokens) => tokens,
-        Err(err) => return TokenStream::from(err.to_compile_error()),
+        Err(err) => return err.to_compile_error().into(),
     };
 
     let expanded = quote! {

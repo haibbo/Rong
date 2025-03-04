@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Expr, ImplItemFn, ItemImpl, Lit, Meta};
+use syn::{Expr, ItemImpl, Lit, Meta};
 
 /// Configuration options for JavaScript method/property bindings.
 ///
@@ -62,67 +62,93 @@ struct MethodOpts {
     enumerable: bool,
 }
 
-impl MethodOpts {
-    fn from_attrs(attrs: &[syn::Attribute]) -> syn::Result<Self> {
-        let mut opts = MethodOpts::default();
+/// Process method attributes and generate JavaScript bindings
+pub fn methods_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStream> {
+    let impl_type = &input.self_ty;
 
-        for attr in attrs {
-            if !attr.path().is_ident("js_method") {
-                continue;
-            }
+    // Get class name from js_methods attribute if present
+    let mut js_class_name = quote!(#impl_type).to_string();
 
-            if let Meta::List(list) = &attr.meta {
-                for nested in &list.parse_args_with(
-                    syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated,
-                )? {
-                    match nested {
-                        Meta::NameValue(nv) if nv.path.is_ident("rename") => {
-                            if let Expr::Lit(expr_lit) = &nv.value {
-                                if let Lit::Str(s) = &expr_lit.lit {
-                                    opts.rename = Some(s.value());
-                                }
-                            }
-                        }
-                        Meta::Path(path) if path.is_ident("getter") => {
-                            opts.getter = true;
-                        }
-                        Meta::Path(path) if path.is_ident("setter") => {
-                            opts.setter = true;
-                        }
-                        Meta::Path(path) if path.is_ident("enumerable") => {
-                            opts.enumerable = true;
-                        }
-                        _ => {}
+    // Parse the rename attribute from the macro arguments
+    if !attr.is_empty() {
+        let meta = syn::parse2::<Meta>(attr)?;
+        if let Meta::NameValue(nv) = meta {
+            if nv.path.is_ident("rename") {
+                if let Expr::Lit(expr_lit) = nv.value {
+                    if let Lit::Str(s) = expr_lit.lit {
+                        js_class_name = s.value();
                     }
                 }
             }
         }
-
-        Ok(opts)
     }
-}
 
-/// Process method attributes and generate JavaScript bindings
-pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<TokenStream> {
-    let impl_type = &input.self_ty;
+    let js_class_name = syn::LitStr::new(&js_class_name, proc_macro2::Span::call_site());
+
     let mut instance_methods = Vec::new();
     let mut static_methods = Vec::new();
     let mut constructor = None;
 
     // Type alias for property definition tuple
-    type PropertyDefinition = (Option<TokenStream>, Option<TokenStream>, bool);
-
-    // Separate maps for instance and static properties
-    let mut instance_properties: std::collections::HashMap<String, PropertyDefinition> =
+    type PropertyDef = (Option<TokenStream>, Option<TokenStream>, bool);
+    let mut instance_properties: std::collections::HashMap<String, PropertyDef> =
         std::collections::HashMap::new();
-    let mut static_properties: std::collections::HashMap<String, PropertyDefinition> =
+    let mut static_properties: std::collections::HashMap<String, PropertyDef> =
         std::collections::HashMap::new();
 
-    for method in methods {
-        let opts = MethodOpts::from_attrs(&method.attrs)?;
+    // Process each method in the impl block
+    for method in &input.items {
+        let method = match method {
+            syn::ImplItem::Fn(method) => method,
+            _ => continue,
+        };
+
+        // Skip methods that don't have #[js_method] attribute
+        if !method.attrs.iter().any(|attr| attr.path().is_ident("js_method")) {
+            continue;
+        }
+
         let method_name = &method.sig.ident;
-        let js_name = opts.rename.unwrap_or_else(|| method_name.to_string());
         let is_async = method.sig.asyncness.is_some();
+
+        // Parse method attributes
+        let mut opts = MethodOpts::default();
+        for attr in &method.attrs {
+            if attr.path().is_ident("js_method") {
+                if let Meta::List(list) = &attr.meta {
+                    for nested in list.parse_args_with(
+                        syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated,
+                    )? {
+                        match nested {
+                            Meta::Path(path) => {
+                                if path.is_ident("getter") {
+                                    opts.getter = true;
+                                } else if path.is_ident("setter") {
+                                    opts.setter = true;
+                                } else if path.is_ident("enumerable") {
+                                    opts.enumerable = true;
+                                }
+                            }
+                            Meta::NameValue(nv) => {
+                                if nv.path.is_ident("rename") {
+                                    if let Expr::Lit(expr_lit) = &nv.value {
+                                        if let Lit::Str(s) = &expr_lit.lit {
+                                            opts.rename = Some(s.value());
+                                        }
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        let js_name = syn::LitStr::new(
+            &opts.rename.unwrap_or_else(|| method_name.to_string()),
+            method_name.span(),
+        );
 
         // Check if this is a constructor
         if method.attrs.iter().any(|attr| {
@@ -205,7 +231,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                 };
 
                 let entry = instance_properties
-                    .entry(js_name.clone())
+                    .entry(js_name.value())
                     .or_insert_with(|| (None, None, opts.enumerable));
 
                 if opts.getter {
@@ -268,7 +294,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
                 };
 
                 let entry = static_properties
-                    .entry(js_name.clone())
+                    .entry(js_name.value())
                     .or_insert_with(|| (None, None, opts.enumerable));
 
                 if opts.getter {
@@ -365,7 +391,7 @@ pub fn methods_impl(input: &ItemImpl, methods: &[ImplItemFn]) -> syn::Result<Tok
 
     let output = quote! {
         impl rusty_js::JSClass<rusty_js::JSEngineValue> for #impl_type {
-            const NAME: &'static str = Self::JS_CLASS_NAME;
+            const NAME: &'static str = #js_class_name;
 
             #constructor
 
