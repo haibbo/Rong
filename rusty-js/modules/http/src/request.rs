@@ -72,7 +72,7 @@ enum ReferrerPolicy {
     UnsafeUrl,
 }
 
-#[js_methods]
+#[js_class]
 impl Request {
     fn is_valid_method(method: &str) -> bool {
         matches!(

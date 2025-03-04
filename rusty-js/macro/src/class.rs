@@ -33,14 +33,14 @@ use syn::{Expr, ItemImpl, Lit, Meta};
 /// # Examples
 ///
 /// ```ignore
-/// use rusty_js_macro::{js_export, js_method, js_methods};
+/// use rusty_js_macro::{js_export, js_method, js_class};
 ///
 /// #[js_export]
 /// struct MyStruct {
 ///     value: i32,
 /// }
 ///
-/// #[js_methods]
+/// #[js_class]
 /// impl MyStruct {
 ///     // Public property with getter and setter
 ///     #[js_method(getter, enumerable)]
@@ -63,10 +63,10 @@ struct MethodOpts {
 }
 
 /// Process method attributes and generate JavaScript bindings
-pub fn methods_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStream> {
+pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStream> {
     let impl_type = &input.self_ty;
 
-    // Get class name from js_methods attribute if present
+    // Get class name from js_class attribute if present
     let mut js_export_name = quote!(#impl_type).to_string();
 
     // Parse the rename attribute from the macro arguments

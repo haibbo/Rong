@@ -6,7 +6,7 @@ pub struct AbortController {
     abort_signal: JSObject, // AbortSignal
 }
 
-#[js_methods]
+#[js_class]
 impl AbortController {
     #[js_method(constructor)]
     fn new(ctx: JSContext) -> JSResult<Self> {

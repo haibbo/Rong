@@ -23,7 +23,7 @@ use rusty_js::*;
 #[js_export]
 pub struct TextEncoder {}
 
-#[js_methods]
+#[js_class]
 impl TextEncoder {
     /// Creates a new `TextEncoder` instance.
     #[js_method(constructor)]

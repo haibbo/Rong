@@ -1,4 +1,4 @@
-use rusty_js::{function::Optional, js_export, js_method, js_methods, *};
+use rusty_js::{function::Optional, js_export, js_method, js_class, *};
 
 #[derive(Default)]
 struct BlobOptions {
@@ -24,7 +24,7 @@ pub struct Blob {
     data: Vec<u8>,
 }
 
-#[js_methods]
+#[js_class]
 impl Blob {
     #[js_method(constructor)]
     pub fn new(parts: Optional<JSArray>, options: Optional<JSObject>) -> JSResult<Self> {

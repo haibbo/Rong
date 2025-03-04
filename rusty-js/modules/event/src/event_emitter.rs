@@ -550,7 +550,7 @@ impl Default for EventEmitter {
     }
 }
 
-#[js_methods]
+#[js_class]
 impl EventEmitter {
     #[js_method(constructor)]
     pub fn new() -> Self {

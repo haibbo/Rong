@@ -63,7 +63,7 @@ impl AbortReceiver {
     }
 }
 
-#[js_methods]
+#[js_class]
 impl AbortSignal {
     pub fn new() -> Self {
         let (sender, _) = watch::channel(None);

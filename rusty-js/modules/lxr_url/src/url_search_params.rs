@@ -14,7 +14,7 @@ pub struct URLSearchParams {
     shared_data: Option<Rc<SharedUrlData>>,
 }
 
-#[js_methods]
+#[js_class]
 impl URLSearchParams {
     #[js_method(constructor)]
     fn new(init: Optional<JSValue>) -> JSResult<Self> {

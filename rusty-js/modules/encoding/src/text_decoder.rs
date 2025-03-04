@@ -32,7 +32,7 @@ pub struct TextDecoder {
     ignore_bom: bool,
 }
 
-#[js_methods]
+#[js_class]
 impl TextDecoder {
     /// Creates a new `TextDecoder` instance.
     ///

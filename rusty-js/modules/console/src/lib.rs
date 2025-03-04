@@ -463,7 +463,7 @@ fn escape_string(s: &str) -> String {
 #[js_export]
 pub struct Console {}
 
-#[js_methods]
+#[js_class]
 impl Console {
     #[js_method(constructor)]
     fn new() -> Self {

@@ -9,7 +9,7 @@ pub struct File {
     last_modified: i64,
 }
 
-#[js_methods]
+#[js_class]
 impl File {
     #[js_method(constructor)]
     fn new(data: JSArray, filename: String, options: Optional<JSObject>) -> JSResult<Self> {

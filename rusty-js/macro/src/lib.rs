@@ -3,8 +3,8 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput, ItemImpl};
 
+mod class;
 mod deserialize;
-mod methods;
 mod object;
 
 /// Expose a Rust struct as a JavaScript object.
@@ -68,7 +68,7 @@ pub fn js_export(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Example
 /// ```ignore
-/// use rusty_js_macro::{js_export, js_method, js_methods};
+/// use rusty_js_macro::{js_export, js_method, js_class};
 ///
 /// #[js_export]
 /// struct Point {
@@ -76,7 +76,7 @@ pub fn js_export(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     y: i32,
 /// }
 ///
-/// #[js_methods(rename = "PointX")]  // Class will be named "PointX" in JavaScript
+/// #[js_class(rename = "PointX")]  // Class will be named "PointX" in JavaScript
 /// impl Point {
 ///     // Constructor
 ///     #[js_method(constructor)]
@@ -129,7 +129,7 @@ pub fn js_export(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// let newPoint = await PointX.createAsync(5, 6);
 /// ```
 #[proc_macro_attribute]
-pub fn js_methods(attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
     // First try to parse as impl block
     let result = syn::parse::<ItemImpl>(item.clone());
 
@@ -137,7 +137,7 @@ pub fn js_methods(attr: TokenStream, item: TokenStream) -> TokenStream {
     if result.is_err() {
         return syn::Error::new(
             proc_macro2::Span::call_site(),
-            "#[js_methods] can only be used on impl blocks",
+            "#[js_class] can only be used on impl blocks",
         )
         .to_compile_error()
         .into();
@@ -146,7 +146,7 @@ pub fn js_methods(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = result.unwrap();
     let attr2: TokenStream2 = attr.into();
 
-    let impl_tokens = match methods::methods_impl(&input, attr2) {
+    let impl_tokens = match class::class_impl(&input, attr2) {
         Ok(tokens) => tokens,
         Err(err) => return err.to_compile_error().into(),
     };
@@ -163,7 +163,7 @@ pub fn js_methods(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Configure how a Rust method is exposed to JavaScript.
 ///
 /// This attribute can only be applied to methods, not to impl blocks.
-/// For impl blocks, use `#[js_methods]` instead.
+/// For impl blocks, use `#[js_class]` instead.
 ///
 /// This attribute configures the behavior of individual methods when they are
 /// exposed to JavaScript. It supports various options for controlling how the
@@ -183,14 +183,14 @@ pub fn js_methods(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 /// ```ignore
-/// use rusty_js_macro::{js_export, js_method, js_methods};
+/// use rusty_js_macro::{js_export, js_method, js_class};
 ///
 /// #[js_export]
 /// struct MyClass {
 ///     value: i32,
 /// }
 ///
-/// #[js_methods]  // Use js_methods for impl block
+/// #[js_class]  // Use js_class for impl block
 /// impl MyClass {
 ///     // Constructor
 ///     #[js_method(constructor)]
@@ -211,7 +211,7 @@ pub fn js_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
     if syn::parse::<ItemImpl>(item.clone()).is_ok() {
         return syn::Error::new(
             proc_macro2::Span::call_site(),
-            "Use #[js_methods] for impl blocks, not #[js_method]",
+            "Use #[js_class] for impl blocks, not #[js_method]",
         )
         .to_compile_error()
         .into();

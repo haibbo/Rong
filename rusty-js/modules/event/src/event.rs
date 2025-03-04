@@ -11,7 +11,7 @@ pub struct Event {
     composed: bool,
 }
 
-#[js_methods]
+#[js_class]
 impl Event {
     #[js_method(constructor)]
     pub fn new(type_: String, options: Optional<JSObject>) -> Self {

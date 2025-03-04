@@ -104,7 +104,7 @@ mod tests {
                 events: EventEmitter,
             }
 
-            #[js_methods]
+            #[js_class]
             impl TestEmitter {
                 #[js_method(constructor)]
                 fn new() -> Self {

@@ -16,7 +16,7 @@ pub(crate) struct SharedUrlData {
     pub url: RefCell<Url>,
 }
 
-#[js_methods]
+#[js_class]
 impl URL {
     #[js_method(constructor)]
     fn new(url: String, base: Optional<String>) -> JSResult<Self> {

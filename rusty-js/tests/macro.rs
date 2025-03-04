@@ -1,4 +1,4 @@
-use rusty_js_macro::{js_method, js_methods, js_export, FromJSObj};
+use rusty_js_macro::{js_class, js_export, js_method, FromJSObj};
 use rustyjs_test::*;
 use std::sync::{Mutex, OnceLock};
 use tokio::time::Duration;
@@ -12,7 +12,7 @@ struct Point {
 
 static ORIGIN: OnceLock<Mutex<Point>> = OnceLock::new();
 
-#[js_methods(rename = "PointX")]
+#[js_class(rename = "PointX")]
 impl Point {
     #[js_method(constructor)]
     fn new(x: i32, y: i32) -> Self {

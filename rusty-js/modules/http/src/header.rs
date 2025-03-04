@@ -1,7 +1,7 @@
 use http_crate::header::{self, HeaderMap, HeaderName, HeaderValue};
 use rusty_js::{
     function::{Optional, This},
-    js_export, js_method, js_methods, *,
+    js_export, js_method, js_class, *,
 };
 
 #[js_export]
@@ -10,7 +10,7 @@ pub struct Headers {
     headers: HeaderMap<HeaderValue>,
 }
 
-#[js_methods]
+#[js_class]
 impl Headers {
     #[js_method(constructor)]
     pub fn new(init: Optional<JSValue>) -> JSResult<Self> {

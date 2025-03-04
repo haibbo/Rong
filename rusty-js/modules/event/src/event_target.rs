@@ -7,7 +7,7 @@ pub struct EventTarget {
     events: EventEmitter,
 }
 
-#[js_methods]
+#[js_class]
 impl EventTarget {
     #[js_method(constructor)]
     pub fn new() -> Self {

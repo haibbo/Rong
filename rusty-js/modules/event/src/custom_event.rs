@@ -9,7 +9,7 @@ pub struct CustomEvent {
     event: Event,
 }
 
-#[js_methods]
+#[js_class]
 impl CustomEvent {
     #[js_method(constructor)]
     pub fn new(type_: String, options: Optional<JSObject>) -> Self {

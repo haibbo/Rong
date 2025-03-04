@@ -138,7 +138,7 @@ pub struct DOMException {
     message: String,
 }
 
-#[js_methods]
+#[js_class]
 impl DOMException {
     #[js_method(constructor)]
     pub fn new(message: Optional<String>, name: Optional<String>) -> Self {

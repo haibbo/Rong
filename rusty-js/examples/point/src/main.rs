@@ -1,5 +1,5 @@
 use rusty_js::*;
-use rusty_js::{js_export, js_method, js_methods};
+use rusty_js::{js_export, js_method, js_class};
 
 // Define the Point struct with js_export macro
 #[js_export(rename = "Point2D")]
@@ -10,7 +10,7 @@ struct Point {
 }
 
 // Implement methods and expose them to JavaScript
-#[js_methods]
+#[js_class]
 impl Point {
     // Constructor
     #[js_method(constructor)]
