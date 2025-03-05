@@ -3,25 +3,105 @@ class TestRunner {
     this.tests = [];
     this.passed = 0;
     this.failed = 0;
-    this.afterEachCallbacks = [];
-    this.beforeEachCallbacks = [];
     this.currentSuite = null;
     this.testCount = 0;
+    this.suites = new Map(); // Store suites and their hooks
   }
 
   describe(name, fn) {
-    this.currentSuite = { name, tests: [] };
-    this.tests.push(this.currentSuite);
-    fn();
-    this.currentSuite = null;
+    const parentSuite = this.currentSuite;
+    const suite = {
+      name,
+      tests: [],
+      beforeEachCallbacks: [],
+      afterEachCallbacks: [],
+      parent: parentSuite,
+    };
+
+    this.suites.set(suite, {
+      beforeEach: [],
+      afterEach: [],
+    });
+
+    this.currentSuite = suite;
+    this.tests.push(suite);
+
+    try {
+      fn();
+    } finally {
+      this.currentSuite = parentSuite;
+    }
   }
 
-  it(name, fn) {
+  beforeEach(fn) {
     if (!this.currentSuite) {
-      throw new Error("it() must be called within a describe() block");
+      throw new Error("beforeEach must be called within a describe block");
     }
-    this.testCount++;
-    this.currentSuite.tests.push({ name, fn, number: this.testCount });
+    this.suites.get(this.currentSuite).beforeEach.push(fn);
+  }
+
+  afterEach(fn) {
+    if (!this.currentSuite) {
+      throw new Error("afterEach must be called within a describe block");
+    }
+    this.suites.get(this.currentSuite).afterEach.push(fn);
+  }
+
+  async runTest(suite, test) {
+    // Collect all beforeEach hooks from outer to inner
+    const beforeEachCallbacks = [];
+    let currentSuite = suite;
+    while (currentSuite) {
+      const hooks = this.suites.get(currentSuite);
+      beforeEachCallbacks.unshift(...hooks.beforeEach);
+      currentSuite = currentSuite.parent;
+    }
+
+    // Collect all afterEach hooks from inner to outer
+    const afterEachCallbacks = [];
+    currentSuite = suite;
+    while (currentSuite) {
+      const hooks = this.suites.get(currentSuite);
+      afterEachCallbacks.push(...hooks.afterEach);
+      currentSuite = currentSuite.parent;
+    }
+
+    try {
+      // Run all beforeEach hooks
+      for (const callback of beforeEachCallbacks) {
+        await callback();
+      }
+
+      // Run the test
+      await new Promise(async (resolve, reject) => {
+        try {
+          const result = test.fn();
+          if (result && typeof result.then === "function") {
+            await result;
+          }
+          resolve();
+        } catch (e) {
+          reject(e);
+        }
+      });
+
+      this.passed++;
+      console.log(`    ✓ Passed`);
+    } catch (e) {
+      this.failed++;
+      console.log(`    ✗ Failed`);
+      if (e.message) console.log(`      Error: ${e.message}`);
+      if (e.stack) console.log(e.stack.split("\n").slice(1).join("\n"));
+    } finally {
+      // Run all afterEach hooks
+      for (const callback of afterEachCallbacks) {
+        try {
+          await callback();
+        } catch (e) {
+          console.error("Error in afterEach:", e);
+        }
+      }
+    }
   }
 
   async runTests() {
@@ -29,56 +109,7 @@ class TestRunner {
       console.log(`\nRunning suite: ${suite.name}`);
       for (const test of suite.tests) {
         console.log(`${test.number}. ${test.name}...`);
-        try {
-          if (this.beforeEachCallbacks) {
-            await Promise.all(this.beforeEachCallbacks.map((cb) => cb()));
-          }
-
-          // Handle async tests
-          await new Promise(async (resolve, reject) => {
-            let isDone = false;
-            const done = () => {
-              isDone = true;
-              resolve();
-            };
-
-            try {
-              // Call test function with done callback
-              const result = test.fn(done);
-              // If it returns a Promise, wait for it
-              if (result && typeof result.then === "function") {
-                await result;
-                if (!isDone) done();
-              } else if (!test.fn.length) {
-                // If function has no parameters (doesn't need done callback)
-                done();
-              }
-
-              // let rust test to handler timeout
-              // setTimeout(() => {
-              //   if (!isDone) {
-              //     reject(new Error("Test timeout after 1000ms"));
-              //   }
-              // }, 1000);
-            } catch (e) {
-              reject(e);
-            }
-          });
-
-          this.passed++;
-          console.log("    ✓ Passed");
-        } catch (e) {
-          this.failed++;
-          console.log("    ✗ Failed");
-          if (e.message) {
-            console.log(`      Error: ${e.message}`);
-          }
-          if (e.stack) {
-            console.log(e.stack.split("\n").slice(1).join("\n"));
-          }
-        } finally {
-          await Promise.all(this.afterEachCallbacks.map((cb) => cb()));
-        }
+        await this.runTest(suite, test);
       }
     }
 
@@ -89,13 +120,12 @@ class TestRunner {
     return this.failed === 0;
   }
 
-  afterEach(fn) {
-    this.afterEachCallbacks.push(fn);
-  }
-
-  beforeEach(fn) {
-    this.beforeEachCallbacks = this.beforeEachCallbacks || [];
-    this.beforeEachCallbacks.push(fn);
+  it(name, fn) {
+    if (!this.currentSuite) {
+      throw new Error("it() must be called within a describe() block");
+    }
+    this.testCount++;
+    this.currentSuite.tests.push({ name, fn, number: this.testCount });
   }
 
   expect(value) {
