@@ -129,7 +129,7 @@ class TestRunner {
   }
 
   expect(value) {
-    return {
+    const matchers = {
       toBe: (expected) => {
         if (value !== expected) {
           throw new Error(`Expected ${expected}, got ${value}`);
@@ -252,6 +252,46 @@ class TestRunner {
             `Expected value to be an instance of ${expected.name}, but got ${value.constructor.name}`,
           );
         }
+      },
+    };
+
+    const negatedMatchers = {
+      toBe: (expected) => {
+        if (value === expected) {
+          throw new Error(`Expected ${value} not to be ${expected}`);
+        }
+      },
+      toContain: (expected) => {
+        if (Array.isArray(value)) {
+          if (value.includes(expected)) {
+            throw new Error(`Expected array not to contain ${expected}`);
+          }
+        } else if (typeof value === "string") {
+          if (value.includes(expected)) {
+            throw new Error(
+              `Expected string not to contain "${expected}", got "${value}"`,
+            );
+          }
+        } else {
+          throw new Error("toContain can only be used with arrays or strings");
+        }
+      },
+      toThrow: (expected) => {
+        try {
+          value();
+          // If we get here, the function didn't throw
+        } catch (e) {
+          throw new Error(
+            `Expected function not to throw, but it threw ${e.message}`,
+          );
+        }
+      },
+    };
+
+    return {
+      ...matchers,
+      not: {
+        ...negatedMatchers,
       },
     };
   }
