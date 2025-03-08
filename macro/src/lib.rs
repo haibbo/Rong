@@ -266,7 +266,29 @@ pub fn js_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// };
 /// ```
 #[proc_macro_derive(FromJSObj, attributes(rename))]
-pub fn derive_from_js_value(input: TokenStream) -> TokenStream {
+pub fn derive_from_js_object(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     TokenStream::from(deserialize::impl_deserialize(input))
+}
+
+#[proc_macro_derive(FromJSValue)]
+pub fn derive_from_js_value(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    // Generate the FromJSValue implementation
+    let expanded = quote! {
+        impl rusty_js::FromJSValue<rusty_js::JSEngineValue> for #name
+        where Self: TryFromJSValue,
+        {
+            fn from_js_value( ctx: &JSContext, value: rusty_js::JSEngineValue) -> JSResult<Self> {
+                let js_value = rusty_js::JSValue::from_raw(ctx, value);
+                Self::try_from_js(js_value)
+            }
+        }
+
+        impl rusty_js::function::JSParameterType for #name {}
+    };
+
+    TokenStream::from(expanded)
 }

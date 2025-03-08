@@ -43,4 +43,9 @@ pub type JSTypedArray = CoreJSTypedArray<JSEngineValue>;
 pub type PropertyDescriptor = CorePropertyDescriptor<JSEngineValue>;
 
 // re-export macro public symbols to rusty_js
-pub use rusty_js_macro::{js_export, js_method, js_class, FromJSObj};
+pub use rusty_js_macro::{js_class, js_export, js_method, FromJSObj, FromJSValue};
+
+/// A Trait for conversion from JavaScript values.
+pub trait TryFromJSValue: Sized {
+    fn try_from_js(_value: JSValue) -> JSResult<Self>;
+}
