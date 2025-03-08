@@ -5,7 +5,7 @@ use syn::{parse_macro_input, DeriveInput, ItemImpl};
 
 mod class;
 mod deserialize;
-mod object;
+mod instance;
 
 /// Expose a Rust struct as a JavaScript object.
 ///
@@ -41,7 +41,7 @@ pub fn js_export(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut new_input = input.clone();
     new_input.attrs.push(object_attr);
 
-    match object::object_impl(&new_input) {
+    match instance::class_instance_impl(&new_input) {
         Ok(expanded) => expanded.into(),
         Err(err) => err.to_compile_error().into(),
     }

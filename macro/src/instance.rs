@@ -3,7 +3,7 @@ use quote::quote;
 use syn::DeriveInput;
 
 /// Main implementation of the object macro
-pub fn object_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
+pub fn class_instance_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
     let type_name = &input.ident;
     let vis = &input.vis;
     let generics = &input.generics;
