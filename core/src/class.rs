@@ -176,7 +176,7 @@ where
         class.0.get::<_, JSObject<V>>("prototype")
     }
 
-    /// Construct a Class from a JSObject if it is an instance of the specified class
+    /// Construct a Class constructor from a JSObject if it is an instance of the specified class
     ///
     /// # Arguments
     /// * `obj` - The JSObject to check and convert
@@ -203,8 +203,12 @@ where
         T: JSClass<V>,
     {
         if !Class::instance_of::<T>(self) {
-            return Err(RustyJSError::Borrow(std::any::type_name::<T>()));
+            return Err(RustyJSError::TypeError(format!(
+                "Not instance of {}",
+                std::any::type_name::<T>()
+            )));
         }
+
         let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
@@ -220,8 +224,12 @@ where
         T: JSClass<V>,
     {
         if !Class::instance_of::<T>(self) {
-            return Err(RustyJSError::Borrow(std::any::type_name::<T>()));
+            return Err(RustyJSError::TypeError(format!(
+                "Not instance of {}",
+                std::any::type_name::<T>()
+            )));
         }
+
         let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
             Err(RustyJSError::Borrow(std::any::type_name::<T>()))
