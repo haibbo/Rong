@@ -1,4 +1,4 @@
-use rusty_js::{function::Optional, js_export, js_method, js_class, *};
+use rusty_js::{function::Optional, js_class, js_export, js_method, *};
 
 #[derive(Default)]
 struct BlobOptions {
@@ -52,10 +52,14 @@ impl Blob {
             })?;
         }
 
-        Ok(Self {
-            mime_type: blob_options.type_,
-            data: blob_data,
-        })
+        Ok(Self::from_parts(blob_options.type_, blob_data))
+    }
+
+    pub fn from_parts(mime: String, data: Vec<u8>) -> Self {
+        Self {
+            mime_type: mime,
+            data,
+        }
     }
 
     #[js_method(getter, enumerable)]
