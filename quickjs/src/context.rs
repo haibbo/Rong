@@ -290,37 +290,42 @@ impl QJSContext {
 impl JSExceptionHandler for QJSContext {
     fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value {
         self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
-            qjs::JS_ThrowSyntaxError(ctx, fmt, msg)
+            qjs::JS_ThrowSyntaxError(ctx, fmt, msg);
+            qjs::JS_GetException(ctx)
         })
     }
 
     fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value {
         self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
-            qjs::JS_ThrowTypeError(ctx, fmt, msg)
+            qjs::JS_ThrowTypeError(ctx, fmt, msg);
+            qjs::JS_GetException(ctx)
         })
     }
 
     fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value {
         self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
-            qjs::JS_ThrowReferenceError(ctx, fmt, msg)
+            qjs::JS_ThrowReferenceError(ctx, fmt, msg);
+            qjs::JS_GetException(ctx)
         })
     }
 
     fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value {
         self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
-            qjs::JS_ThrowRangeError(ctx, fmt, msg)
+            qjs::JS_ThrowRangeError(ctx, fmt, msg);
+            qjs::JS_GetException(ctx)
         })
     }
 
     fn throw_error(&self, message: impl AsRef<str>) -> Self::Value {
         self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
-            qjs::JS_ThrowPlainError(ctx, fmt, msg)
+            qjs::JS_ThrowPlainError(ctx, fmt, msg);
+            qjs::JS_GetException(ctx)
         })
-        .with_error()
+        .with_exception()
     }
 
     fn new_error(&self) -> Self::Value {
-        QJSValue::from_owned_raw(self.ctx, unsafe { qjs::JS_NewError(self.ctx) })
+        QJSValue::from_owned_raw(self.ctx, unsafe { qjs::JS_NewError(self.ctx) }).with_error()
     }
 
     fn throw(&self, value: Self::Value) -> Self::Value {

@@ -1,5 +1,5 @@
 use crate::{qjs, QJSContext, QJSValue};
-use rusty_js_core::{JSClass, JSClassExt, JSContextImpl, JSValueImpl};
+use rusty_js_core::{JSClass, JSClassExt, JSContextImpl, JSTypeOf, JSValueImpl};
 
 pub(crate) unsafe extern "C" fn generic_constructor<JC>(
     ctx: *mut qjs::JSContext,
@@ -17,7 +17,12 @@ where
         .collect();
 
     let ctx = QJSContext::from_borrowed_raw(ctx);
-    <JC as JSClassExt<QJSValue>>::constructor(&ctx, this, args).into_raw_value()
+    let value = <JC as JSClassExt<QJSValue>>::constructor(&ctx, this, args);
+    if value.is_exception() {
+        qjs::JS_Throw(ctx.to_raw(), value.into_raw_value())
+    } else {
+        value.into_raw_value()
+    }
 }
 
 pub(crate) unsafe extern "C" fn finalizer<JC>(_rt: *mut qjs::JSRuntime, obj: qjs::JSValue)
@@ -48,5 +53,10 @@ where
         .collect();
 
     let ctx = QJSContext::from_borrowed_raw(ctx);
-    <JC as JSClassExt<QJSValue>>::call(&ctx, function, this, args).into_raw_value()
+    let value = <JC as JSClassExt<QJSValue>>::call(&ctx, function, this, args);
+    if value.is_exception() {
+        qjs::JS_Throw(ctx.to_raw(), value.into_raw_value())
+    } else {
+        value.into_raw_value()
+    }
 }

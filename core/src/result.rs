@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSError, JSException, JSExceptionHandler, JSObject,
-    JSObjectOps, JSValueImpl,
+    JSObjectOps, JSValue, JSValueImpl,
 };
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -99,17 +99,13 @@ impl RustyJSError {
         }
     }
 
-    pub fn into_js_error<V>(self, ctx: &JSContext<V::Context>) -> JSObject<V>
+    pub fn into_js_error<V>(self, ctx: &JSContext<V::Context>) -> JSValue<V>
     where
-        V: JSObjectOps + JSValueImpl,
+        V: JSValueImpl,
         V::Context: JSExceptionHandler,
     {
-        // Quickjs does not support to receive exception on promise,  but jsc works.
-        // here, regradless of error type, new general error to return
-        let v = ctx.as_ref().new_error();
-        let obj = JSObject::from_js_value(ctx, v).unwrap();
-        let _ = obj.set("message", self.to_string());
-        obj
+        let v = self.throw_js_exception(ctx);
+        JSValue::from_raw(ctx, v)
     }
 }
 

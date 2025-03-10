@@ -227,9 +227,6 @@ impl JSCContext {
         error_name: &str,
         message: impl AsRef<str>,
     ) -> JSCValue {
-        #[cfg(debug_assertions)]
-        println!("{}: {}", error_name, message.as_ref());
-
         let message_cstr = CString::new(message.as_ref()).unwrap();
         let error_name_cstr = CString::new(error_name).unwrap();
 
