@@ -223,8 +223,9 @@ impl URL {
         self.search_params.clone().unwrap()
     }
 
+    #[allow(clippy::inherent_to_string)]
     #[js_method(rename = "toString")]
-    fn to_str(&self) -> String {
+    pub fn to_string(&self) -> String {
         self.inner().to_string()
     }
 

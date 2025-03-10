@@ -1,4 +1,4 @@
-use http_crate::header::{self, HeaderMap, HeaderName, HeaderValue};
+use http::header::{self, HeaderMap, HeaderName, HeaderValue};
 use rusty_js::{
     function::{Optional, This},
     js_class, js_export, js_method, *,

@@ -6,7 +6,8 @@ edition = "2021"
 [dependencies]
 rusty-js = { workspace = true }
 tokio = { version = "1.0", features = ["rt", "time", "macros"] }
-http_crate = { package = "http", version = "1.2" }
+http = { package = "http", version = "1.2" }
+lxr_url = { path = "../lxr_url" }
 
 [dev-dependencies]
 rustyjs_test = { path = "../../utils/rustyjs_test" }
