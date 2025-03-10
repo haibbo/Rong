@@ -190,6 +190,11 @@ impl Request {
         self.body.clone().map(|b| b.0)
     }
 
+    #[js_method(getter, rename = "bodyUsed")]
+    pub fn body_used(&self) -> bool {
+        self.body.is_none()
+    }
+
     #[js_method]
     pub fn clone(&self) -> Self {
         Self {
