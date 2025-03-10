@@ -1,6 +1,7 @@
 use http::{Method, Uri};
 use rusty_js::{function::Optional, *};
 
+use crate::body::HttpBody;
 use crate::header::Headers;
 use lxr_url::URL;
 
@@ -9,7 +10,7 @@ pub struct Request {
     url: Uri,
     method: Method,
     headers: Headers,
-    body: Option<JSValue>,
+    body: Option<HttpBody>,
     redirect: RequestRedirect,
     signal: Option<JSObject>, // AbortSignal
 }
@@ -40,7 +41,7 @@ impl RequestInit {
             request.headers = headers;
         }
         if let Some(body) = self.body {
-            request.body = Some(body);
+            request.body = Some(HttpBody(body));
         }
         if let Some(redirect) = self.redirect {
             request.redirect = redirect;
@@ -186,7 +187,7 @@ impl Request {
 
     #[js_method(getter)]
     pub fn body(&self) -> Option<JSValue> {
-        self.body.clone()
+        self.body.clone().map(|b| b.0)
     }
 
     #[js_method]
@@ -203,8 +204,11 @@ impl Request {
 
     #[js_method]
     pub async fn text(&self) -> JSResult<String> {
-        // TODO:
-        Ok(String::new())
+        if let Some(body) = &self.body {
+            body.text().await
+        } else {
+            Ok(String::new())
+        }
     }
 
     #[js_method]
@@ -216,8 +220,12 @@ impl Request {
 
     #[js_method(rename = "arrayBuffer")]
     pub async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
-        //TODO:
-        JSArrayBuffer::from_bytes(&ctx, &[])
+        if let Some(body) = &self.body {
+            let bytes = body.bytes().await?;
+            JSArrayBuffer::from_bytes(&ctx, &bytes)
+        } else {
+            JSArrayBuffer::from_bytes(&ctx, &[])
+        }
     }
 
     #[js_method(rename = "formData")]

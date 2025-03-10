@@ -94,6 +94,93 @@ describe("Request", () => {
         expect(request.method).toBe("POST");
       });
     });
+
+    describe("text()", () => {
+      it("should handle string body", async () => {
+        const body = "Hello, World!";
+        const request = new Request("https://example.com", {
+          method: "POST",
+          body,
+        });
+        const text = await request.text();
+        expect(text).toBe(body);
+      });
+
+      it("should handle URLSearchParams body", async () => {
+        const params = new URLSearchParams();
+        params.append("key1", "value1");
+        params.append("key2", "value2");
+        const request = new Request("https://example.com", {
+          method: "POST",
+          body: params,
+        });
+        const text = await request.text();
+        expect(text).toBe("key1=value1&key2=value2");
+      });
+
+      it("should handle ArrayBuffer body", async () => {
+        const text = "Hello, ArrayBuffer!";
+        const encoder = new TextEncoder();
+        const buffer = encoder.encode(text).buffer;
+        const request = new Request("https://example.com", {
+          method: "POST",
+          body: buffer,
+        });
+        const result = await request.text();
+        expect(result).toBe(text);
+      });
+
+      it("should return empty string for null body", async () => {
+        const request = new Request("https://example.com");
+        const text = await request.text();
+        expect(text).toBe("");
+      });
+    });
+
+    describe("arrayBuffer()", () => {
+      it("should handle string body", async () => {
+        const body = "Hello, World!";
+        const request = new Request("https://example.com", {
+          method: "POST",
+          body,
+        });
+        const buffer = await request.arrayBuffer();
+        const text = new TextDecoder().decode(buffer);
+        expect(text).toBe(body);
+      });
+
+      it("should handle URLSearchParams body", async () => {
+        const params = new URLSearchParams();
+        params.append("key1", "value1");
+        params.append("key2", "value2");
+        const request = new Request("https://example.com", {
+          method: "POST",
+          body: params,
+        });
+        const buffer = await request.arrayBuffer();
+        const text = new TextDecoder().decode(buffer);
+        expect(text).toBe("key1=value1&key2=value2");
+      });
+
+      it("should handle ArrayBuffer body", async () => {
+        const text = "Hello, ArrayBuffer!";
+        const encoder = new TextEncoder();
+        const originalBuffer = encoder.encode(text).buffer;
+        const request = new Request("https://example.com", {
+          method: "POST",
+          body: originalBuffer,
+        });
+        const buffer = await request.arrayBuffer();
+        const result = new TextDecoder().decode(buffer);
+        expect(result).toBe(text);
+      });
+
+      it("should return empty ArrayBuffer for null body", async () => {
+        const request = new Request("https://example.com");
+        const buffer = await request.arrayBuffer();
+        expect(buffer.byteLength).toBe(0);
+      });
+    });
   });
 
   describe("clone", () => {
