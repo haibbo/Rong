@@ -1,7 +1,8 @@
 use bytes::Bytes;
 use http::{header, HeaderMap, Method, Uri};
+use http_body_util::BodyExt;
+use hyper::body::Incoming;
 use rusty_js::{function::Optional, *};
-use std::rc::Rc;
 
 use crate::blob::Blob;
 use crate::body::{BodyKind, HttpBody};
@@ -118,7 +119,10 @@ impl Response {
 
     #[js_method(getter, rename = "bodyUsed")]
     pub fn body_used(&self) -> bool {
-        self.body.is_none()
+        match &self.body {
+            Some(BodyKind::Hyper(body)) => body.is_none(),
+            _ => false,
+        }
     }
 
     #[js_method(getter)]
@@ -141,21 +145,26 @@ impl Response {
         }
     }
 
-    async fn body_to_bytes(&self) -> JSResult<Bytes> {
-        match &self.body {
+    async fn body_to_bytes(&mut self) -> JSResult<Bytes> {
+        match &mut self.body {
             Some(BodyKind::JS(body)) => body.bytes().await,
-            Some(BodyKind::Hyper(_body)) => {
-                // TODO: Implement hyper body bytes conversion
-                // For now, return empty bytes
-                Ok(Bytes::new())
+            Some(BodyKind::Hyper(body)) => {
+                if let Some(body) = body.take() {
+                    let collected = body.collect().await.map_err(|e| {
+                        RustyJSError::Error(format!("Failed to collect body: {}", e))
+                    })?;
+                    Ok(collected.to_bytes())
+                } else {
+                    Ok(Bytes::new())
+                }
             }
             None => Ok(Bytes::new()),
         }
     }
 
     #[js_method]
-    async fn text(&self) -> JSResult<String> {
-        match &self.body {
+    async fn text(&mut self) -> JSResult<String> {
+        match &mut self.body {
             Some(BodyKind::JS(body)) => body.text().await,
             Some(BodyKind::Hyper(_)) => {
                 let bytes = self.body_to_bytes().await?;
@@ -166,13 +175,13 @@ impl Response {
     }
 
     #[js_method]
-    async fn json(&self, ctx: JSContext) -> JSResult<JSValue> {
+    async fn json(&mut self, ctx: JSContext) -> JSResult<JSValue> {
         let text = self.text().await?;
         text.as_str().json_to_jsvalue(&ctx)
     }
 
     #[js_method]
-    async fn blob(&self) -> JSResult<Blob> {
+    async fn blob(&mut self) -> JSResult<Blob> {
         let bytes = self.body_to_bytes().await?;
         let mime = self
             .headers
@@ -182,7 +191,7 @@ impl Response {
     }
 
     #[js_method(rename = "arrayBuffer")]
-    async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
+    async fn array_buffer(&mut self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
         let bytes = self.body_to_bytes().await?;
         JSArrayBuffer::from_bytes(&ctx, &bytes)
     }
@@ -241,7 +250,7 @@ impl Response {
         (None, None)
     }
 
-    pub(crate) fn from_hyper(response: hyper::Response<hyper::body::Incoming>) -> Self {
+    pub(crate) fn from_hyper(response: hyper::Response<Incoming>) -> Self {
         let (parts, body) = response.into_parts();
 
         // Convert hyper headers to Headers
@@ -267,7 +276,7 @@ impl Response {
             status: parts.status.as_u16(),
             status_text: parts.status.canonical_reason().unwrap_or("").to_string(),
             headers,
-            body: Some(BodyKind::Hyper(Rc::new(body))),
+            body: Some(BodyKind::Hyper(Some(body))),
             content_type,
             content_encoding,
             ..Default::default()

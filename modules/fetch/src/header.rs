@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use http::header::{self, HeaderMap, HeaderName, HeaderValue};
 use rusty_js::{
     function::{Optional, This},
@@ -8,6 +10,14 @@ use rusty_js::{
 #[derive(Default)]
 pub struct Headers {
     headers: HeaderMap<HeaderValue>,
+}
+
+impl Deref for Headers {
+    type Target = HeaderMap;
+
+    fn deref(&self) -> &Self::Target {
+        &self.headers
+    }
 }
 
 #[js_class]

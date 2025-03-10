@@ -7,10 +7,10 @@ use lxr_url::URL;
 
 #[js_export]
 pub struct Request {
-    url: Uri,
-    method: Method,
-    headers: Headers,
-    body: Option<HttpBody>,
+    pub(crate) url: Uri,
+    pub(crate) method: Method,
+    pub(crate) headers: Headers,
+    pub(crate) body: Option<HttpBody>,
     redirect: RequestRedirect,
     signal: Option<JSObject>, // AbortSignal
 }
@@ -141,6 +141,11 @@ impl Request {
         // Process init object if provided
         if let Some(init) = request_init.0 {
             init.assign_request(&mut request);
+        }
+
+        // make sure body is None for Get
+        if request.method == Method::GET {
+            request.body = None;
         }
 
         Ok(request)

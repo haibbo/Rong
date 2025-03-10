@@ -2,16 +2,20 @@ use bytes::Bytes;
 use hyper::body::Incoming;
 use lxr_url::URLSearchParams;
 use rusty_js::*;
-use std::{
-    pin::Pin,
-    rc::Rc,
-    task::{Context, Poll},
-};
 
-#[derive(Clone)]
 pub(crate) enum BodyKind {
-    Hyper(Rc<Incoming>), // need Rc for Clone support
+    Hyper(Option<Incoming>),
     JS(HttpBody),
+}
+
+// TODO: handle incoming well
+impl Clone for BodyKind {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Hyper(_) => Self::Hyper(None),
+            Self::JS(arg0) => Self::JS(arg0.clone()),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -51,7 +55,7 @@ impl HttpBody {
     }
 
     // Convert to bytes synchronously for hyper Body implementation
-    fn to_bytes(&self) -> Result<Bytes, RustyJSError> {
+    pub fn to_bytes(&self) -> JSResult<Bytes> {
         if let Ok(s) = self.0.clone().try_into::<String>() {
             return Ok(Bytes::from(s));
         }
@@ -75,21 +79,5 @@ impl HttpBody {
         }
 
         Ok(Bytes::new())
-    }
-}
-
-impl hyper::body::Body for HttpBody {
-    type Data = Bytes;
-    type Error = RustyJSError;
-
-    fn poll_frame(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
-        // Convert to bytes synchronously
-        match self.get_mut().to_bytes() {
-            Ok(bytes) => Poll::Ready(Some(Ok(hyper::body::Frame::data(bytes)))),
-            Err(e) => Poll::Ready(Some(Err(e))),
-        }
     }
 }
