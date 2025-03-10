@@ -208,8 +208,9 @@ impl URLSearchParams {
         Ok(())
     }
 
+    #[allow(clippy::inherent_to_string)]
     #[js_method(rename = "toString")]
-    fn to_str(&self) -> String {
+    pub fn to_string(&self) -> String {
         let params = self.params.borrow();
         if params.is_empty() {
             return String::new();
@@ -224,7 +225,7 @@ impl URLSearchParams {
     // Sync parameters to the associated URL
     pub(crate) fn sync_url(&self) {
         if let Some(shared_data) = &self.shared_data {
-            let query_string = self.to_str();
+            let query_string = self.to_string();
             let mut url = shared_data.url.borrow_mut();
             url.set_query(Some(&query_string));
         }
