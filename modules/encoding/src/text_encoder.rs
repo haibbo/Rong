@@ -107,6 +107,12 @@ impl TextEncoder {
     }
 }
 
+impl Default for TextEncoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Registers the `TextEncoder` class with the JavaScript context.
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<TextEncoder>()?;
