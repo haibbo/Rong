@@ -6,48 +6,58 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use rusty_js::{function::Optional, *};
 use std::io::Error;
+use std::sync::OnceLock;
 
 use crate::request::{Request, RequestInit};
 use crate::response::Response;
 
+// Global client instance
+static CLIENT: OnceLock<
+    Client<
+        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+        BoxBody<Bytes, Error>,
+    >,
+> = OnceLock::new();
+
 // Create a new HTTPS-enabled client
-fn create_client() -> Client<
+fn get_client() -> &'static Client<
     hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
     BoxBody<Bytes, Error>,
 > {
-    let https = HttpsConnectorBuilder::new()
-        .with_webpki_roots()
-        .https_or_http()
-        .enable_http1()
-        .build();
+    CLIENT.get_or_init(|| {
+        let https = HttpsConnectorBuilder::new()
+            .with_webpki_roots()
+            .https_or_http()
+            .enable_http1()
+            .build();
 
-    Client::builder(TokioExecutor::new()).build(https)
+        Client::builder(TokioExecutor::new()).build(https)
+    })
 }
 
 // Convert Request to hyper::Request
 fn to_hyper_request(request: Request) -> HttpRequest<BoxBody<Bytes, Error>> {
     let mut builder = HttpRequest::builder()
-        .method(&request.method)
-        .uri(&request.url);
+        .method(request.method)
+        .uri(request.url);
 
-    // Copy headers using HeaderMap's methods directly through Deref
+    // Take ownership of headers
     if let Some(headers) = builder.headers_mut() {
-        headers.extend(request.headers.iter().map(|(k, v)| (k.clone(), v.clone())));
+        headers.extend(request.headers.into_header_map());
     }
 
-    // TODO:
-    // add ua, accept, accept-encoding
+    // Create body - if conversion fails, use empty body
+    let bytes = request
+        .body
+        .and_then(|b| b.to_bytes().ok())
+        .unwrap_or_default();
 
-    // Create body
-    let body = Full::new(
-        request
-            .body
-            .and_then(|b| b.to_bytes().ok())
-            .unwrap_or_default(),
-    )
-    .map_err(|_| Error::new(std::io::ErrorKind::Other, "body error"))
-    .boxed();
+    let body = Full::new(bytes)
+        .map_err(|e| match e {}) // Infallible can never happen
+        .boxed();
 
+    // builder.body() only fails if the headers are invalid, which we know they aren't
+    // because we just created them from valid headers
     builder.body(body).unwrap()
 }
 
@@ -55,17 +65,14 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     // Create Request object from input and init
     let request = Request::new(input, init)?;
 
-    // Create hyper client
-    let client = create_client();
-
     // Convert Request to hyper::Request
     let hyper_request = to_hyper_request(request);
 
     // Send request and get response
-    let hyper_response = client
+    let hyper_response = get_client()
         .request(hyper_request)
         .await
-        .map_err(|e| RustyJSError::TypeError(format!("fetch: {}", e)))?;
+        .map_err(|e| RustyJSError::TypeError(format!("fetch failed: {}", e)))?;
 
     // Convert hyper::Response to our Response
     Ok(Response::from_hyper(hyper_response))
