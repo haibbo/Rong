@@ -1,3 +1,4 @@
+use http::header;
 use http::Request as HttpRequest;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::body::Bytes;
@@ -39,7 +40,8 @@ fn get_client() -> &'static Client<
 fn to_hyper_request(request: Request) -> HttpRequest<BoxBody<Bytes, Error>> {
     let mut builder = HttpRequest::builder()
         .method(request.method)
-        .uri(request.url);
+        .uri(request.url)
+        .header(header::ACCEPT_ENCODING, "gzip"); // TODO: "gzip, zstd"
 
     // Take ownership of headers
     if let Some(headers) = builder.headers_mut() {
@@ -86,6 +88,14 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{
+        body::Body,
+        http::HeaderMap,
+        response::{IntoResponse, Response as AxumResponse},
+        routing::get,
+        Router,
+    };
+    use flate2::{write::GzEncoder, Compression};
     use rustyjs_test::*;
     use std::io::Write;
     use std::net::SocketAddr;

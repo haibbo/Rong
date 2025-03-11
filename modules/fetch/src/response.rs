@@ -153,7 +153,11 @@ impl Response {
                     let collected = body.collect().await.map_err(|e| {
                         RustyJSError::Error(format!("Failed to collect body: {}", e))
                     })?;
-                    Ok(collected.to_bytes())
+                    let bytes = collected.to_bytes();
+                    
+                    // Get a reference to the headers for decompression
+                    let header_map = self.headers.as_header_map();
+                    crate::body::decompress_bytes(bytes, header_map)
                 } else {
                     Ok(Bytes::new())
                 }

@@ -1,7 +1,10 @@
 use bytes::Bytes;
+use flate2::read::GzDecoder;
+use http::HeaderMap;
 use hyper::body::Incoming;
 use lxr_url::URLSearchParams;
 use rusty_js::*;
+use std::io::Read;
 
 pub(crate) enum BodyKind {
     Hyper(Option<Incoming>),
@@ -79,5 +82,28 @@ impl HttpBody {
         }
 
         Ok(Bytes::new())
+    }
+}
+
+// Decompress bytes based on content-encoding header
+pub(crate) fn decompress_bytes(bytes: Bytes, headers: &HeaderMap) -> JSResult<Bytes> {
+    if let Some(encoding) = headers.get(http::header::CONTENT_ENCODING) {
+        match encoding.to_str() {
+            Ok("gzip") => {
+                let mut decoder = GzDecoder::new(&bytes[..]);
+                let mut decompressed = Vec::new();
+                decoder.read_to_end(&mut decompressed).map_err(|e| {
+                    RustyJSError::Error(format!("Failed to decompress gzip: {}", e))
+                })?;
+                Ok(Bytes::from(decompressed))
+            }
+            Ok(encoding) => Err(RustyJSError::Error(format!(
+                "Unsupported content-encoding: {}",
+                encoding
+            ))),
+            Err(_) => Ok(bytes),
+        }
+    } else {
+        Ok(bytes)
     }
 }

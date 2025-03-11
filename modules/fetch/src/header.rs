@@ -15,6 +15,11 @@ impl Headers {
     pub fn into_header_map(self) -> HeaderMap<HeaderValue> {
         self.headers
     }
+
+    // Get a reference to the inner HeaderMap
+    pub fn as_header_map(&self) -> &HeaderMap<HeaderValue> {
+        &self.headers
+    }
 }
 
 #[js_class]
