@@ -87,6 +87,48 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
 mod tests {
     use super::*;
     use rustyjs_test::*;
+    use std::io::Write;
+    use std::net::SocketAddr;
+    use tokio::net::TcpListener;
+
+    async fn test_ip() -> impl IntoResponse {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"origin": "127.0.0.1"}"#))
+            .unwrap()
+    }
+
+    async fn test_gzip() -> impl IntoResponse {
+        // Create gzipped JSON response
+        let json = r#"{"gzipped": true, "method": "GET"}"#;
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(json.as_bytes()).unwrap();
+        let compressed = encoder.finish().unwrap();
+
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::CONTENT_ENCODING, "gzip")
+            .body(Body::from(compressed))
+            .unwrap()
+    }
+
+    async fn start_test_server() -> SocketAddr {
+        let app = Router::new()
+            .route("/ip", get(test_ip))
+            .route("/gzip", get(test_gzip));
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+
+        addr
+    }
 
     #[test]
     fn test_fetch() {
@@ -101,6 +143,13 @@ mod tests {
             crate::request::init(&ctx).unwrap();
             crate::response::init(&ctx).unwrap();
             init(&ctx)?;
+
+            // Start test server
+            let addr = start_test_server().await;
+            let base_url = format!("http://{}", addr);
+
+            // Set base URL for tests
+            ctx.global().set("TEST_SERVER_URL", base_url)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "fetch.js")
                 .await?

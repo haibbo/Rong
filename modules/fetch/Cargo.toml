@@ -19,3 +19,4 @@ rustyjs_test = { path = "../../utils/rustyjs_test" }
 encoding={path="../encoding"}
 console={path="../console"}
 assert={path="../assert"}
+axum = "0.8.1"
