@@ -104,12 +104,8 @@ pub struct EventListener {
 /// }
 ///
 /// impl Emitter for MyEmitter {
-///     fn get_events(&self) -> &EventEmitter {
+///     fn get_events_emitter(&self) -> &EventEmitter {
 ///         &self.events
-///     }
-///
-///     fn get_events_mut(&mut self) -> &mut EventEmitter {
-///         &mut self.events
 ///     }
 /// }
 ///
@@ -122,9 +118,6 @@ where
 {
     /// Get a reference to the internal events container
     fn get_event_emitter(&self) -> &EventEmitter;
-
-    /// Get a mutable reference to the internal events container
-    fn get_mut_event_emitter(&mut self) -> &mut EventEmitter;
 
     /// Callback triggered when an event listener is added or removed
     ///
@@ -362,13 +355,13 @@ where
     fn get_max_listeners(this: This<JSObject>) -> JSResult<u32> {
         let target = this.borrow::<Self>()?;
         let events = target.get_event_emitter();
-        Ok(events.max_listener)
+        Ok(events.get_max_listeners())
     }
 
     fn set_max_listeners(this: This<JSObject>, num: u32) -> JSResult<JSObject> {
-        let mut target = this.borrow_mut::<Self>()?;
-        let events = target.get_mut_event_emitter();
-        events.max_listener = num;
+        let target = this.borrow_mut::<Self>()?;
+        let events = target.get_event_emitter();
+        events.set_max_listeners(num);
         Ok(this.0.clone())
     }
 
@@ -395,6 +388,7 @@ impl EventEmitter {
     pub fn get_listener(&self, key: &EventKey) -> Option<JSFunc> {
         self.inner.lock().ok().and_then(|inner| {
             inner
+                .listeners
                 .get(key)
                 .and_then(|listeners| listeners.front().map(|l| l.listener.clone()))
         })
@@ -421,37 +415,45 @@ impl EventEmitter {
         once: bool,
     ) -> JSResult<bool> {
         let mut events = self.inner.lock().unwrap();
-        let is_new = !events.contains_key(&key);
-        let listeners = events.entry(key).or_default();
+        let is_new = !events.listeners.contains_key(&key);
 
-        // Check max_listener
-        if listeners.len() as u32 >= self.max_listener {
+        let max_listener = events.max_listener;
+
+        let current_len = events
+            .listeners
+            .get(&key)
+            .map(|listeners| listeners.len())
+            .unwrap_or(0);
+
+        if current_len as u32 >= max_listener {
             let warning = format!(
                 "EventEmitter overflow: {} listeners added. Use setMaxListeners() to increase limit",
-                listeners.len() + 1,
+                current_len + 1,
             );
             return Err(RustyJSError::Error(warning));
         }
 
         let listener = EventListener { listener, once };
+        let listeners = events.listeners.entry(key).or_default();
         if prepend {
             listeners.push_front(listener);
         } else {
             listeners.push_back(listener);
         }
+
         Ok(is_new)
     }
 
     fn remove_listener(&self, key: EventKey, listener: JSFunc) {
         let mut events = self.inner.lock().unwrap();
-        events.entry(key).and_modify(|listeners| {
+        events.listeners.entry(key).and_modify(|listeners| {
             listeners.retain(|l| l.listener != listener);
         });
     }
 
     fn event_names(&self) -> JSResult<Vec<EventKey>> {
         let events = self.inner.lock().into_result()?;
-        Ok(events.keys().cloned().collect::<Vec<_>>())
+        Ok(events.listeners.keys().cloned().collect::<Vec<_>>())
     }
 
     fn do_emit(
@@ -462,18 +464,16 @@ impl EventEmitter {
         is_empty: &mut bool,
     ) -> JSResult<bool> {
         let mut events = self.inner.lock().into_result()?;
-        if let Some(listeners) = events.get_mut(&key) {
+        if let Some(listeners) = events.listeners.get_mut(&key) {
             // Clone listeners to avoid mutable borrow issues
             let mut listeners_to_remove = Vec::new();
             let listeners_clone: Vec<_> = listeners.iter().cloned().collect();
 
-            // Process listeners in order (changed from reverse)
+            // Process listeners in order
             for listener in listeners_clone.iter() {
-                // Call the listener with provided args
                 let _ = listener
                     .listener
                     .call::<_, ()>(Some(this.clone()), (args.clone(),));
-                // Mark for removal if it's a once listener
                 if listener.once {
                     listeners_to_remove.push(listener.listener.clone());
                 }
@@ -482,7 +482,6 @@ impl EventEmitter {
             // Remove once listeners after iteration
             if !listeners_to_remove.is_empty() {
                 listeners.retain(|l| !listeners_to_remove.contains(&l.listener));
-                // Call on_event_changed if all listeners were removed
                 if listeners.is_empty() {
                     *is_empty = true;
                 }
@@ -497,10 +496,10 @@ impl EventEmitter {
         let mut events = self.inner.lock().into_result()?;
         match key {
             Some(key) => {
-                events.remove(&key);
+                events.listeners.remove(&key);
             }
             None => {
-                events.clear();
+                events.listeners.clear();
             }
         }
         Ok(())
@@ -508,7 +507,7 @@ impl EventEmitter {
 
     fn listener_count(&self, key: EventKey, listener: Option<JSFunc>) -> JSResult<u32> {
         let events = self.inner.lock().into_result()?;
-        let count = if let Some(listeners) = events.get(&key) {
+        let count = if let Some(listeners) = events.listeners.get(&key) {
             if let Some(listener) = listener {
                 listeners.iter().filter(|l| l.listener == listener).count()
             } else {
@@ -518,6 +517,19 @@ impl EventEmitter {
             0
         };
         Ok(count as _)
+    }
+
+    pub fn set_max_listeners(&self, max: u32) {
+        if let Ok(mut guard) = self.inner.lock() {
+            guard.max_listener = max;
+        }
+    }
+
+    pub fn get_max_listeners(&self) -> u32 {
+        self.inner
+            .lock()
+            .map(|guard| guard.max_listener)
+            .unwrap_or(10)
     }
 }
 
@@ -531,21 +543,23 @@ impl EventEmitter {
 /// - Support for multiple listeners per event
 /// - Configurable maximum number of listeners
 /// - Once-only event listeners
-///
-/// # Internal Structure
-/// - `inner`: A thread-safe HashMap storing event keys and their associated listeners
-/// - `max_listener`: Maximum number of listeners allowed per event (default: 10)
 #[js_export]
 pub struct EventEmitter {
-    inner: Rc<Mutex<HashMap<EventKey, VecDeque<EventListener>>>>,
+    inner: Rc<Mutex<EventEmitterInner>>,
+}
+
+struct EventEmitterInner {
+    listeners: HashMap<EventKey, VecDeque<EventListener>>,
     max_listener: u32,
 }
 
 impl Default for EventEmitter {
     fn default() -> Self {
         Self {
-            inner: Rc::new(Mutex::new(HashMap::new())),
-            max_listener: 10,
+            inner: Rc::new(Mutex::new(EventEmitterInner {
+                listeners: HashMap::new(),
+                max_listener: 10,
+            })),
         }
     }
 }
@@ -560,10 +574,6 @@ impl EventEmitter {
 
 impl Emitter for EventEmitter {
     fn get_event_emitter(&self) -> &EventEmitter {
-        self
-    }
-
-    fn get_mut_event_emitter(&mut self) -> &mut EventEmitter {
         self
     }
 }

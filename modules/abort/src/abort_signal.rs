@@ -244,8 +244,4 @@ impl Emitter for AbortSignal {
     fn get_event_emitter(&self) -> &EventEmitter {
         &self.emitter
     }
-
-    fn get_mut_event_emitter(&mut self) -> &mut EventEmitter {
-        &mut self.emitter
-    }
 }

@@ -27,8 +27,4 @@ impl Emitter for EventTarget {
     fn get_event_emitter(&self) -> &EventEmitter {
         &self.events
     }
-
-    fn get_mut_event_emitter(&mut self) -> &mut EventEmitter {
-        &mut self.events
-    }
 }
