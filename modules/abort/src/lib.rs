@@ -5,7 +5,7 @@ use event::EmitterExt;
 use rusty_js::*;
 
 pub use abort_controller::AbortController;
-pub use abort_signal::AbortSignal;
+pub use abort_signal::{AbortReceiver, AbortSignal};
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<AbortSignal>()?;

@@ -22,14 +22,14 @@ impl AbortController {
 
     #[js_method]
     pub fn abort(&self, ctx: JSContext, reason: Optional<JSValue>) -> JSResult<()> {
-        let mut abort = self.abort_signal.borrow_mut::<AbortSignal>()?;
+        let abort = self.abort_signal.borrow_mut::<AbortSignal>()?;
         if abort.aborted() {
             //only once
             return Ok(());
         }
         abort.set_reason(reason);
         drop(abort);
-        AbortSignal::send_aborted(&ctx, This(self.abort_signal.clone()))?;
+        AbortSignal::broadcast_abort(&ctx, This(self.abort_signal.clone()))?;
         Ok(())
     }
 }
