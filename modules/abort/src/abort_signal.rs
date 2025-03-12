@@ -17,10 +17,11 @@ struct AbortSignalInner {
     aborted: bool,
 
     // The reason why the operation was aborted, which can be any JavaScript value
-    reason: Option<JSValue>,
+    // default value is UNDEFINED
+    reason: JSValue,
 
     emitter: EventEmitter,
-    sender: watch::Sender<Option<JSValue>>,
+    sender: watch::Sender<JSValue>,
 }
 
 /// A structure with one sender and multiple receivers
@@ -28,17 +29,17 @@ struct AbortSignalInner {
 /// multiple receivers can subscribe and receive the signal
 #[derive(Clone, Debug)]
 pub struct AbortReceiver {
-    inner: watch::Receiver<Option<JSValue>>,
+    inner: watch::Receiver<JSValue>,
 }
 
 impl AbortSignal {
-    pub fn new() -> Self {
-        let (sender, _) = watch::channel(None);
+    pub fn new(ctx: &JSContext) -> Self {
+        let (sender, _) = watch::channel(JSValue::undefined(ctx));
         Self {
             inner: Rc::new(Mutex::new(AbortSignalInner {
                 emitter: EventEmitter::new(),
                 aborted: false,
-                reason: None,
+                reason: JSValue::undefined(ctx),
                 sender,
             })),
         }
@@ -50,9 +51,12 @@ impl AbortSignal {
     #[must_use]
     pub fn subscribe(&self) -> AbortReceiver {
         let inner = self.inner.lock().unwrap();
-        AbortReceiver {
-            inner: inner.sender.subscribe(),
+        let recv = inner.sender.subscribe();
+        if inner.aborted {
+            let reason = inner.reason.clone();
+            let _ = inner.sender.send(reason);
         }
+        AbortReceiver { inner: recv }
     }
 
     /// Sends an abort signal
@@ -60,11 +64,9 @@ impl AbortSignal {
     /// Uses watch channel to ensure all receivers receive the same signal
     pub fn notify_abort(&self, abort: JSValue) -> JSResult<()> {
         let inner = self.inner.lock().unwrap();
-        if inner.sender.borrow().is_none() {
-            // Check if there are any active receivers before sending
-            if inner.sender.receiver_count() > 0 {
-                inner.sender.send(Some(abort)).into_result()?;
-            }
+        // Always try to send the signal if there are active receivers
+        if inner.sender.receiver_count() > 0 {
+            inner.sender.send(abort).into_result()?;
         }
         Ok(())
     }
@@ -76,13 +78,16 @@ impl AbortSignal {
 
 impl AbortReceiver {
     /// Receives an abort signal
-    /// Blocks until a signal is received
     pub async fn recv(&mut self) -> JSValue {
         loop {
-            if let Some(value) = &*self.inner.borrow() {
-                return value.clone();
+            // get the current value in the channel. However, this value might still
+            // be the initial undefined value if no abort signal has been sent yet.
+            let value = self.inner.borrow().clone();
+            if !value.is_undefined() {
+                return value;
             }
-            self.inner.changed().await.unwrap();
+            // waits for the next change to the value
+            let _ = self.inner.changed().await;
         }
     }
 }
@@ -115,25 +120,24 @@ impl AbortSignal {
     }
 
     #[js_method(getter, enumerable, rename = "reason")]
-    pub(crate) fn get_reason(&self, ctx: JSContext) -> JSValue {
+    pub fn get_reason(&self) -> JSValue {
         let inner = self.inner.lock().unwrap();
-        inner.reason.clone().unwrap_or(JSValue::undefined(&ctx))
+        inner.reason.clone()
     }
 
     #[js_method(setter, rename = "reason")]
     pub(crate) fn set_reason(&self, reason: Optional<JSValue>) {
         let mut inner = self.inner.lock().unwrap();
-        match reason.0 {
-            Some(new_reason) if !new_reason.is_undefined() => inner.reason.replace(new_reason),
-            _ => inner.reason.take(),
-        };
+        if let Some(r) = reason.0 {
+            inner.reason = r;
+        }
     }
 
     #[js_method(rename = "throwIfAborted")]
     fn throw_if_aborted(&self, ctx: JSContext) -> JSValue {
         let inner = self.inner.lock().unwrap();
-        if inner.aborted && inner.reason.is_some() {
-            ctx.throw(inner.reason.clone().unwrap())
+        if inner.aborted && !inner.reason.is_undefined() {
+            ctx.throw(inner.reason.clone())
         } else {
             JSValue::undefined(&ctx)
         }
@@ -146,7 +150,7 @@ impl AbortSignal {
     /// then so will be the returned AbortSignal.
     #[js_method]
     fn any(ctx: JSContext, signals: JSArray) -> JSResult<JSObject> {
-        let new_signal = AbortSignal::new();
+        let new_signal = AbortSignal::new(&ctx);
         let class = Class::get::<AbortSignal>(&ctx)?;
         let mut unaborted_signals = Vec::with_capacity(signals.len() as _);
 
@@ -158,7 +162,7 @@ impl AbortSignal {
                 {
                     let mut inner = new_signal.inner.lock().unwrap();
                     inner.aborted = true;
-                    inner.reason = Some(borrow.get_reason(ctx.clone()));
+                    inner.reason = borrow.get_reason();
                 }
                 let new_signal = class.instance::<AbortSignal>(new_signal);
                 return Ok(new_signal);
@@ -176,14 +180,14 @@ impl AbortSignal {
 
             let notifier = JSFunc::new_once(&ctx, move |signal: This<JSObject>| -> JSResult<()> {
                 let signal_obj = signal.borrow::<AbortSignal>()?;
-                let reason = signal_obj.get_reason(ctx_for_closure.clone());
+                let reason = signal_obj.get_reason();
                 drop(signal_obj);
 
                 let to_abort_obj = to_abort.borrow_mut::<AbortSignal>()?;
                 {
                     let mut inner = to_abort_obj.inner.lock().unwrap();
                     inner.aborted = true;
-                    inner.reason = Some(reason);
+                    inner.reason = reason;
                 }
                 drop(to_abort_obj);
 
@@ -197,8 +201,8 @@ impl AbortSignal {
     /// static method returns an AbortSignal that is already set as aborted, and
     /// which does not trigger an abort event
     #[js_method]
-    fn abort(reason: Optional<JSValue>) -> JSResult<AbortSignal> {
-        let signal = Self::new();
+    fn abort(ctx: JSContext, reason: Optional<JSValue>) -> JSResult<AbortSignal> {
+        let signal = Self::new(&ctx);
         signal.set_reason(reason);
         {
             let mut inner = signal.inner.lock().into_result()?;
@@ -212,11 +216,11 @@ impl AbortSignal {
     /// The "active" time in milliseconds before the returned AbortSignal will abort
     #[js_method]
     pub fn timeout(ctx: JSContext, time: u64) -> JSResult<JSObject> {
-        let signal = Self::new();
+        let signal = Self::new(&ctx);
         let timeout_error = get_reason_or_dom_exception(&ctx, None, DOMExceptionName::TIMEOUT_ERR)?;
         {
             let mut inner = signal.inner.lock().unwrap();
-            inner.reason = Some(timeout_error);
+            inner.reason = timeout_error;
         }
 
         let instance = Class::get::<AbortSignal>(&ctx)?.instance(signal);
@@ -241,40 +245,32 @@ impl AbortSignal {
 
     /// send abort signal to this
     pub(crate) fn broadcast_abort(ctx: &JSContext, this: This<JSObject>) -> JSResult<()> {
-        let borrow = this.borrow_mut::<AbortSignal>()?;
-        let reason = {
-            let mut inner = borrow.inner.lock().into_result()?;
-            inner.aborted = true;
-            let reason = get_reason_or_dom_exception(
-                ctx,
-                inner.reason.as_ref(),
-                DOMExceptionName::ABORT_ERR,
-            )?;
-            inner.reason = Some(reason.clone());
-            reason
-        };
-        borrow.notify_abort(reason)?;
-        drop(borrow);
-        Self::do_emit(this, EventKey::from("abort"), Rest(vec![]))?;
-        Ok(())
-    }
-}
+        Self::do_emit(This(this.0.clone()), EventKey::from("abort"), Rest(vec![]))?;
 
-impl Default for AbortSignal {
-    fn default() -> Self {
-        Self::new()
+        let borrow = this.borrow_mut::<AbortSignal>()?;
+        let reason = get_reason_or_dom_exception(
+            ctx,
+            Some(borrow.inner.lock().unwrap().reason.clone()),
+            DOMExceptionName::ABORT_ERR,
+        )?;
+
+        borrow.notify_abort(reason.clone())?;
+
+        let mut inner = borrow.inner.lock().into_result()?;
+        inner.aborted = true;
+        inner.reason = reason;
+        Ok(())
     }
 }
 
 fn get_reason_or_dom_exception(
     ctx: &JSContext,
-    reason: Option<&JSValue>,
+    reason: Option<JSValue>,
     name: DOMExceptionName,
 ) -> JSResult<JSValue> {
-    let reason = if let Some(reason) = reason {
-        reason.clone()
-    } else {
-        DOMException::create(ctx, "", name)?.into_jsvalue()
+    let reason = match reason {
+        Some(r) if !r.is_undefined() => r,
+        _ => DOMException::create(ctx, "", name)?.into_jsvalue(),
     };
     Ok(reason)
 }

@@ -11,7 +11,7 @@ impl AbortController {
     #[js_method(constructor)]
     fn new(ctx: JSContext) -> JSResult<Self> {
         Ok(Self {
-            abort_signal: Class::get::<AbortSignal>(&ctx)?.instance(AbortSignal::new()),
+            abort_signal: Class::get::<AbortSignal>(&ctx)?.instance(AbortSignal::new(&ctx)),
         })
     }
 
