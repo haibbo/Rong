@@ -7,6 +7,7 @@ use rusty_js::{function::Optional, *};
 use crate::blob::Blob;
 use crate::body::{BodyKind, HttpBody};
 use crate::header::Headers;
+use abort::AbortReceiver;
 
 #[derive(Default)]
 #[js_export]
@@ -20,6 +21,7 @@ pub struct Response {
     redirected: bool,
     content_type: Option<String>,
     content_encoding: Option<String>,
+    abort_receiver: Option<AbortReceiver>,
 }
 
 #[derive(FromJSValue)]
@@ -142,6 +144,7 @@ impl Response {
             redirected: self.redirected,
             content_type: self.content_type.clone(),
             content_encoding: self.content_encoding.clone(),
+            abort_receiver: self.abort_receiver.clone(),
         }
     }
 
@@ -150,14 +153,31 @@ impl Response {
             Some(BodyKind::JS(body)) => body.bytes().await,
             Some(BodyKind::Hyper(body)) => {
                 if let Some(body) = body.take() {
-                    let collected = body.collect().await.map_err(|e| {
-                        RustyJSError::Error(format!("Failed to collect body: {}", e))
-                    })?;
-                    let bytes = collected.to_bytes();
-                    
-                    // Get a reference to the headers for decompression
-                    let header_map = self.headers.as_header_map();
-                    crate::body::decompress_bytes(bytes, header_map)
+                    // Check for abort signal before starting to read
+                    if let Some(receiver) = &mut self.abort_receiver {
+                        tokio::select! {
+                            result = body.collect() => {
+                                let collected = result.map_err(|e| {
+                                    RustyJSError::Error(format!("Failed to collect body: {}", e))
+                                })?;
+                                let bytes = collected.to_bytes();
+                                // Get a reference to the headers for decompression
+                                let header_map = self.headers.as_header_map();
+                                crate::body::decompress_bytes(bytes, header_map)
+                            }
+                            abort_reason = receiver.recv() => {
+                                Err(RustyJSError::from_jsvalue(abort_reason))
+                            }
+                        }
+                    } else {
+                        let collected = body.collect().await.map_err(|e| {
+                            RustyJSError::Error(format!("Failed to collect body: {}", e))
+                        })?;
+                        let bytes = collected.to_bytes();
+                        // Get a reference to the headers for decompression
+                        let header_map = self.headers.as_header_map();
+                        crate::body::decompress_bytes(bytes, header_map)
+                    }
                 } else {
                     Ok(Bytes::new())
                 }
@@ -254,7 +274,10 @@ impl Response {
         (None, None)
     }
 
-    pub(crate) fn from_hyper(response: hyper::Response<Incoming>) -> Self {
+    pub(crate) fn from_hyper(
+        response: hyper::Response<Incoming>,
+        abort_receiver: Option<AbortReceiver>,
+    ) -> Self {
         let (parts, body) = response.into_parts();
 
         // Convert hyper headers to Headers
@@ -283,6 +306,7 @@ impl Response {
             body: Some(BodyKind::Hyper(Some(body))),
             content_type,
             content_encoding,
+            abort_receiver,
             ..Default::default()
         }
     }

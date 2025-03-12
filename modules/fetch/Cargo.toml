@@ -8,6 +8,8 @@ rusty-js = { workspace = true }
 tokio = { version = "1.0", features = ["rt", "time", "macros"] }
 http = { package = "http", version = "1.2" }
 lxr_url = { path = "../lxr_url" }
+abort = { path = "../abort" }
+dom-exception = { path = "../dom-exception" }
 hyper = { version = "1.6.0", features = ["client", "http1"] }
 hyper-util = { version = "0.1.10", features = ["client", "http1", "tokio"] }
 hyper-rustls = { version = "0.27.5", features = ["webpki-roots", "http1"] }
@@ -20,4 +22,7 @@ rustyjs_test = { path = "../../utils/rustyjs_test" }
 encoding={path="../encoding"}
 console={path="../console"}
 assert={path="../assert"}
-axum = "0.8.1"
+timer={path="../timer"}
+futures = "0.3"
+tokio-stream = "0.1"
+axum = { version = "0.8.1", features = ["http1"] }

@@ -3,6 +3,7 @@ use rusty_js::{function::Optional, *};
 
 use crate::body::HttpBody;
 use crate::header::Headers;
+use abort::AbortSignal;
 use lxr_url::URL;
 
 #[js_export]
@@ -12,7 +13,13 @@ pub struct Request {
     pub(crate) headers: Headers,
     pub(crate) body: Option<HttpBody>,
     redirect: RequestRedirect,
-    signal: Option<JSObject>, // AbortSignal
+    signal: Option<AbortSignal>, // AbortSignal
+}
+
+impl Request {
+    pub(crate) fn abort_signal(&self) -> Option<&AbortSignal> {
+        self.signal.as_ref()
+    }
 }
 
 #[derive(Default, Clone)]
@@ -29,7 +36,7 @@ pub(crate) struct RequestInit {
     headers: Option<Headers>,
     body: Option<JSValue>,
     redirect: Option<RequestRedirect>,
-    signal: Option<JSObject>, // AbortSignal
+    signal: Option<AbortSignal>, // AbortSignal
 }
 
 impl RequestInit {
@@ -95,7 +102,7 @@ impl TryFromJSValue for RequestInit {
         }
 
         // Signal
-        if let Ok(signal) = obj.get::<_, JSObject>("signal") {
+        if let Ok(signal) = obj.get::<_, AbortSignal>("signal") {
             request.signal = Some(signal);
         }
         Ok(request)
@@ -105,7 +112,7 @@ impl TryFromJSValue for RequestInit {
 #[js_class]
 impl Request {
     #[js_method(constructor)]
-    pub fn new(input: JSValue, request_init: Optional<RequestInit>) -> JSResult<Self> {
+    pub(crate) fn new(input: JSValue, request_init: Optional<RequestInit>) -> JSResult<Self> {
         // Parse input - can be a URL string or another Request object
         let mut request = if let Ok(url_str) = input.clone().try_into::<String>() {
             // Validate URL format
@@ -152,22 +159,22 @@ impl Request {
     }
 
     #[js_method(getter)]
-    pub fn method(&self) -> String {
+    fn method(&self) -> String {
         self.method.as_str().to_string()
     }
 
     #[js_method(getter)]
-    pub fn url(&self) -> String {
+    fn url(&self) -> String {
         self.url.to_string()
     }
 
     #[js_method(getter)]
-    pub fn headers(&self) -> Headers {
+    fn headers(&self) -> Headers {
         self.headers.clone()
     }
 
     #[js_method(getter)]
-    pub fn cache(&self) -> &'static str {
+    fn cache(&self) -> &'static str {
         "no-cache"
     }
 
@@ -181,27 +188,27 @@ impl Request {
     }
 
     #[js_method(getter)]
-    pub fn keepalive(&self) -> bool {
+    fn keepalive(&self) -> bool {
         true
     }
 
     #[js_method(getter)]
-    pub fn signal(&self) -> Option<JSObject> {
+    fn signal(&self) -> Option<AbortSignal> {
         self.signal.clone()
     }
 
     #[js_method(getter)]
-    pub fn body(&self) -> Option<JSValue> {
+    fn body(&self) -> Option<JSValue> {
         self.body.clone().map(|b| b.0)
     }
 
     #[js_method(getter, rename = "bodyUsed")]
-    pub fn body_used(&self) -> bool {
+    fn body_used(&self) -> bool {
         self.body.is_none()
     }
 
     #[js_method]
-    pub fn clone(&self) -> Self {
+    fn clone(&self) -> Self {
         Self {
             method: self.method.clone(),
             url: self.url.clone(),
@@ -213,7 +220,7 @@ impl Request {
     }
 
     #[js_method]
-    pub async fn text(&self) -> JSResult<String> {
+    async fn text(&self) -> JSResult<String> {
         if let Some(body) = &self.body {
             body.text().await
         } else {
@@ -222,14 +229,14 @@ impl Request {
     }
 
     #[js_method]
-    pub async fn json(&self, ctx: JSContext) -> JSResult<JSValue> {
+    async fn json(&self, ctx: JSContext) -> JSResult<JSValue> {
         let text = self.text().await?;
         // Use the to_js_value() trait method to convert the string to JSValue
         text.as_str().json_to_jsvalue(&ctx)
     }
 
     #[js_method(rename = "arrayBuffer")]
-    pub async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
+    async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
         if let Some(body) = &self.body {
             let bytes = body.bytes().await?;
             JSArrayBuffer::from_bytes(&ctx, &bytes)
@@ -239,7 +246,7 @@ impl Request {
     }
 
     #[js_method(rename = "formData")]
-    pub async fn form_data(&self) -> JSResult<JSObject> {
+    async fn form_data(&self) -> JSResult<JSObject> {
         // TODO: Implement form data parsing
         Err(RustyJSError::TypeError("Not implemented".to_string()))
     }

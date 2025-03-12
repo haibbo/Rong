@@ -8,6 +8,7 @@ use hyper_util::rt::TokioExecutor;
 use rusty_js::{function::Optional, *};
 use std::io::Error;
 use std::sync::OnceLock;
+use tokio::select;
 
 use crate::request::{Request, RequestInit};
 use crate::response::Response;
@@ -65,23 +66,38 @@ fn to_hyper_request(request: Request) -> HttpRequest<BoxBody<Bytes, Error>> {
 
 pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Response> {
     // Create Request object from input and init
-    let request = Request::new(input, init)?;
+    let request = Request::new(input, init).map_err(|e| RustyJSError::TypeError(e.to_string()))?;
+
+    // Get abort signal if present
+    let mut abort_receiver = request.abort_signal().map(|signal| signal.subscribe());
 
     // Convert Request to hyper::Request
     let hyper_request = to_hyper_request(request);
 
     // Send request and get response
-    let hyper_response = get_client()
-        .request(hyper_request)
-        .await
-        .map_err(|e| RustyJSError::TypeError(format!("fetch failed: {}", e)))?;
+    let response = if let Some(ref mut receiver) = abort_receiver {
+        select! {
+            result = get_client().request(hyper_request) => {
+                result.map_err(|e| RustyJSError::TypeError(format!("fetch failed: {}", e)))?
+            }
+            abort_reason = receiver.recv() => {
+                return Err(RustyJSError::from_jsvalue(abort_reason));
+            }
+        }
+    } else {
+        get_client()
+            .request(hyper_request)
+            .await
+            .map_err(|e| RustyJSError::TypeError(format!("fetch failed: {}", e)))?
+    };
 
-    // Convert hyper::Response to our Response
-    Ok(Response::from_hyper(hyper_response))
+    // Convert hyper::Response to our Response, passing the abort receiver
+    Ok(Response::from_hyper(response, abort_receiver))
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.global().set("fetch", JSFunc::new(ctx, fetch))?;
+    let fetch_fn = JSFunc::new(ctx, fetch)?;
+    ctx.global().set("fetch", fetch_fn)?;
     Ok(())
 }
 
@@ -96,10 +112,13 @@ mod tests {
         Router,
     };
     use flate2::{write::GzEncoder, Compression};
+    use futures::{stream, StreamExt};
     use rustyjs_test::*;
+    use std::convert::Infallible;
     use std::io::Write;
     use std::net::SocketAddr;
     use tokio::net::TcpListener;
+    use tokio::time::{sleep, Duration};
 
     async fn test_ip() -> impl IntoResponse {
         let mut headers = HeaderMap::new();
@@ -125,10 +144,34 @@ mod tests {
             .unwrap()
     }
 
+    async fn test_delay() -> impl IntoResponse {
+        sleep(Duration::from_millis(1000)).await;
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"delayed": true}"#))
+            .unwrap()
+    }
+
+    async fn test_large() -> impl IntoResponse {
+        let stream = stream::iter(0..100).then(|i| async move {
+            // Add a significant delay between chunks
+            sleep(Duration::from_millis(200)).await;
+            Ok::<_, Infallible>(format!("chunk_{:04}\n", i).repeat(1024))
+        });
+
+        // Convert the stream into a response
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "text/plain")
+            .body(Body::from_stream(stream))
+            .unwrap()
+    }
+
     async fn start_test_server() -> SocketAddr {
         let app = Router::new()
             .route("/ip", get(test_ip))
-            .route("/gzip", get(test_gzip));
+            .route("/gzip", get(test_gzip))
+            .route("/delay", get(test_delay))
+            .route("/large", get(test_large));
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -147,11 +190,14 @@ mod tests {
             console::init(&ctx, None)?;
             encoding::init(&ctx)?;
             lxr_url::init(&ctx)?;
+            timer::init(&ctx)?;
+            abort::init(&ctx)?;
+            dom_exception::init(&ctx)?;
 
-            crate::blob::init(&ctx).unwrap();
-            crate::header::init(&ctx).unwrap();
-            crate::request::init(&ctx).unwrap();
-            crate::response::init(&ctx).unwrap();
+            crate::blob::init(&ctx)?;
+            crate::header::init(&ctx)?;
+            crate::request::init(&ctx)?;
+            crate::response::init(&ctx)?;
             init(&ctx)?;
 
             // Start test server

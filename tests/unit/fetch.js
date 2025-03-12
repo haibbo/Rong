@@ -36,3 +36,116 @@ describe("fetch", () => {
     }
   });
 });
+
+describe("Abort to fetch", () => {
+  let controller;
+  let signal;
+
+  beforeEach(() => {
+    controller = new AbortController();
+    signal = controller.signal;
+  });
+
+  const waitForFetchStart = async (startFlag) => {
+    while (!startFlag) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  };
+
+  it("should abort fetch request", async () => {
+    let fetchStarted = false;
+    const fetchPromise = (async () => {
+      fetchStarted = true;
+      return await fetch(`${TEST_SERVER_URL}/delay`, { signal });
+    })();
+
+    await waitForFetchStart(fetchStarted);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    controller.abort();
+
+    try {
+      await fetchPromise;
+      assert.fail("fetch should have been aborted");
+    } catch (error) {
+      assert.ok(error instanceof DOMException);
+      assert.equal(error.name, "AbortError");
+      console.log("##Got:", error.name);
+    }
+  });
+
+  it("should abort during response body read", async () => {
+    const response = await fetch(`${TEST_SERVER_URL}/large`, { signal });
+
+    // Start reading the body first
+    const readPromise = response.arrayBuffer();
+    let abortCaught = false; // Add flag to track if we catch the abort
+
+    // Wait just a tiny bit to ensure reading has started
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Then abort
+    controller.abort();
+
+    try {
+      await readPromise;
+      console.log("##Body read completed without being aborted");
+    } catch (error) {
+      assert.ok(error instanceof DOMException);
+      assert.equal(error.name, "AbortError");
+      abortCaught = true; // Set flag when we catch the abort
+      console.log("##Got: ", error.name);
+    }
+
+    // Verify that we actually caught the abort
+    if (!abortCaught) {
+      throw new Error("Body read was not aborted as expected");
+    }
+  });
+
+  it("should abort with custom reason", async () => {
+    const reason = new Error("Custom abort reason");
+    assert.equal(signal.aborted, false);
+    assert.equal(signal.reason, undefined);
+
+    let fetchStarted = false;
+    const fetchPromise = (async () => {
+      fetchStarted = true;
+      return await fetch(`${TEST_SERVER_URL}/delay`, { signal });
+    })();
+
+    await waitForFetchStart(fetchStarted);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    controller.abort(reason);
+
+    assert.equal(signal.aborted, true);
+    assert.equal(signal.reason, reason);
+
+    try {
+      await fetchPromise;
+      assert.fail("fetch should have been aborted");
+    } catch (error) {
+      assert.equal(error, reason);
+      console.log("##Got: ", error);
+    }
+  });
+
+  it("should abort immediately if signal is already aborted", async () => {
+    assert.equal(signal.aborted, false);
+    assert.equal(signal.reason, undefined);
+
+    controller.abort();
+
+    assert.equal(signal.aborted, true);
+    assert.ok(signal.reason instanceof DOMException);
+    assert.equal(signal.reason.name, "AbortError");
+
+    try {
+      await fetch(`${TEST_SERVER_URL}/ip`, { signal });
+      assert.fail("fetch should have been aborted");
+    } catch (error) {
+      console.log("##Got: ", error.name);
+      assert.ok(error instanceof DOMException);
+      assert.equal(error.name, "AbortError");
+    }
+  });
+});
