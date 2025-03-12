@@ -26,3 +26,4 @@ timer={path="../timer"}
 futures = "0.3"
 tokio-stream = "0.1"
 axum = { version = "0.8.1", features = ["http1"] }
+serde_json = "1.0"

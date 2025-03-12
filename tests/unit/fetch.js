@@ -12,6 +12,31 @@ describe("fetch", () => {
     expect(data.origin).toBe("127.0.0.1");
   });
 
+  it("should send and receive custom headers", async () => {
+    const url = new URL("/headers", TEST_SERVER_URL);
+    const customHeaders = {
+      "X-Custom-Header": "custom value",
+      "X-Test-Header": "test value",
+      "User-Agent": "RustyJS Test Client",
+    };
+
+    const response = await fetch(url, {
+      headers: customHeaders,
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/json");
+
+    const data = await response.json();
+    console.log("Received headers:", data);
+
+    // Verify our custom headers were received by the server
+    for (const [key, value] of Object.entries(customHeaders)) {
+      assert.equal(data[key.toLowerCase()], value);
+    }
+  });
+
   it("should handle gzipped response", async () => {
     const url = new URL("/gzip", TEST_SERVER_URL);
     const response = await fetch(url);

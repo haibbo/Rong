@@ -166,12 +166,32 @@ mod tests {
             .unwrap()
     }
 
+    async fn test_headers(headers: HeaderMap) -> impl IntoResponse {
+        // Create a response containing the received headers
+        let mut headers_map = serde_json::Map::new();
+        for (key, value) in headers.iter() {
+            if let Ok(v) = value.to_str() {
+                headers_map.insert(
+                    key.as_str().to_string(),
+                    serde_json::Value::String(v.to_string()),
+                );
+            }
+        }
+        let json = serde_json::Value::Object(headers_map);
+
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json.to_string()))
+            .unwrap()
+    }
+
     async fn start_test_server() -> SocketAddr {
         let app = Router::new()
             .route("/ip", get(test_ip))
             .route("/gzip", get(test_gzip))
             .route("/delay", get(test_delay))
-            .route("/large", get(test_large));
+            .route("/large", get(test_large))
+            .route("/headers", get(test_headers));
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
