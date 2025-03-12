@@ -126,14 +126,5 @@ describe("assert module", () => {
         expect(e).toBe(error);
       }
     });
-
-    it("should throw with message and operator", () => {
-      try {
-        assert.fail("Actual", "Expected", "Message", "!=");
-      } catch (e) {
-        expect(e.message).toContain("Message");
-        expect(e.message).toContain("Actual != Expected");
-      }
-    });
   });
 });

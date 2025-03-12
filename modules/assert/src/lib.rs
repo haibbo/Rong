@@ -76,7 +76,12 @@ fn ok(ctx: JSContext, value: JSValue, message: Optional<JSValue>) -> JSValue {
 /// Forces a test to fail with a custom message
 fn fail(ctx: JSContext, message: Optional<JSValue>) -> JSValue {
     if let Some(msg) = message.0 {
-        msg
+        if msg.is_string() {
+            let msg: String = msg.try_into().unwrap_or_default();
+            ctx.throw_error(msg)
+        } else {
+            ctx.throw(msg)
+        }
     } else {
         ctx.throw_error("Failed")
     }
