@@ -3,9 +3,9 @@ use std::collections::HashSet;
 use std::fmt;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, IsTerminal, Write};
-use std::sync::OnceLock;
+use std::sync::Mutex;
 
-static CONSOLE_WRITER: OnceLock<Box<dyn ConsoleWriter>> = OnceLock::new();
+static CONSOLE_WRITER: Mutex<Option<Box<dyn ConsoleWriter>>> = Mutex::new(None);
 
 #[derive(Debug)]
 pub enum LogLevel {
@@ -47,21 +47,17 @@ impl ConsoleWriter for DefaultWriter {
     }
 }
 
-pub fn init(ctx: &JSContext, writer: Option<Box<dyn ConsoleWriter>>) -> JSResult<()> {
-    let writer = writer.unwrap_or_else(|| Box::new(DefaultWriter));
+/// Set a custom console writer. This can be called multiple times to replace the writer.
+pub fn set_writer(writer: Box<dyn ConsoleWriter>) {
+    let mut console_writer = CONSOLE_WRITER.lock().unwrap();
+    *console_writer = Some(writer);
+}
 
-    // In test environment, allow reinitialization of CONSOLE_WRITER
-    #[cfg(test)]
-    {
-        // If already initialized, ignore error to allow reinitialization
-        let _ = CONSOLE_WRITER.set(writer);
-    }
-
-    #[cfg(not(test))]
-    if CONSOLE_WRITER.get().is_none() {
-        CONSOLE_WRITER
-            .set(writer)
-            .expect("Console writer already initialized");
+/// Initialize the console module with default writer
+pub fn init(ctx: &JSContext) -> JSResult<()> {
+    // Initialize with default writer if not yet initialized
+    if CONSOLE_WRITER.lock().unwrap().is_none() {
+        set_writer(Box::new(DefaultWriter));
     }
 
     let console = JSObject::new(ctx);
@@ -80,22 +76,22 @@ pub fn init(ctx: &JSContext, writer: Option<Box<dyn ConsoleWriter>>) -> JSResult
 }
 
 fn log_message(level: LogLevel, message: String) {
-    CONSOLE_WRITER
-        .get()
-        .map(|boxed| &**boxed)
-        .expect("Console writer not initialized")
-        .write(level, message);
+    if let Some(writer) = &*CONSOLE_WRITER.lock().unwrap() {
+        writer.write(level, message);
+    }
 }
 
 fn clear() {
-    if CONSOLE_WRITER.get().map(|w| w.is_tty()).unwrap_or(false) {
-        // ANSI clear screen sequence
-        print!("\x1B[2J\x1B[1;1H");
-        // Ensure immediate output flush
-        io::stdout().flush().unwrap();
-    } else {
-        // In non-terminal environment, print a newline
-        println!();
+    if let Some(writer) = &*CONSOLE_WRITER.lock().unwrap() {
+        if writer.is_tty() {
+            // ANSI clear screen sequence
+            print!("\x1B[2J\x1B[1;1H");
+            // Ensure immediate output flush
+            io::stdout().flush().unwrap();
+        } else {
+            // In non-terminal environment, print a newline
+            println!();
+        }
     }
 }
 
@@ -269,7 +265,7 @@ fn format_raw_inner(
                     fn_info.push("anonymous".to_string());
                 }
             } else {
-                fn_info.push("anonymos".to_string());
+                fn_info.push("anonymous".to_string());
             }
 
             if let Ok(length) = obj.get::<_, f64>("length") {
@@ -511,10 +507,23 @@ pub fn default_hash<T: Hash + ?Sized>(v: &T) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
+    use std::sync::Mutex;
 
-    thread_local! {
-        static CAPTURED_OUTPUT: RefCell<String> = const{RefCell::new(String::new())};
+    static TEST_OUTPUT: Mutex<String> = Mutex::new(String::new());
+
+    fn clear_test_output() {
+        let mut output = TEST_OUTPUT.lock().unwrap();
+        *output = String::new();
+    }
+
+    fn get_test_output() -> String {
+        TEST_OUTPUT.lock().unwrap().clone()
+    }
+
+    fn append_test_output(message: &str) {
+        let mut output = TEST_OUTPUT.lock().unwrap();
+        output.push_str(message);
+        output.push('\n');
     }
 
     #[derive(Debug)]
@@ -522,59 +531,46 @@ mod tests {
 
     impl ConsoleWriter for TestConsoleWriter {
         fn write(&self, _level: LogLevel, message: String) {
-            println!("JS: {}", message);
-
-            CAPTURED_OUTPUT.with(|output| {
-                let mut output = output.borrow_mut();
-                *output += &message;
-                *output += "\n";
-            });
+            println!("{}", message);
+            clear_test_output(); // Clear any previous output
+            append_test_output(&message);
         }
 
         fn is_tty(&self) -> bool {
             false
         }
     }
-    // Helper function: Clear captured output
-    fn clear_captured_output() {
-        CAPTURED_OUTPUT.with(|output| {
-            *output.borrow_mut() = String::new();
-        });
-    }
-
-    // Helper function: Get captured output
-    fn get_captured_output() -> String {
-        CAPTURED_OUTPUT.with(|output| output.borrow().clone())
-    }
 
     #[test]
     fn test_console_log_formatted_string() {
-        clear_captured_output();
+        clear_test_output();
 
         let rt = RustyJS::runtime();
         let ctx = RustyJS::context(&rt);
 
-        init(&ctx, Some(Box::new(TestConsoleWriter))).unwrap();
+        init(&ctx).unwrap();
+        set_writer(Box::new(TestConsoleWriter));
 
         let js_code = r#"console.log("Name: %s, Age: %d", "Alice", 30);"#;
         ctx.eval::<()>(Source::from_bytes(js_code)).unwrap();
 
-        let output = get_captured_output();
-        assert!(
-            output.contains("Name: Alice, Age: 30"),
-            "Output should contain formatted string: {}",
-            output
+        let output = get_test_output().trim().to_string();
+        assert_eq!(
+            output, "Name: Alice, Age: 30",
+            "Output should match formatted string"
         );
     }
 
     #[test]
     fn test_console_log_circular_reference() {
-        clear_captured_output();
+        clear_test_output();
 
         let rt = RustyJS::runtime();
         let ctx = RustyJS::context(&rt);
 
-        init(&ctx, Some(Box::new(TestConsoleWriter))).unwrap();
+        init(&ctx).unwrap();
+        set_writer(Box::new(TestConsoleWriter));
+
         let js_code = r#"
             // Create an object with circular reference
             const obj = { name: "Circular Object" };
@@ -584,22 +580,23 @@ mod tests {
         "#;
         ctx.eval::<()>(Source::from_bytes(js_code)).unwrap();
 
-        let output = get_captured_output();
+        let output = get_test_output().trim().to_string();
         assert!(
             output.contains("[Circular]"),
-            "Output should contain circular reference marker: {}",
+            "Output '{}' should contain circular reference marker",
             output
         );
     }
 
     #[test]
     fn test_console_log_max_depth() {
-        clear_captured_output();
+        clear_test_output();
 
         let rt = RustyJS::runtime();
         let ctx = RustyJS::context(&rt);
 
-        init(&ctx, Some(Box::new(TestConsoleWriter))).unwrap();
+        init(&ctx).unwrap();
+        set_writer(Box::new(TestConsoleWriter));
 
         let js_code = r#"
             // Function to create a deeply nested object
@@ -615,10 +612,10 @@ mod tests {
         "#;
         ctx.eval::<()>(Source::from_bytes(js_code)).unwrap();
 
-        let output = get_captured_output();
+        let output = get_test_output().trim().to_string();
         assert!(
             output.contains("[Maximum recursion depth exceeded]"),
-            "Output should contain recursion depth warning: {}",
+            "Output '{}' should contain recursion depth warning",
             output
         );
     }

@@ -207,7 +207,7 @@ mod tests {
     fn test_fetch() {
         async_run!(|ctx: JSContext| async move {
             assert::init(&ctx)?;
-            console::init(&ctx, None)?;
+            console::init(&ctx)?;
             encoding::init(&ctx)?;
             lxr_url::init(&ctx)?;
             timer::init(&ctx)?;

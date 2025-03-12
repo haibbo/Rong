@@ -398,7 +398,7 @@ mod tests {
     fn test_path() {
         async_run!(|ctx: JSContext| async move {
             init(&ctx)?;
-            console::init(&ctx, None)?;
+            console::init(&ctx)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "path.js")
                 .await?

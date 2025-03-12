@@ -326,7 +326,7 @@ mod tests {
     fn test_response() {
         async_run!(|ctx: JSContext| async move {
             assert::init(&ctx)?;
-            console::init(&ctx, None)?;
+            console::init(&ctx)?;
             encoding::init(&ctx)?;
             lxr_url::init(&ctx)?;
 

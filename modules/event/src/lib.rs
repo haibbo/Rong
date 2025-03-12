@@ -160,7 +160,7 @@ mod tests {
             init(&ctx)?;
             assert::init(&ctx)?;
             timer::init(&ctx)?;
-            console::init(&ctx, None)?;
+            console::init(&ctx)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "event.js")
                 .await?

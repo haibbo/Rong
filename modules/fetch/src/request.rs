@@ -279,8 +279,8 @@ mod tests {
     fn test_request() {
         async_run!(|ctx: JSContext| async move {
             assert::init(&ctx)?;
-            console::init(&ctx, None)?;
-            encoding::init(&ctx).unwrap();
+            console::init(&ctx)?;
+            encoding::init(&ctx)?;
             lxr_url::init(&ctx).unwrap();
 
             // Initialize Blob first

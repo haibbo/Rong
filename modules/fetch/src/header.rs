@@ -299,15 +299,17 @@ mod tests {
     #[test]
     fn test_headers() {
         async_run!(|ctx: JSContext| async move {
-            init(&ctx).unwrap();
             assert::init(&ctx)?;
-            console::init(&ctx, None)?;
+            console::init(&ctx)?;
+            encoding::init(&ctx)?;
+            crate::header::init(&ctx)?; // Initialize Headers before running tests
 
             let passed = UnitJSRunner::load_script(&ctx, "header.js")
                 .await?
                 .run()
                 .await?;
             assert!(passed);
+
             Ok(())
         });
     }

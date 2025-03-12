@@ -22,7 +22,7 @@ mod tests {
         async_run!(|ctx: JSContext| async move {
             init(&ctx)?;
             assert::init(&ctx)?;
-            console::init(&ctx, None)?;
+            console::init(&ctx)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "url.js")
                 .await?

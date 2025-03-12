@@ -81,7 +81,7 @@ mod tests {
             event::init(&ctx)?;
             dom_exception::init(&ctx)?;
             timer::init(&ctx)?;
-            console::init(&ctx, None)?;
+            console::init(&ctx)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "abort.js")
                 .await?
