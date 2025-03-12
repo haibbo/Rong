@@ -281,14 +281,10 @@ mod tests {
             assert::init(&ctx)?;
             console::init(&ctx)?;
             encoding::init(&ctx)?;
-            lxr_url::init(&ctx).unwrap();
+            lxr_url::init(&ctx)?;
 
-            // Initialize Blob first
-            crate::blob::init(&ctx).unwrap();
-            // Then initialize Headers
-            crate::header::init(&ctx).unwrap();
-            // Finally initialize Request
-            init(&ctx).unwrap();
+            crate::header::init(&ctx)?;
+            init(&ctx)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "request.js")
                 .await?

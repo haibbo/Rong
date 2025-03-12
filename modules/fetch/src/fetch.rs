@@ -214,7 +214,6 @@ mod tests {
             abort::init(&ctx)?;
             dom_exception::init(&ctx)?;
 
-            crate::blob::init(&ctx)?;
             crate::header::init(&ctx)?;
             crate::request::init(&ctx)?;
             crate::response::init(&ctx)?;

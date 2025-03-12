@@ -1,0 +1,13 @@
+[package]
+name = "buffer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rusty-js = { workspace = true }
+
+[dev-dependencies]
+rustyjs_test = { path = "../../utils/rustyjs_test" }
+console={path="../console"}
+assert={path="../assert"}
+encoding={path="../encoding"}

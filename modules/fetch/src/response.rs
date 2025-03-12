@@ -4,10 +4,10 @@ use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use rusty_js::{function::Optional, *};
 
-use crate::blob::Blob;
 use crate::body::{BodyKind, HttpBody};
 use crate::header::Headers;
 use abort::AbortReceiver;
+use buffer::Blob;
 
 #[derive(Default)]
 #[js_export]
@@ -330,8 +330,8 @@ mod tests {
             encoding::init(&ctx)?;
             lxr_url::init(&ctx)?;
 
-            crate::blob::init(&ctx).unwrap();
-            crate::header::init(&ctx).unwrap();
+            buffer::init(&ctx)?;
+            crate::header::init(&ctx)?;
             init(&ctx)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "response.js")

@@ -247,11 +247,6 @@ fn normalize_type(mime_type: String) -> String {
     mime_type.to_ascii_lowercase()
 }
 
-pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<Blob>()?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,42 +255,17 @@ mod tests {
     #[test]
     fn test_path() {
         async_run!(|ctx: JSContext| async move {
-            ctx.global().set(
-                "print",
-                JSFunc::new(&ctx, |msg: String| println!("JS: {}", msg)),
-            )?;
+            encoding::init(&ctx)?;
+            console::init(&ctx)?;
+            assert::init(&ctx)?;
+            ctx.register_class::<Blob>()?;
 
-            ctx.eval::<()>(Source::from_bytes(
-                r#"
-                const process = { platform: "darwin" };
-                    const console={
-                        log: function(...args){
-                            print(args.join(' '))
-                        }
-                    }
-                "#,
-            ))?;
+            let passed = UnitJSRunner::load_script(&ctx, "blob.js")
+                .await?
+                .run()
+                .await?;
+            assert!(passed);
 
-            encoding::init(&ctx).unwrap(); // load TextEncoder
-            init(&ctx).unwrap();
-
-            let source = Source::from_path("tests/blob.js").await.unwrap();
-            let obj: JSObject = ctx.eval_async(source).await?;
-
-            let total: i32 = obj.get("total").unwrap();
-            let passed: i32 = obj.get("passed").unwrap();
-            let success: bool = obj.get("success").unwrap();
-
-            if !success {
-                let failed: JSArray = obj.get("failed").unwrap();
-                let error_messages: Vec<String> = failed.iter().collect::<JSResult<_>>()?;
-                panic!(
-                    "Path tests failed:\nPassed {}/{}\nFailures:\n{}",
-                    passed,
-                    total,
-                    error_messages.join("\n")
-                );
-            }
             Ok(())
         });
     }
