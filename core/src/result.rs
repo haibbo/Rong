@@ -62,6 +62,9 @@ pub enum RustyJSError {
 
     #[error("{0}")]
     Exception(#[from] JSError),
+
+    #[error("{0}")]
+    JSValue(#[from] JSValueErr),
 }
 
 impl RustyJSError {
@@ -96,6 +99,11 @@ impl RustyJSError {
             | RustyJSError::CompileToByteErr
             | RustyJSError::OnceFnCalled
             | RustyJSError::NotSupportByteCode => ctx.as_ref().throw_error(self.to_string()),
+
+            RustyJSError::JSValue(JSValueErr(value)) => {
+                let value = unsafe { Box::from_raw(value as *mut JSValue<V>) };
+                ctx.throw(*value).into_value()
+            }
         }
     }
 
@@ -106,6 +114,11 @@ impl RustyJSError {
     {
         let v = self.throw_js_exception(ctx);
         JSValue::from_raw(ctx, v)
+    }
+
+    pub fn from_jsvalue<V: JSValueImpl>(value: JSValue<V>) -> Self {
+        let addr = Box::new(value);
+        RustyJSError::JSValue(JSValueErr(Box::into_raw(addr) as usize))
     }
 }
 
@@ -170,3 +183,14 @@ where
         self.map_err(|e| RustyJSError::TypeError(e.to_string()))
     }
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct JSValueErr(usize);
+
+impl std::fmt::Display for JSValueErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "JSValue Error")
+    }
+}
+
+impl std::error::Error for JSValueErr {}
