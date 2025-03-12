@@ -1,39 +1,22 @@
 //! Timer implementation
 //!
-//! This module provides timer functionality similar to Web APIs:
-//! - setTimeout/clearTimeout
-//! - setInterval/clearInterval
+//! This module provides both sync and async timer functionality:
+//! - Sync timers are mounted on the global object:
+//!   - setTimeout/clearTimeout (sync)
+//!   - setInterval/clearInterval (sync)
+//! - Async timers are mounted under global.timer:
+//!   - setTimeout/clearTimeout (async)
+//!   - setInterval/clearInterval (async)
+//!   - setImmediate (async)
+//!
+//! # Features
+//! - Sync timers for traditional callback-based usage
+//! - Async timers that return Promises for modern async/await patterns
 //!
 //! # Limitations
 //! - Unlike Web APIs, this implementation does not support passing additional arguments
 //!   to the callback function. Only the callback function and delay are supported.
 //! - Delay is in milliseconds and should be a positive number.
-//!
-//! # Example
-//! ```rust,no_run
-//! use rusty_js::*;
-//! use rustyjs_test::*;
-//! use timer::init;
-//! use tokio::time::{Duration,sleep};
-//!
-//! async_run!(|ctx: JSContext| async move {
-//!
-//! init(&ctx).unwrap();
-//!
-//! ctx.global().set(
-//!     "print",
-//!     JSFunc::new(&ctx, |msg: String| println!("{}", msg))
-//! );
-//!
-//! ctx.eval::<()>(Source::from_bytes(r#"
-//!     setTimeout(() => print('Timeout!'), 1000);
-//!     setInterval(() => print('Interval!'), 1000);
-//! "#)).unwrap();
-//!
-//! sleep(Duration::from_millis(2500)).await;
-//! Ok(())
-//! });
-//! ```
 
 use rusty_js::{function::Optional, JSContext, JSFunc, JSResult, JSRuntimeService};
 
