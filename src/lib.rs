@@ -1,11 +1,12 @@
 pub use rusty_js_core::{
-    Class as CoreClass, ClassSetup, FromJSValue, IntoJSResult, IntoJSValue, JSArray as CoreJSArray,
-    JSArrayBuffer as CoreJSArrayBuffer, JSClass, JSContext as CoreJSContext, JSEngine,
-    JSException as CoreJSException, JSFunc as CoreJSFunc, JSObject as CoreJSObject, JSResult,
-    JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
-    JSTypedArray as CoreJSTypedArray, JSTypedArrayKind, JSValue as CoreJSValue, JSValueType,
-    JsonToJsValue, Promise as CorePromise, PropertyDescriptor as CorePropertyDescriptor,
-    RustyJSError, Source, ToJSAsyncIterator, ToJSIterator,
+    Class as CoreClass, ClassSetup, FromJSValue, IntoJSAsyncIterator, IntoJSResult, IntoJSValue,
+    JSArray as CoreJSArray, JSArrayBuffer as CoreJSArrayBuffer, JSClass,
+    JSContext as CoreJSContext, JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc,
+    JSObject as CoreJSObject, JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService,
+    JSSymbol as CoreJSSymbol, JSTypedArray as CoreJSTypedArray, JSTypedArrayKind,
+    JSValue as CoreJSValue, JSValueType, JsonToJsValue, Promise as CorePromise,
+    PropertyDescriptor as CorePropertyDescriptor, RustyJSError, Source, ToJSAsyncIterator,
+    ToJSIterator,
 };
 
 pub use rusty_js_core::function;
