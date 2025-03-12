@@ -329,7 +329,6 @@ impl JSExceptionHandler for QJSContext {
     }
 
     fn throw(&self, value: Self::Value) -> Self::Value {
-        let raw_value = unsafe { qjs::JS_Throw(self.ctx, value.into_raw_value()) };
-        QJSValue::from_owned_raw(self.ctx, raw_value).with_exception()
+        QJSValue::from_owned_raw(self.ctx, value.into_raw_value()).with_exception()
     }
 }
