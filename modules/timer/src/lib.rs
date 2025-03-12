@@ -1,4 +1,4 @@
-//! Timer implementation for rusty-js
+//! Timer implementation
 //!
 //! This module provides timer functionality similar to Web APIs:
 //! - setTimeout/clearTimeout
@@ -43,6 +43,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 use tokio::sync::Notify;
 use tokio::time::Duration;
+
+mod promise;
 
 #[derive(Clone)]
 pub struct TimerRegistry {
@@ -187,6 +189,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     global.set("setInterval", set_interval)?;
     global.set("clearInterval", clear_interval)?;
 
+    promise::init(ctx)?;
     Ok(())
 }
 
@@ -197,59 +200,6 @@ mod tests {
     use std::rc::Rc;
     use std::sync::atomic::{AtomicI32, Ordering};
     use tokio::time::sleep;
-
-    #[test]
-    fn test_set_timeout() {
-        async_run!(|ctx: JSContext| async move {
-            init(&ctx).unwrap();
-
-            let result: i32 = ctx
-                .eval::<Promise>(Source::from_bytes(
-                    r#"
-                new Promise((resolve) => {
-                    setTimeout(() => {
-                        resolve(42);
-                    }, 100);
-                })"#,
-                ))
-                .unwrap()
-                .into_future::<i32>()
-                .await
-                .unwrap();
-
-            assert_eq!(result, 42);
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_clear_timeout() {
-        async_run!(|ctx: JSContext| async move {
-            init(&ctx).unwrap();
-
-            let counter = Rc::new(AtomicI32::new(0));
-            let counter_clone = counter.clone();
-
-            let increment = JSFunc::new(&ctx, move || {
-                counter_clone.fetch_add(1, Ordering::SeqCst);
-            });
-            ctx.global().set("increment", increment)?;
-
-            ctx.eval::<()>(Source::from_bytes(
-                r#"
-                let id = setTimeout(increment, 100);
-                clearTimeout(id);
-            "#,
-            ))
-            .unwrap();
-
-            // Wait longer than the timeout
-            sleep(Duration::from_millis(200)).await;
-            assert_eq!(counter.load(Ordering::SeqCst), 0);
-
-            Ok(())
-        })
-    }
 
     #[test]
     fn test_set_interval_without_cancel() {
@@ -284,75 +234,18 @@ mod tests {
     }
 
     #[test]
-    fn test_set_clear_interval() {
+    fn test_timer() {
         async_run!(|ctx: JSContext| async move {
             init(&ctx).unwrap();
 
-            let counter = Rc::new(AtomicI32::new(0));
-            let counter_clone = counter.clone();
+            console::init(&ctx)?;
+            assert::init(&ctx)?;
 
-            let increment = JSFunc::new(&ctx, move || {
-                counter_clone.fetch_add(1, Ordering::SeqCst);
-            });
-            ctx.global().set("increment", increment)?;
-
-            // Use JavaScript APIs to set and clear interval
-            ctx.eval::<()>(Source::from_bytes(
-                r#"
-                let id = setInterval(increment, 50);
-                setTimeout(() => {
-                    clearInterval(id);
-                }, 125);
-            "#,
-            ))
-            .unwrap();
-
-            // Wait for interval to be cleared
-            sleep(Duration::from_millis(150)).await;
-
-            let count = counter.load(Ordering::SeqCst);
-            assert!(count >= 2, "Expected at least 2 increments, got {}", count);
-
-            // Wait to ensure no more increments occur
-            sleep(Duration::from_millis(100)).await;
-            let final_count = counter.load(Ordering::SeqCst);
-            assert_eq!(
-                count, final_count,
-                "Counter should not increase after clearInterval"
-            );
-
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn test_timer_edge_cases() {
-        async_run!(|ctx: JSContext| async move {
-            init(&ctx).unwrap();
-
-            // Test negative delay (should be treated as 0)
-            let result: bool = ctx
-                .eval::<Promise>(Source::from_bytes(
-                    r#"
-                new Promise((resolve) => {
-                    setTimeout(() => resolve(true), -100);
-                })"#,
-                ))
-                .unwrap()
-                .into_future::<bool>()
-                .await
-                .unwrap();
-
-            assert!(result);
-
-            // Test clearing non-existent timer (should not crash)
-            ctx.eval::<()>(Source::from_bytes(
-                r#"
-                clearTimeout(999999);
-                clearInterval(999999);
-            "#,
-            ))
-            .unwrap();
+            let passed = UnitJSRunner::load_script(&ctx, "timer.js")
+                .await?
+                .run()
+                .await?;
+            assert!(passed);
 
             Ok(())
         })
