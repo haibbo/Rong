@@ -1,7 +1,7 @@
 use http::header::{self, HeaderMap, HeaderName, HeaderValue};
 use rusty_js::{
     function::{Optional, This},
-    js_class, js_export, js_method, *,
+    js_class, js_export, js_method, IntoJSIterator, *,
 };
 
 #[js_export]
@@ -19,6 +19,63 @@ impl Headers {
     // Get a reference to the inner HeaderMap
     pub fn as_header_map(&self) -> &HeaderMap<HeaderValue> {
         &self.headers
+    }
+}
+
+struct HeaderEntriesIter {
+    entries: Vec<(String, String)>,
+    pos: usize,
+}
+
+impl Iterator for HeaderEntriesIter {
+    type Item = Vec<String>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos < self.entries.len() {
+            let (name, value) = &self.entries[self.pos];
+            self.pos += 1;
+            Some(vec![name.clone(), value.clone()])
+        } else {
+            None
+        }
+    }
+}
+
+struct HeaderKeysIter {
+    keys: Vec<String>,
+    pos: usize,
+}
+
+impl Iterator for HeaderKeysIter {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos < self.keys.len() {
+            let key = &self.keys[self.pos];
+            self.pos += 1;
+            Some(key.clone())
+        } else {
+            None
+        }
+    }
+}
+
+struct HeaderValuesIter {
+    values: Vec<String>,
+    pos: usize,
+}
+
+impl Iterator for HeaderValuesIter {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos < self.values.len() {
+            let value = &self.values[self.pos];
+            self.pos += 1;
+            Some(value.clone())
+        } else {
+            None
+        }
     }
 }
 
@@ -214,38 +271,45 @@ impl Headers {
     /// The Headers.entries() method returns an iterator allowing to go through all
     /// key/value pairs contained in this object. Both the key and value of each pair are String objects
     #[js_method]
-    pub fn entries(&self, ctx: JSContext) -> JSResult<JSArray> {
-        let array = JSArray::new(&ctx)?;
-        for (i, (name, value)) in self.headers.iter().enumerate() {
-            let entry = JSArray::new(&ctx)?;
-            entry
-                .set(0, name.as_str())?
-                .set(1, value.to_str().unwrap_or_default())?;
-            array.set(i as u32, entry)?;
-        }
-        Ok(array)
+    pub fn entries(&self, ctx: JSContext) -> JSResult<JSObject> {
+        let entries = self
+            .headers
+            .iter()
+            .map(|(name, value)| {
+                (
+                    name.as_str().to_lowercase(),
+                    value.to_str().unwrap_or_default().to_string(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        HeaderEntriesIter { entries, pos: 0 }.into_js_iter(&ctx)
     }
 
     /// The Headers.keys() method returns an iterator allowing to go through all
     /// keys contained in this object. The keys are String objects.
     #[js_method]
-    pub fn keys(&self, ctx: JSContext) -> JSResult<JSArray> {
-        let array = JSArray::new(&ctx)?;
-        for (i, name) in self.headers.keys().enumerate() {
-            array.set(i as u32, name.as_str())?;
-        }
-        Ok(array)
+    pub fn keys(&self, ctx: JSContext) -> JSResult<JSObject> {
+        let keys = self
+            .headers
+            .keys()
+            .map(|name| name.as_str().to_lowercase())
+            .collect::<Vec<_>>();
+
+        HeaderKeysIter { keys, pos: 0 }.into_js_iter(&ctx)
     }
 
     /// The Headers.values() method returns an iterator allowing to go through all
     /// values contained in this object. The values are String objects
     #[js_method]
-    pub fn values(&self, ctx: JSContext) -> JSResult<JSArray> {
-        let array = JSArray::new(&ctx)?;
-        for (i, value) in self.headers.values().enumerate() {
-            array.set(i as u32, value.to_str().unwrap_or_default())?;
-        }
-        Ok(array)
+    pub fn values(&self, ctx: JSContext) -> JSResult<JSObject> {
+        let values = self
+            .headers
+            .values()
+            .filter_map(|value| value.to_str().ok().map(|s| s.to_string()))
+            .collect::<Vec<_>>();
+
+        HeaderValuesIter { values, pos: 0 }.into_js_iter(&ctx)
     }
 
     /// getSetCookie() returns an array containing the values of all Set-Cookie
@@ -277,7 +341,7 @@ impl Headers {
         // Value to use as this when executing callback. It's optional
         let this_arg = this_arg.0;
 
-        for (name, value) in self.headers.iter() {
+        for (name, value) in &self.headers {
             let value_str = value.to_str().unwrap_or_default();
             let name_str = name.as_str();
 

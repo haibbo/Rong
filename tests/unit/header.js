@@ -213,54 +213,89 @@ describe("Headers", () => {
 
     describe("keys", () => {
       it("should return an iterator of all header names", () => {
-        const keys = Array.from(header.keys());
-        expect(keys).toContain("content-type");
-        expect(keys).toContain("accept");
-        expect(keys).toContain("x-custom");
-        expect(keys.every((key) => typeof key === "string")).toBe(true);
+        const expectedKeys = new Set(["content-type", "accept", "x-custom"]);
+        const foundKeys = new Set();
+
+        for (const key of header.keys()) {
+          expect(typeof key).toBe("string");
+          expect(expectedKeys.has(key)).toBe(true);
+          foundKeys.add(key);
+        }
+
+        expect(foundKeys.size).toBe(expectedKeys.size);
       });
 
       it("should return header names in lower case", () => {
-        const keys = Array.from(header.keys());
-        expect(keys.every((key) => key === key.toLowerCase())).toBe(true);
+        for (const key of header.keys()) {
+          expect(key).toBe(key.toLowerCase());
+        }
+      });
+
+      it("should support multiple iterations", () => {
+        const iter1 = [...header.keys()];
+        const iter2 = [...header.keys()];
+        expect(iter1).toEqual(iter2);
       });
     });
 
     describe("values", () => {
       it("should return an iterator of all header values", () => {
-        const values = Array.from(header.values());
-        expect(values).toContain("application/json");
-        expect(values).toContain("text/plain");
-        expect(values).toContain("test");
-        expect(values.every((value) => typeof value === "string")).toBe(true);
+        const expectedValues = new Set([
+          "application/json",
+          "text/plain",
+          "test",
+        ]);
+        const foundValues = new Set();
+
+        for (const value of header.values()) {
+          expect(typeof value).toBe("string");
+          expect(expectedValues.has(value)).toBe(true);
+          foundValues.add(value);
+        }
+
+        expect(foundValues.size).toBe(expectedValues.size);
+      });
+
+      it("should support multiple iterations", () => {
+        const iter1 = [...header.values()];
+        const iter2 = [...header.values()];
+        expect(iter1).toEqual(iter2);
       });
     });
 
     describe("entries", () => {
       it("should return an iterator of header [name, value] pairs", () => {
-        const entries = Array.from(header.entries());
-        const expectedEntries = [
+        const expectedEntries = new Map([
           ["content-type", "application/json"],
           ["accept", "text/plain"],
           ["x-custom", "test"],
-        ];
+        ]);
+        const foundEntries = new Map();
 
-        expect(entries.length).toBe(expectedEntries.length);
-        entries.forEach((entry, index) => {
-          expect(entry).toEqual(expectedEntries[index]);
-        });
+        for (const [key, value] of header.entries()) {
+          expect(typeof key).toBe("string");
+          expect(typeof value).toBe("string");
+          expect(expectedEntries.get(key)).toBe(value);
+          foundEntries.set(key, value);
+        }
 
-        expect(
-          entries.every(
-            ([key, value]) =>
-              typeof key === "string" && typeof value === "string",
-          ),
-        ).toBe(true);
+        expect(foundEntries.size).toBe(expectedEntries.size);
       });
 
       it("should return header names in lower case", () => {
-        const entries = Array.from(header.entries());
-        expect(entries.every(([key]) => key === key.toLowerCase())).toBe(true);
+        for (const [key] of header.entries()) {
+          expect(key).toBe(key.toLowerCase());
+        }
+      });
+
+      it("should support multiple iterations", () => {
+        const iter1 = [...header.entries()];
+        const iter2 = [...header.entries()];
+        expect(iter1.length).toBe(iter2.length);
+        for (let i = 0; i < iter1.length; i++) {
+          expect(iter1[i][0]).toBe(iter2[i][0]);
+          expect(iter1[i][1]).toBe(iter2[i][1]);
+        }
       });
     });
 
