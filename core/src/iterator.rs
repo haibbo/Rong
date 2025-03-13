@@ -4,9 +4,94 @@ use crate::{
     JSResult, JSSymbol, JSValue,
 };
 use futures::{Stream, StreamExt};
+use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
 use tokio::sync::Mutex;
+
+/// Converts an iterator into a JavaScript iterable object by consuming self
+///
+/// This trait provides a method to convert any Rust iterator into a JavaScript iterable
+/// that follows the JavaScript iteration protocol. The resulting object can be used
+/// with `for...of` loops and other JavaScript constructs that expect iterables.
+///
+/// # Example
+/// ```rust
+/// use crate::IntoJSIterator;
+///
+/// let vec = vec![1, 2, 3];
+/// let iterable = vec.into_js_iter(ctx)?;
+/// ```
+pub trait IntoJSIterator<T>
+where
+    Self: IntoIterator<Item = T> + 'static + Sized,
+{
+    fn into_js_iter<V>(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>
+    where
+        T: IntoJSValue<V>,
+        V: JSObjectOps + 'static,
+        V::Context: JSExceptionHandler,
+    {
+        let iterable = JSObject::new(ctx);
+
+        // Wrap self in an Rc to avoid moving it into the closure
+        let iter_rc = Rc::new(RefCell::new(self.into_iter()));
+
+        // MDN:
+        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_iterable_protocol
+        // In order to be iterable, an object must implement the [Symbol.iterator]()
+        // method, meaning that the object (or one of the objects up its prototype
+        // chain) must have a property with a [Symbol.iterator] key which is available
+        // via constant Symbol.iterator.
+        let iterator = JSFunc::new(ctx, {
+            let iter_rc = iter_rc.clone();
+            move |ctx: JSContext<V::Context>| {
+                let obj = JSObject::new(&ctx);
+
+                // store result of next to avoid create object on each next
+                let result = JSObject::new(&ctx);
+
+                let next = JSFunc::new(&ctx, {
+                    let iter_rc = iter_rc.clone();
+                    move |ctx: JSContext<V::Context>| {
+                        let result = result.clone();
+                        let mut iter = iter_rc.borrow_mut();
+                        match iter.next() {
+                            Some(i) => {
+                                let _ = result.set("done", false);
+                                let value = i.into_js_value(&ctx);
+                                let value = JSValue::from_raw(&ctx, value);
+                                result.set("value", value)?;
+                            }
+                            None => {
+                                result.set("done", true)?;
+                            }
+                        }
+                        Ok(result)
+                    }
+                })?;
+
+                obj.set("next", next)?;
+                Ok(obj)
+            }
+        })?;
+
+        let constant = ctx
+            .global()
+            .get::<_, JSObject<V>>("Symbol")?
+            .get::<_, JSSymbol<V>>("iterator")?;
+        iterable.set(constant, iterator)?;
+        Ok(iterable)
+    }
+}
+
+/// Auto-implementation of IntoJSIterator for all types that satisfy the trait bounds
+impl<T, I> IntoJSIterator<T> for I
+where
+    I: IntoIterator<Item = T>,
+    I: 'static,
+{
+}
 
 /// Converts an iterator into a JavaScript iterable object
 ///
@@ -36,12 +121,6 @@ where
         let iterable = JSObject::new(ctx);
         let target = self.clone();
 
-        // MDN:
-        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_iterable_protocol
-        // In order to be iterable, an object must implement the [Symbol.iterator]()
-        // method, meaning that the object (or one of the objects up its prototype
-        // chain) must have a property with a [Symbol.iterator] key which is available
-        // via constant Symbol.iterator.
         let iterator = JSFunc::new(ctx, move |ctx: JSContext<V::Context>| {
             let obj = JSObject::new(&ctx);
             let mut iter = target.clone().into_iter();
