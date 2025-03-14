@@ -1,0 +1,15 @@
+[package]
+name = "fs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rusty-js = { workspace = true }
+tokio = { version = "1.0", features = ["rt", "time", "macros"] }
+abort={path="../abort"}
+
+[dev-dependencies]
+rustyjs_test = { path = "../../utils/rustyjs_test" }
+encoding={path="../encoding"}
+console={path="../console"}
+assert={path="../assert"}
