@@ -41,6 +41,18 @@ impl Source {
         }
     }
 
+    /// Set or change the name of the source
+    ///
+    /// # Example
+    /// ```rust
+    /// let source = Source::from_bytes("let x = 1;")
+    ///     .with_name("example.js");
+    /// ```
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
     /// Create a Source from compiled bytecode
     pub(crate) fn from_bytecode(code: impl Into<Vec<u8>>) -> Self {
         Self {
