@@ -56,6 +56,7 @@ mod tests {
             let workspace_root = env::current_dir()
                 .map_err(|e| RustyJSError::TypeError(format!("Failed to get current dir: {}", e)))?
                 .parent()
+                .and_then(|p| p.parent())  // Go up two levels
                 .ok_or_else(|| RustyJSError::TypeError("Failed to get workspace root".into()))?
                 .to_string_lossy()
                 .into_owned();
