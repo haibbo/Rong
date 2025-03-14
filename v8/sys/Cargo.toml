@@ -1,0 +1,9 @@
+[package]
+name = "rusty-js-v8-sys"
+version = "0.1.0"
+edition = "2021"
+description = "Low-level V8 bindings for Rust"
+license = "MIT"
+
+[build-dependencies]
+bindgen = "0.71.1"

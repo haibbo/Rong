@@ -2,8 +2,7 @@
 members = [
     "core",
     "macro",
-    "quickjs",
-    "javascriptcore",
+    "quickjs", "javascriptcore", "v8",
     "utils/rustyjs_test",
     "examples/point",
     "modules/timer", "modules/navigator", "modules/path",
@@ -24,6 +23,7 @@ edition = "2021"
 rusty-js-core = { path = "core" }
 rusty-js-quickjs = { path = "quickjs", optional = true }
 rusty-js-jscore = { path = "javascriptcore", optional = true }
+rusty-js-v8 = { path = "v8", optional = true }
 rusty-js-macro = { path = "macro" }
 tokio = { version = "1.0", features = ["rt", "time", "macros"] }
 futures = "0.3.31"
@@ -31,6 +31,7 @@ futures = "0.3.31"
 [features]
 quickjs = ["rusty-js-quickjs"]
 jscore = ["rusty-js-jscore"]
+v8 = ["rusty-js-v8"]
 default = ["quickjs"]
 
 [dev-dependencies]
