@@ -5,19 +5,22 @@ use abort::AbortSignal;
 
 #[derive(FromJSObj)]
 struct ReadFileOptions {
-    signal: AbortSignal,
+    signal: Option<AbortSignal>,
 }
 
 async fn read_text_file(file: String, option: Optional<ReadFileOptions>) -> JSResult<String> {
-    if let Some(abort) = option.0 {
-        let mut abort = abort.signal.subscribe();
+    let options = option.0.unwrap_or(ReadFileOptions { signal: None });
+
+    if let Some(signal) = options.signal {
+        let mut abort = signal.subscribe();
 
         select! {
-            result = fs::read_to_string(file) => {
+            result = fs::read_to_string(&file) => {
                 result.into_result()
             }
 
             abort_reason = abort.recv() => {
+                // println!("read_text_file: Received abort signal");
                 Err(RustyJSError::from_jsvalue(abort_reason))
             }
         }
@@ -26,10 +29,48 @@ async fn read_text_file(file: String, option: Optional<ReadFileOptions>) -> JSRe
     }
 }
 
+async fn read_file(
+    ctx: JSContext,
+    file: String,
+    option: Optional<ReadFileOptions>,
+) -> JSResult<JSArrayBuffer<u8>> {
+    let options = option.0.unwrap_or(ReadFileOptions { signal: None });
+
+    if let Some(signal) = options.signal {
+        let mut abort = signal.subscribe();
+        println!("read_file: Subscribed to abort signal");
+
+        select! {
+            result = fs::read(&file) => {
+                println!("read_file: File read completed");
+                match result {
+                    Ok(bytes) => JSArrayBuffer::<u8>::from_bytes_owned(&ctx, bytes),
+                    Err(e) => Err(RustyJSError::TypeError(format!("Failed to read file: {}", e)))
+                }
+            }
+
+            abort_reason = abort.recv() => {
+                println!("read_file: Received abort signal");
+                Err(RustyJSError::from_jsvalue(abort_reason))
+            }
+        }
+    } else {
+        let bytes = fs::read(file)
+            .await
+            .map_err(|e| RustyJSError::TypeError(format!("Failed to read file: {}", e)))?;
+
+        JSArrayBuffer::<u8>::from_bytes_owned(&ctx, bytes)
+    }
+}
+
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
     let danity = ctx.dainty();
 
-    let read = JSFunc::new(ctx, read_text_file)?.name("readTextFile")?;
-    danity.set("readTextFile", read)?;
+    let read_text = JSFunc::new(ctx, read_text_file)?.name("readTextFile")?;
+    danity.set("readTextFile", read_text)?;
+
+    let read_file = JSFunc::new(ctx, read_file)?.name("readFile")?;
+    danity.set("readFile", read_file)?;
+
     Ok(())
 }

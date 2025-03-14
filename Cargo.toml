@@ -8,7 +8,7 @@ members = [
     "modules/timer", "modules/navigator", "modules/path",
     "modules/fetch", "modules/encoding", "modules/event",
     "modules/assert", "modules/dom-exception",
-    "modules/abort", "modules/console", "modules/lxr_url", "modules/buffer",
+    "modules/abort", "modules/console", "modules/lxr_url", "modules/buffer", "modules/fs",
 ]
 
 [workspace.dependencies]
