@@ -123,6 +123,7 @@ pub struct JSContext<C: JSContextImpl> {
 struct JSContextInner<C: JSContextImpl> {
     inner: C,
     runtime: JSRuntime<C::Runtime>,
+    dainty: C::Value,
 }
 
 impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
@@ -156,10 +157,17 @@ impl<C: JSContextImpl> JSContext<C> {
     ///     ctx_clone.eval_async("...").await?;
     /// });
     /// ```
-    pub(crate) fn new(runtime: &JSRuntime<C::Runtime>) -> Self {
+    pub(crate) fn new(runtime: &JSRuntime<C::Runtime>) -> Self
+    where
+        C::Value: JSObjectOps,
+    {
+        let raw_ctx = C::new(&runtime.inner);
+        let dainty = C::Value::new_object(&raw_ctx);
+
         let inner = JSContextInner {
-            inner: C::new(&runtime.inner),
+            inner: raw_ctx,
             runtime: runtime.clone(),
+            dainty,
         };
 
         let ctx = JSContext { rc: Rc::new(inner) };
@@ -175,6 +183,12 @@ impl<C: JSContextImpl> JSContext<C> {
             .insert(key, Box::into_raw(opaque) as usize);
 
         ctx
+    }
+
+    /// return global Dainty object
+    pub fn dainty(&self) -> JSObject<C::Value> {
+        let value = JSValue::from_raw(self, self.rc.as_ref().dainty.clone());
+        value.into()
     }
 
     /// Creates a JSContext from an FFI context pointer.

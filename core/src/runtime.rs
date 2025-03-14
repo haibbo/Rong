@@ -161,7 +161,13 @@ pub trait JSEngine: Sized {
         Self::Value: JSObjectOps + 'static,
     {
         let ctx = JSContext::<Self::Context>::new(rt);
-        ctx.register_builtin_class().unwrap();
+        ctx.register_builtin_class()
+            .expect("Failed to register builtin class");
+
+        ctx.global()
+            .set("Danity", ctx.dainty())
+            .expect("Failed to add Danity object");
+
         ctx
     }
 }
