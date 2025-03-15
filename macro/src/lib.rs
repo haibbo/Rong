@@ -5,26 +5,40 @@ use syn::{parse_macro_input, DeriveInput, ItemImpl};
 
 mod class;
 mod deserialize;
+mod r#enum;
 mod instance;
 
-/// Expose a Rust struct as a JavaScript object.
+/// Expose a Rust struct or enum as a JavaScript object.
 ///
-/// This macro generates the necessary code to make a Rust struct usable as a JavaScript object,
+/// This macro generates the necessary code to make a Rust type usable in JavaScript,
 /// including type conversions and object registration.
 ///
-/// # Generated Implementations
-/// - `IntoJSValue<JSEngineValue>`
-/// - `FromJSObj<JSEngineValue>`
-/// - `JSParameterType`
+/// For structs:
+/// - Generates class instance implementation
+/// - Allows method and property definitions
+/// - Supports constructors and static methods
+/// - Implements `FromJSValue`, `IntoJSValue`,`FromJSObj`, and `JSParameterType` traits
 ///
-/// # Example
+/// For enums:
+/// - Implements `FromJSValue`, `IntoJSValue`, and `JSParameterType` traits
+/// - Provides automatic type conversion and error handling
+/// - each variant required to implement `FromJSValue`, `IntoJSValue`
+///
+/// # Example (Struct)
 /// ```ignore
-/// use rusty_js_macro::js_export;
-///
 /// #[js_export]
 /// struct Point {
 ///     x: i32,
 ///     y: i32,
+/// }
+/// ```
+///
+/// # Example (Enum)
+/// ```ignore
+/// #[js_export]
+/// enum Status {
+///     Pending(String),
+///     Complete(i32),
 /// }
 /// ```
 #[proc_macro_attribute]
@@ -32,18 +46,22 @@ pub fn js_export(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let attr2: TokenStream2 = attr.into();
 
-    // Create a new class attribute with the original attribute parameters.
-    // This is necessary because the original attribute is consumed during macro expansion,
-    // but we need to parse it again in class_impl to extract options like rename.
-    let object_attr = syn::parse_quote!(#[js_export(#attr2)]);
+    match &input.data {
+        syn::Data::Enum(_) => match r#enum::impl_enum_conversions(&input) {
+            Ok(expanded) => expanded.into(),
+            Err(err) => err.to_compile_error().into(),
+        },
+        _ => {
+            // For structs, use the existing class implementation
+            let object_attr = syn::parse_quote!(#[js_export(#attr2)]);
+            let mut new_input = input.clone();
+            new_input.attrs.push(object_attr);
 
-    // Create a new DeriveInput with all original attributes plus the reconstructed class attribute
-    let mut new_input = input.clone();
-    new_input.attrs.push(object_attr);
-
-    match instance::class_instance_impl(&new_input) {
-        Ok(expanded) => expanded.into(),
-        Err(err) => err.to_compile_error().into(),
+            match instance::class_instance_impl(&new_input) {
+                Ok(expanded) => expanded.into(),
+                Err(err) => err.to_compile_error().into(),
+            }
+        }
     }
 }
 
