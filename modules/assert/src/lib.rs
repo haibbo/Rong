@@ -17,9 +17,17 @@ fn handle_assertion_error(
     message: Optional<JSValue>,
     default_message: &str,
 ) -> JSValue {
-    message
-        .0
-        .map_or_else(|| ctx.throw_error(default_message), |value| value)
+    message.0.map_or_else(
+        || ctx.throw_error(default_message),
+        |value| {
+            if value.is_string() {
+                let msg: String = value.try_into().unwrap_or_default();
+                ctx.throw_error(msg)
+            } else {
+                ctx.throw(value)
+            }
+        },
+    )
 }
 
 /// Asserts that two values are equal.
