@@ -19,7 +19,7 @@ async fn real_path(path: String) -> JSResult<String> {
         .map_err(|e| RustyJSError::TypeError(format!("Failed to resolve real path: {}", e)))
 }
 
-pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
+pub fn init(ctx: &JSContext) -> JSResult<()> {
     let danity = ctx.dainty();
 
     let rename_fn = JSFunc::new(ctx, rename)?.name("rename")?;
@@ -56,7 +56,7 @@ mod tests {
             let workspace_root = env::current_dir()
                 .map_err(|e| RustyJSError::TypeError(format!("Failed to get current dir: {}", e)))?
                 .parent()
-                .and_then(|p| p.parent())  // Go up two levels
+                .and_then(|p| p.parent()) // Go up two levels
                 .ok_or_else(|| RustyJSError::TypeError("Failed to get workspace root".into()))?
                 .to_string_lossy()
                 .into_owned();
