@@ -359,14 +359,14 @@ fn format_raw_inner(
 }
 
 fn format_array(result: &mut String, array: JSArray, visited: &mut HashSet<usize>, depth: usize) {
-    result.push('[');
+    result.push_str("[ ");
     for (index, item) in array.iter::<JSValue>().flatten().enumerate() {
         if index > 0 {
             result.push_str(", ");
         }
         format_raw_inner(result, item, visited, depth + 1);
     }
-    result.push(']');
+    result.push_str(" ]");
 }
 
 fn format_object(result: &mut String, obj: JSObject, visited: &mut HashSet<usize>, depth: usize) {
