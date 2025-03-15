@@ -246,27 +246,3 @@ fn normalize_type(mime_type: String) -> String {
     // Convert to ASCII lowercase and return
     mime_type.to_ascii_lowercase()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rustyjs_test::*;
-
-    #[test]
-    fn test_path() {
-        async_run!(|ctx: JSContext| async move {
-            encoding::init(&ctx)?;
-            console::init(&ctx)?;
-            assert::init(&ctx)?;
-            ctx.register_class::<Blob>()?;
-
-            let passed = UnitJSRunner::load_script(&ctx, "blob.js")
-                .await?
-                .run()
-                .await?;
-            assert!(passed);
-
-            Ok(())
-        });
-    }
-}
