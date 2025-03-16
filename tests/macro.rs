@@ -103,145 +103,142 @@ struct Person {
 mod tests {
     use super::*;
 
-    fn setup() -> JSContext {
-        let rt = RustyJS::runtime();
-        let ctx = RustyJS::context(&rt);
-        ctx.register_class::<Point>().unwrap();
-        ctx
-    }
-
     #[test]
     fn test_constructor() {
-        let ctx = setup();
-        let point: Point = ctx.eval(Source::from_bytes("new PointX(2, 3)")).unwrap();
-        assert_eq!(point, Point { x: 2, y: 3 });
+        run(|ctx| {
+            ctx.register_class::<Point>()?;
+            let point: Point = ctx.eval(Source::from_bytes("new PointX(2, 3)"))?;
+            assert_eq!(point, Point { x: 2, y: 3 });
+            Ok(())
+        });
     }
 
     #[test]
     fn test_instance_property() {
-        let ctx = setup();
+        run(|ctx| {
+            ctx.register_class::<Point>()?;
 
-        // Test value behavior
-        let result: i32 = ctx
-            .eval(Source::from_bytes(
+            // Test value behavior
+            let result: i32 = ctx.eval(Source::from_bytes(
                 r#"
-                let p = new PointX(1, 2);
-                p.x = 10;
-                p.y = 20;
-                p.x + p.y
-                "#,
-            ))
-            .unwrap();
-        assert_eq!(result, 30);
+                    let p = new PointX(1, 2);
+                    p.x = 10;
+                    p.y = 20;
+                    p.x + p.y
+                    "#,
+            ))?;
+            assert_eq!(result, 30);
 
-        // Test property attributes
-        let desc: bool = ctx
-            .eval(Source::from_bytes(
+            // Test property attributes
+            let desc: bool = ctx.eval(Source::from_bytes(
                 r#"
-                p = new PointX(1, 2);
-                let desc = Object.getOwnPropertyDescriptor(p.constructor.prototype, 'x');
-                desc.configurable === true &&  // 添加 configurable 测试
-                desc.enumerable === true &&
-                typeof desc.get === 'function' &&
-                typeof desc.set === 'function'
-                "#,
-            ))
-            .unwrap();
-        assert!(
-            desc,
-            "x should be configurable and enumerable with accessors"
-        );
+                    p = new PointX(1, 2);
+                    let desc = Object.getOwnPropertyDescriptor(p.constructor.prototype, 'x');
+                    desc.configurable === true &&
+                    desc.enumerable === true &&
+                    typeof desc.get === 'function' &&
+                    typeof desc.set === 'function'
+                    "#,
+            ))?;
+            assert!(
+                desc,
+                "x should be configurable and enumerable with accessors"
+            );
 
-        // Test non-enumerable property
-        let desc: bool = ctx
-            .eval(Source::from_bytes(
+            // Test non-enumerable property
+            let desc: bool = ctx.eval(Source::from_bytes(
                 r#"
-                desc = Object.getOwnPropertyDescriptor(p.constructor.prototype, 'y');
-                desc.configurable === true &&  // 添加 configurable 测试
-                desc.enumerable === false &&
-                typeof desc.get === 'function' &&
-                typeof desc.set === 'function'
-                "#,
-            ))
-            .unwrap();
-        assert!(
-            desc,
-            "y should be configurable but not enumerable with accessors"
-        );
+                    desc = Object.getOwnPropertyDescriptor(p.constructor.prototype, 'y');
+                    desc.configurable === true &&  // 添加 configurable 测试
+                    desc.enumerable === false &&
+                    typeof desc.get === 'function' &&
+                    typeof desc.set === 'function'
+                    "#,
+            ))?;
+            assert!(
+                desc,
+                "y should be configurable but not enumerable with accessors"
+            );
+            Ok(())
+        });
     }
 
     #[test]
     fn test_instance_method() {
-        let ctx = setup();
-        let result: Point = ctx
-            .eval(Source::from_bytes(
+        run(|ctx| {
+            ctx.register_class::<Point>()?;
+            let result: Point = ctx.eval(Source::from_bytes(
                 r#"
-            let p1 = new PointX(1, 2);
-            let p2 = new PointX(3, 4);
-            p1.Add(p2)
-        "#,
-            ))
-            .unwrap();
-        assert_eq!(result, Point { x: 4, y: 6 });
+                let p1 = new PointX(1, 2);
+                let p2 = new PointX(3, 4);
+                p1.Add(p2)
+            "#,
+            ))?;
+            assert_eq!(result, Point { x: 4, y: 6 });
+            Ok(())
+        });
     }
 
     #[test]
     fn test_static_method() {
-        let ctx = setup();
-        let result: Point = ctx.eval(Source::from_bytes("PointX.create(5, 6)")).unwrap();
-        assert_eq!(result, Point { x: 5, y: 6 });
+        run(|ctx| {
+            ctx.register_class::<Point>()?;
+            let result: Point = ctx.eval(Source::from_bytes("PointX.create(5, 6)"))?;
+            assert_eq!(result, Point { x: 5, y: 6 });
+            Ok(())
+        });
     }
 
     #[test]
     fn test_mutable_instance_method() {
-        let ctx = setup();
-        let result: Point = ctx
-            .eval(Source::from_bytes(
+        run(|ctx| {
+            ctx.register_class::<Point>()?;
+            let result: Point = ctx.eval(Source::from_bytes(
                 r#"
-                let p = new PointX(1, 2);
-                p.moveBy(10, 20);
-                p
-            "#,
-            ))
-            .unwrap();
-        assert_eq!(result, Point { x: 11, y: 22 });
+                    let p = new PointX(1, 2);
+                    p.moveBy(10, 20);
+                    p
+                "#,
+            ))?;
+            assert_eq!(result, Point { x: 11, y: 22 });
+            Ok(())
+        });
     }
 
     #[test]
     fn test_static_property() {
-        let ctx = setup();
+        run(|ctx| {
+            ctx.register_class::<Point>()?;
 
-        // Test value behavior
-        let result: Point = ctx.eval(Source::from_bytes("PointX.ORIGIN")).unwrap();
-        assert_eq!(result, Point { x: 0x5a, y: 0xa5 });
+            // Test value behavior
+            let result: Point = ctx.eval(Source::from_bytes("PointX.ORIGIN"))?;
+            assert_eq!(result, Point { x: 0x5a, y: 0xa5 });
 
-        // Test setting new value
-        let result: Point = ctx
-            .eval(Source::from_bytes(
+            // Test setting new value
+            let result: Point = ctx.eval(Source::from_bytes(
                 r#"
-                PointX.ORIGIN = new PointX(1, 2);
-                PointX.ORIGIN
-            "#,
-            ))
-            .unwrap();
-        assert_eq!(result, Point { x: 1, y: 2 });
-
-        // Test property attributes
-        let desc: bool = ctx
-            .eval(Source::from_bytes(
-                r#"
-                let desc = Object.getOwnPropertyDescriptor(PointX, 'ORIGIN');
-                desc.configurable === true &&
-                desc.enumerable === false &&
-                typeof desc.get === 'function' &&
-                typeof desc.set === 'function'
+                    PointX.ORIGIN = new PointX(1, 2);
+                    PointX.ORIGIN
                 "#,
-            ))
-            .unwrap();
-        assert!(
-            desc,
-            "ORIGIN should be configurable but not enumerable, with getter and setter"
-        );
+            ))?;
+            assert_eq!(result, Point { x: 1, y: 2 });
+
+            // Test property attributes
+            let desc: bool = ctx.eval(Source::from_bytes(
+                r#"
+                    let desc = Object.getOwnPropertyDescriptor(PointX, 'ORIGIN');
+                    desc.configurable === true &&
+                    desc.enumerable === false &&
+                    typeof desc.get === 'function' &&
+                    typeof desc.set === 'function'
+                    "#,
+            ))?;
+            assert!(
+                desc,
+                "ORIGIN should be configurable but not enumerable, with getter and setter"
+            );
+            Ok(())
+        });
     }
 
     #[test]
