@@ -140,14 +140,7 @@ fn format_values_internal(result: &mut String, args: Rest<JSValue>) {
                         match chars.next() {
                             Some('s') => {
                                 if let Some((_, next_arg)) = iter.next() {
-                                    if let Ok(status) = next_arg.clone().try_into::<bool>() {
-                                        if status {
-                                            result.push_str("true");
-                                        } else {
-                                            result.push_str("false");
-                                        }
-                                        continue;
-                                    } else if let Ok(str) = next_arg.try_into::<String>() {
+                                    if let Ok(str) = next_arg.try_into::<String>() {
                                         result.push_str(&str);
                                         continue;
                                     }

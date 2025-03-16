@@ -255,10 +255,8 @@ impl_js_converter!(
         result
     },
     |ctx, value, result: *mut String| unsafe {
-        if !jsc::JSValueIsString(ctx, value) {
-            return -1;
-        }
-
+        // This intentionally skips JSValueIsString check to allow any value that
+        // the JS engine can convert to a string, providing more flexible type coercion
         let js_str = jsc::JSValueToStringCopy(ctx, value, std::ptr::null_mut());
         if js_str.is_null() {
             return -1;

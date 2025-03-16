@@ -27,10 +27,6 @@ pub(crate) struct HttpBody(pub JSValue);
 impl HttpBody {
     // Convert body to text
     pub async fn text(&self) -> JSResult<String> {
-        if let Ok(s) = self.0.clone().try_into::<String>() {
-            return Ok(s);
-        }
-
         if let Some(obj) = self.0.clone().into_object() {
             // Handle URLSearchParams
             if let Ok(params) = obj.borrow::<URLSearchParams>() {
@@ -49,6 +45,10 @@ impl HttpBody {
             return Ok(obj.to_string());
         }
 
+        if let Ok(s) = self.0.clone().try_into::<String>() {
+            return Ok(s);
+        }
+
         Ok(String::new())
     }
 
@@ -59,10 +59,6 @@ impl HttpBody {
 
     // Convert to bytes synchronously for hyper Body implementation
     pub fn to_bytes(&self) -> JSResult<Bytes> {
-        if let Ok(s) = self.0.clone().try_into::<String>() {
-            return Ok(Bytes::from(s));
-        }
-
         if let Some(obj) = self.0.clone().into_object() {
             // Handle URLSearchParams
             if let Ok(params) = obj.borrow::<URLSearchParams>() {
@@ -79,6 +75,10 @@ impl HttpBody {
 
             // Handle other as empty bytes
             return Ok(Bytes::new());
+        }
+
+        if let Ok(s) = self.0.clone().try_into::<String>() {
+            return Ok(Bytes::from(s));
         }
 
         Ok(Bytes::new())

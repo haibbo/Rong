@@ -292,10 +292,8 @@ impl_js_converter!(
         qjs::JS_NewStringLen(ctx, value.as_ptr() as _, len as _)
     },
     |ctx, value, result: *mut String| {
-        if qjs::QJS_IsString(ctx, value) == 0 {
-            return -1;
-        }
-
+        // This intentionally skips QJS_IsString check to allow any value that
+        // the JS engine can convert to a string, providing more flexible type coercion
         let mut len: usize = 0;
         let ptr = qjs::JS_ToCStringLen2(ctx, &mut len as _, value, 0);
         if ptr.is_null() {
