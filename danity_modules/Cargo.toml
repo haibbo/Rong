@@ -1,0 +1,52 @@
+[package]
+name = "danity_modules"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rusty-js = { workspace = true }
+timer = { path = "../modules/timer", optional = true }
+navigator = { path = "../modules/navigator", optional = true }
+path = { path = "../modules/path", optional = true }
+fetch = { path = "../modules/fetch", optional = true }
+encoding = { path = "../modules/encoding", optional = true }
+event = { path = "../modules/event", optional = true }
+assert = { path = "../modules/assert", optional = true }
+dom-exception = { path = "../modules/dom-exception", optional = true }
+abort = { path = "../modules/abort", optional = true }
+console = { path = "../modules/console", optional = true }
+lxr_url = { path = "../modules/lxr_url", optional = true }
+buffer = { path = "../modules/buffer", optional = true }
+fs = { path = "../modules/fs", optional = true }
+
+[features]
+default = ["all"]
+all = [
+    "timer",
+    "navigator",
+    "path",
+    "fetch",
+    "encoding",
+    "event",
+    "assert",
+    "dom-exception",
+    "abort",
+    "console",
+    "url",
+    "buffer",
+    "fs",
+]
+
+timer = ["dep:timer"]
+navigator = ["dep:navigator"]
+path = ["dep:path"]
+fetch = ["dep:fetch"]
+encoding = ["dep:encoding"]
+event = ["dep:event"]
+assert = ["dep:assert"]
+dom-exception = ["dep:dom-exception"]
+abort = ["dep:abort"]
+console = ["dep:console"]
+url = ["dep:lxr_url"]
+buffer = ["dep:buffer"]
+fs = ["dep:fs"]
