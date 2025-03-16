@@ -42,6 +42,7 @@ fn to_hyper_request(request: Request) -> HttpRequest<BoxBody<Bytes, Error>> {
     let mut builder = HttpRequest::builder()
         .method(request.method)
         .uri(request.url)
+        .header(header::USER_AGENT, navigator::get_user_agent())
         .header(header::ACCEPT_ENCODING, "gzip"); // TODO: "gzip, zstd"
 
     // Take ownership of headers
