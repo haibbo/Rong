@@ -128,3 +128,75 @@ describe("assert module", () => {
     });
   });
 });
+
+describe("Custom message handling", () => {
+  describe("assert.ok()", () => {
+    it("should use default message when no custom message provided", () => {
+      try {
+        assert.ok(false);
+      } catch (e) {
+        expect(e.message).toBe(
+          "AssertionError: The expression was evaluated to a falsy value",
+        );
+      }
+    });
+
+    it("should use custom string message", () => {
+      const message = "Custom ok message";
+      try {
+        assert.ok(false, message);
+      } catch (e) {
+        expect(e.message).toBe(message);
+      }
+    });
+
+    it("should throw custom error object", () => {
+      const error = new Error("Custom error");
+      try {
+        assert.ok(false, error);
+      } catch (e) {
+        expect(e).toBe(error);
+      }
+    });
+
+    it("should throw non-string values as-is", () => {
+      const testValues = [123, { key: "value" }];
+
+      testValues.forEach((value) => {
+        try {
+          assert.ok(false, value);
+        } catch (e) {
+          expect(e).toBe(value);
+        }
+      });
+    });
+  });
+
+  describe("assert.equal()", () => {
+    it("should use default message when no custom message provided", () => {
+      try {
+        assert.equal(1, 2);
+      } catch (e) {
+        expect(e.message).toBe("AssertionError: It's not equal!");
+      }
+    });
+
+    it("should use custom string message", () => {
+      const message = "Custom equality message";
+      try {
+        assert.equal(1, 2, message);
+      } catch (e) {
+        expect(e.message).toBe(message);
+      }
+    });
+
+    it("should throw custom error object", () => {
+      const error = new Error("Custom equality error");
+      try {
+        assert.equal(1, 2, error);
+      } catch (e) {
+        expect(e).toBe(error);
+      }
+    });
+  });
+});
