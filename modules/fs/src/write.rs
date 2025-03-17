@@ -146,14 +146,14 @@ async fn copy_file(from: String, to: String) -> JSResult<()> {
         .map_err(|e| RustyJSError::TypeError(format!("Failed to copy file: {}", e)))
 }
 
-async fn truncate(path: String, len: Optional<u64>) -> JSResult<()> {
-    let len = len.unwrap_or(0);
+async fn truncate(path: String, len: Optional<f64>) -> JSResult<()> {
+    let len = len.unwrap_or(0.0);
     fs::OpenOptions::new()
         .write(true)
         .open(&path)
         .await
         .map_err(|e| RustyJSError::TypeError(format!("Failed to open file: {}", e)))?
-        .set_len(len)
+        .set_len(len as u64)
         .await
         .map_err(|e| RustyJSError::TypeError(format!("Failed to truncate file: {}", e)))?;
     Ok(())

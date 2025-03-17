@@ -9,7 +9,7 @@ struct FileInfo {
     is_file: bool,
     is_directory: bool,
     is_symlink: bool,
-    size: u64,
+    size: f64,
     modified: Option<SystemTime>,
     accessed: Option<SystemTime>,
     created: Option<SystemTime>,
@@ -24,7 +24,7 @@ impl FileInfo {
             is_file: false,
             is_directory: false,
             is_symlink: false,
-            size: 0,
+            size: 0.0,
             modified: None,
             accessed: None,
             created: None,
@@ -48,7 +48,7 @@ impl FileInfo {
     }
 
     #[js_method(getter)]
-    fn size(&self) -> u64 {
+    fn size(&self) -> f64 {
         self.size
     }
 
@@ -99,7 +99,7 @@ async fn stat(path: String) -> JSResult<FileInfo> {
         is_file: metadata.is_file(),
         is_directory: metadata.is_dir(),
         is_symlink: metadata.is_symlink(),
-        size: metadata.len(),
+        size: metadata.len() as f64,
         modified: metadata.modified().ok(),
         accessed: metadata.accessed().ok(),
         created: metadata.created().ok(),
@@ -123,7 +123,7 @@ async fn lstat(path: String) -> JSResult<FileInfo> {
         is_file: metadata.is_file(),
         is_directory: metadata.is_dir(),
         is_symlink: metadata.is_symlink(),
-        size: metadata.len(),
+        size: metadata.len() as f64,
         modified: metadata.modified().ok(),
         accessed: metadata.accessed().ok(),
         created: metadata.created().ok(),
