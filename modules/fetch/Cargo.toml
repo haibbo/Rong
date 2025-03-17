@@ -14,7 +14,8 @@ navigator = { path = "../navigator" }
 dom-exception = { path = "../dom-exception" }
 hyper = { version = "1.6.0", features = ["client", "http1"] }
 hyper-util = { version = "0.1.10", features = ["client", "http1", "tokio"] }
-hyper-rustls = { version = "0.27.5", features = ["webpki-roots", "http1"] }
+hyper-rustls = { version = "0.27.5", features = ["webpki-roots", "http1", "aws-lc-rs"] }
+rustls = { version = "0.23", default-features = false }
 bytes = "1.10.1"
 http-body-util = "0.1.2"
 flate2 = { version = "1.1.0" }

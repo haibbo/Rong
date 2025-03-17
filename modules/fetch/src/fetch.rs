@@ -27,6 +27,9 @@ fn get_client() -> &'static Client<
     BoxBody<Bytes, Error>,
 > {
     CLIENT.get_or_init(|| {
+        // Initialize rustls CryptoProvider
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
         let https = HttpsConnectorBuilder::new()
             .with_webpki_roots()
             .https_or_http()
