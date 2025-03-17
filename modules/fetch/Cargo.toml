@@ -19,6 +19,7 @@ rustls = { version = "0.23", default-features = false }
 bytes = "1.10.1"
 http-body-util = "0.1.2"
 flate2 = { version = "1.1.0" }
+uuid = { version = "1.16.0", features = ["v4"] }
 
 [dev-dependencies]
 rustyjs_test = { path = "../../utils/rustyjs_test" }

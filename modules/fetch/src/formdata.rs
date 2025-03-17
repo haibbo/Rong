@@ -10,7 +10,7 @@ enum FormDataEntryValue {
 }
 
 #[js_export]
-struct FormData {
+pub struct FormData {
     // Reasons for using Vec instead of HashMap:
     // 1. FormData specification requires maintaining insertion order, which Vec naturally supports
     // 2. FormData is mainly used for form data, where the data volume is usually small, so O(n) lookup performance impact is minimal
@@ -174,6 +174,70 @@ impl FormData {
             pos: 0,
         }
         .into_js_iter(&ctx)
+    }
+}
+
+impl FormData {
+    // Add new methods for serialization
+    pub(crate) async fn serialize(&self, ctx: JSContext) -> JSResult<(Vec<u8>, String)> {
+        let boundary = uuid::Uuid::new_v4().to_string();
+        let mut body = Vec::new();
+
+        for (name, value, filename) in &self.entries {
+            body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+
+            match value {
+                FormDataEntryValue::File(file) => {
+                    body.extend_from_slice(
+                        format!(
+                            "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
+                            name, filename
+                        )
+                        .as_bytes(),
+                    );
+                    body.extend_from_slice(
+                        format!("Content-Type: {}\r\n\r\n", file.mime_type()).as_bytes(),
+                    );
+                    if let Ok(bytes) = file.bytes(ctx.clone()).await {
+                        if let Some(bytes_vec) = bytes.as_bytes() {
+                            body.extend_from_slice(bytes_vec);
+                        }
+                    }
+                }
+                FormDataEntryValue::Blob(blob) => {
+                    body.extend_from_slice(
+                        format!(
+                            "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
+                            name, filename
+                        )
+                        .as_bytes(),
+                    );
+                    body.extend_from_slice(
+                        format!("Content-Type: {}\r\n\r\n", blob.mime_type()).as_bytes(),
+                    );
+                    if let Ok(bytes) = blob.bytes(ctx.clone()).await {
+                        if let Some(bytes_vec) = bytes.as_bytes() {
+                            body.extend_from_slice(bytes_vec);
+                        }
+                    }
+                }
+                FormDataEntryValue::String(value) => {
+                    body.extend_from_slice(
+                        format!("Content-Disposition: form-data; name=\"{}\"\r\n\r\n", name)
+                            .as_bytes(),
+                    );
+                    body.extend_from_slice(value.as_bytes());
+                }
+            }
+            body.extend_from_slice(b"\r\n");
+        }
+
+        body.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
+        Ok((body, boundary))
+    }
+
+    pub(crate) fn content_type(boundary: &str) -> String {
+        format!("multipart/form-data; boundary={}", boundary)
     }
 }
 

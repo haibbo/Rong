@@ -10,6 +10,7 @@ use std::io::Error;
 use std::sync::OnceLock;
 use tokio::select;
 
+use crate::formdata::FormData;
 use crate::request::{Request, RequestInit};
 use crate::response::Response;
 
@@ -41,11 +42,12 @@ fn get_client() -> &'static Client<
 }
 
 // Convert Request to hyper::Request
-fn to_hyper_request(request: Request) -> HttpRequest<BoxBody<Bytes, Error>> {
+async fn to_hyper_request(request: Request) -> JSResult<HttpRequest<BoxBody<Bytes, Error>>> {
     let mut builder = HttpRequest::builder()
         .method(request.method)
         .uri(request.url)
         .header(header::USER_AGENT, navigator::get_user_agent())
+        .header(header::ACCEPT, "*/*")
         .header(header::ACCEPT_ENCODING, "gzip"); // TODO: "gzip, zstd"
 
     // Take ownership of headers
@@ -54,10 +56,24 @@ fn to_hyper_request(request: Request) -> HttpRequest<BoxBody<Bytes, Error>> {
     }
 
     // Create body - if conversion fails, use empty body
-    let bytes = request
-        .body
-        .and_then(|b| b.to_bytes().ok())
-        .unwrap_or_default();
+    let (bytes, boundary) = if let Some(body) = request.body {
+        body.to_bytes().await.ok()
+    } else {
+        None
+    }
+    .unwrap_or_default();
+
+    // If we have a boundary, set the Content-Type header with it
+    if let Some(boundary) = boundary {
+        if let Some(headers) = builder.headers_mut() {
+            headers.insert(
+                header::CONTENT_TYPE,
+                FormData::content_type(&boundary).parse().map_err(|e| {
+                    RustyJSError::TypeError(format!("Invalid content-type header: {}", e))
+                })?,
+            );
+        }
+    }
 
     let body = Full::new(bytes)
         .map_err(|e| match e {}) // Infallible can never happen
@@ -65,7 +81,9 @@ fn to_hyper_request(request: Request) -> HttpRequest<BoxBody<Bytes, Error>> {
 
     // builder.body() only fails if the headers are invalid, which we know they aren't
     // because we just created them from valid headers
-    builder.body(body).unwrap()
+    builder
+        .body(body)
+        .map_err(|e| RustyJSError::TypeError(format!("Failed to build request: {}", e)))
 }
 
 pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Response> {
@@ -76,7 +94,7 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     let mut abort_receiver = request.abort_signal().map(|signal| signal.subscribe());
 
     // Convert Request to hyper::Request
-    let hyper_request = to_hyper_request(request);
+    let hyper_request = to_hyper_request(request).await?;
 
     // Send request and get response
     let response = if let Some(ref mut receiver) = abort_receiver {

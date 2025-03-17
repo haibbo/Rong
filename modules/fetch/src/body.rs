@@ -1,3 +1,5 @@
+use crate::formdata::FormData;
+use buffer::{Blob, File};
 use bytes::Bytes;
 use flate2::read::GzDecoder;
 use http::HeaderMap;
@@ -25,63 +27,83 @@ impl Clone for BodyKind {
 pub(crate) struct HttpBody(pub JSValue);
 
 impl HttpBody {
-    // Convert body to text
-    pub async fn text(&self) -> JSResult<String> {
+    // Convert to bytes synchronously for hyper Body implementation
+    pub async fn to_bytes(&self) -> JSResult<(Bytes, Option<String>)> {
         if let Some(obj) = self.0.clone().into_object() {
+            let ctx = obj.get_ctx();
+
             // Handle URLSearchParams
             if let Ok(params) = obj.borrow::<URLSearchParams>() {
-                return Ok(params.to_string());
+                return Ok((Bytes::from(params.to_string()), None));
             }
 
-            // Handle TypedArray/ArrayBuffer
-            if obj.is_array_buffer() {
-                let array = JSArrayBuffer::<u8>::from_object(obj).ok_or_else(|| {
-                    RustyJSError::TypeError("Failed to convert ArrayBuffer".to_string())
-                })?;
-                return Ok(String::from_utf8_lossy(&array.to_vec()).into_owned());
+            // Handle TypedArray
+            if let Some(typed_array) = JSTypedArray::from_object(obj.clone()) {
+                if let Some(bytes) = typed_array.as_bytes() {
+                    return Ok((Bytes::from(bytes.to_vec()), None));
+                }
             }
 
-            // Handle other objects by converting to string
-            return Ok(obj.to_string());
+            // Handle ArrayBuffer
+            if let Some(buffer) = JSArrayBuffer::<u8>::from_object(obj.clone()) {
+                if let Some(bytes) = buffer.as_bytes() {
+                    return Ok((Bytes::from(bytes.to_vec()), None));
+                }
+            }
+
+            // Handle Blob
+            if let Ok(blob) = obj.borrow::<Blob>().map(|b| b.clone()) {
+                let bytes = {
+                    let blob = blob.clone();
+                    blob.bytes(ctx.clone()).await?
+                };
+                if let Some(bytes_vec) = bytes.as_bytes() {
+                    return Ok((Bytes::from(bytes_vec.to_vec()), None));
+                }
+            }
+
+            // Handle File
+            if let Ok(file) = obj.borrow::<File>().map(|f| f.clone()) {
+                let bytes = {
+                    let file = file.clone();
+                    file.bytes(ctx.clone()).await?
+                };
+                if let Some(bytes_vec) = bytes.as_bytes() {
+                    return Ok((Bytes::from(bytes_vec.to_vec()), None));
+                }
+            }
+
+            // Handle FormData
+            if let Ok(formdata) = obj.borrow::<FormData>().map(|f| f.clone()) {
+                let (body, boundary) = {
+                    let formdata = formdata.clone();
+                    formdata.serialize(ctx.clone()).await?
+                };
+                return Ok((Bytes::from(body), Some(boundary)));
+            }
+
+            // Handle other as empty string
+            return Ok((Bytes::new(), None));
         }
 
+        // Handle string
         if let Ok(s) = self.0.clone().try_into::<String>() {
-            return Ok(s);
+            return Ok((Bytes::from(s), None));
         }
 
-        Ok(String::new())
+        Ok((Bytes::new(), None))
+    }
+
+    // Convert body to text
+    pub async fn text(&self) -> JSResult<String> {
+        // For most cases, we can just convert bytes to UTF-8 string
+        let (bytes, _) = self.to_bytes().await?;
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
     // Convert body to bytes
     pub async fn bytes(&self) -> JSResult<Bytes> {
-        self.to_bytes()
-    }
-
-    // Convert to bytes synchronously for hyper Body implementation
-    pub fn to_bytes(&self) -> JSResult<Bytes> {
-        if let Some(obj) = self.0.clone().into_object() {
-            // Handle URLSearchParams
-            if let Ok(params) = obj.borrow::<URLSearchParams>() {
-                return Ok(Bytes::from(params.to_string()));
-            }
-
-            // Handle TypedArray/ArrayBuffer
-            if obj.is_array_buffer() {
-                let array = JSArrayBuffer::<u8>::from_object(obj).ok_or_else(|| {
-                    RustyJSError::TypeError("Failed to convert ArrayBuffer".to_string())
-                })?;
-                return Ok(Bytes::from(array.to_vec()));
-            }
-
-            // Handle other as empty bytes
-            return Ok(Bytes::new());
-        }
-
-        if let Ok(s) = self.0.clone().try_into::<String>() {
-            return Ok(Bytes::from(s));
-        }
-
-        Ok(Bytes::new())
+        Ok(self.to_bytes().await?.0)
     }
 }
 
