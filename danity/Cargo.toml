@@ -1,0 +1,14 @@
+[package]
+name = "danity"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "danity"
+path = "src/main.rs"
+
+[dependencies]
+rusty-js = { workspace = true }
+danity_modules = { path = "../danity_modules" }
+ureq = "3.0.9"
+
