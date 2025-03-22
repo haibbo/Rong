@@ -43,6 +43,7 @@ pub struct JSRuntime<R: JSRuntimeImpl> {
     pub(crate) inner: Rc<R>,
     scheduler: Rc<Scheduler<R>>,
     services: ServiceContainer,
+    pub(crate) engine: &'static str,
 }
 
 impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
@@ -51,6 +52,7 @@ impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
             inner: self.inner.clone(),
             scheduler: self.scheduler.clone(),
             services: self.services.clone(),
+            engine: self.engine,
         }
     }
 }
@@ -141,6 +143,7 @@ pub trait JSEngine: Sized {
             inner: runtime,
             scheduler,
             services: ServiceContainer::new(),
+            engine: Self::name(),
         }
     }
 
