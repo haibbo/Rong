@@ -10,5 +10,4 @@ path = "src/main.rs"
 [dependencies]
 rusty-js = { workspace = true }
 danity_modules = { path = "../danity_modules" }
-ureq = "3.0.9"
 
