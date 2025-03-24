@@ -5,8 +5,8 @@ pub use rusty_js_core::{
     JSObject as CoreJSObject, JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService,
     JSSymbol as CoreJSSymbol, JSTypedArray as CoreJSTypedArray, JSTypedArrayKind,
     JSValue as CoreJSValue, JSValueType, JsonToJsValue, Promise as CorePromise,
-    PropertyDescriptor as CorePropertyDescriptor, RustyJSError, Source, ToJSAsyncIterator,
-    ToJSIterator,
+    PropertyDescriptor as CorePropertyDescriptor, RustyJSError, Source, SourceKind,
+    ToJSAsyncIterator, ToJSIterator,
 };
 
 pub use rusty_js_core::function;

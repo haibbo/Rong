@@ -15,5 +15,5 @@ pub use iterator::*;
 pub use promise::*;
 pub use result::{IntoJSResult, JSResult, RustyJSError};
 pub use runtime::*;
-pub use source::Source;
+pub use source::{Source, SourceKind};
 pub use value::*;

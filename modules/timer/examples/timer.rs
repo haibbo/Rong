@@ -19,8 +19,7 @@ fn main() {
         let js_path = current_dir.join("examples/timer_script.js");
         println!("Looking for JS file at: {}", js_path.display());
 
-        ctx.eval::<()>(Source::from_path(js_path).await.unwrap())
-            .unwrap();
+        ctx.eval::<()>(Source::from_path(&ctx, js_path).await?)?;
 
         println!("Timers set up. Waiting for 5 seconds...");
         sleep(Duration::from_millis(5500)).await;

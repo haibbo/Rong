@@ -39,12 +39,12 @@ impl<'a> UnitJSRunner<'a> {
 
         // First, load the test runner
         let runner = current_dir.join("../../tests/unit/test-runner.js");
-        let source = Source::from_path(runner).await.unwrap();
+        let source = Source::from_path(ctx, runner).await?;
         ctx.eval_async::<()>(source).await?;
 
         // Then, load the test file
         let test = current_dir.join("../../tests/unit/").join(unit);
-        let source = Source::from_path(test).await.unwrap();
+        let source = Source::from_path(ctx, test).await?;
         ctx.eval_async::<()>(source).await?;
 
         Ok(Self { ctx })
