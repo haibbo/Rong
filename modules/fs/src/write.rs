@@ -160,19 +160,19 @@ async fn truncate(path: String, len: Optional<f64>) -> JSResult<()> {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    let danity = ctx.dainty();
+    let rong = ctx.rong();
 
     let write_text = JSFunc::new(ctx, write_text_file)?.name("writeTextFile")?;
-    danity.set("writeTextFile", write_text)?;
+    rong.set("writeTextFile", write_text)?;
 
     let write = JSFunc::new(ctx, write_file)?.name("writeFile")?;
-    danity.set("writeFile", write)?;
+    rong.set("writeFile", write)?;
 
     let truncate_fn = JSFunc::new(ctx, truncate)?.name("truncate")?;
-    danity.set("truncate", truncate_fn)?;
+    rong.set("truncate", truncate_fn)?;
 
     let copy = JSFunc::new(ctx, copy_file)?.name("copyFile")?;
-    danity.set("copyFile", copy)?;
+    rong.set("copyFile", copy)?;
 
     Ok(())
 }

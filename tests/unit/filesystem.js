@@ -7,7 +7,7 @@ describe("Filesystem", () => {
   // Helper function to ensure temp directory exists
   async function ensureTempDir() {
     try {
-      await Danity.mkdir(`${WORKSPACE_ROOT}/target/test-tmp`, {
+      await Rong.mkdir(`${WORKSPACE_ROOT}/target/test-tmp`, {
         recursive: true,
       });
     } catch (e) {
@@ -18,7 +18,7 @@ describe("Filesystem", () => {
   // Helper function to clean up temp directory
   async function cleanupTempDir() {
     try {
-      await Danity.remove(`${WORKSPACE_ROOT}/target/test-tmp`, {
+      await Rong.remove(`${WORKSPACE_ROOT}/target/test-tmp`, {
         recursive: true,
       });
     } catch (e) {
@@ -31,18 +31,18 @@ describe("Filesystem", () => {
     const testFile = getTempPath("test.txt");
     const testContent = "Hello, World!";
 
-    await Danity.writeTextFile(testFile, testContent);
-    const content = await Danity.readTextFile(testFile);
+    await Rong.writeTextFile(testFile, testContent);
+    const content = await Rong.readTextFile(testFile);
     assert.equal(content, testContent);
 
     // Test with options
-    await Danity.writeTextFile(testFile, "Append", { append: true });
-    const appendedContent = await Danity.readTextFile(testFile);
+    await Rong.writeTextFile(testFile, "Append", { append: true });
+    const appendedContent = await Rong.readTextFile(testFile);
     assert.equal(appendedContent, testContent + "Append");
 
     // Test abort
     const controller = new AbortController();
-    const promise = Danity.writeTextFile(testFile, "Should not write", {
+    const promise = Rong.writeTextFile(testFile, "Should not write", {
       signal: controller.signal,
     });
     controller.abort();
@@ -64,8 +64,8 @@ describe("Filesystem", () => {
     const testFile = getTempPath("test.bin");
     const testData = new Uint8Array([1, 2, 3, 4, 5]);
 
-    await Danity.writeFile(testFile, testData);
-    const data = await Danity.readFile(testFile);
+    await Rong.writeFile(testFile, testData);
+    const data = await Rong.readFile(testFile);
     const readData = new Uint8Array(data);
 
     // Compare length and content
@@ -76,8 +76,8 @@ describe("Filesystem", () => {
 
     // Test with options
     const appendData = new Uint8Array([6, 7, 8]);
-    await Danity.writeFile(testFile, appendData, { append: true });
-    const appendedData = new Uint8Array(await Danity.readFile(testFile));
+    await Rong.writeFile(testFile, appendData, { append: true });
+    const appendedData = new Uint8Array(await Rong.readFile(testFile));
 
     // Verify appended data
     assert.equal(
@@ -100,14 +100,14 @@ describe("Filesystem", () => {
   it("truncate", async () => {
     await ensureTempDir();
     const testFile = getTempPath("truncate.txt");
-    await Danity.writeTextFile(testFile, "1234567890");
+    await Rong.writeTextFile(testFile, "1234567890");
 
-    await Danity.truncate(testFile, 5);
-    const content = await Danity.readTextFile(testFile);
+    await Rong.truncate(testFile, 5);
+    const content = await Rong.readTextFile(testFile);
     assert.equal(content, "12345");
 
-    await Danity.truncate(testFile); // Should truncate to 0
-    const emptyContent = await Danity.readTextFile(testFile);
+    await Rong.truncate(testFile); // Should truncate to 0
+    const emptyContent = await Rong.readTextFile(testFile);
     assert.equal(emptyContent, "");
 
     await cleanupTempDir();
@@ -119,10 +119,10 @@ describe("Filesystem", () => {
     const destFile = getTempPath("dest.txt");
     const content = "Copy test content";
 
-    await Danity.writeTextFile(sourceFile, content);
-    await Danity.copyFile(sourceFile, destFile);
+    await Rong.writeTextFile(sourceFile, content);
+    await Rong.copyFile(sourceFile, destFile);
 
-    const copiedContent = await Danity.readTextFile(destFile);
+    const copiedContent = await Rong.readTextFile(destFile);
     assert.equal(copiedContent, content);
 
     await cleanupTempDir();
@@ -134,15 +134,15 @@ describe("Filesystem", () => {
     const newPath = getTempPath("new.txt");
     const content = "Rename test content";
 
-    await Danity.writeTextFile(oldPath, content);
-    await Danity.rename(oldPath, newPath);
+    await Rong.writeTextFile(oldPath, content);
+    await Rong.rename(oldPath, newPath);
 
-    const exists = await Danity.readTextFile(newPath);
+    const exists = await Rong.readTextFile(newPath);
     assert.equal(exists, content);
 
     let rejected = false;
     try {
-      await Danity.readTextFile(oldPath);
+      await Rong.readTextFile(oldPath);
     } catch (e) {
       rejected = true;
     }
@@ -155,12 +155,12 @@ describe("Filesystem", () => {
     // Test file removal
     await ensureTempDir();
     const testFile = getTempPath("remove.txt");
-    await Danity.writeTextFile(testFile, "To be removed");
-    await Danity.remove(testFile);
+    await Rong.writeTextFile(testFile, "To be removed");
+    await Rong.remove(testFile);
 
     let rejected = false;
     try {
-      await Danity.readTextFile(testFile);
+      await Rong.readTextFile(testFile);
     } catch (e) {
       rejected = true;
     }
@@ -171,14 +171,14 @@ describe("Filesystem", () => {
     const nestedDir = getTempPath("test_dir/nested");
     const nestedFile = getTempPath("test_dir/nested/test.txt");
 
-    await Danity.mkdir(testDir);
-    await Danity.mkdir(nestedDir, { recursive: true });
-    await Danity.writeTextFile(nestedFile, "Test content");
+    await Rong.mkdir(testDir);
+    await Rong.mkdir(nestedDir, { recursive: true });
+    await Rong.writeTextFile(nestedFile, "Test content");
 
     // Try to remove non-empty directory without recursive option
     rejected = false;
     try {
-      await Danity.remove(testDir);
+      await Rong.remove(testDir);
     } catch (e) {
       rejected = true;
     }
@@ -188,12 +188,12 @@ describe("Filesystem", () => {
     );
 
     // Remove directory recursively
-    await Danity.remove(testDir, { recursive: true });
+    await Rong.remove(testDir, { recursive: true });
 
     // Verify directory is removed
     rejected = false;
     try {
-      await Danity.readDir(testDir);
+      await Rong.readDir(testDir);
     } catch (e) {
       rejected = true;
     }
@@ -205,9 +205,9 @@ describe("Filesystem", () => {
   it("realPath", async () => {
     await ensureTempDir();
     const testFile = getTempPath("real.txt");
-    await Danity.writeTextFile(testFile, "");
+    await Rong.writeTextFile(testFile, "");
 
-    const realPath = await Danity.realPath(testFile);
+    const realPath = await Rong.realPath(testFile);
     assert(realPath.endsWith(testFile));
 
     await cleanupTempDir();
@@ -220,13 +220,13 @@ describe("Filesystem", () => {
     const testFile = getTempPath("test_dir/test.txt");
 
     // Test mkdir
-    await Danity.mkdir(testDir);
-    await Danity.mkdir(nestedDir, { recursive: true });
-    await Danity.writeTextFile(testFile, "");
+    await Rong.mkdir(testDir);
+    await Rong.mkdir(nestedDir, { recursive: true });
+    await Rong.writeTextFile(testFile, "");
 
     // Test readDir
     const entries = [];
-    const dirEntries = await Danity.readDir(testDir);
+    const dirEntries = await Rong.readDir(testDir);
     for await (const entry of dirEntries) {
       console.log(
         "entry:%s, isFile:%s, isDirectory:%s",
@@ -246,9 +246,9 @@ describe("Filesystem", () => {
     assert(hasTestFile, "Should have test file");
 
     // Cleanup
-    await Danity.remove(testFile);
-    await Danity.remove(nestedDir);
-    await Danity.remove(testDir);
+    await Rong.remove(testFile);
+    await Rong.remove(nestedDir);
+    await Rong.remove(testDir);
 
     await cleanupTempDir();
   });
@@ -257,9 +257,9 @@ describe("Filesystem", () => {
     await ensureTempDir();
     const testFile = getTempPath("stat.txt");
     const testContent = "Test content";
-    await Danity.writeTextFile(testFile, testContent);
+    await Rong.writeTextFile(testFile, testContent);
 
-    const info = await Danity.stat(testFile);
+    const info = await Rong.stat(testFile);
     assert(info.isFile);
     assert(!info.isDirectory);
     assert(!info.isSymlink);
@@ -277,9 +277,9 @@ describe("Filesystem", () => {
     await ensureTempDir();
     const testFile = getTempPath("lstat.txt");
     const testContent = "Test content";
-    await Danity.writeTextFile(testFile, testContent);
+    await Rong.writeTextFile(testFile, testContent);
 
-    const info = await Danity.lstat(testFile);
+    const info = await Rong.lstat(testFile);
     assert(info.isFile);
     assert(!info.isDirectory);
     assert(!info.isSymlink);
@@ -300,7 +300,7 @@ describe("Filesystem", () => {
     const { signal } = controller;
 
     // Test readTextFile abort
-    const readPromise = Danity.readTextFile(testFile, { signal });
+    const readPromise = Rong.readTextFile(testFile, { signal });
     controller.abort();
 
     let error;
@@ -314,7 +314,7 @@ describe("Filesystem", () => {
 
     // Test writeTextFile abort with new controller
     const writeController = new AbortController();
-    const writePromise = Danity.writeTextFile(testFile, "Should not write", {
+    const writePromise = Rong.writeTextFile(testFile, "Should not write", {
       signal: writeController.signal,
     });
     writeController.abort();
@@ -330,7 +330,7 @@ describe("Filesystem", () => {
 
     // Clean up if file was created
     try {
-      await Danity.remove(testFile);
+      await Rong.remove(testFile);
     } catch {}
 
     await cleanupTempDir();
@@ -343,22 +343,22 @@ describe("Filesystem", () => {
     const content = "Symlink test content";
 
     // Create target file first
-    await Danity.writeTextFile(targetFile, content);
+    await Rong.writeTextFile(targetFile, content);
 
     // Get absolute paths
-    const targetAbsPath = await Danity.realPath(targetFile);
+    const targetAbsPath = await Rong.realPath(targetFile);
     const linkAbsPath = `${WORKSPACE_ROOT}/target/test-tmp/link.txt`;
 
     // Create symlink and verify it
-    await Danity.symlink(targetAbsPath, linkAbsPath);
-    const linkTarget = await Danity.readlink(linkAbsPath);
+    await Rong.symlink(targetAbsPath, linkAbsPath);
+    const linkTarget = await Rong.readlink(linkAbsPath);
     assert(
       linkTarget === targetAbsPath,
       "Link target should match absolute path",
     );
 
     // Read through symlink
-    const linkContent = await Danity.readTextFile(linkAbsPath);
+    const linkContent = await Rong.readTextFile(linkAbsPath);
     assert.equal(
       linkContent,
       content,
@@ -371,12 +371,12 @@ describe("Filesystem", () => {
   it("chmod", async () => {
     await ensureTempDir();
     const testFile = getTempPath("chmod.txt");
-    await Danity.writeTextFile(testFile, "Test content");
+    await Rong.writeTextFile(testFile, "Test content");
 
     // Test chmod (Unix-like systems only)
-    if (typeof Danity.chmod === "function") {
-      await Danity.chmod(testFile, 0o600);
-      const info = await Danity.stat(testFile);
+    if (typeof Rong.chmod === "function") {
+      await Rong.chmod(testFile, 0o600);
+      const info = await Rong.stat(testFile);
       assert.equal(info.mode & 0o777, 0o600);
     }
 
@@ -386,13 +386,13 @@ describe("Filesystem", () => {
   it("chown", async () => {
     await ensureTempDir();
     const testFile = getTempPath("chown.txt");
-    await Danity.writeTextFile(testFile, "Test content");
+    await Rong.writeTextFile(testFile, "Test content");
 
     // Test chown (Unix-like systems only)
-    if (typeof Danity.chown === "function") {
+    if (typeof Rong.chown === "function") {
       try {
         // Try to chown to current user (might fail if not root)
-        await Danity.chown(testFile, process.getuid(), process.getgid());
+        await Rong.chown(testFile, process.getuid(), process.getgid());
       } catch (e) {
         // Ignore permission errors
       }
@@ -404,16 +404,16 @@ describe("Filesystem", () => {
   it("chdir", async () => {
     await ensureTempDir();
     const testDir = getTempPath("chdir_test");
-    await Danity.mkdir(testDir);
+    await Rong.mkdir(testDir);
 
-    const oldPath = await Danity.realPath(".");
-    await Danity.chdir(testDir);
+    const oldPath = await Rong.realPath(".");
+    await Rong.chdir(testDir);
 
-    const newPath = await Danity.realPath(".");
+    const newPath = await Rong.realPath(".");
     assert(newPath.endsWith("chdir_test"));
 
-    await Danity.chdir(oldPath);
-    await Danity.remove(testDir);
+    await Rong.chdir(oldPath);
+    await Rong.remove(testDir);
 
     await cleanupTempDir();
   });
@@ -421,15 +421,15 @@ describe("Filesystem", () => {
   it("utime", async () => {
     await ensureTempDir();
     const testFile = getTempPath("utime.txt");
-    await Danity.writeTextFile(testFile, "Test content");
+    await Rong.writeTextFile(testFile, "Test content");
 
     const now = Date.now();
-    await Danity.utime(testFile, {
+    await Rong.utime(testFile, {
       accessed: now,
       modified: now,
     });
 
-    const info = await Danity.stat(testFile);
+    const info = await Rong.stat(testFile);
     // Allow 1 second difference due to timestamp precision
     assert(Math.abs(info.accessed - now) < 1000);
     assert(Math.abs(info.modified - now) < 1000);

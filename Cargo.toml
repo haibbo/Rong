@@ -9,7 +9,7 @@ members = [
     "modules/fetch", "modules/encoding", "modules/event",
     "modules/assert", "modules/dom-exception",
     "modules/abort", "modules/console", "modules/lxr_url", "modules/buffer", "modules/fs",
-    "danity_modules", "danity"
+    "rong_modules", "rong"
 ]
 
 [workspace.dependencies]

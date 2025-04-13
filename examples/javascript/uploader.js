@@ -1,5 +1,5 @@
 // Tiny File Uploader
-// Usage: danity uploader.js <file-path> <server-url>
+// Usage: rong uploader.js <file-path> <server-url>
 
 async function uploadFile(localPath, serverUrl) {
   try {
@@ -7,7 +7,7 @@ async function uploadFile(localPath, serverUrl) {
     console.log(`To server: ${serverUrl}`);
 
     // 1. Read local file
-    const fileContent = await Danity.readFile(localPath);
+    const fileContent = await Rong.readFile(localPath);
     const fileName = localPath.split("/").pop() || "file";
 
     // 2. Construct FormData
@@ -16,7 +16,7 @@ async function uploadFile(localPath, serverUrl) {
       type: "application/octet-stream",
     });
     formData.append("file", fileBlob, fileName);
-    formData.append("description", "Example file uploaded from Danity");
+    formData.append("description", "Example file uploaded from Rong");
 
     // 3. Send POST request
     console.log("Starting upload...");
@@ -36,11 +36,11 @@ async function uploadFile(localPath, serverUrl) {
 }
 
 // Get command line arguments
-const args = Danity.args;
+const args = Rong.args;
 
 if (args.length < 2) {
-  console.log("Usage: danity uploader.js <file-path> <server-url>");
-  Danity.exit(1);
+  console.log("Usage: rong uploader.js <file-path> <server-url>");
+  Rong.exit(1);
 }
 
 const localFile = args[0];

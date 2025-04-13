@@ -64,13 +64,13 @@ async fn read_file(
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    let danity = ctx.dainty();
+    let rong = ctx.rong();
 
     let read_text = JSFunc::new(ctx, read_text_file)?.name("readTextFile")?;
-    danity.set("readTextFile", read_text)?;
+    rong.set("readTextFile", read_text)?;
 
     let read_file = JSFunc::new(ctx, read_file)?.name("readFile")?;
-    danity.set("readFile", read_file)?;
+    rong.set("readFile", read_file)?;
 
     Ok(())
 }

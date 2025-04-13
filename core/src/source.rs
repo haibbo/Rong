@@ -71,9 +71,9 @@ impl Source {
         use tokio::io::AsyncWriteExt;
 
         // Verify file extension
-        if path.as_ref().extension().and_then(|ext| ext.to_str()) != Some("danity") {
+        if path.as_ref().extension().and_then(|ext| ext.to_str()) != Some("rong") {
             return Err(RustyJSError::Error(
-                "Bytecode files must have .danity extension".to_string(),
+                "Bytecode files must have .rong extension".to_string(),
             ));
         }
 
@@ -108,7 +108,7 @@ impl Source {
 
         let kind = match path.as_ref().extension().and_then(|ext| ext.to_str()) {
             Some("js") | Some("ts") | Some("mjs") => SourceKind::JavaScript(code),
-            Some("danity") => {
+            Some("rong") => {
                 // Verify bytecode header
                 if code.len() >= 6 && &code[0..6] == b"DANITY" {
                     let engine_name = ctx.runtime().engine.to_string();
@@ -129,13 +129,13 @@ impl Source {
                     }
                 } else {
                     return Err(RustyJSError::Error(
-                        "Invalid .danity file format".to_string(),
+                        "Invalid .rong file format".to_string(),
                     ));
                 }
             }
             _ => {
                 return Err(RustyJSError::Error(format!(
-                "Unsupported file type. Supported extensions: .js, .ts, .mjs, .danity. Found: {}",
+                "Unsupported file type. Supported extensions: .js, .ts, .mjs, .rong. Found: {}",
                 path.as_ref().display()
             )))
             }

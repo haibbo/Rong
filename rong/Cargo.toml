@@ -1,13 +1,13 @@
 [package]
-name = "danity"
+name = "rong"
 version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "danity"
+name = "rong"
 path = "src/main.rs"
 
 [dependencies]
 rusty-js = { workspace = true }
-danity_modules = { path = "../danity_modules" }
+rong_modules = { path = "../rong_modules" }
 

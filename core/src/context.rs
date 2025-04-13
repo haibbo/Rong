@@ -123,7 +123,7 @@ pub struct JSContext<C: JSContextImpl> {
 struct JSContextInner<C: JSContextImpl> {
     inner: C,
     runtime: JSRuntime<C::Runtime>,
-    dainty: C::Value,
+    rong: C::Value,
 }
 
 impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
@@ -162,12 +162,12 @@ impl<C: JSContextImpl> JSContext<C> {
         C::Value: JSObjectOps,
     {
         let raw_ctx = C::new(&runtime.inner);
-        let dainty = C::Value::new_object(&raw_ctx);
+        let rong = C::Value::new_object(&raw_ctx);
 
         let inner = JSContextInner {
             inner: raw_ctx,
             runtime: runtime.clone(),
-            dainty,
+            rong,
         };
 
         let ctx = JSContext { rc: Rc::new(inner) };
@@ -186,8 +186,8 @@ impl<C: JSContextImpl> JSContext<C> {
     }
 
     /// return global Dainty object
-    pub fn dainty(&self) -> JSObject<C::Value> {
-        let value = JSValue::from_raw(self, self.rc.as_ref().dainty.clone());
+    pub fn rong(&self) -> JSObject<C::Value> {
+        let value = JSValue::from_raw(self, self.rc.as_ref().rong.clone());
         value.into()
     }
 

@@ -168,8 +168,8 @@ pub trait JSEngine: Sized {
             .expect("Failed to register builtin class");
 
         ctx.global()
-            .set("Danity", ctx.dainty())
-            .expect("Failed to add Danity object");
+            .set("Rong", ctx.rong())
+            .expect("Failed to add Rong object");
 
         ctx
     }

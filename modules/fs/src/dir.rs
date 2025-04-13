@@ -291,39 +291,39 @@ async fn utime(path: String, options: UTimeOptions) -> JSResult<()> {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    let danity = ctx.dainty();
+    let rong = ctx.rong();
 
     ctx.register_class::<DirEntry>()?;
 
     let mkdir_fn = JSFunc::new(ctx, mkdir)?.name("mkdir")?;
-    danity.set("mkdir", mkdir_fn)?;
+    rong.set("mkdir", mkdir_fn)?;
 
     let remove_fn = JSFunc::new(ctx, remove)?.name("remove")?;
-    danity.set("remove", remove_fn)?;
+    rong.set("remove", remove_fn)?;
 
     let readdir_fn = JSFunc::new(ctx, readdir)?.name("readDir")?;
-    danity.set("readDir", readdir_fn)?;
+    rong.set("readDir", readdir_fn)?;
 
     let symlink_fn = JSFunc::new(ctx, symlink)?.name("symlink")?;
-    danity.set("symlink", symlink_fn)?;
+    rong.set("symlink", symlink_fn)?;
 
     let readlink_fn = JSFunc::new(ctx, readlink)?.name("readlink")?;
-    danity.set("readlink", readlink_fn)?;
+    rong.set("readlink", readlink_fn)?;
 
     #[cfg(unix)]
     {
         let chmod_fn = JSFunc::new(ctx, chmod)?.name("chmod")?;
-        danity.set("chmod", chmod_fn)?;
+        rong.set("chmod", chmod_fn)?;
 
         let chown_fn = JSFunc::new(ctx, chown)?.name("chown")?;
-        danity.set("chown", chown_fn)?;
+        rong.set("chown", chown_fn)?;
     }
 
     let chdir_fn = JSFunc::new(ctx, chdir)?.name("chdir")?;
-    danity.set("chdir", chdir_fn)?;
+    rong.set("chdir", chdir_fn)?;
 
     let utime_fn = JSFunc::new(ctx, utime)?.name("utime")?;
-    danity.set("utime", utime_fn)?;
+    rong.set("utime", utime_fn)?;
 
     Ok(())
 }

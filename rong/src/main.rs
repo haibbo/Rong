@@ -2,7 +2,7 @@ use rusty_js::*;
 use std::env;
 use std::path::PathBuf;
 
-mod danity;
+mod rong;
 mod repl;
 
 #[derive(Debug)]
@@ -17,10 +17,10 @@ fn usage() {
     println!(
         r#"
 Usage:
-  dainty run <file.js>
-  dainty compile <input.js> <output.danity>
-  dainty -v | --version
-  dainty -h | --help
+  rong run <file.js>
+  rong compile <input.js> <output.rong>
+  rong -v | --version
+  rong -h | --help
 
 Commands:
   run         Execute a JavaScript file
@@ -106,8 +106,8 @@ fn main() -> Result<(), RustyJSError> {
     let ctx = RustyJS::context(&rt);
 
     // Initialize all modules
-    danity_modules::init(&ctx)?;
-    danity::init(&ctx)?;
+    rong_modules::init(&ctx)?;
+    rong::init(&ctx)?;
 
     match command {
         Command::Run(path) => rt.block_on(async move { run_file(&ctx, path).await })?,
@@ -118,7 +118,7 @@ fn main() -> Result<(), RustyJSError> {
             usage();
         }
         Command::Version => {
-            println!("dainty v0.1.0");
+            println!("rong v0.1.0");
         }
     }
 

@@ -20,13 +20,13 @@ async fn real_path(path: String) -> JSResult<String> {
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    let danity = ctx.dainty();
+    let rong = ctx.rong();
 
     let rename_fn = JSFunc::new(ctx, rename)?.name("rename")?;
-    danity.set("rename", rename_fn)?;
+    rong.set("rename", rename_fn)?;
 
     let real_path_fn = JSFunc::new(ctx, real_path)?.name("realPath")?;
-    danity.set("realPath", real_path_fn)?;
+    rong.set("realPath", real_path_fn)?;
 
     read::init(ctx)?;
     write::init(ctx)?;

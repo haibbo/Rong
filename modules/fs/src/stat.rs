@@ -134,15 +134,15 @@ async fn lstat(path: String) -> JSResult<FileInfo> {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    let danity = ctx.dainty();
+    let rong = ctx.rong();
 
     ctx.register_class::<FileInfo>()?;
 
     let stat_fn = JSFunc::new(ctx, stat)?.name("stat")?;
-    danity.set("stat", stat_fn)?;
+    rong.set("stat", stat_fn)?;
 
     let lstat_fn = JSFunc::new(ctx, lstat)?.name("lstat")?;
-    danity.set("lstat", lstat_fn)?;
+    rong.set("lstat", lstat_fn)?;
 
     Ok(())
 }

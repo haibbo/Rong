@@ -7,13 +7,13 @@ fn exit(status: u32) {
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    let danity = ctx.dainty();
+    let rong = ctx.rong();
 
     let args = env::args().skip(2).collect::<Vec<String>>();
-    danity.set("args", args)?;
+    rong.set("args", args)?;
 
     let exit = JSFunc::new(ctx, exit)?.name("exit")?;
-    danity.set("exit", exit)?;
+    rong.set("exit", exit)?;
 
     Ok(())
 }
