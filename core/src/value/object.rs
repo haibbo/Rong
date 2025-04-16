@@ -1,5 +1,5 @@
 use crate::{
-    FromJSValue, JSContext, JSResult, JSTypeOf, JSValue, JSValueConversion, JSValueImpl,
+    FromJSValue, JSContext, JSFunc, JSResult, JSTypeOf, JSValue, JSValueConversion, JSValueImpl,
     RongJSError,
 };
 use std::fmt;
@@ -134,6 +134,20 @@ where
     /// Creates a JSObject from a raw JSValue and context
     pub fn from_raw(ctx: &JSContext<V::Context>, value: V) -> Self {
         JSValue::from_raw(ctx, value).into()
+    }
+
+    /// Convert JSObject to JSON string using JavaScript's JSON.stringify
+    pub fn json_stringify(self) -> JSResult<String> {
+        let ctx = self.get_ctx();
+
+        // Get the global JSON object
+        let json = ctx.global().get::<_, JSObject<V>>("JSON")?;
+
+        // Get the stringify function
+        let stringify = json.get::<_, JSFunc<V>>("stringify")?;
+
+        // Call stringify with this object
+        stringify.call::<_, String>(None, (self,))
     }
 
     pub fn set<'a, K, KV>(&'a self, k: K, kv: KV) -> JSResult<&'a Self>
