@@ -1,8 +1,8 @@
 [package]
-name = "rong-js-v8"
+name = "rong-v8"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rong-js-v8-sys={path="./sys/"}
-rong-js-core = { path = "../core" }
+rong-v8-sys={path="./sys/"}
+rong-core = { path = "../core" }

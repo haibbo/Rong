@@ -16,7 +16,7 @@
 //! - `encode` creates a new `Uint8Array` for each call, which may allocate memory.
 //! - `encodeInto` allows reusing existing buffers, reducing allocations for repeated operations.
 
-use rong_js::*;
+use rong::*;
 
 /// Implementation of the JavaScript `TextEncoder` interface.
 /// Encodes strings into UTF-8 byte sequences. Currently supports only UTF-8 encoding.

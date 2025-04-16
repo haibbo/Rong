@@ -1,5 +1,5 @@
 use http::header::{self, HeaderMap, HeaderName, HeaderValue};
-use rong_js::{
+use rong::{
     function::{Optional, This},
     js_class, js_export, js_method, IntoJSIterator, *,
 };

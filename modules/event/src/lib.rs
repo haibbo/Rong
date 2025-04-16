@@ -74,7 +74,7 @@ pub use event::Event;
 pub use event_emitter::{EmitError, Emitter, EmitterExt, EventEmitter, EventKey};
 pub use event_target::EventTarget;
 
-use rong_js::*;
+use rong::*;
 
 /// Register event-related classes with the JavaScript engine
 pub fn init(ctx: &JSContext) -> JSResult<()> {

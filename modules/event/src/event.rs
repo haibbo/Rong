@@ -1,4 +1,4 @@
-use rong_js::{function::*, *};
+use rong::{function::*, *};
 
 /// Represents an event object
 #[js_export]

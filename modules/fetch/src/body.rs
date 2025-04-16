@@ -5,7 +5,7 @@ use flate2::read::GzDecoder;
 use http::HeaderMap;
 use hyper::body::Incoming;
 use rong_url::URLSearchParams;
-use rong_js::*;
+use rong::*;
 use std::io::Read;
 
 pub(crate) enum BodyKind {

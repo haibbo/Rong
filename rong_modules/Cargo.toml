@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rong-js = { workspace = true }
+rong = { workspace = true }
 timer = { path = "../modules/timer", optional = true }
 navigator = { path = "../modules/navigator", optional = true }
 path = { path = "../modules/path", optional = true }

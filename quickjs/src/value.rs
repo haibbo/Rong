@@ -1,5 +1,5 @@
 use crate::{qjs, QJSContext};
-use rong_js_core::{
+use rong_core::{
     impl_js_converter, JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RongJSError,
 };
 use std::ffi::CString;

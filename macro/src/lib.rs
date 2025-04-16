@@ -86,7 +86,7 @@ pub fn js_export(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Example
 /// ```ignore
-/// use rong_js_macro::{js_export, js_method, js_class};
+/// use rong_macro::{js_export, js_method, js_class};
 ///
 /// #[js_export]
 /// struct Point {
@@ -201,7 +201,7 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Examples
 /// ```ignore
-/// use rong_js_macro::{js_export, js_method, js_class};
+/// use rong_macro::{js_export, js_method, js_class};
 ///
 /// #[js_export]
 /// struct MyClass {
@@ -296,16 +296,16 @@ pub fn derive_from_js_value(input: TokenStream) -> TokenStream {
 
     // Generate the FromJSValue implementation
     let expanded = quote! {
-        impl rong_js::FromJSValue<rong_js::JSEngineValue> for #name
+        impl rong::FromJSValue<rong::JSEngineValue> for #name
         where Self: TryFromJSValue,
         {
-            fn from_js_value( ctx: &JSContext, value: rong_js::JSEngineValue) -> JSResult<Self> {
-                let js_value = rong_js::JSValue::from_raw(ctx, value);
+            fn from_js_value( ctx: &JSContext, value: rong::JSEngineValue) -> JSResult<Self> {
+                let js_value = rong::JSValue::from_raw(ctx, value);
                 Self::try_from_js(js_value)
             }
         }
 
-        impl rong_js::function::JSParameterType for #name {}
+        impl rong::function::JSParameterType for #name {}
     };
 
     TokenStream::from(expanded)

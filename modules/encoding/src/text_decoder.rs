@@ -14,7 +14,7 @@
 //! - Only UTF-8 encoding is supported. Other encodings will result in a `TypeError`.
 //! - The `stream` option in `decode` is currently ignored.
 
-use rong_js::{function::Optional, *};
+use rong::{function::Optional, *};
 
 #[derive(Default)]
 struct TextDecoderOptions {

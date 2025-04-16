@@ -1,4 +1,4 @@
-use rong_js::*;
+use rong::*;
 use std::env;
 use std::process;
 

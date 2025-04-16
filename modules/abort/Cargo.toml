@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rong-js = { workspace = true }
+rong = { workspace = true }
 event = {path="../event"}
 dom-exception = {path="../dom-exception"}
 tokio = { version = "1.0", features = ["rt", "time", "macros"] }

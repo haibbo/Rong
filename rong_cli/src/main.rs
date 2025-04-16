@@ -1,8 +1,8 @@
-use rong_js::*;
+use rong::*;
 use std::env;
 use std::path::PathBuf;
 
-mod rong;
+mod extension;
 mod repl;
 
 #[derive(Debug)]
@@ -67,11 +67,7 @@ async fn run_file(ctx: &JSContext, path: PathBuf) -> Result<(), RongJSError> {
     ctx.eval_async::<()>(source).await
 }
 
-async fn compile_file(
-    ctx: &JSContext,
-    input: PathBuf,
-    output: PathBuf,
-) -> Result<(), RongJSError> {
+async fn compile_file(ctx: &JSContext, input: PathBuf, output: PathBuf) -> Result<(), RongJSError> {
     // 1. Load the source file
     let source = Source::from_path(ctx, &input).await?;
 
@@ -107,7 +103,7 @@ fn main() -> Result<(), RongJSError> {
 
     // Initialize all modules
     rong_modules::init(&ctx)?;
-    rong::init(&ctx)?;
+    extension::init(&ctx)?;
 
     match command {
         Command::Run(path) => rt.block_on(async move { run_file(&ctx, path).await })?,

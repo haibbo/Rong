@@ -2,7 +2,7 @@
 mod url;
 mod url_search_params;
 
-use rong_js::*;
+use rong::*;
 pub use url::URL;
 pub use url_search_params::URLSearchParams;
 

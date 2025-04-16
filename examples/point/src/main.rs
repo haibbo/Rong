@@ -1,5 +1,5 @@
-use rong_js::*;
-use rong_js::{js_export, js_method, js_class};
+use rong::*;
+use rong::{js_export, js_method, js_class};
 
 // Define the Point struct with js_export macro
 #[js_export(rename = "Point2D")]

@@ -1,5 +1,5 @@
 use crate::url::SharedUrlData;
-use rong_js::{function::*, *};
+use rong::{function::*, *};
 use std::cell::RefCell;
 use std::rc::Rc;
 use url::{Url, form_urlencoded};

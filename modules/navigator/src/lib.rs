@@ -1,4 +1,4 @@
-use rong_js::{JSContext, JSObject, JSResult};
+use rong::{JSContext, JSObject, JSResult};
 use std::env;
 use std::sync::OnceLock;
 

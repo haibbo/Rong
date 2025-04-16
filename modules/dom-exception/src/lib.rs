@@ -28,7 +28,7 @@
 //! deprecated in the DOM specification and is no longer recommended for use.
 //! Instead, use the `name` property to identify the type of error.
 
-use rong_js::{function::*, *};
+use rong::{function::*, *};
 
 /// Macro to define error names
 #[allow(clippy::upper_case_acronyms)]

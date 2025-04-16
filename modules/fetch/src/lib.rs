@@ -1,4 +1,4 @@
-use rong_js::*;
+use rong::*;
 
 mod body;
 mod fetch;

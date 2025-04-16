@@ -9,7 +9,7 @@
 //! assert.equal(1, 1);
 //! ```
 
-use rong_js::{function::*, *};
+use rong::{function::*, *};
 
 /// Handles assertion errors with optional custom message
 fn handle_assertion_error(

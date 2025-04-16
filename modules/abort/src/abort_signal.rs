@@ -1,6 +1,6 @@
 use dom_exception::{DOMException, DOMExceptionName};
 use event::{Emitter, EmitterExt, EventEmitter, EventKey};
-use rong_js::{function::*, *};
+use rong::{function::*, *};
 use std::rc::Rc;
 use std::sync::Mutex;
 use tokio::sync::watch;

@@ -1,5 +1,5 @@
 use buffer::{Blob, File};
-use rong_js::{function::*, *};
+use rong::{function::*, *};
 
 #[js_export]
 #[derive(Clone)]

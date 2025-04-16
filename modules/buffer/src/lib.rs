@@ -4,7 +4,7 @@ mod file;
 pub use blob::Blob;
 pub use file::File;
 
-use rong_js::*;
+use rong::*;
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<Blob>()?;

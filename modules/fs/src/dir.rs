@@ -1,5 +1,5 @@
 use futures::Stream;
-use rong_js::{function::Optional, *};
+use rong::{function::Optional, *};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::SystemTime;

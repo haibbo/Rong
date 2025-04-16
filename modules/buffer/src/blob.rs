@@ -1,4 +1,4 @@
-use rong_js::{function::Optional, js_class, js_export, js_method, *};
+use rong::{function::Optional, js_class, js_export, js_method, *};
 
 #[derive(Default)]
 struct BlobOptions {

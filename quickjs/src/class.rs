@@ -1,5 +1,5 @@
 use crate::{qjs, QJSContext, QJSValue};
-use rong_js_core::{JSClass, JSClassExt, JSContextImpl, JSTypeOf, JSValueImpl};
+use rong_core::{JSClass, JSClassExt, JSContextImpl, JSTypeOf, JSValueImpl};
 
 pub(crate) unsafe extern "C" fn generic_constructor<JC>(
     ctx: *mut qjs::JSContext,

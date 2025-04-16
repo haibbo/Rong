@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 base64 = "0.22.1"
-rong-js = { workspace = true }
+rong = { workspace = true }
 
 [dev-dependencies]
 rong_test = { path = "../../utils/rong_test" }

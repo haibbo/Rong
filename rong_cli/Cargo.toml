@@ -1,5 +1,5 @@
 [package]
-name = "rong"
+name = "rong-cli"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,6 +8,6 @@ name = "rong"
 path = "src/main.rs"
 
 [dependencies]
-rong-js = { workspace = true }
+rong = { workspace = true }
 rong_modules = { path = "../rong_modules" }
 

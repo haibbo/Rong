@@ -56,7 +56,7 @@ pub(crate) fn impl_deserialize(input: syn::DeriveInput) -> TokenStream2 {
             quote! {
                 #field_name: match obj.get(#js_name_lit) {
                     Ok(val) => Some(val),
-                    Err(rong_js::RongJSError::PropertyNotFound(_)) => None,
+                    Err(rong::RongJSError::PropertyNotFound(_)) => None,
                     Err(e) => return Err(e),
                 }
             }
@@ -68,16 +68,16 @@ pub(crate) fn impl_deserialize(input: syn::DeriveInput) -> TokenStream2 {
     });
 
     let expanded = quote! {
-        impl rong_js::FromJSValue<rong_js::JSEngineValue> for #name {
-            fn from_js_value(ctx: &rong_js::JSContext, value: rong_js::JSEngineValue) -> rong_js::JSResult<Self> {
-                let obj = rong_js::JSObject::from_js_value(ctx, value)?;
+        impl rong::FromJSValue<rong::JSEngineValue> for #name {
+            fn from_js_value(ctx: &rong::JSContext, value: rong::JSEngineValue) -> rong::JSResult<Self> {
+                let obj = rong::JSObject::from_js_value(ctx, value)?;
                 Ok(Self {
                     #(#field_extractions,)*
                 })
             }
         }
 
-        impl rong_js::function::JSParameterType for #name {}
+        impl rong::function::JSParameterType for #name {}
     };
 
     expanded

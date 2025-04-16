@@ -9,30 +9,30 @@ members = [
     "modules/fetch", "modules/encoding", "modules/event",
     "modules/assert", "modules/dom-exception",
     "modules/abort", "modules/console", "modules/rong_url", "modules/buffer", "modules/fs",
-    "rong_modules", "rong"
+    "rong_modules", "rong_cli"
 ]
 
 [workspace.dependencies]
-rong-js = { path = "."}
+rong = { path = "."}
 
 [package]
-name = "rong-js"
+name = "rong"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rong-js-core = { path = "core" }
-rong-js-quickjs = { path = "quickjs", optional = true }
-rong-js-jscore = { path = "javascriptcore", optional = true }
-rong-js-v8 = { path = "v8", optional = true }
-rong-js-macro = { path = "macro" }
+rong-core = { path = "core" }
+rong-quickjs = { path = "quickjs", optional = true }
+rongcore = { path = "javascriptcore", optional = true }
+rong-v8 = { path = "v8", optional = true }
+rong-macro = { path = "macro" }
 tokio = { version = "1.0", features = ["rt", "time", "macros"] }
 futures = "0.3.31"
 
 [features]
-quickjs = ["rong-js-quickjs"]
-jscore = ["rong-js-jscore"]
-v8 = ["rong-js-v8"]
+quickjs = ["rong-quickjs"]
+jscore = ["rongcore"]
+v8 = ["rong-v8"]
 default = ["quickjs"]
 
 [dev-dependencies]

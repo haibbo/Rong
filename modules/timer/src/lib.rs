@@ -18,7 +18,7 @@
 //!   to the callback function. Only the callback function and delay are supported.
 //! - Delay is in milliseconds and should be a positive number.
 
-use rong_js::{function::Optional, JSContext, JSFunc, JSResult, JSRuntimeService};
+use rong::{function::Optional, JSContext, JSFunc, JSResult, JSRuntimeService};
 
 use std::collections::HashMap;
 use std::rc::Rc;

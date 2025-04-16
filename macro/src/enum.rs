@@ -51,8 +51,8 @@ pub(crate) fn impl_enum_conversions(input: &DeriveInput) -> Result<TokenStream, 
             let variant_names = data.variants.iter().map(|v| &v.ident);
 
             let expanded = quote! {
-                impl rong_js::FromJSValue<rong_js::JSEngineValue> for #name {
-                    fn from_js_value(ctx: &JSContext, value: rong_js::JSEngineValue) -> JSResult<Self> {
+                impl rong::FromJSValue<rong::JSEngineValue> for #name {
+                    fn from_js_value(ctx: &JSContext, value: rong::JSEngineValue) -> JSResult<Self> {
                         #(#from_js_variants)*
                         Err(RongJSError::TypeError(format!(
                             "Invalid value for enum {}. Expected one of: {}",
@@ -62,15 +62,15 @@ pub(crate) fn impl_enum_conversions(input: &DeriveInput) -> Result<TokenStream, 
                     }
                 }
 
-                impl rong_js::IntoJSValue<rong_js::JSEngineValue> for #name {
-                    fn into_js_value(self, ctx: &JSContext) -> rong_js::JSEngineValue {
+                impl rong::IntoJSValue<rong::JSEngineValue> for #name {
+                    fn into_js_value(self, ctx: &JSContext) -> rong::JSEngineValue {
                         match self {
                             #(#into_js_variants,)*
                         }
                     }
                 }
 
-                impl rong_js::function::JSParameterType for #name {}
+                impl rong::function::JSParameterType for #name {}
             };
 
             let input_tokens = quote! { #input };

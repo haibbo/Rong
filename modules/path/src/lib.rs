@@ -25,7 +25,7 @@
 //! path.join('/foo', 'bar', 'baz');  // Returns: '/foo/bar/baz'
 //! ```
 
-use rong_js::{function::*, *};
+use rong::{function::*, *};
 use std::path::{Component, Path, PathBuf};
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {

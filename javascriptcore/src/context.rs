@@ -1,5 +1,5 @@
 use crate::{jsc, JSCRuntime, JSCValue};
-use rong_js_core::{
+use rong_core::{
     JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, RongJSError,
 };
 use std::ffi::CString;
@@ -32,7 +32,7 @@ impl JSContextImpl for JSCContext {
         Self::_from_borrowed_raw(ctx)
     }
 
-    fn eval(&self, source: rong_js_core::Source) -> Self::Value {
+    fn eval(&self, source: rong_core::Source) -> Self::Value {
         let filename = source.name().unwrap_or("eval");
         let code = CString::new(source.code()).unwrap();
         let c_filename = CString::new(filename).unwrap();
@@ -148,7 +148,7 @@ impl JSContextImpl for JSCContext {
         }
     }
 
-    fn compile_to_bytecode(&self, _source: rong_js_core::Source) -> Result<Vec<u8>, RongJSError> {
+    fn compile_to_bytecode(&self, _source: rong_core::Source) -> Result<Vec<u8>, RongJSError> {
         Err(RongJSError::NotSupportByteCode)
     }
 

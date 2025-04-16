@@ -1,4 +1,4 @@
-use rong_js_macro::js_export;
+use rong_macro::js_export;
 use rong_test::*;
 
 #[js_export]

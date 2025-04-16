@@ -1,5 +1,5 @@
 use crate::{jsc, JSCContext, JSCValue};
-use rong_js_core::{JSClass, JSClassExt, JSContextImpl, JSTypeOf, JSValueImpl};
+use rong_core::{JSClass, JSClassExt, JSContextImpl, JSTypeOf, JSValueImpl};
 use std::collections::HashMap;
 use std::ffi::{c_char, CString};
 use std::ptr;

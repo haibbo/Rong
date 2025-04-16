@@ -1,5 +1,5 @@
 use base64::{engine::general_purpose, Engine as _};
-use rong_js::{JSResult, RongJSError};
+use rong::{JSResult, RongJSError};
 
 /// Decodes a string of data which has been encoded using base-64 encoding
 pub fn atob(input: String) -> JSResult<String> {

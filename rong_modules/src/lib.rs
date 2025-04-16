@@ -1,4 +1,4 @@
-use rong_js::*;
+use rong::*;
 
 pub use console;
 pub use navigator;

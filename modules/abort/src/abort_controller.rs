@@ -1,5 +1,5 @@
 use crate::AbortSignal;
-use rong_js::{function::*, *};
+use rong::{function::*, *};
 
 #[js_export]
 pub struct AbortController {

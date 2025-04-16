@@ -1,4 +1,4 @@
-use rong_js::{function::*, *};
+use rong::{function::*, *};
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 use std::rc::Rc;
@@ -78,7 +78,7 @@ impl IntoJSValue<JSEngineValue> for EventKey {
 }
 
 // blanket implementing to make EventKey can be as extracted from JSFunc
-impl rong_js::function::JSParameterType for EventKey {}
+impl rong::function::JSParameterType for EventKey {}
 
 /// Represents an event listener
 #[derive(Clone, PartialEq)]
@@ -95,7 +95,7 @@ pub struct EventListener {
 ///
 /// # Example
 /// ```ignore
-/// use rong_js::js_export;
+/// use rong::js_export;
 /// use event::EventEmitter;
 ///
 /// #[js_export]

@@ -1,6 +1,6 @@
 use crate::jsc;
 use crate::JSCValue;
-use rong_js_core::{JSExceptionHandler, JSTypedArrayKind, JSTypedArrayOps, JSValueImpl};
+use rong_core::{JSExceptionHandler, JSTypedArrayKind, JSTypedArrayOps, JSValueImpl};
 use std::ptr;
 
 impl JSTypedArrayOps for JSCValue {

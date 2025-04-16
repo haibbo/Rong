@@ -1,5 +1,5 @@
 use super::blob::Blob;
-use rong_js::{function::Optional, *};
+use rong::{function::Optional, *};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[js_export]

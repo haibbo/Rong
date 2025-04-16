@@ -1,4 +1,4 @@
-use rong_js::*;
+use rong::*;
 
 mod base64;
 mod text_decoder;

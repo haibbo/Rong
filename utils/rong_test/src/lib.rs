@@ -1,6 +1,6 @@
-pub use rong_js::*;
+pub use rong::*;
 // Re-export commonly used types for tests
-pub use rong_js::function::{Constructor, Optional, Rest, This, ThisMut};
+pub use rong::function::{Constructor, Optional, Rest, This, ThisMut};
 
 // Helper function to run tests with JS context
 #[allow(dead_code)]

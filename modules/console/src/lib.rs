@@ -1,4 +1,4 @@
-use rong_js::{function::*, *};
+use rong::{function::*, *};
 use std::collections::HashSet;
 use std::fmt;
 use std::hash::{DefaultHasher, Hash, Hasher};

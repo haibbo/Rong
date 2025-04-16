@@ -1,4 +1,4 @@
-use rong_js::*;
+use rong::*;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 use std::time::SystemTime;

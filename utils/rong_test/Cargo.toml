@@ -2,7 +2,7 @@
 name = "rong_test"
 version = "0.1.0"
 edition = "2021"
-description = "Test utilities for rong-js"
+description = "Test utilities for rong"
 
 [dependencies]
-rong-js = { path = "../.."}
+rong = { path = "../.."}

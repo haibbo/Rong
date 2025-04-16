@@ -1,6 +1,6 @@
 use crate::qjs;
 use crate::QJSValue;
-use rong_js_core::{JSTypedArrayKind, JSTypedArrayOps, JSValueImpl};
+use rong_core::{JSTypedArrayKind, JSTypedArrayOps, JSValueImpl};
 
 impl JSTypedArrayOps for QJSValue {
     fn from_array_buffer(

@@ -1,4 +1,4 @@
-pub use rong_js_core::{
+pub use rong_core::{
     Class as CoreClass, ClassSetup, FromJSValue, IntoJSAsyncIterator, IntoJSIterator, IntoJSResult,
     IntoJSValue, JSArray as CoreJSArray, JSArrayBuffer as CoreJSArrayBuffer, JSClass,
     JSContext as CoreJSContext, JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc,
@@ -9,17 +9,17 @@ pub use rong_js_core::{
     ToJSAsyncIterator, ToJSIterator,
 };
 
-pub use rong_js_core::function;
+pub use rong_core::function;
 
 #[cfg(feature = "quickjs")]
 mod engine {
-    use rong_js_quickjs::QuickJS;
+    use rong_quickjs::QuickJS;
     pub type RongJS = QuickJS;
 }
 
 #[cfg(feature = "jscore")]
 mod engine {
-    use rong_js_jscore::JavaScriptCore;
+    use rong_jscore::JavaScriptCore;
     pub type RongJS = JavaScriptCore;
 }
 
@@ -43,8 +43,8 @@ pub type JSArrayBuffer<T> = CoreJSArrayBuffer<JSEngineValue, T>;
 pub type JSTypedArray = CoreJSTypedArray<JSEngineValue>;
 pub type PropertyDescriptor = CorePropertyDescriptor<JSEngineValue>;
 
-// re-export macro public symbols to rong_js
-pub use rong_js_macro::{js_class, js_export, js_method, FromJSObj, FromJSValue};
+// re-export macro public symbols to rong
+pub use rong_macro::{js_class, js_export, js_method, FromJSObj, FromJSValue};
 
 /// A Trait for conversion from JavaScript values.
 pub trait TryFromJSValue: Sized {

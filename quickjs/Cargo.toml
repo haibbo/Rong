@@ -1,8 +1,8 @@
 [package]
-name = "rong-js-quickjs"
+name = "rong-quickjs"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rong-js-quickjs-sys={path="./sys/"}
-rong-js-core = { path = "../core" }
+rong-quickjs-sys={path="./sys/"}
+rong-core = { path = "../core" }

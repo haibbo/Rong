@@ -2,7 +2,7 @@ mod abort_controller;
 mod abort_signal;
 
 use event::EmitterExt;
-use rong_js::*;
+use rong::*;
 
 pub use abort_controller::AbortController;
 pub use abort_signal::{AbortReceiver, AbortSignal};

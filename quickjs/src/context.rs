@@ -1,5 +1,5 @@
 use crate::{qjs, QJSRuntime, QJSValue};
-use rong_js_core::{
+use rong_core::{
     JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSTypeOf, JSValueImpl, RongJSError,
     Source,
 };
