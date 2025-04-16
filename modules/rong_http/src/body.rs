@@ -1,11 +1,11 @@
 use crate::formdata::FormData;
-use buffer::{Blob, File};
 use bytes::Bytes;
 use flate2::read::GzDecoder;
 use http::HeaderMap;
 use hyper::body::Incoming;
-use rong_url::URLSearchParams;
 use rong::*;
+use rong_buffer::{Blob, File};
+use rong_url::URLSearchParams;
 use std::io::Read;
 
 pub(crate) enum BodyKind {
@@ -114,9 +114,9 @@ pub(crate) fn decompress_bytes(bytes: Bytes, headers: &HeaderMap) -> JSResult<By
             Ok("gzip") => {
                 let mut decoder = GzDecoder::new(&bytes[..]);
                 let mut decompressed = Vec::new();
-                decoder.read_to_end(&mut decompressed).map_err(|e| {
-                    RongJSError::Error(format!("Failed to decompress gzip: {}", e))
-                })?;
+                decoder
+                    .read_to_end(&mut decompressed)
+                    .map_err(|e| RongJSError::Error(format!("Failed to decompress gzip: {}", e)))?;
                 Ok(Bytes::from(decompressed))
             }
             Ok(encoding) => Err(RongJSError::Error(format!(

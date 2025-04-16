@@ -1,6 +1,6 @@
-use http::header;
 use http::Request as HttpRequest;
-use http_body_util::{combinators::BoxBody, BodyExt, Full};
+use http::header;
+use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::body::Bytes;
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
@@ -46,7 +46,7 @@ async fn to_hyper_request(request: Request) -> JSResult<HttpRequest<BoxBody<Byte
     let mut builder = HttpRequest::builder()
         .method(request.method)
         .uri(request.url)
-        .header(header::USER_AGENT, navigator::get_user_agent())
+        .header(header::USER_AGENT, rong_navigator::get_user_agent())
         .header(header::ACCEPT, "*/*")
         .header(header::ACCEPT_ENCODING, "gzip"); // TODO: "gzip, zstd"
 
@@ -127,20 +127,20 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
 mod tests {
     use super::*;
     use axum::{
+        Router,
         body::Body,
         http::HeaderMap,
         response::{IntoResponse, Response as AxumResponse},
         routing::get,
-        Router,
     };
-    use flate2::{write::GzEncoder, Compression};
-    use futures::{stream, StreamExt};
+    use flate2::{Compression, write::GzEncoder};
+    use futures::{StreamExt, stream};
     use rong_test::*;
     use std::convert::Infallible;
     use std::io::Write;
     use std::net::SocketAddr;
     use tokio::net::TcpListener;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     async fn test_ip() -> impl IntoResponse {
         let mut headers = HeaderMap::new();
@@ -228,13 +228,13 @@ mod tests {
     #[test]
     fn test_fetch() {
         async_run!(|ctx: JSContext| async move {
-            assert::init(&ctx)?;
-            console::init(&ctx)?;
-            encoding::init(&ctx)?;
+            rong_assert::init(&ctx)?;
+            rong_console::init(&ctx)?;
+            rong_encoding::init(&ctx)?;
             rong_url::init(&ctx)?;
-            timer::init(&ctx)?;
-            abort::init(&ctx)?;
-            dom_exception::init(&ctx)?;
+            rong_timer::init(&ctx)?;
+            rong_abort::init(&ctx)?;
+            rong_exception::init(&ctx)?;
 
             crate::header::init(&ctx)?;
             crate::request::init(&ctx)?;

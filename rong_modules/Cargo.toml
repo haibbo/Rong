@@ -5,19 +5,19 @@ edition = "2024"
 
 [dependencies]
 rong = { workspace = true }
-timer = { path = "../modules/timer", optional = true }
-navigator = { path = "../modules/navigator", optional = true }
-path = { path = "../modules/path", optional = true }
-rong-http = { path = "../modules/rong_http", optional = true }
-encoding = { path = "../modules/encoding", optional = true }
-event = { path = "../modules/event", optional = true }
-assert = { path = "../modules/assert", optional = true }
-dom-exception = { path = "../modules/dom-exception", optional = true }
-abort = { path = "../modules/abort", optional = true }
-console = { path = "../modules/console", optional = true }
+rong_timer = { path = "../modules/rong_timer", optional = true }
+rong_navigator = { path = "../modules/rong_navigator", optional = true }
+rong_path = { path = "../modules/rong_path", optional = true }
+rong_http = { path = "../modules/rong_http", optional = true }
+rong_encoding = { path = "../modules/rong_encoding", optional = true }
+rong_event = { path = "../modules/rong_event", optional = true }
+rong_assert = { path = "../modules/rong_assert", optional = true }
+rong_exception = { path = "../modules/rong_exception", optional = true }
+rong_abort = { path = "../modules/rong_abort", optional = true }
+rong_console = { path = "../modules/rong_console", optional = true }
 rong_url = { path = "../modules/rong_url", optional = true }
-buffer = { path = "../modules/buffer", optional = true }
-fs = { path = "../modules/fs", optional = true }
+rong_buffer = { path = "../modules/rong_buffer", optional = true }
+rong_fs = { path = "../modules/rong_fs", optional = true }
 
 [features]
 default = ["all"]
@@ -37,16 +37,16 @@ all = [
     "fs",
 ]
 
-timer = ["dep:timer"]
-navigator = ["dep:navigator"]
-path = ["dep:path"]
-http = ["dep:rong-http"]
-encoding = ["dep:encoding"]
-event = ["dep:event"]
-assert = ["dep:assert"]
-dom-exception = ["dep:dom-exception"]
-abort = ["dep:abort"]
-console = ["dep:console"]
+timer = ["dep:rong_timer"]
+navigator = ["dep:rong_navigator"]
+path = ["dep:rong_path"]
+http = ["dep:rong_http"]
+encoding = ["dep:rong_encoding"]
+event = ["dep:rong_event"]
+assert = ["dep:rong_assert"]
+dom-exception = ["dep:rong_exception"]
+abort = ["dep:rong_abort"]
+console = ["dep:rong_console"]
 url = ["dep:rong_url"]
-buffer = ["dep:buffer"]
-fs = ["dep:fs"]
+buffer = ["dep:rong_buffer"]
+fs = ["dep:rong_fs"]

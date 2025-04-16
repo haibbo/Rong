@@ -1,5 +1,5 @@
-use buffer::{Blob, File};
 use rong::{function::*, *};
+use rong_buffer::{Blob, File};
 
 #[js_export]
 #[derive(Clone)]
@@ -254,10 +254,10 @@ mod tests {
     #[test]
     fn test_formdata() {
         async_run!(|ctx: JSContext| async move {
-            assert::init(&ctx)?;
-            console::init(&ctx)?;
-            encoding::init(&ctx)?;
-            buffer::init(&ctx)?;
+            rong_assert::init(&ctx)?;
+            rong_console::init(&ctx)?;
+            rong_encoding::init(&ctx)?;
+            rong_buffer::init(&ctx)?;
             init(&ctx)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "formdata.js")

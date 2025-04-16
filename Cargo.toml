@@ -5,10 +5,10 @@ members = [
     "quickjs", "javascriptcore", "v8",
     "utils/rong_test",
     "examples/point",
-    "modules/timer", "modules/navigator", "modules/path",
-    "modules/rong_http", "modules/encoding", "modules/event",
-    "modules/assert", "modules/dom-exception",
-    "modules/abort", "modules/console", "modules/rong_url", "modules/buffer", "modules/fs",
+    "modules/rong_timer", "modules/rong_navigator", "modules/rong_path",
+    "modules/rong_http", "modules/rong_encoding", "modules/rong_event",
+    "modules/rong_assert", "modules/rong_exception",
+    "modules/rong_abort", "modules/rong_console", "modules/rong_url", "modules/rong_buffer", "modules/rong_fs",
     "rong_modules", "rong_cli"
 ]
 

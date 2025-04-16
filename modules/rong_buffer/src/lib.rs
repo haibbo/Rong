@@ -1,14 +1,15 @@
-//! # URL Module
-mod url;
-mod url_search_params;
+mod blob;
+mod file;
+
+pub use blob::Blob;
+pub use file::File;
 
 use rong::*;
-pub use url::URL;
-pub use url_search_params::URLSearchParams;
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<URLSearchParams>()?;
-    ctx.register_class::<URL>()?;
+    ctx.register_class::<Blob>()?;
+    ctx.register_class::<File>()?;
+
     Ok(())
 }
 
@@ -18,13 +19,14 @@ mod tests {
     use rong_test::*;
 
     #[test]
-    fn test_url() {
+    fn test_path() {
         async_run!(|ctx: JSContext| async move {
-            init(&ctx)?;
-            rong_assert::init(&ctx)?;
+            rong_encoding::init(&ctx)?;
             rong_console::init(&ctx)?;
+            rong_assert::init(&ctx)?;
+            init(&ctx)?;
 
-            let passed = UnitJSRunner::load_script(&ctx, "url.js")
+            let passed = UnitJSRunner::load_script(&ctx, "buffer.js")
                 .await?
                 .run()
                 .await?;

@@ -363,9 +363,9 @@ mod tests {
     #[test]
     fn test_headers() {
         async_run!(|ctx: JSContext| async move {
-            assert::init(&ctx)?;
-            console::init(&ctx)?;
-            encoding::init(&ctx)?;
+            rong_assert::init(&ctx)?;
+            rong_console::init(&ctx)?;
+            rong_encoding::init(&ctx)?;
             crate::header::init(&ctx)?; // Initialize Headers before running tests
 
             let passed = UnitJSRunner::load_script(&ctx, "header.js")

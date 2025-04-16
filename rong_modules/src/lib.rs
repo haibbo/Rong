@@ -1,48 +1,48 @@
 use rong::*;
 
-pub use console;
-pub use navigator;
+pub use rong_console as console;
+pub use rong_navigator as navigator;
 
 /// Initialize all enabled modules in the JavaScript context
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     #[cfg(feature = "timer")]
-    timer::init(ctx)?;
+    rong_timer::init(ctx)?;
 
     #[cfg(feature = "navigator")]
-    navigator::init(ctx)?;
+    rong_navigator::init(ctx)?;
 
     #[cfg(feature = "path")]
-    path::init(ctx)?;
+    rong_path::init(ctx)?;
 
     #[cfg(feature = "http")]
     rong_http::init(ctx)?;
 
     #[cfg(feature = "encoding")]
-    encoding::init(ctx)?;
+    rong_encoding::init(ctx)?;
 
     #[cfg(feature = "event")]
-    event::init(ctx)?;
+    rong_event::init(ctx)?;
 
     #[cfg(feature = "assert")]
-    assert::init(ctx)?;
+    rong_assert::init(ctx)?;
 
     #[cfg(feature = "dom-exception")]
-    dom_exception::init(ctx)?;
+    rong_exception::init(ctx)?;
 
     #[cfg(feature = "abort")]
-    abort::init(ctx)?;
+    rong_abort::init(ctx)?;
 
     #[cfg(feature = "console")]
-    console::init(ctx)?;
+    rong_console::init(ctx)?;
 
     #[cfg(feature = "url")]
     rong_url::init(ctx)?;
 
     #[cfg(feature = "buffer")]
-    buffer::init(ctx)?;
+    rong_buffer::init(ctx)?;
 
     #[cfg(feature = "fs")]
-    fs::init(ctx)?;
+    rong_fs::init(ctx)?;
 
     Ok(())
 }

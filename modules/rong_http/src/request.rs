@@ -3,7 +3,7 @@ use rong::{function::Optional, *};
 
 use crate::body::HttpBody;
 use crate::header::Headers;
-use abort::AbortSignal;
+use rong_abort::AbortSignal;
 use rong_url::URL;
 
 #[js_export]
@@ -95,7 +95,7 @@ impl TryFromJSValue for RequestInit {
                     return Err(RongJSError::TypeError(format!(
                         "Invalid redirect: {}",
                         redirect_str
-                    )))
+                    )));
                 }
             };
             request.redirect = Some(redirect);
@@ -278,9 +278,9 @@ mod tests {
     #[test]
     fn test_request() {
         async_run!(|ctx: JSContext| async move {
-            assert::init(&ctx)?;
-            console::init(&ctx)?;
-            encoding::init(&ctx)?;
+            rong_assert::init(&ctx)?;
+            rong_console::init(&ctx)?;
+            rong_encoding::init(&ctx)?;
             rong_url::init(&ctx)?;
 
             crate::header::init(&ctx)?;

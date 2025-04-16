@@ -1,13 +1,13 @@
 use bytes::Bytes;
-use http::{header, HeaderMap, Method, Uri};
+use http::{HeaderMap, Method, Uri, header};
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use rong::{function::Optional, *};
 
 use crate::body::{BodyKind, HttpBody};
 use crate::header::Headers;
-use abort::AbortReceiver;
-use buffer::Blob;
+use rong_abort::AbortReceiver;
+use rong_buffer::Blob;
 
 #[derive(Default)]
 #[js_export]
@@ -325,12 +325,12 @@ mod tests {
     #[test]
     fn test_response() {
         async_run!(|ctx: JSContext| async move {
-            assert::init(&ctx)?;
-            console::init(&ctx)?;
-            encoding::init(&ctx)?;
+            rong_assert::init(&ctx)?;
+            rong_console::init(&ctx)?;
+            rong_encoding::init(&ctx)?;
             rong_url::init(&ctx)?;
 
-            buffer::init(&ctx)?;
+            rong_buffer::init(&ctx)?;
             crate::header::init(&ctx)?;
             init(&ctx)?;
 

@@ -1,17 +1,17 @@
 [package]
-name = "rong-http"
+name = "rong_http"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 rong = { workspace = true }
 tokio = { version = "1.0", features = ["rt", "time", "macros"] }
 http = { package = "http", version = "1.2" }
 rong_url = { path = "../rong_url" }
-abort = { path = "../abort" }
-buffer = { path = "../buffer" }
-navigator = { path = "../navigator" }
-dom-exception = { path = "../dom-exception" }
+rong_abort = { path = "../rong_abort" }
+rong_buffer = { path = "../rong_buffer" }
+rong_navigator = { path = "../rong_navigator" }
+rong_exception = { path = "../rong_exception" }
 hyper = { version = "1.6.0", features = ["client", "http1"] }
 hyper-util = { version = "0.1.10", features = ["client", "http1", "tokio"] }
 hyper-rustls = { version = "0.27.5", features = ["webpki-roots", "http1", "aws-lc-rs"] }
@@ -23,10 +23,10 @@ uuid = { version = "1.16.0", features = ["v4"] }
 
 [dev-dependencies]
 rong_test = { path = "../../utils/rong_test" }
-encoding={path="../encoding"}
-console={path="../console"}
-assert={path="../assert"}
-timer={path="../timer"}
+rong_encoding = { path="../rong_encoding" }
+rong_console = { path="../rong_console" }
+rong_assert = { path="../rong_assert" }
+rong_timer = { path="../rong_timer" }
 futures = "0.3"
 tokio-stream = "0.1"
 axum = { version = "0.8.1", features = ["http1"] }

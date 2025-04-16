@@ -1,14 +1,10 @@
 [package]
-name = "rong_url"
+name = "rong_assert"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 rong = { workspace = true }
-url = "2.5.4"
-
 
 [dev-dependencies]
 rong_test = { path = "../../utils/rong_test" }
-rong_assert = { path="../../modules/rong_assert" }
-rong_console = { path="../../modules/rong_console" }

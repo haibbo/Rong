@@ -1,7 +1,7 @@
 [package]
 name = "rong-v8-sys"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "Low-level V8 bindings for Rust"
 license = "MIT"
 

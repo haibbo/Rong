@@ -1,0 +1,20 @@
+[package]
+name = "rong_fs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rong = { path = "../../" }
+rong-quickjs = { path = "../../quickjs" }
+tokio = { version = "1.0", features = ["fs", "io-util"] }
+rong_abort = { path = "../rong_abort" }
+rong_exception = { path = "../rong_exception" }
+futures = "0.3"
+filetime = "0.2"
+nix = { version = "0.29.0", features = ["user", "fs"] }
+
+[dev-dependencies]
+rong_test = { path = "../../utils/rong_test" }
+rong_encoding = { path = "../rong_encoding" }
+rong_console = { path = "../rong_console" }
+rong_assert = { path = "../rong_assert" }
