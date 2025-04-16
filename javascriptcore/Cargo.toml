@@ -1,8 +1,8 @@
 [package]
-name = "rongcore"
+name = "rong_jscore"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rongcore_sys={path="./sys/"}
+rong_jscore_sys={path="./sys/"}
 rong_core = { path = "../core" }

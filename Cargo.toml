@@ -23,7 +23,7 @@ edition = "2021"
 [dependencies]
 rong_core = { path = "core" }
 rong_quickjs = { path = "quickjs", optional = true }
-rongcore = { path = "javascriptcore", optional = true }
+rong_jscore = { path = "javascriptcore", optional = true }
 rong_v8 = { path = "v8", optional = true }
 rong_macro = { path = "macro" }
 tokio = { version = "1.0", features = ["rt", "time", "macros"] }
@@ -31,7 +31,7 @@ futures = "0.3.31"
 
 [features]
 quickjs = ["rong_quickjs"]
-jscore = ["rongcore"]
+jscore = ["rong_jscore"]
 v8 = ["rong_v8"]
 default = ["quickjs"]
 

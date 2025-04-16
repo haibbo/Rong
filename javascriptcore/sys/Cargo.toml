@@ -1,5 +1,5 @@
 [package]
-name = "rongcore_sys"
+name = "rong_jscore_sys"
 version = "0.1.0"
 edition = "2021"
 
