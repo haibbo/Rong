@@ -41,7 +41,7 @@ pub(crate) fn impl_deserialize(input: syn::DeriveInput) -> TokenStream2 {
         let js_name_lit = syn::LitStr::new(&js_name, field_name.span());
 
         // Check if field type is Option<T>
-        let is_option = if let syn::Type::Path(ref type_path) = field_type {
+        let is_option = if let syn::Type::Path(type_path) = field_type {
             type_path
                 .path
                 .segments
