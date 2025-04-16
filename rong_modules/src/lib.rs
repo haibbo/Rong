@@ -14,8 +14,8 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     #[cfg(feature = "path")]
     path::init(ctx)?;
 
-    #[cfg(feature = "fetch")]
-    fetch::init(ctx)?;
+    #[cfg(feature = "http")]
+    rong_http::init(ctx)?;
 
     #[cfg(feature = "encoding")]
     encoding::init(ctx)?;

@@ -6,7 +6,7 @@ members = [
     "utils/rong_test",
     "examples/point",
     "modules/timer", "modules/navigator", "modules/path",
-    "modules/fetch", "modules/encoding", "modules/event",
+    "modules/rong_http", "modules/encoding", "modules/event",
     "modules/assert", "modules/dom-exception",
     "modules/abort", "modules/console", "modules/rong_url", "modules/buffer", "modules/fs",
     "rong_modules", "rong_cli"

@@ -8,7 +8,7 @@ rong = { workspace = true }
 timer = { path = "../modules/timer", optional = true }
 navigator = { path = "../modules/navigator", optional = true }
 path = { path = "../modules/path", optional = true }
-fetch = { path = "../modules/fetch", optional = true }
+rong-http = { path = "../modules/rong_http", optional = true }
 encoding = { path = "../modules/encoding", optional = true }
 event = { path = "../modules/event", optional = true }
 assert = { path = "../modules/assert", optional = true }
@@ -25,7 +25,7 @@ all = [
     "timer",
     "navigator",
     "path",
-    "fetch",
+    "http",
     "encoding",
     "event",
     "assert",
@@ -40,7 +40,7 @@ all = [
 timer = ["dep:timer"]
 navigator = ["dep:navigator"]
 path = ["dep:path"]
-fetch = ["dep:fetch"]
+http = ["dep:rong-http"]
 encoding = ["dep:encoding"]
 event = ["dep:event"]
 assert = ["dep:assert"]
