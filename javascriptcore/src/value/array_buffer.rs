@@ -1,5 +1,5 @@
-use crate::jsc;
 use crate::JSCValue;
+use crate::jsc;
 use rong_core::{JSArrayBufferOps, JSValueImpl};
 use std::ptr;
 use std::slice;
@@ -9,12 +9,12 @@ impl JSArrayBufferOps for JSCValue {
     fn from_bytes(ctx: &Self::Context, bytes: &[u8]) -> Self {
         unsafe {
             let mut exception: jsc::JSValueRef = ptr::null_mut();
-            
+
             // Create a copy of the bytes
             let mut data = bytes.to_vec();
             let len = data.len();
             let ptr = data.as_mut_ptr();
-            
+
             // Take ownership of the data to prevent it from being dropped
             std::mem::forget(data);
 
@@ -41,10 +41,10 @@ impl JSArrayBufferOps for JSCValue {
     fn from_vec(ctx: &Self::Context, mut vec: Vec<u8>) -> Self {
         unsafe {
             let mut exception: jsc::JSValueRef = ptr::null_mut();
-            
+
             let len = vec.len();
             let ptr = vec.as_mut_ptr();
-            
+
             // Take ownership of the vec to prevent it from being dropped
             std::mem::forget(vec);
 
@@ -71,7 +71,8 @@ impl JSArrayBufferOps for JSCValue {
     fn length(&self) -> usize {
         unsafe {
             let mut exception: jsc::JSValueRef = ptr::null_mut();
-            let len = jsc::JSObjectGetArrayBufferByteLength(self.ctx, self.as_obj(), &mut exception);
+            let len =
+                jsc::JSObjectGetArrayBufferByteLength(self.ctx, self.as_obj(), &mut exception);
             if !exception.is_null() {
                 0
             } else {
@@ -85,7 +86,7 @@ impl JSArrayBufferOps for JSCValue {
         unsafe {
             let mut exception: jsc::JSValueRef = ptr::null_mut();
             let ptr = jsc::JSObjectGetArrayBufferBytesPtr(self.ctx, self.as_obj(), &mut exception);
-            
+
             if !exception.is_null() || ptr.is_null() {
                 // Return empty slice if there's an error
                 &[]
@@ -101,7 +102,7 @@ impl JSArrayBufferOps for JSCValue {
         unsafe {
             let mut exception: jsc::JSValueRef = ptr::null_mut();
             let ptr = jsc::JSObjectGetArrayBufferBytesPtr(self.ctx, self.as_obj(), &mut exception);
-            
+
             if !exception.is_null() || ptr.is_null() {
                 // Return empty slice if there's an error
                 &mut []
@@ -121,11 +122,15 @@ unsafe extern "C" fn deallocator_callback(
     if !bytes.is_null() {
         // Get the length from the ArrayBuffer before deallocating
         let len = {
-            let slice = slice::from_raw_parts(bytes as *const u8, 0);
-            slice.as_ptr().align_offset(std::mem::align_of::<u8>())
+            unsafe {
+                let slice = slice::from_raw_parts(bytes as *const u8, 0);
+                slice.as_ptr().align_offset(std::mem::align_of::<u8>())
+            }
         };
-        
+
         // Reconstruct the Vec and let it drop
-        let _ = Vec::from_raw_parts(bytes as *mut u8, len, len);
+        unsafe {
+            let _ = Vec::from_raw_parts(bytes as *mut u8, len, len);
+        }
     }
 }

@@ -1,7 +1,7 @@
-use crate::{jsc, JSCContext, JSCValue};
+use crate::{JSCContext, JSCValue, jsc};
 use rong_core::{JSClass, JSClassExt, JSContextImpl, JSTypeOf, JSValueImpl};
 use std::collections::HashMap;
-use std::ffi::{c_char, CString};
+use std::ffi::{CString, c_char};
 use std::ptr;
 use std::sync::{LazyLock, RwLock};
 
@@ -43,16 +43,20 @@ where
     let this = JSCValue::from_borrowed_obj(raw, constructor);
 
     let args: Vec<_> = (0..argument_count)
-        .map(move |i| JSCValue::from_borrowed_raw(raw, *arguments.add(i)))
+        .map(move |i| unsafe { JSCValue::from_borrowed_raw(raw, *arguments.add(i)) })
         .collect();
 
     let ctx = JSCContext::from_borrowed_raw(raw);
     let value = <JC as JSClassExt<JSCValue>>::constructor(&ctx, this, args);
     if value.is_exception() {
         if !exception.is_null() {
-            *exception = value.into_raw_value();
+            unsafe {
+                *exception = value.into_raw_value();
+            }
         }
-        return jsc::JSValueMakeUndefined(ctx.to_raw()) as _;
+        unsafe {
+            return jsc::JSValueMakeUndefined(ctx.to_raw()) as _;
+        }
     }
 
     value.into_raw_value() as jsc::JSObjectRef
@@ -62,11 +66,13 @@ unsafe extern "C" fn finalizer<JC>(object: jsc::JSObjectRef)
 where
     JC: JSClass<JSCValue>,
 {
-    let classid = jsc::JSObjectGetPrivate(object) as usize;
+    let classid = unsafe { jsc::JSObjectGetPrivate(object) } as usize;
     if classid & 0x1 == 1 {
         // release JSClass
         let class_ref = classid & !0x1;
-        jsc::JSClassRelease(class_ref as _);
+        unsafe {
+            jsc::JSClassRelease(class_ref as _);
+        }
         return;
     }
 
@@ -93,7 +99,7 @@ where
     // Convert arguments to Vec<JSCValue>
     let args: Vec<JSCValue> = if !arguments.is_null() {
         (0..argument_count)
-            .map(|i| JSCValue::from_borrowed_raw(ctx.to_raw(), *arguments.add(i)))
+            .map(|i| unsafe { JSCValue::from_borrowed_raw(ctx.to_raw(), *arguments.add(i)) })
             .collect()
     } else {
         vec![]
@@ -103,9 +109,13 @@ where
     let value = <JC as JSClassExt<JSCValue>>::call(&ctx, function, this, args);
     if value.is_exception() {
         if !exception.is_null() {
-            *exception = value.into_raw_value();
+            unsafe {
+                *exception = value.into_raw_value();
+            }
         }
-        return jsc::JSValueMakeUndefined(ctx.to_raw());
+        unsafe {
+            return jsc::JSValueMakeUndefined(ctx.to_raw());
+        }
     }
     value.into_raw_value()
 }
@@ -116,9 +126,10 @@ unsafe extern "C" fn has_instance(
     possible_instance: jsc::JSValueRef,
     _exception: *mut jsc::JSValueRef,
 ) -> bool {
-    if jsc::JSValueIsObject(ctx, possible_instance) {
-        let instance = jsc::JSValueToObject(ctx, possible_instance, std::ptr::null_mut());
-        let private = jsc::JSObjectGetPrivate(instance);
+    if unsafe { jsc::JSValueIsObject(ctx, possible_instance) } {
+        let instance =
+            unsafe { jsc::JSValueToObject(ctx, possible_instance, std::ptr::null_mut()) };
+        let private = unsafe { jsc::JSObjectGetPrivate(instance) };
         if !private.is_null() {
             return true;
         }

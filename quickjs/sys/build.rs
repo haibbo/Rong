@@ -27,21 +27,25 @@ fn android_setup() {
     };
     let api = env::var("API").unwrap_or("22".to_string());
 
-    env::set_var(
-        "CC",
-        format!("{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/clang -target aarch64-linux-android{api}")
-    );
+    unsafe {
+        env::set_var(
+            "CC",
+            format!(
+                "{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/clang -target aarch64-linux-android{api}"
+            ),
+        );
 
-    env::set_var(
-        "AR",
-        format!("{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/llvm-ar"),
-    );
+        env::set_var(
+            "AR",
+            format!("{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/llvm-ar"),
+        );
 
-    // for bindgen
-    env::set_var(
-        "BINDGEN_EXTRA_CLANG_ARGS",
-        format!("--sysroot {ndk}/toolchains/llvm/prebuilt/{os}-{arch}/sysroot"),
-    );
+        // for bindgen
+        env::set_var(
+            "BINDGEN_EXTRA_CLANG_ARGS",
+            format!("--sysroot {ndk}/toolchains/llvm/prebuilt/{os}-{arch}/sysroot"),
+        );
+    }
 }
 
 // use utility xcrun to get path of sdk and clang
@@ -60,27 +64,29 @@ fn ios_setup() {
         .stdout;
     let clang_path = String::from_utf8_lossy(&clang).trim().to_string();
 
-    env::set_var(
-        "CC",
-        format!(
-            "{} -isysroot {} -arch arm64 -mios-version-min=11.0",
-            clang_path, sdk_path
-        ),
-    );
+    unsafe {
+        env::set_var(
+            "CC",
+            format!(
+                "{} -isysroot {} -arch arm64 -mios-version-min=11.0",
+                clang_path, sdk_path
+            ),
+        );
 
-    let ar = Command::new("xcrun")
-        .args(["--find", "ar"])
-        .output()
-        .expect("failed to find ar")
-        .stdout;
-    let ar_path = String::from_utf8_lossy(&ar).trim().to_string();
-    env::set_var("AR", ar_path);
+        let ar = Command::new("xcrun")
+            .args(["--find", "ar"])
+            .output()
+            .expect("failed to find ar")
+            .stdout;
+        let ar_path = String::from_utf8_lossy(&ar).trim().to_string();
+        env::set_var("AR", ar_path);
 
-    // extra args for bindgen
-    env::set_var(
-        "BINDGEN_EXTRA_CLANG_ARGS",
-        format!("-isysroot {}", sdk_path),
-    );
+        // extra args for bindgen
+        env::set_var(
+            "BINDGEN_EXTRA_CLANG_ARGS",
+            format!("-isysroot {}", sdk_path),
+        );
+    }
 }
 
 fn build_static_archive() {

@@ -93,6 +93,6 @@ unsafe extern "C" fn deallocator_callback(
     _ptr: *mut ::std::os::raw::c_void,
 ) {
     if !opaque.is_null() {
-        let _ = Box::from_raw(opaque as *mut u8);
+        unsafe { let _ = Box::from_raw(opaque as *mut u8); }
     }
 }

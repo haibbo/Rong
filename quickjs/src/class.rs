@@ -1,4 +1,4 @@
-use crate::{qjs, QJSContext, QJSValue};
+use crate::{QJSContext, QJSValue, qjs};
 use rong_core::{JSClass, JSClassExt, JSContextImpl, JSTypeOf, JSValueImpl};
 
 pub(crate) unsafe extern "C" fn generic_constructor<JC>(
@@ -13,13 +13,13 @@ where
     let this = QJSValue::from_borrowed_raw(ctx, this);
 
     let args: Vec<_> = (0..argc as usize)
-        .map(move |i| QJSValue::from_borrowed_raw(ctx, *argv.add(i)))
+        .map(move |i| unsafe { QJSValue::from_borrowed_raw(ctx, *argv.add(i)) })
         .collect();
 
     let ctx = QJSContext::from_borrowed_raw(ctx);
     let value = <JC as JSClassExt<QJSValue>>::constructor(&ctx, this, args);
     if value.is_exception() {
-        qjs::JS_Throw(ctx.to_raw(), value.into_raw_value())
+        unsafe { qjs::JS_Throw(ctx.to_raw(), value.into_raw_value()) }
     } else {
         value.into_raw_value()
     }
@@ -49,13 +49,13 @@ where
     let this = QJSValue::from_borrowed_raw(ctx, this);
     let function = QJSValue::from_borrowed_raw(ctx, function);
     let args: Vec<_> = (0..argc as usize)
-        .map(move |i| QJSValue::from_borrowed_raw(ctx, *argv.add(i)))
+        .map(move |i| unsafe { QJSValue::from_borrowed_raw(ctx, *argv.add(i)) })
         .collect();
 
     let ctx = QJSContext::from_borrowed_raw(ctx);
     let value = <JC as JSClassExt<QJSValue>>::call(&ctx, function, this, args);
     if value.is_exception() {
-        qjs::JS_Throw(ctx.to_raw(), value.into_raw_value())
+        unsafe { qjs::JS_Throw(ctx.to_raw(), value.into_raw_value()) }
     } else {
         value.into_raw_value()
     }
