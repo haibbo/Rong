@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 rong = { path = "../../" }
-rong-quickjs = { path = "../../quickjs" }
+rong_quickjs = { path = "../../quickjs" }
 tokio = { version = "1.0", features = ["fs", "io-util"] }
 rong_abort = { path = "../rong_abort" }
 rong_exception = { path = "../rong_exception" }

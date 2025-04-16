@@ -1,5 +1,5 @@
 [package]
-name = "rongcore-sys"
+name = "rongcore_sys"
 version = "0.1.0"
 edition = "2021"
 

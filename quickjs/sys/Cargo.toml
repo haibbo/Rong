@@ -1,5 +1,5 @@
 [package]
-name = "rong-quickjs-sys"
+name = "rong_quickjs_sys"
 version = "0.1.0"
 edition = "2021"
 

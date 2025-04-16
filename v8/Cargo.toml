@@ -1,8 +1,8 @@
 [package]
-name = "rong-v8"
+name = "rong_v8"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rong-v8-sys={path="./sys/"}
-rong-core = { path = "../core" }
+rong_v8_sys={path="./sys/"}
+rong_core = { path = "../core" }

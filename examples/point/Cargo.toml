@@ -1,5 +1,5 @@
 [package]
-name = "rong-example-point"
+name = "rong_example_point"
 version = "0.1.0"
 edition = "2021"
 
