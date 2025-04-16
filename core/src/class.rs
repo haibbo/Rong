@@ -17,6 +17,17 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
     /// Returns the data constructor function for this class
     fn data_constructor() -> Constructor<V>;
 
+    /// Returns the implicit constructor function for this class
+    ///
+    /// This is the function called when the class is invoked directly without
+    /// 'new' (e.g. `MyClass()`).
+    ///
+    /// Note: This is distinct from `data_constructor()`, which provides the internal
+    /// constructor logic.
+    fn call_without_new() -> Constructor<V> {
+        Constructor::new(|| ())
+    }
+
     /// Configures the class prototype and constructor with methods and properties
     fn class_setup(class: &ClassSetup<V>) -> JSResult<()>;
 }
@@ -29,6 +40,13 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     {
         let ctx = &JSContext::from_borrowed_raw_ptr(ctx.as_raw());
         let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
+
+        if this.is_undefined() {
+            match Self::call_without_new().0.call(&mut accessor) {
+                Ok(v) => return v,
+                Err(e) => return e.throw_js_exception(ctx),
+            }
+        }
 
         let instance = match Self::data_constructor().0.call(&mut accessor) {
             Ok(v) => {

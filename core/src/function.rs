@@ -115,7 +115,8 @@ impl<V: JSValueImpl> RustFunc<V> {
     }
 }
 
-/// A wrapper for a Rust function that can be used as a constructor in JavaScript.
+/// A wrapper for a Rust function that can be used to handles both class construction (`new T()`)
+/// and implicit constructor invocation(`T()`) behaviors in JavaScript.
 ///
 /// This struct encapsulates a `RustFunc` and provides a way to create new instances
 /// of JavaScript objects using Rust functions. It is designed to be used with the
