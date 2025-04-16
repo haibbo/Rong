@@ -1,6 +1,6 @@
 use crate::jsc;
 use crate::JSCValue;
-use rusty_js_core::{JSArrayOps, JSValueImpl};
+use rong_js_core::{JSArrayOps, JSValueImpl};
 
 impl JSArrayOps for JSCValue {
     fn new(ctx: &Self::Context) -> Self {

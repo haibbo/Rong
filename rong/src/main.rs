@@ -1,4 +1,4 @@
-use rusty_js::*;
+use rong_js::*;
 use std::env;
 use std::path::PathBuf;
 
@@ -62,7 +62,7 @@ fn parse_args() -> Result<Command, String> {
     }
 }
 
-async fn run_file(ctx: &JSContext, path: PathBuf) -> Result<(), RustyJSError> {
+async fn run_file(ctx: &JSContext, path: PathBuf) -> Result<(), RongJSError> {
     let source = Source::from_path(ctx, &path).await?;
     ctx.eval_async::<()>(source).await
 }
@@ -71,7 +71,7 @@ async fn compile_file(
     ctx: &JSContext,
     input: PathBuf,
     output: PathBuf,
-) -> Result<(), RustyJSError> {
+) -> Result<(), RongJSError> {
     // 1. Load the source file
     let source = Source::from_path(ctx, &input).await?;
 
@@ -79,7 +79,7 @@ async fn compile_file(
     let js_code = match source.kind() {
         SourceKind::JavaScript(code) => code,
         SourceKind::ByteCode(_) => {
-            return Err(RustyJSError::Error(
+            return Err(RongJSError::Error(
                 "Cannot compile already compiled bytecode".to_string(),
             ));
         }
@@ -92,7 +92,7 @@ async fn compile_file(
     bytecode_source.save_bytecode(ctx, output).await
 }
 
-fn main() -> Result<(), RustyJSError> {
+fn main() -> Result<(), RongJSError> {
     let command = match parse_args() {
         Ok(cmd) => cmd,
         Err(err) => {
@@ -102,8 +102,8 @@ fn main() -> Result<(), RustyJSError> {
         }
     };
 
-    let rt = RustyJS::runtime();
-    let ctx = RustyJS::context(&rt);
+    let rt = RongJS::runtime();
+    let ctx = RongJS::context(&rt);
 
     // Initialize all modules
     rong_modules::init(&ctx)?;

@@ -1,6 +1,6 @@
 use crate::qjs;
 use crate::QJSValue;
-use rusty_js_core::JSTypeOf;
+use rong_js_core::JSTypeOf;
 
 impl JSTypeOf for QJSValue {
     fn is_boolean(&self) -> bool {

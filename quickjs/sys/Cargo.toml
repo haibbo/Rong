@@ -1,5 +1,5 @@
 [package]
-name = "rusty-js-quickjs-sys"
+name = "rong-js-quickjs-sys"
 version = "0.1.0"
 edition = "2021"
 

@@ -1,10 +1,10 @@
-use rusty_js::*;
+use rong_js::*;
 use std::time::Duration;
 use tokio::time::sleep;
 
 fn main() {
-    let rt = RustyJS::runtime();
-    let ctx = RustyJS::context(&rt);
+    let rt = RongJS::runtime();
+    let ctx = RongJS::context(&rt);
 
     ctx.global()
         .set(

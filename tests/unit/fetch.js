@@ -17,7 +17,7 @@ describe("fetch", () => {
     const customHeaders = {
       "X-Custom-Header": "custom value",
       "X-Test-Header": "test value",
-      "User-Agent": "RustyJS Test Client",
+      "User-Agent": "RongJS Test Client",
     };
 
     const response = await fetch(url, {

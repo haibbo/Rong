@@ -1,4 +1,4 @@
-use rusty_js::{JSContext, JSObject, JSResult};
+use rong_js::{JSContext, JSObject, JSResult};
 use std::env;
 use std::sync::OnceLock;
 
@@ -7,14 +7,14 @@ static USER_AGENT: OnceLock<String> = OnceLock::new();
 /// Sets a custom user agent string for the navigator.
 ///
 /// This function must be called before initializing the navigator with `init()`.
-/// If not called, the default user agent will be "RustyJS/{version}".
+/// If not called, the default user agent will be "RongJS/{version}".
 pub fn set_user_agent(ua: &str) {
     let _ = USER_AGENT.set(ua.to_string());
 }
 
 /// Gets the current user agent string.
 pub fn get_user_agent() -> &'static str {
-    USER_AGENT.get_or_init(|| format!("RustyJS/{}", env!("CARGO_PKG_VERSION")))
+    USER_AGENT.get_or_init(|| format!("RongJS/{}", env!("CARGO_PKG_VERSION")))
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
@@ -34,7 +34,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_user_agent() {

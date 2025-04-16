@@ -2,7 +2,7 @@
 mod url;
 mod url_search_params;
 
-use rusty_js::*;
+use rong_js::*;
 pub use url::URL;
 pub use url_search_params::URLSearchParams;
 
@@ -15,7 +15,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_url() {

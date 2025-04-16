@@ -1,6 +1,6 @@
 use crate::qjs;
 use crate::QJSValue;
-use rusty_js_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
+use rong_js_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
 use std::mem::MaybeUninit;
 
 impl JSObjectOps for QJSValue {

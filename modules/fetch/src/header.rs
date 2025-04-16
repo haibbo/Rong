@@ -1,5 +1,5 @@
 use http::header::{self, HeaderMap, HeaderName, HeaderValue};
-use rusty_js::{
+use rong_js::{
     function::{Optional, This},
     js_class, js_export, js_method, IntoJSIterator, *,
 };
@@ -100,16 +100,16 @@ impl Headers {
                         let item = item?;
                         if let Some(pair) = item.into_object().and_then(JSArray::from_object) {
                             if pair.len() != 2 {
-                                return Err(RustyJSError::TypeError(
+                                return Err(RongJSError::TypeError(
                                     "Each header must be an array of [name, value]".to_string(),
                                 ));
                             }
 
                             let key: String = pair.get(0)?.ok_or_else(|| {
-                                RustyJSError::TypeError("Header name is required".to_string())
+                                RongJSError::TypeError("Header name is required".to_string())
                             })?;
                             let value: String = pair.get(1)?.ok_or_else(|| {
-                                RustyJSError::TypeError("Header value is required".to_string())
+                                RongJSError::TypeError("Header value is required".to_string())
                             })?;
 
                             match (
@@ -120,19 +120,19 @@ impl Headers {
                                     headers.append(name, value);
                                 }
                                 (Err(_), _) => {
-                                    return Err(RustyJSError::TypeError(format!(
+                                    return Err(RongJSError::TypeError(format!(
                                         "Invalid header name: {}",
                                         key
                                     )));
                                 }
                                 (_, Err(_)) => {
-                                    return Err(RustyJSError::TypeError(
+                                    return Err(RongJSError::TypeError(
                                         "Invalid header value".to_string(),
                                     ));
                                 }
                             }
                         } else {
-                            return Err(RustyJSError::TypeError(
+                            return Err(RongJSError::TypeError(
                                 "Each header must be an array of [name, value]".to_string(),
                             ));
                         }
@@ -149,13 +149,13 @@ impl Headers {
                                 headers.append(name, value);
                             }
                             (Err(_), _) => {
-                                return Err(RustyJSError::TypeError(format!(
+                                return Err(RongJSError::TypeError(format!(
                                     "Invalid header name: {}",
                                     key
                                 )));
                             }
                             (_, Err(_)) => {
-                                return Err(RustyJSError::TypeError(
+                                return Err(RongJSError::TypeError(
                                     "Invalid header value".to_string(),
                                 ));
                             }
@@ -163,7 +163,7 @@ impl Headers {
                     }
                 }
             } else {
-                return Err(RustyJSError::TypeError("Invalid Headers init".to_string()));
+                return Err(RongJSError::TypeError("Invalid Headers init".to_string()));
             }
         }
 
@@ -215,7 +215,7 @@ impl Headers {
 
                 Ok(Some(values.join(", ")))
             }
-            Err(_) => Err(RustyJSError::TypeError(format!(
+            Err(_) => Err(RongJSError::TypeError(format!(
                 "Invalid header name: {}",
                 name
             ))),
@@ -231,7 +231,7 @@ impl Headers {
     pub fn has(&self, name: String) -> JSResult<bool> {
         match HeaderName::try_from(name.as_str()) {
             Ok(name) => Ok(self.headers.contains_key(&name)),
-            Err(_) => Err(RustyJSError::TypeError(format!(
+            Err(_) => Err(RongJSError::TypeError(format!(
                 "Invalid header name: {}",
                 name
             ))),
@@ -247,7 +247,7 @@ impl Headers {
     pub fn set(&mut self, name: String, value: String) -> JSResult<()> {
         // Check for null characters in value
         if value.contains('\0') {
-            return Err(RustyJSError::TypeError(
+            return Err(RongJSError::TypeError(
                 "Header value must not contain null characters".to_string(),
             ));
         }
@@ -260,11 +260,11 @@ impl Headers {
                 self.headers.insert(name, value);
                 Ok(())
             }
-            (Err(_), _) => Err(RustyJSError::TypeError(format!(
+            (Err(_), _) => Err(RongJSError::TypeError(format!(
                 "Invalid header name: {}",
                 name
             ))),
-            (_, Err(_)) => Err(RustyJSError::TypeError("Invalid header value".to_string())),
+            (_, Err(_)) => Err(RongJSError::TypeError("Invalid header value".to_string())),
         }
     }
 
@@ -358,7 +358,7 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_headers() {

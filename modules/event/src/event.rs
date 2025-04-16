@@ -1,4 +1,4 @@
-use rusty_js::{function::*, *};
+use rong_js::{function::*, *};
 
 /// Represents an event object
 #[js_export]

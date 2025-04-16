@@ -1,5 +1,5 @@
 use buffer::{Blob, File};
-use rusty_js::{function::*, *};
+use rong_js::{function::*, *};
 
 #[js_export]
 #[derive(Clone)]
@@ -249,7 +249,7 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_formdata() {

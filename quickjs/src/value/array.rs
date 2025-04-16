@@ -1,6 +1,6 @@
 use crate::qjs;
 use crate::QJSValue;
-use rusty_js_core::{JSArrayOps, JSValueImpl};
+use rong_js_core::{JSArrayOps, JSValueImpl};
 
 impl JSArrayOps for QJSValue {
     fn new(ctx: &Self::Context) -> Self {

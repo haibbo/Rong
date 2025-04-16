@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rusty-js = { workspace = true }
+rong-js = { workspace = true }
 timer = { path = "../modules/timer", optional = true }
 navigator = { path = "../modules/navigator", optional = true }
 path = { path = "../modules/path", optional = true }
@@ -15,7 +15,7 @@ assert = { path = "../modules/assert", optional = true }
 dom-exception = { path = "../modules/dom-exception", optional = true }
 abort = { path = "../modules/abort", optional = true }
 console = { path = "../modules/console", optional = true }
-lxr_url = { path = "../modules/lxr_url", optional = true }
+rong_url = { path = "../modules/rong_url", optional = true }
 buffer = { path = "../modules/buffer", optional = true }
 fs = { path = "../modules/fs", optional = true }
 
@@ -47,6 +47,6 @@ assert = ["dep:assert"]
 dom-exception = ["dep:dom-exception"]
 abort = ["dep:abort"]
 console = ["dep:console"]
-url = ["dep:lxr_url"]
+url = ["dep:rong_url"]
 buffer = ["dep:buffer"]
 fs = ["dep:fs"]

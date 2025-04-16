@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 base64 = "0.22.1"
-rusty-js = { workspace = true }
+rong-js = { workspace = true }
 
 [dev-dependencies]
-rustyjs_test = { path = "../../utils/rustyjs_test" }
+rong_test = { path = "../../utils/rong_test" }
 console = { path="../../modules/console" }

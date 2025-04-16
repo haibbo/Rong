@@ -1,8 +1,8 @@
 [package]
-name = "rusty-js-quickjs"
+name = "rong-js-quickjs"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rusty-js-quickjs-sys={path="./sys/"}
-rusty-js-core = { path = "../core" }
+rong-js-quickjs-sys={path="./sys/"}
+rong-js-core = { path = "../core" }

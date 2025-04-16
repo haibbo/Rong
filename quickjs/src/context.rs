@@ -1,6 +1,6 @@
 use crate::{qjs, QJSRuntime, QJSValue};
-use rusty_js_core::{
-    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSTypeOf, JSValueImpl, RustyJSError,
+use rong_js_core::{
+    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSTypeOf, JSValueImpl, RongJSError,
     Source,
 };
 use std::ffi::CString;
@@ -50,14 +50,14 @@ impl JSContextImpl for QJSContext {
         self.eval_raw(&source, options.to_flags())
     }
 
-    fn compile_to_bytecode(&self, source: Source) -> Result<Vec<u8>, RustyJSError> {
+    fn compile_to_bytecode(&self, source: Source) -> Result<Vec<u8>, RongJSError> {
         let options = EvalOptions {
             bytecode: true,
             ..EvalOptions::default()
         };
         let obj = self.eval_raw(&source, options.to_flags());
         if obj.is_exception() {
-            return Err(RustyJSError::CompileToByteErr);
+            return Err(RongJSError::CompileToByteErr);
         }
 
         let mut out_size = 0;
@@ -70,7 +70,7 @@ impl JSContextImpl for QJSContext {
             );
 
             if buf.is_null() {
-                return Err(RustyJSError::CompileToByteErr);
+                return Err(RongJSError::CompileToByteErr);
             }
 
             std::slice::from_raw_parts(buf, out_size)

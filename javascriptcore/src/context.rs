@@ -1,6 +1,6 @@
 use crate::{jsc, JSCRuntime, JSCValue};
-use rusty_js_core::{
-    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, RustyJSError,
+use rong_js_core::{
+    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, RongJSError,
 };
 use std::ffi::CString;
 use std::ptr;
@@ -32,7 +32,7 @@ impl JSContextImpl for JSCContext {
         Self::_from_borrowed_raw(ctx)
     }
 
-    fn eval(&self, source: rusty_js_core::Source) -> Self::Value {
+    fn eval(&self, source: rong_js_core::Source) -> Self::Value {
         let filename = source.name().unwrap_or("eval");
         let code = CString::new(source.code()).unwrap();
         let c_filename = CString::new(filename).unwrap();
@@ -148,8 +148,8 @@ impl JSContextImpl for JSCContext {
         }
     }
 
-    fn compile_to_bytecode(&self, _source: rusty_js_core::Source) -> Result<Vec<u8>, RustyJSError> {
-        Err(RustyJSError::NotSupportByteCode)
+    fn compile_to_bytecode(&self, _source: rong_js_core::Source) -> Result<Vec<u8>, RongJSError> {
+        Err(RongJSError::NotSupportByteCode)
     }
 
     fn run_bytecode(&self, _bytes: &[u8]) -> Self::Value {

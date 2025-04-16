@@ -1,8 +1,8 @@
 [package]
-name = "rusty-js-jscore"
+name = "rong-js-jscore"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rusty-js-jscore-sys={path="./sys/"}
-rusty-js-core = { path = "../core" }
+rong-js-jscore-sys={path="./sys/"}
+rong-js-core = { path = "../core" }

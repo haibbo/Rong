@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rusty-js = { workspace = true }
+rong-js = { workspace = true }
 tokio = { version = "1.0", features = ["rt", "time", "macros"] }
 futures = "0.3"
 
 [dev-dependencies]
-rustyjs_test = { path = "../../utils/rustyjs_test" }
+rong_test = { path = "../../utils/rong_test" }
 console = { path = "../console" }
 assert = { path = "../assert" }

@@ -4,8 +4,8 @@ use bytes::Bytes;
 use flate2::read::GzDecoder;
 use http::HeaderMap;
 use hyper::body::Incoming;
-use lxr_url::URLSearchParams;
-use rusty_js::*;
+use rong_url::URLSearchParams;
+use rong_js::*;
 use std::io::Read;
 
 pub(crate) enum BodyKind {
@@ -115,11 +115,11 @@ pub(crate) fn decompress_bytes(bytes: Bytes, headers: &HeaderMap) -> JSResult<By
                 let mut decoder = GzDecoder::new(&bytes[..]);
                 let mut decompressed = Vec::new();
                 decoder.read_to_end(&mut decompressed).map_err(|e| {
-                    RustyJSError::Error(format!("Failed to decompress gzip: {}", e))
+                    RongJSError::Error(format!("Failed to decompress gzip: {}", e))
                 })?;
                 Ok(Bytes::from(decompressed))
             }
-            Ok(encoding) => Err(RustyJSError::Error(format!(
+            Ok(encoding) => Err(RongJSError::Error(format!(
                 "Unsupported content-encoding: {}",
                 encoding
             ))),

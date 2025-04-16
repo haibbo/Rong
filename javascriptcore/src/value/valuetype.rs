@@ -1,5 +1,5 @@
 use crate::{jsc, JSCValue};
-use rusty_js_core::JSTypeOf;
+use rong_js_core::JSTypeOf;
 
 impl JSTypeOf for JSCValue {
     fn is_exception(&self) -> bool {

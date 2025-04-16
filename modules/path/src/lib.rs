@@ -1,4 +1,4 @@
-//! Path module for RustyJS
+//! Path module for RongJS
 //!
 //! This module provides functionality for working with file and directory paths.
 //! It aims to be compatible with Node.js's path module API, providing similar
@@ -25,7 +25,7 @@
 //! path.join('/foo', 'bar', 'baz');  // Returns: '/foo/bar/baz'
 //! ```
 
-use rusty_js::{function::*, *};
+use rong_js::{function::*, *};
 use std::path::{Component, Path, PathBuf};
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
@@ -392,7 +392,7 @@ fn format(path_object: JSObject) -> JSResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_path() {

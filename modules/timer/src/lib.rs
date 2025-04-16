@@ -18,7 +18,7 @@
 //!   to the callback function. Only the callback function and delay are supported.
 //! - Delay is in milliseconds and should be a positive number.
 
-use rusty_js::{function::Optional, JSContext, JSFunc, JSResult, JSRuntimeService};
+use rong_js::{function::Optional, JSContext, JSFunc, JSResult, JSRuntimeService};
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -179,7 +179,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
     use std::rc::Rc;
     use std::sync::atomic::{AtomicI32, Ordering};
     use tokio::time::sleep;

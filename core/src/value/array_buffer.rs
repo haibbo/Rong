@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValueImpl,
-    JSValueMapper, RustyJSError, TypedArrayElement,
+    JSValueMapper, RongJSError, TypedArrayElement,
 };
 
 use std::marker::PhantomData;
@@ -55,7 +55,7 @@ where
                 _phantom: PhantomData,
             })
         } else {
-            Err(RustyJSError::NotJSArrayBuffer)
+            Err(RongJSError::NotJSArrayBuffer)
         }
     }
 }
@@ -99,7 +99,7 @@ where
     pub fn from_bytes(ctx: &JSContext<V::Context>, bytes: &[u8]) -> JSResult<Self> {
         // Validate that the byte length is a multiple of the element size
         if bytes.len() % T::BYTES_PER_ELEMENT != 0 {
-            return Err(RustyJSError::TypedArrayAlignmentError);
+            return Err(RongJSError::TypedArrayAlignmentError);
         }
 
         let value = V::from_bytes(ctx.as_ref(), bytes);
@@ -130,7 +130,7 @@ where
         let vec = data.into();
         // Validate that the byte length is a multiple of the element size
         if vec.len() % T::BYTES_PER_ELEMENT != 0 {
-            return Err(RustyJSError::TypedArrayAlignmentError);
+            return Err(RongJSError::TypedArrayAlignmentError);
         }
 
         let value = V::from_vec(ctx.as_ref(), vec);

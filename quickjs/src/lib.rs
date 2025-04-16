@@ -5,7 +5,7 @@ mod value;
 
 mod qjs {
     // Native low-level bindings
-    pub use rusty_js_quickjs_sys::*;
+    pub use rong_js_quickjs_sys::*;
 }
 
 pub use context::QJSContext;

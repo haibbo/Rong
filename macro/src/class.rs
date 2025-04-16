@@ -33,7 +33,7 @@ use syn::{Expr, ItemImpl, Lit, Meta};
 /// # Examples
 ///
 /// ```ignore
-/// use rusty_js_macro::{js_export, js_method, js_class};
+/// use rong_js_macro::{js_export, js_method, js_class};
 ///
 /// #[js_export]
 /// struct MyStruct {
@@ -165,8 +165,8 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
                     .is_some_and(|meta| meta.path().is_ident("constructor"))
         }) {
             constructor = Some(quote! {
-                fn data_constructor() -> rusty_js::function::Constructor<rusty_js::JSEngineValue> {
-                    rusty_js::function::Constructor::new(Self::#method_name)
+                fn data_constructor() -> rong_js::function::Constructor<rong_js::JSEngineValue> {
+                    rong_js::function::Constructor::new(Self::#method_name)
                 }
             });
             continue;
@@ -196,7 +196,7 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
                 if receiver.mutability.is_some() {
                     // For &mut self methods, use ThisMut and map to Self::method_name
                     (
-                        quote! { mut __self: rusty_js::function::ThisMut<#impl_type> },
+                        quote! { mut __self: rong_js::function::ThisMut<#impl_type> },
                         if is_async {
                             quote! { Self::#method_name(&mut *__self, #(#patterns),*).await }
                         } else {
@@ -206,7 +206,7 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
                 } else {
                     // For &self methods, use This and map to Self::method_name
                     (
-                        quote! { __self: rusty_js::function::This<#impl_type> },
+                        quote! { __self: rong_js::function::This<#impl_type> },
                         if is_async {
                             quote! { Self::#method_name(&*__self, #(#patterns),*).await }
                         } else {
@@ -335,8 +335,8 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
 
     let constructor = constructor.unwrap_or_else(|| {
         quote! {
-            fn data_constructor() -> rusty_js::function::Constructor<rusty_js::JSEngineValue> {
-                rusty_js::function::Constructor::new(|_: ()| panic!("No constructor defined"))
+            fn data_constructor() -> rong_js::function::Constructor<rong_js::JSEngineValue> {
+                rong_js::function::Constructor::new(|_: ()| panic!("No constructor defined"))
             }
         }
     });
@@ -394,12 +394,12 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
     }
 
     let output = quote! {
-        impl rusty_js::JSClass<rusty_js::JSEngineValue> for #impl_type {
+        impl rong_js::JSClass<rong_js::JSEngineValue> for #impl_type {
             const NAME: &'static str = #js_export_name;
 
             #constructor
 
-            fn class_setup(class: &rusty_js::ClassSetup<rusty_js::JSEngineValue>) -> JSResult<()> {
+            fn class_setup(class: &rong_js::ClassSetup<rong_js::JSEngineValue>) -> JSResult<()> {
                 #(#instance_methods)*
                 #(#static_methods)*
                 Ok(())

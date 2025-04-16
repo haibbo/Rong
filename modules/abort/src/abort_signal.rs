@@ -1,6 +1,6 @@
 use dom_exception::{DOMException, DOMExceptionName};
 use event::{Emitter, EmitterExt, EventEmitter, EventKey};
-use rusty_js::{function::*, *};
+use rong_js::{function::*, *};
 use std::rc::Rc;
 use std::sync::Mutex;
 use tokio::sync::watch;
@@ -96,7 +96,7 @@ impl AbortReceiver {
 impl AbortSignal {
     #[js_method(constructor)]
     fn constructor() -> JSResult<()> {
-        Err(RustyJSError::TypeError(
+        Err(RongJSError::TypeError(
             "Failed to construct 'AbortSignal': Illegal constructor".to_string(),
         ))
     }

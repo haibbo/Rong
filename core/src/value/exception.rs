@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult, JSTypeOf,
-    JSValue, JSValueImpl, RustyJSError,
+    JSValue, JSValueImpl, RongJSError,
 };
 use std::fmt;
 use std::ops::Deref;
@@ -45,7 +45,7 @@ where
         if value.is_exception() || value.is_error() {
             Ok(Self(JSObject::from_js_value(ctx, value)?))
         } else {
-            Err(RustyJSError::NotObject)
+            Err(RongJSError::NotObject)
         }
     }
 }

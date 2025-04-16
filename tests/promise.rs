@@ -1,4 +1,4 @@
-use rustyjs_test::*;
+use rong_test::*;
 use std::time::Duration;
 
 #[test]
@@ -118,7 +118,7 @@ fn test_rust_future_error_in_js() {
         let async_fn = JSFunc::new(&ctx, move |_: i32| {
             let future = async {
                 tokio::time::sleep(Duration::from_millis(50)).await;
-                RustyJSError::Error("async operation failed".to_string())
+                RongJSError::Error("async operation failed".to_string())
             };
             Promise::from_future(&ctx2, future).unwrap()
         })?;

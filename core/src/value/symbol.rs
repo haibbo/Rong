@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue,
-    JSValueImpl, JSValueMapper, RustyJSError,
+    JSValueImpl, JSValueMapper, RongJSError,
 };
 use std::ops::Deref;
 
@@ -55,7 +55,7 @@ where
         if value.is_symbol() {
             Ok(Self(JSValue::from_raw(ctx, value).into()))
         } else {
-            Err(RustyJSError::NotSymbol)
+            Err(RongJSError::NotSymbol)
         }
     }
 }

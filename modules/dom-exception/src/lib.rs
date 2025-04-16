@@ -28,7 +28,7 @@
 //! deprecated in the DOM specification and is no longer recommended for use.
 //! Instead, use the `name` property to identify the type of error.
 
-use rusty_js::{function::*, *};
+use rong_js::{function::*, *};
 
 /// Macro to define error names
 #[allow(clippy::upper_case_acronyms)]
@@ -200,7 +200,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_dom_exception() {

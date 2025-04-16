@@ -1,4 +1,4 @@
-use rusty_js::*;
+use rong_js::*;
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 use std::time::SystemTime;
@@ -88,7 +88,7 @@ impl FileInfo {
 async fn stat(path: String) -> JSResult<FileInfo> {
     let metadata = fs::metadata(&path)
         .await
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to get file info: {}", e)))?;
+        .map_err(|e| RongJSError::TypeError(format!("Failed to get file info: {}", e)))?;
 
     #[cfg(unix)]
     let mode = Some(metadata.mode());
@@ -112,7 +112,7 @@ async fn stat(path: String) -> JSResult<FileInfo> {
 async fn lstat(path: String) -> JSResult<FileInfo> {
     let metadata = fs::symlink_metadata(&path)
         .await
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to get file info: {}", e)))?;
+        .map_err(|e| RongJSError::TypeError(format!("Failed to get file info: {}", e)))?;
 
     #[cfg(unix)]
     let mode = Some(metadata.mode());

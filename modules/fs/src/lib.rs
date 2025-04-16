@@ -1,4 +1,4 @@
-use rusty_js::*;
+use rong_js::*;
 use tokio::fs;
 
 mod dir;
@@ -9,14 +9,14 @@ mod write;
 async fn rename(from: String, to: String) -> JSResult<()> {
     fs::rename(&from, &to)
         .await
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to rename file: {}", e)))
+        .map_err(|e| RongJSError::TypeError(format!("Failed to rename file: {}", e)))
 }
 
 async fn real_path(path: String) -> JSResult<String> {
     fs::canonicalize(&path)
         .await
         .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to resolve real path: {}", e)))
+        .map_err(|e| RongJSError::TypeError(format!("Failed to resolve real path: {}", e)))
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
@@ -39,7 +39,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
     use std::env;
 
     #[test]
@@ -54,10 +54,10 @@ mod tests {
 
             // Get workspace root path
             let workspace_root = env::current_dir()
-                .map_err(|e| RustyJSError::TypeError(format!("Failed to get current dir: {}", e)))?
+                .map_err(|e| RongJSError::TypeError(format!("Failed to get current dir: {}", e)))?
                 .parent()
                 .and_then(|p| p.parent()) // Go up two levels
-                .ok_or_else(|| RustyJSError::TypeError("Failed to get workspace root".into()))?
+                .ok_or_else(|| RongJSError::TypeError("Failed to get workspace root".into()))?
                 .to_string_lossy()
                 .into_owned();
 

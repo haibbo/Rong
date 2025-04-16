@@ -1,4 +1,4 @@
-use rustyjs_test::*;
+use rong_test::*;
 
 #[test]
 fn test_typed_array_creation() {

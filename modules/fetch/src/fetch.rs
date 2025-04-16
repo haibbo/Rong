@@ -5,7 +5,7 @@ use hyper::body::Bytes;
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
-use rusty_js::{function::Optional, *};
+use rong_js::{function::Optional, *};
 use std::io::Error;
 use std::sync::OnceLock;
 use tokio::select;
@@ -69,7 +69,7 @@ async fn to_hyper_request(request: Request) -> JSResult<HttpRequest<BoxBody<Byte
             headers.insert(
                 header::CONTENT_TYPE,
                 FormData::content_type(&boundary).parse().map_err(|e| {
-                    RustyJSError::TypeError(format!("Invalid content-type header: {}", e))
+                    RongJSError::TypeError(format!("Invalid content-type header: {}", e))
                 })?,
             );
         }
@@ -83,12 +83,12 @@ async fn to_hyper_request(request: Request) -> JSResult<HttpRequest<BoxBody<Byte
     // because we just created them from valid headers
     builder
         .body(body)
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to build request: {}", e)))
+        .map_err(|e| RongJSError::TypeError(format!("Failed to build request: {}", e)))
 }
 
 pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Response> {
     // Create Request object from input and init
-    let request = Request::new(input, init).map_err(|e| RustyJSError::TypeError(e.to_string()))?;
+    let request = Request::new(input, init).map_err(|e| RongJSError::TypeError(e.to_string()))?;
 
     // Get abort signal if present
     let mut abort_receiver = request.abort_signal().map(|signal| signal.subscribe());
@@ -100,17 +100,17 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     let response = if let Some(ref mut receiver) = abort_receiver {
         select! {
             result = get_client().request(hyper_request) => {
-                result.map_err(|e| RustyJSError::TypeError(format!("fetch failed: {}", e)))?
+                result.map_err(|e| RongJSError::TypeError(format!("fetch failed: {}", e)))?
             }
             abort_reason = receiver.recv() => {
-                return Err(RustyJSError::from_jsvalue(abort_reason));
+                return Err(RongJSError::from_jsvalue(abort_reason));
             }
         }
     } else {
         get_client()
             .request(hyper_request)
             .await
-            .map_err(|e| RustyJSError::TypeError(format!("fetch failed: {}", e)))?
+            .map_err(|e| RongJSError::TypeError(format!("fetch failed: {}", e)))?
     };
 
     // Convert hyper::Response to our Response, passing the abort receiver
@@ -135,7 +135,7 @@ mod tests {
     };
     use flate2::{write::GzEncoder, Compression};
     use futures::{stream, StreamExt};
-    use rustyjs_test::*;
+    use rong_test::*;
     use std::convert::Infallible;
     use std::io::Write;
     use std::net::SocketAddr;
@@ -231,7 +231,7 @@ mod tests {
             assert::init(&ctx)?;
             console::init(&ctx)?;
             encoding::init(&ctx)?;
-            lxr_url::init(&ctx)?;
+            rong_url::init(&ctx)?;
             timer::init(&ctx)?;
             abort::init(&ctx)?;
             dom_exception::init(&ctx)?;

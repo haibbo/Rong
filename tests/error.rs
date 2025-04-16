@@ -1,4 +1,4 @@
-use rustyjs_test::*;
+use rong_test::*;
 
 #[test]
 fn test_throw_error() {
@@ -32,21 +32,21 @@ fn test_error_constructor() {
         ctx.global().set(
             "type_error",
             JSFunc::new(ctx, || -> JSResult<()> {
-                Err(RustyJSError::TypeError("this is typeError".to_string()))
+                Err(RongJSError::TypeError("this is typeError".to_string()))
             })?,
         )?;
 
         ctx.global().set(
             "reference_error",
             JSFunc::new(ctx, || -> JSResult<()> {
-                Err(RustyJSError::PropertyNotFound("dummy".to_string()))
+                Err(RongJSError::PropertyNotFound("dummy".to_string()))
             })?,
         )?;
 
         ctx.global().set(
             "range_error",
             JSFunc::new(ctx, || -> JSResult<()> {
-                Err(RustyJSError::TypedArrayRangeError)
+                Err(RongJSError::TypedArrayRangeError)
             })?,
         )?;
 
@@ -100,7 +100,7 @@ fn test_error_stack() {
     run(|ctx| {
         // test syntax error
         let result = ctx.eval::<()>(Source::from_bytes(b"function test() { a b c }"));
-        let RustyJSError::Exception(error) = result.unwrap_err() else {
+        let RongJSError::Exception(error) = result.unwrap_err() else {
             panic!("Expected JSError");
         };
         assert!(error.message.is_some(), "Should have error message");
@@ -116,7 +116,7 @@ fn test_error_stack() {
             foo();
         ",
         ));
-        let RustyJSError::Exception(error) = result.unwrap_err() else {
+        let RongJSError::Exception(error) = result.unwrap_err() else {
             panic!("Expected JSError");
         };
         assert!(
@@ -135,7 +135,7 @@ fn test_error_stack() {
             obj.property;  // TypeError: Cannot read property of null
         ",
         ));
-        let RustyJSError::Exception(error) = result.unwrap_err() else {
+        let RongJSError::Exception(error) = result.unwrap_err() else {
             panic!("Expected JSError");
         };
         assert!(
@@ -164,7 +164,7 @@ fn test_custom_error() {
         ",
         ));
 
-        let RustyJSError::Exception(error) = result.unwrap_err() else {
+        let RongJSError::Exception(error) = result.unwrap_err() else {
             panic!("Expected JSError");
         };
         assert_eq!(error.message.unwrap(), "Custom error message");
@@ -190,7 +190,7 @@ fn test_error_conversion() {
         ];
 
         for (code, expected_msg) in cases {
-            let RustyJSError::Exception(error) =
+            let RongJSError::Exception(error) =
                 ctx.eval::<()>(Source::from_bytes(code)).unwrap_err()
             else {
                 panic!("Expected JSError");

@@ -1,4 +1,4 @@
-use rustyjs_test::*;
+use rong_test::*;
 
 use std::string::String;
 

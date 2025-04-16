@@ -1,4 +1,4 @@
-use rusty_js::{function::Optional, js_class, js_export, js_method, *};
+use rong_js::{function::Optional, js_class, js_export, js_method, *};
 
 #[derive(Default)]
 struct BlobOptions {
@@ -48,7 +48,7 @@ impl Blob {
         // Process parts if provided
         if let Some(parts) = parts.0 {
             blob_data = process_blob_part(&parts, &blob_options).map_err(|e| {
-                RustyJSError::TypeError(format!("Failed to process blob parts: {}", e))
+                RongJSError::TypeError(format!("Failed to process blob parts: {}", e))
             })?;
         }
 
@@ -82,7 +82,7 @@ impl Blob {
     #[js_method]
     pub async fn text(&self) -> JSResult<String> {
         String::from_utf8(self.data.clone())
-            .map_err(|e| RustyJSError::Error(format!("Invalid UTF-8 sequence: {}", e)))
+            .map_err(|e| RongJSError::Error(format!("Invalid UTF-8 sequence: {}", e)))
     }
 
     /// Returns a new Blob containing a subset of this blob's data
@@ -217,7 +217,7 @@ fn process_blob_part(array: &JSArray, options: &BlobOptions) -> JSResult<Vec<u8>
             continue;
         }
 
-        return Err(RustyJSError::TypeError(
+        return Err(RongJSError::TypeError(
             "Unsupported Blob part type".to_string(),
         ));
     }

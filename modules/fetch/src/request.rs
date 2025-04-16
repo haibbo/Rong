@@ -1,10 +1,10 @@
 use http::{Method, Uri};
-use rusty_js::{function::Optional, *};
+use rong_js::{function::Optional, *};
 
 use crate::body::HttpBody;
 use crate::header::Headers;
 use abort::AbortSignal;
-use lxr_url::URL;
+use rong_url::URL;
 
 #[js_export]
 pub struct Request {
@@ -65,13 +65,13 @@ impl TryFromJSValue for RequestInit {
 
         let obj = value
             .into_object()
-            .ok_or(RustyJSError::TypeError("Invalid RequestInit".to_string()))?;
+            .ok_or(RongJSError::TypeError("Invalid RequestInit".to_string()))?;
 
         // Method
         if let Ok(method_str) = obj.get::<_, String>("method") {
             request.method =
                 Some(Method::from_bytes(method_str.as_bytes()).map_err(|_| {
-                    RustyJSError::TypeError(format!("Invalid method: {}", method_str))
+                    RongJSError::TypeError(format!("Invalid method: {}", method_str))
                 })?);
         }
 
@@ -92,7 +92,7 @@ impl TryFromJSValue for RequestInit {
                 "error" => RequestRedirect::Error,
                 "manual" => RequestRedirect::Manual,
                 _ => {
-                    return Err(RustyJSError::TypeError(format!(
+                    return Err(RongJSError::TypeError(format!(
                         "Invalid redirect: {}",
                         redirect_str
                     )))
@@ -117,10 +117,10 @@ impl Request {
         let mut request = if let Ok(url_str) = input.clone().try_into::<String>() {
             // Validate URL format
             if !url_str.starts_with("http://") && !url_str.starts_with("https://") {
-                return Err(RustyJSError::TypeError(format!("Invalid URL: {}", url_str)));
+                return Err(RongJSError::TypeError(format!("Invalid URL: {}", url_str)));
             }
             let url = Uri::try_from(url_str.as_str())
-                .map_err(|_| RustyJSError::TypeError(format!("Invalid URL: {}", url_str)))?;
+                .map_err(|_| RongJSError::TypeError(format!("Invalid URL: {}", url_str)))?;
 
             Self {
                 url,
@@ -133,7 +133,7 @@ impl Request {
                 // Convert URL to string first, then parse as Uri
                 let url_str = url.to_string();
                 let uri = Uri::try_from(url_str.as_str())
-                    .map_err(|_| RustyJSError::TypeError(format!("Invalid URL: {}", url_str)))?;
+                    .map_err(|_| RongJSError::TypeError(format!("Invalid URL: {}", url_str)))?;
                 Self {
                     url: uri,
                     ..Default::default()
@@ -248,7 +248,7 @@ impl Request {
     #[js_method(rename = "formData")]
     async fn form_data(&self) -> JSResult<JSObject> {
         // TODO: Implement form data parsing
-        Err(RustyJSError::TypeError("Not implemented".to_string()))
+        Err(RongJSError::TypeError("Not implemented".to_string()))
     }
 }
 
@@ -273,7 +273,7 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_request() {
@@ -281,7 +281,7 @@ mod tests {
             assert::init(&ctx)?;
             console::init(&ctx)?;
             encoding::init(&ctx)?;
-            lxr_url::init(&ctx)?;
+            rong_url::init(&ctx)?;
 
             crate::header::init(&ctx)?;
             init(&ctx)?;

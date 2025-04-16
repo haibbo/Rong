@@ -1,5 +1,5 @@
 use futures::Stream;
-use rusty_js::{function::Optional, *};
+use rong_js::{function::Optional, *};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::SystemTime;
@@ -68,7 +68,7 @@ async fn mkdir(path: String, option: Optional<MkdirOptions>) -> JSResult<()> {
         fs::create_dir(&path).await
     };
 
-    result.map_err(|e| RustyJSError::TypeError(format!("Failed to create directory: {}", e)))?;
+    result.map_err(|e| RongJSError::TypeError(format!("Failed to create directory: {}", e)))?;
 
     // Set mode if specified (Unix-like systems only)
     #[cfg(unix)]
@@ -78,7 +78,7 @@ async fn mkdir(path: String, option: Optional<MkdirOptions>) -> JSResult<()> {
         tokio::fs::set_permissions(&path, permissions)
             .await
             .map_err(|e| {
-                RustyJSError::TypeError(format!("Failed to set directory permissions: {}", e))
+                RongJSError::TypeError(format!("Failed to set directory permissions: {}", e))
             })?;
     }
 
@@ -104,7 +104,7 @@ impl DirEntryStream {
 }
 
 impl Stream for DirEntryStream {
-    type Item = Result<DirEntry, RustyJSError>;
+    type Item = Result<DirEntry, RongJSError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = self.get_mut();
@@ -126,7 +126,7 @@ impl Stream for DirEntryStream {
                 Poll::Ready(Err(e)) => {
                     this.current_file_type_fut.take();
                     this.current_entry.take();
-                    return Poll::Ready(Some(Err(RustyJSError::TypeError(format!(
+                    return Poll::Ready(Some(Err(RongJSError::TypeError(format!(
                         "Failed to get file type: {}",
                         e
                     )))));
@@ -151,7 +151,7 @@ impl Stream for DirEntryStream {
                 Poll::Pending
             }
             Poll::Ready(Ok(None)) => Poll::Ready(None),
-            Poll::Ready(Err(e)) => Poll::Ready(Some(Err(RustyJSError::TypeError(format!(
+            Poll::Ready(Err(e)) => Poll::Ready(Some(Err(RongJSError::TypeError(format!(
                 "Failed to read directory entry: {}",
                 e
             ))))),
@@ -163,7 +163,7 @@ impl Stream for DirEntryStream {
 async fn readdir(ctx: JSContext, path: String) -> JSResult<JSObject> {
     let entries = fs::read_dir(&path)
         .await
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to read directory: {}", e)))?;
+        .map_err(|e| RongJSError::TypeError(format!("Failed to read directory: {}", e)))?;
 
     let stream = DirEntryStream::new(entries);
     stream.into_js_async_iter(&ctx)
@@ -184,25 +184,25 @@ async fn remove(path: String, option: Optional<RemoveOptions>) -> JSResult<()> {
             if metadata.is_file() || metadata.is_symlink() {
                 fs::remove_file(&path)
                     .await
-                    .map_err(|e| RustyJSError::TypeError(format!("Failed to remove file: {}", e)))
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to remove file: {}", e)))
             } else if metadata.is_dir() {
                 if options.recursive {
                     fs::remove_dir_all(&path).await.map_err(|e| {
-                        RustyJSError::TypeError(format!(
+                        RongJSError::TypeError(format!(
                             "Failed to remove directory recursively: {}",
                             e
                         ))
                     })
                 } else {
                     fs::remove_dir(&path).await.map_err(|e| {
-                        RustyJSError::TypeError(format!("Failed to remove directory: {}", e))
+                        RongJSError::TypeError(format!("Failed to remove directory: {}", e))
                     })
                 }
             } else {
-                Err(RustyJSError::TypeError("Unknown file type".to_string()))
+                Err(RongJSError::TypeError("Unknown file type".to_string()))
             }
         }
-        Err(e) => Err(RustyJSError::TypeError(format!(
+        Err(e) => Err(RongJSError::TypeError(format!(
             "Failed to access path: {}",
             e
         ))),
@@ -214,7 +214,7 @@ async fn symlink(old_path: String, new_path: String) -> JSResult<()> {
     {
         fs::symlink(&old_path, &new_path)
             .await
-            .map_err(|e| RustyJSError::TypeError(format!("Failed to create symlink: {}", e)))
+            .map_err(|e| RongJSError::TypeError(format!("Failed to create symlink: {}", e)))
     }
     #[cfg(windows)]
     {
@@ -230,7 +230,7 @@ async fn symlink(old_path: String, new_path: String) -> JSResult<()> {
             Err(e) => Err(e),
         }
         .await
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to create symlink: {}", e)))
+        .map_err(|e| RongJSError::TypeError(format!("Failed to create symlink: {}", e)))
     }
 }
 
@@ -238,7 +238,7 @@ async fn readlink(path: String) -> JSResult<String> {
     fs::read_link(&path)
         .await
         .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to read symlink: {}", e)))
+        .map_err(|e| RongJSError::TypeError(format!("Failed to read symlink: {}", e)))
 }
 
 #[cfg(unix)]
@@ -247,7 +247,7 @@ async fn chmod(path: String, mode: u32) -> JSResult<()> {
     let permissions = std::fs::Permissions::from_mode(mode);
     fs::set_permissions(&path, permissions)
         .await
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to change permissions: {}", e)))
+        .map_err(|e| RongJSError::TypeError(format!("Failed to change permissions: {}", e)))
 }
 
 #[cfg(unix)]
@@ -258,12 +258,12 @@ async fn chown(path: String, uid: u32, gid: u32) -> JSResult<()> {
         Some(Uid::from_raw(uid)),
         Some(Gid::from_raw(gid)),
     )
-    .map_err(|e| RustyJSError::TypeError(format!("Failed to change ownership: {}", e)))
+    .map_err(|e| RongJSError::TypeError(format!("Failed to change ownership: {}", e)))
 }
 
 async fn chdir(directory: String) -> JSResult<()> {
     std::env::set_current_dir(&directory)
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to change directory: {}", e)))
+        .map_err(|e| RongJSError::TypeError(format!("Failed to change directory: {}", e)))
 }
 
 #[derive(FromJSObj)]
@@ -287,7 +287,7 @@ async fn utime(path: String, options: UTimeOptions) -> JSResult<()> {
         atime.unwrap_or_else(|| FileTime::from_system_time(SystemTime::now())),
         mtime.unwrap_or_else(|| FileTime::from_system_time(SystemTime::now())),
     )
-    .map_err(|e| RustyJSError::TypeError(format!("Failed to set file times: {}", e)))
+    .map_err(|e| RongJSError::TypeError(format!("Failed to set file times: {}", e)))
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {

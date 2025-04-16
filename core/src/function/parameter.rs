@@ -58,7 +58,7 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
 ///
 /// # Example
 /// ```ignore
-/// use rusty_js_core::function::parameter::This;
+/// use rong_js_core::function::parameter::This;
 ///
 /// fn method(this: This<MyStruct>, x: i32) {
 ///     let my_struct: &MyStruct = &this;
@@ -79,7 +79,7 @@ pub struct ThisMut<T: 'static>(pub(crate) RefMut<'static, T>);
 ///
 /// # Example
 /// ```ignore
-/// use rusty_js_core::function::parameter::Optional;
+/// use rong_js_core::function::parameter::Optional;
 ///
 /// fn func(x: i32, opt: Optional<String>) {
 ///     // Access the optional value via deref
@@ -100,7 +100,7 @@ pub struct Optional<T>(pub Option<T>);
 ///
 /// # Example
 /// ```ignore
-/// use rusty_js_core::function::parameter::Rest;
+/// use rong_js_core::function::parameter::Rest;
 ///
 /// fn variadic(x: i32, rest: Rest<String>) {
 ///     // Access the rest parameters via deref

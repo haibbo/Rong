@@ -1,5 +1,5 @@
-use rusty_js_macro::{js_class, js_export, js_method, FromJSObj};
-use rustyjs_test::*;
+use rong_js_macro::{js_class, js_export, js_method, FromJSObj};
+use rong_test::*;
 use std::sync::{Mutex, OnceLock};
 use tokio::time::Duration;
 

@@ -5,10 +5,10 @@ use crate::{
 use thiserror::Error;
 use tokio::sync::oneshot;
 
-pub type JSResult<T> = Result<T, RustyJSError>;
+pub type JSResult<T> = Result<T, RongJSError>;
 
 #[derive(Error, Debug, PartialEq, Eq)]
-pub enum RustyJSError {
+pub enum RongJSError {
     #[error("Failed to borrow for type {0}")]
     Borrow(&'static str),
 
@@ -67,40 +67,40 @@ pub enum RustyJSError {
     JSValue(#[from] JSValueErr),
 }
 
-impl RustyJSError {
+impl RongJSError {
     pub fn throw_js_exception<V>(self, ctx: &JSContext<V::Context>) -> V
     where
         V: JSValueImpl,
         V::Context: JSExceptionHandler,
     {
         match self {
-            RustyJSError::TypeError(_)
-            | RustyJSError::NotJSFunc
-            | RustyJSError::NotJSArray
-            | RustyJSError::NotJSArrayBuffer
-            | RustyJSError::NotJSTypedArray
-            | RustyJSError::TypedArrayAlignmentError
-            | RustyJSError::NotObject
-            | RustyJSError::NotSymbol
-            | RustyJSError::NotJSExcep
-            | RustyJSError::InvalidParameter { .. } => {
+            RongJSError::TypeError(_)
+            | RongJSError::NotJSFunc
+            | RongJSError::NotJSArray
+            | RongJSError::NotJSArrayBuffer
+            | RongJSError::NotJSTypedArray
+            | RongJSError::TypedArrayAlignmentError
+            | RongJSError::NotObject
+            | RongJSError::NotSymbol
+            | RongJSError::NotJSExcep
+            | RongJSError::InvalidParameter { .. } => {
                 ctx.as_ref().throw_type_error(self.to_string())
             }
 
-            RustyJSError::PropertyNotFound(_) => {
+            RongJSError::PropertyNotFound(_) => {
                 ctx.as_ref().throw_reference_error(self.to_string())
             }
 
-            RustyJSError::TypedArrayRangeError => ctx.as_ref().throw_range_error(self.to_string()),
+            RongJSError::TypedArrayRangeError => ctx.as_ref().throw_range_error(self.to_string()),
 
-            RustyJSError::Exception(_)
-            | RustyJSError::Error(_)
-            | RustyJSError::Borrow(_)
-            | RustyJSError::CompileToByteErr
-            | RustyJSError::OnceFnCalled
-            | RustyJSError::NotSupportByteCode => ctx.as_ref().throw_error(self.to_string()),
+            RongJSError::Exception(_)
+            | RongJSError::Error(_)
+            | RongJSError::Borrow(_)
+            | RongJSError::CompileToByteErr
+            | RongJSError::OnceFnCalled
+            | RongJSError::NotSupportByteCode => ctx.as_ref().throw_error(self.to_string()),
 
-            RustyJSError::JSValue(JSValueErr(value)) => {
+            RongJSError::JSValue(JSValueErr(value)) => {
                 let value = unsafe { Box::from_raw(value as *mut JSValue<V>) };
                 ctx.throw(*value).into_value()
             }
@@ -118,25 +118,25 @@ impl RustyJSError {
 
     pub fn from_jsvalue<V: JSValueImpl>(value: JSValue<V>) -> Self {
         let addr = Box::new(value);
-        RustyJSError::JSValue(JSValueErr(Box::into_raw(addr) as usize))
+        RongJSError::JSValue(JSValueErr(Box::into_raw(addr) as usize))
     }
 }
 
-impl<V: JSValueImpl> FromJSValue<V> for RustyJSError
+impl<V: JSValueImpl> FromJSValue<V> for RongJSError
 where
     V: JSObjectOps,
 {
     fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         let obj = JSObject::from_js_value(ctx, value)?;
-        Ok(RustyJSError::Exception(
+        Ok(RongJSError::Exception(
             JSException::from_object(obj)
-                .ok_or(RustyJSError::NotObject)?
+                .ok_or(RongJSError::NotObject)?
                 .into_error(),
         ))
     }
 }
 
-impl<V: JSValueImpl> IntoJSValue<V> for RustyJSError
+impl<V: JSValueImpl> IntoJSValue<V> for RongJSError
 where
     V::Context: JSExceptionHandler,
     V: JSObjectOps,
@@ -160,9 +160,9 @@ where
     }
 }
 
-impl From<oneshot::error::RecvError> for RustyJSError {
+impl From<oneshot::error::RecvError> for RongJSError {
     fn from(err: oneshot::error::RecvError) -> Self {
-        RustyJSError::Error(format!("Tokio oneshot error: {}", err))
+        RongJSError::Error(format!("Tokio oneshot error: {}", err))
     }
 }
 
@@ -176,11 +176,11 @@ where
     E: ToString,
 {
     fn into_result(self) -> JSResult<T> {
-        self.map_err(|e| RustyJSError::Error(e.to_string()))
+        self.map_err(|e| RongJSError::Error(e.to_string()))
     }
 
     fn into_type_result(self) -> JSResult<T> {
-        self.map_err(|e| RustyJSError::TypeError(e.to_string()))
+        self.map_err(|e| RongJSError::TypeError(e.to_string()))
     }
 }
 

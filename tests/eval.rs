@@ -1,4 +1,4 @@
-use rustyjs_test::*;
+use rong_test::*;
 
 use std::string::String;
 use tokio::time::Duration;
@@ -24,7 +24,7 @@ fn test_bytecode() {
         let code = "(4 + 8) * 3";
         let source = match ctx.compile_to_bytecode(code) {
             Ok(source) => source,
-            Err(RustyJSError::NotSupportByteCode) => return Ok(()),
+            Err(RongJSError::NotSupportByteCode) => return Ok(()),
             Err(e) => panic!("Unexpected error: {:?}", e),
         };
 
@@ -70,7 +70,7 @@ fn test_eval_async() {
 
         let source = match ctx.compile_to_bytecode(js_code) {
             Ok(source) => source,
-            Err(RustyJSError::NotSupportByteCode) => return Ok(()),
+            Err(RongJSError::NotSupportByteCode) => return Ok(()),
             Err(e) => panic!("Unexpected error: {:?}", e),
         };
         // println!("source length is {}", source.len());

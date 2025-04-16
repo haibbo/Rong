@@ -1,5 +1,5 @@
 use crate::event_emitter::{Emitter, EventEmitter};
-use rusty_js::*;
+use rong_js::*;
 
 /// Represents an event target that can receive events and may have listeners for them.
 #[js_export]

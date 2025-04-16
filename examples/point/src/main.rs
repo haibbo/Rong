@@ -1,5 +1,5 @@
-use rusty_js::*;
-use rusty_js::{js_export, js_method, js_class};
+use rong_js::*;
+use rong_js::{js_export, js_method, js_class};
 
 // Define the Point struct with js_export macro
 #[js_export(rename = "Point2D")]
@@ -64,8 +64,8 @@ impl Point {
 
 fn main() {
     // Create a JavaScript runtime and context
-    let rt = RustyJS::runtime();
-    let ctx = RustyJS::context(&rt);
+    let rt = RongJS::runtime();
+    let ctx = RongJS::context(&rt);
 
     // Register our Point class with JavaScript
     ctx.register_class::<Point>();

@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf,
-    JSValueConversion, JSValueImpl, JSValueMapper, RustyJSError,
+    JSValueConversion, JSValueImpl, JSValueMapper, RongJSError,
 };
 use std::fmt;
 use std::marker::PhantomData;
@@ -38,7 +38,7 @@ where
         if value.is_array() {
             JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
         } else {
-            Err(RustyJSError::NotJSArray)
+            Err(RongJSError::NotJSArray)
         }
     }
 }
@@ -109,7 +109,7 @@ where
     ///
     /// # Returns
     /// - `Ok(&Self)` if successful, allowing method chaining
-    /// - `Err(RustyJSError)` if an exception occurred
+    /// - `Err(RongJSError)` if an exception occurred
     pub fn set<T>(&self, index: u32, value: T) -> JSResult<&Self>
     where
         T: IntoJSValue<V>,
@@ -270,7 +270,7 @@ where
             let vec = array.iter::<T>().collect::<JSResult<Vec<_>>>()?;
             Ok(vec)
         } else {
-            Err(RustyJSError::NotJSArray)
+            Err(RongJSError::NotJSArray)
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::qjs;
 use crate::QJSValue;
-use rusty_js_core::{JSArrayBufferOps, JSValueImpl};
+use rong_js_core::{JSArrayBufferOps, JSValueImpl};
 use std::ptr;
 use std::slice;
 

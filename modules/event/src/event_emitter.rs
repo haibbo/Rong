@@ -1,4 +1,4 @@
-use rusty_js::{function::*, *};
+use rong_js::{function::*, *};
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 use std::rc::Rc;
@@ -62,7 +62,7 @@ impl FromJSValue<JSEngineValue> for EventKey {
         if let Ok(symbol) = JSSymbol::from_js_value(ctx, value) {
             return Ok(EventKey::Symbol(symbol));
         }
-        Err(RustyJSError::TypeError(
+        Err(RongJSError::TypeError(
             "EventKey must be Symbol or String!".to_string(),
         ))
     }
@@ -78,7 +78,7 @@ impl IntoJSValue<JSEngineValue> for EventKey {
 }
 
 // blanket implementing to make EventKey can be as extracted from JSFunc
-impl rusty_js::function::JSParameterType for EventKey {}
+impl rong_js::function::JSParameterType for EventKey {}
 
 /// Represents an event listener
 #[derive(Clone, PartialEq)]
@@ -95,7 +95,7 @@ pub struct EventListener {
 ///
 /// # Example
 /// ```ignore
-/// use rusty_js::js_export;
+/// use rong_js::js_export;
 /// use event::EventEmitter;
 ///
 /// #[js_export]
@@ -175,7 +175,7 @@ where
 
                 match M::do_emit(This(this.0.clone()), key.clone(), Rest(vec![value])) {
                     Ok(has) if has => Ok(true),
-                    _ => Err(RustyJSError::Error(err)),
+                    _ => Err(RongJSError::Error(err)),
                 }
             }
             Ok(_) => Ok(false),
@@ -430,7 +430,7 @@ impl EventEmitter {
                 "EventEmitter overflow: {} listeners added. Use setMaxListeners() to increase limit",
                 current_len + 1,
             );
-            return Err(RustyJSError::Error(warning));
+            return Err(RongJSError::Error(warning));
         }
 
         let listener = EventListener { listener, once };

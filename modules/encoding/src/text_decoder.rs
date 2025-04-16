@@ -14,7 +14,7 @@
 //! - Only UTF-8 encoding is supported. Other encodings will result in a `TypeError`.
 //! - The `stream` option in `decode` is currently ignored.
 
-use rusty_js::{function::Optional, *};
+use rong_js::{function::Optional, *};
 
 #[derive(Default)]
 struct TextDecoderOptions {
@@ -53,7 +53,7 @@ impl TextDecoder {
             match label.as_str() {
                 "utf-8" | "utf8" | "" => {}
                 _ => {
-                    return Err(RustyJSError::TypeError(format!(
+                    return Err(RongJSError::TypeError(format!(
                         "Unsupported encoding: {}",
                         label
                     )))
@@ -127,17 +127,17 @@ impl TextDecoder {
                 if let Some(bytes) = typed_array.as_bytes() {
                     bytes.to_vec()
                 } else {
-                    return Err(RustyJSError::TypeError("Invalid TypedArray".to_string()));
+                    return Err(RongJSError::TypeError("Invalid TypedArray".to_string()));
                 }
             } else if let Some(buffer) = JSArrayBuffer::<u8>::from_object(input) {
                 // Get bytes from ArrayBuffer
                 if let Some(bytes) = buffer.as_bytes() {
                     bytes.to_vec()
                 } else {
-                    return Err(RustyJSError::TypeError("Invalid ArrayBuffer".to_string()));
+                    return Err(RongJSError::TypeError("Invalid ArrayBuffer".to_string()));
                 }
             } else {
-                return Err(RustyJSError::TypeError(
+                return Err(RongJSError::TypeError(
                     "Input must be an ArrayBuffer or TypedArray".to_string(),
                 ));
             }
@@ -158,7 +158,7 @@ impl TextDecoder {
             Ok(text) => Ok(text),
             Err(e) => {
                 if self.fatal {
-                    Err(RustyJSError::TypeError(format!(
+                    Err(RongJSError::TypeError(format!(
                         "Invalid UTF-8 sequence: {}",
                         e
                     )))

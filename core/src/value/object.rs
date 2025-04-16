@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, JSContext, JSResult, JSTypeOf, JSValue, JSValueConversion, JSValueImpl,
-    RustyJSError,
+    RongJSError,
 };
 use std::fmt;
 use std::ops::Deref;
@@ -36,7 +36,7 @@ where
         if value.is_object() {
             Ok(JSValue::from_raw(ctx, value).into())
         } else {
-            Err(RustyJSError::NotObject)
+            Err(RongJSError::NotObject)
         }
     }
 }
@@ -174,7 +174,7 @@ where
         let kv = key.clone().into_value(ctx);
         self.as_value()
             .get_property(kv)
-            .ok_or(RustyJSError::PropertyNotFound(key.to_string())) // check existence firstly
+            .ok_or(RongJSError::PropertyNotFound(key.to_string())) // check existence firstly
             .and_then(|value| T::from_js_value(ctx, value))
     }
 }

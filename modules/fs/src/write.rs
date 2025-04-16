@@ -1,5 +1,5 @@
 use crate::JSTypedArray;
-use rusty_js::{function::Optional, *};
+use rong_js::{function::Optional, *};
 use tokio::io::AsyncWriteExt;
 use tokio::{fs, select};
 
@@ -31,7 +31,7 @@ async fn write_text_file(
 
     // Handle createNew option
     if options.create_new.unwrap_or(false) && fs::metadata(&file).await.is_ok() {
-        return Err(RustyJSError::TypeError("File already exists".into()));
+        return Err(RongJSError::TypeError("File already exists".into()));
     }
 
     // Handle append option
@@ -54,26 +54,26 @@ async fn write_text_file(
         select! {
             result = async {
                 let mut file = open_options.open(&file).await
-                    .map_err(|e| RustyJSError::TypeError(format!("Failed to open file: {}", e)))?;
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
                 file.write_all(text.as_bytes()).await
-                    .map_err(|e| RustyJSError::TypeError(format!("Write failed: {}", e)))
+                    .map_err(|e| RongJSError::TypeError(format!("Write failed: {}", e)))
             } => {
                 result
             }
 
             abort_reason = abort.recv() => {
                 // println!("write_text_file: Received abort signal");
-                Err(RustyJSError::from_jsvalue(abort_reason))
+                Err(RongJSError::from_jsvalue(abort_reason))
             }
         }
     } else {
         let mut file = open_options
             .open(&file)
             .await
-            .map_err(|e| RustyJSError::TypeError(format!("Failed to open file: {}", e)))?;
+            .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
         file.write_all(text.as_bytes())
             .await
-            .map_err(|e| RustyJSError::TypeError(format!("Write failed: {}", e)))
+            .map_err(|e| RongJSError::TypeError(format!("Write failed: {}", e)))
     }
 }
 
@@ -87,11 +87,11 @@ async fn write_file(
     // Get bytes from TypedArray
     let bytes = data
         .as_bytes()
-        .ok_or_else(|| RustyJSError::TypeError("Invalid TypedArray data".into()))?;
+        .ok_or_else(|| RongJSError::TypeError("Invalid TypedArray data".into()))?;
 
     // Handle createNew option
     if options.create_new.unwrap_or(false) && fs::metadata(&file).await.is_ok() {
-        return Err(RustyJSError::TypeError("File already exists".into()));
+        return Err(RongJSError::TypeError("File already exists".into()));
     }
 
     // Handle append option
@@ -115,9 +115,9 @@ async fn write_file(
         select! {
             result = async {
                 let mut file = open_options.open(&file).await
-                    .map_err(|e| RustyJSError::TypeError(format!("Failed to open file: {}", e)))?;
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
                 file.write_all(bytes).await
-                    .map_err(|e| RustyJSError::TypeError(format!("Write failed: {}", e)))
+                    .map_err(|e| RongJSError::TypeError(format!("Write failed: {}", e)))
             } => {
                 println!("write_file: Write completed");
                 result
@@ -125,17 +125,17 @@ async fn write_file(
 
             abort_reason = abort.recv() => {
                 println!("write_file: Received abort signal");
-                Err(RustyJSError::from_jsvalue(abort_reason))
+                Err(RongJSError::from_jsvalue(abort_reason))
             }
         }
     } else {
         let mut file = open_options
             .open(&file)
             .await
-            .map_err(|e| RustyJSError::TypeError(format!("Failed to open file: {}", e)))?;
+            .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
         file.write_all(bytes)
             .await
-            .map_err(|e| RustyJSError::TypeError(format!("Write failed: {}", e)))
+            .map_err(|e| RongJSError::TypeError(format!("Write failed: {}", e)))
     }
 }
 
@@ -143,7 +143,7 @@ async fn copy_file(from: String, to: String) -> JSResult<()> {
     fs::copy(&from, &to)
         .await
         .map(|_| ())
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to copy file: {}", e)))
+        .map_err(|e| RongJSError::TypeError(format!("Failed to copy file: {}", e)))
 }
 
 async fn truncate(path: String, len: Optional<f64>) -> JSResult<()> {
@@ -152,10 +152,10 @@ async fn truncate(path: String, len: Optional<f64>) -> JSResult<()> {
         .write(true)
         .open(&path)
         .await
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to open file: {}", e)))?
+        .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?
         .set_len(len as u64)
         .await
-        .map_err(|e| RustyJSError::TypeError(format!("Failed to truncate file: {}", e)))?;
+        .map_err(|e| RongJSError::TypeError(format!("Failed to truncate file: {}", e)))?;
     Ok(())
 }
 

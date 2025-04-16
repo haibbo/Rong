@@ -1,7 +1,7 @@
 use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
     FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
-    JSResult, JSValueImpl, PropertyDescriptor, PropertyKey, RustyJSError,
+    JSResult, JSValueImpl, PropertyDescriptor, PropertyKey, RongJSError,
 };
 
 use std::any::TypeId;
@@ -104,7 +104,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
 
         let mut func = match obj.borrow_mut::<RustFunc<V>>() {
             Ok(f) => f,
-            Err(_) => return RustyJSError::NotJSFunc.throw_js_exception(ctx),
+            Err(_) => return RongJSError::NotJSFunc.throw_js_exception(ctx),
         };
 
         // ignore checking whether v is exception or error, sicne no one use it again here
@@ -181,7 +181,7 @@ where
         let constructor = context
             .get_class_registry()
             .and_then(|registry| registry.borrow().get(&TypeId::of::<JC>()).cloned())
-            .ok_or(RustyJSError::Error(format!(
+            .ok_or(RongJSError::Error(format!(
                 "JS Class {} is not registered",
                 std::any::type_name::<JC>()
             )))?;
@@ -221,7 +221,7 @@ where
         T: JSClass<V>,
     {
         if !Class::instance_of::<T>(self) {
-            return Err(RustyJSError::TypeError(format!(
+            return Err(RongJSError::TypeError(format!(
                 "Not instance of {}",
                 std::any::type_name::<T>()
             )));
@@ -229,7 +229,7 @@ where
 
         let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
-            Err(RustyJSError::Borrow(std::any::type_name::<T>()))
+            Err(RongJSError::Borrow(std::any::type_name::<T>()))
         } else {
             // SAFETY: ptr was created by Box::into_raw in instance()
             Ok(unsafe { &*ptr }.borrow())
@@ -242,7 +242,7 @@ where
         T: JSClass<V>,
     {
         if !Class::instance_of::<T>(self) {
-            return Err(RustyJSError::TypeError(format!(
+            return Err(RongJSError::TypeError(format!(
                 "Not instance of {}",
                 std::any::type_name::<T>()
             )));
@@ -250,7 +250,7 @@ where
 
         let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
-            Err(RustyJSError::Borrow(std::any::type_name::<T>()))
+            Err(RongJSError::Borrow(std::any::type_name::<T>()))
         } else {
             // SAFETY: ptr was created by Box::into_raw in instance()
             Ok(unsafe { &*ptr }.borrow_mut())

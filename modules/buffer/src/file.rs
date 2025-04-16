@@ -1,5 +1,5 @@
 use super::blob::Blob;
-use rusty_js::{function::Optional, *};
+use rong_js::{function::Optional, *};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[js_export]
@@ -15,7 +15,7 @@ impl File {
     fn new(data: JSArray, filename: String, options: Optional<JSObject>) -> JSResult<Self> {
         // Validate filename
         if filename.is_empty() {
-            return Err(RustyJSError::TypeError(
+            return Err(RongJSError::TypeError(
                 "File name cannot be empty".to_string(),
             ));
         }
@@ -23,7 +23,7 @@ impl File {
         // Get current time as default last_modified
         let default_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| RustyJSError::Error("Failed to get current time".to_string()))?
+            .map_err(|_| RongJSError::Error("Failed to get current time".to_string()))?
             .as_millis() as i64;
 
         // Extract options

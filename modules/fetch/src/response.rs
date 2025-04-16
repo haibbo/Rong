@@ -2,7 +2,7 @@ use bytes::Bytes;
 use http::{header, HeaderMap, Method, Uri};
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
-use rusty_js::{function::Optional, *};
+use rong_js::{function::Optional, *};
 
 use crate::body::{BodyKind, HttpBody};
 use crate::header::Headers;
@@ -33,7 +33,7 @@ struct InitOption {
 
 impl TryFromJSValue for InitOption {
     fn try_from_js(value: JSValue) -> JSResult<Self> {
-        let obj = value.into_object().ok_or(RustyJSError::TypeError(
+        let obj = value.into_object().ok_or(RongJSError::TypeError(
             "Invalid Response Option".to_string(),
         ))?;
 
@@ -69,7 +69,7 @@ impl Response {
             if let Some(status) = init.status {
                 // Validate status code
                 if !(100..=599).contains(&status) {
-                    return Err(RustyJSError::TypeError(format!(
+                    return Err(RongJSError::TypeError(format!(
                         "Invalid status code: {}",
                         status
                     )));
@@ -158,7 +158,7 @@ impl Response {
                         tokio::select! {
                             result = body.collect() => {
                                 let collected = result.map_err(|e| {
-                                    RustyJSError::Error(format!("Failed to collect body: {}", e))
+                                    RongJSError::Error(format!("Failed to collect body: {}", e))
                                 })?;
                                 let bytes = collected.to_bytes();
                                 // Get a reference to the headers for decompression
@@ -166,12 +166,12 @@ impl Response {
                                 crate::body::decompress_bytes(bytes, header_map)
                             }
                             abort_reason = receiver.recv() => {
-                                Err(RustyJSError::from_jsvalue(abort_reason))
+                                Err(RongJSError::from_jsvalue(abort_reason))
                             }
                         }
                     } else {
                         let collected = body.collect().await.map_err(|e| {
-                            RustyJSError::Error(format!("Failed to collect body: {}", e))
+                            RongJSError::Error(format!("Failed to collect body: {}", e))
                         })?;
                         let bytes = collected.to_bytes();
                         // Get a reference to the headers for decompression
@@ -235,14 +235,14 @@ impl Response {
 
         // Validate redirect status
         if !matches!(status, 301 | 302 | 303 | 307 | 308) {
-            return Err(RustyJSError::TypeError(format!(
+            return Err(RongJSError::TypeError(format!(
                 "Invalid redirect status: {}",
                 status
             )));
         }
 
         let uri = Uri::try_from(url.as_str())
-            .map_err(|_| RustyJSError::TypeError(format!("Invalid URL: {}", url)))?;
+            .map_err(|_| RongJSError::TypeError(format!("Invalid URL: {}", url)))?;
 
         let mut headers = Headers::default();
         headers.set("Location".to_string(), url)?;
@@ -320,7 +320,7 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_response() {
@@ -328,7 +328,7 @@ mod tests {
             assert::init(&ctx)?;
             console::init(&ctx)?;
             encoding::init(&ctx)?;
-            lxr_url::init(&ctx)?;
+            rong_url::init(&ctx)?;
 
             buffer::init(&ctx)?;
             crate::header::init(&ctx)?;

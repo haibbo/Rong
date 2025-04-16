@@ -1,35 +1,35 @@
-pub use rusty_js_core::{
+pub use rong_js_core::{
     Class as CoreClass, ClassSetup, FromJSValue, IntoJSAsyncIterator, IntoJSIterator, IntoJSResult,
     IntoJSValue, JSArray as CoreJSArray, JSArrayBuffer as CoreJSArrayBuffer, JSClass,
     JSContext as CoreJSContext, JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc,
     JSObject as CoreJSObject, JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService,
     JSSymbol as CoreJSSymbol, JSTypedArray as CoreJSTypedArray, JSTypedArrayKind,
     JSValue as CoreJSValue, JSValueType, JsonToJsValue, Promise as CorePromise,
-    PropertyDescriptor as CorePropertyDescriptor, RustyJSError, Source, SourceKind,
+    PropertyDescriptor as CorePropertyDescriptor, RongJSError, Source, SourceKind,
     ToJSAsyncIterator, ToJSIterator,
 };
 
-pub use rusty_js_core::function;
+pub use rong_js_core::function;
 
 #[cfg(feature = "quickjs")]
 mod engine {
-    use rusty_js_quickjs::QuickJS;
-    pub type RustyJS = QuickJS;
+    use rong_js_quickjs::QuickJS;
+    pub type RongJS = QuickJS;
 }
 
 #[cfg(feature = "jscore")]
 mod engine {
-    use rusty_js_jscore::JavaScriptCore;
-    pub type RustyJS = JavaScriptCore;
+    use rong_js_jscore::JavaScriptCore;
+    pub type RongJS = JavaScriptCore;
 }
 
 pub use engine::*;
 
-pub type JSEngineValue = <RustyJS as JSEngine>::Value;
-pub type JSEngineContext = <RustyJS as JSEngine>::Context;
+pub type JSEngineValue = <RongJS as JSEngine>::Value;
+pub type JSEngineContext = <RongJS as JSEngine>::Context;
 
-pub type JSContext = CoreJSContext<<RustyJS as JSEngine>::Context>;
-pub type JSRuntime = CoreJSRuntime<<RustyJS as JSEngine>::Runtime>;
+pub type JSContext = CoreJSContext<<RongJS as JSEngine>::Context>;
+pub type JSRuntime = CoreJSRuntime<<RongJS as JSEngine>::Runtime>;
 
 pub type JSValue = CoreJSValue<JSEngineValue>;
 pub type JSObject = CoreJSObject<JSEngineValue>;
@@ -43,8 +43,8 @@ pub type JSArrayBuffer<T> = CoreJSArrayBuffer<JSEngineValue, T>;
 pub type JSTypedArray = CoreJSTypedArray<JSEngineValue>;
 pub type PropertyDescriptor = CorePropertyDescriptor<JSEngineValue>;
 
-// re-export macro public symbols to rusty_js
-pub use rusty_js_macro::{js_class, js_export, js_method, FromJSObj, FromJSValue};
+// re-export macro public symbols to rong_js
+pub use rong_js_macro::{js_class, js_export, js_method, FromJSObj, FromJSValue};
 
 /// A Trait for conversion from JavaScript values.
 pub trait TryFromJSValue: Sized {

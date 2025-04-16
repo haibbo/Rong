@@ -1,5 +1,5 @@
 use super::JSValueImpl;
-use crate::{JSContext, JSResult, RustyJSError};
+use crate::{JSContext, JSResult, RongJSError};
 
 /// The conversion between Rust primitive types, which implement the `JSCompatible`
 /// marker trait, and `JSValue` is facilitated using the standard `TryInto` and
@@ -28,13 +28,13 @@ pub trait JSValueConversion:
     + for<'a> From<(&'a Self::Context, u64)>
     + for<'a> From<(&'a Self::Context, f64)>
     + for<'a> From<(&'a Self::Context, &'a str)>
-    + TryInto<bool, Error = RustyJSError>
-    + TryInto<i32, Error = RustyJSError>
-    + TryInto<u32, Error = RustyJSError>
-    + TryInto<i64, Error = RustyJSError>
-    + TryInto<u64, Error = RustyJSError>
-    + TryInto<f64, Error = RustyJSError>
-    + TryInto<String, Error = RustyJSError>
+    + TryInto<bool, Error = RongJSError>
+    + TryInto<i32, Error = RongJSError>
+    + TryInto<u32, Error = RongJSError>
+    + TryInto<i64, Error = RongJSError>
+    + TryInto<u64, Error = RongJSError>
+    + TryInto<f64, Error = RongJSError>
+    + TryInto<String, Error = RongJSError>
 {
 }
 
@@ -48,13 +48,13 @@ impl<T> JSValueConversion for T where
         + for<'a> From<(&'a T::Context, u64)>
         + for<'a> From<(&'a T::Context, f64)>
         + for<'a> From<(&'a T::Context, &'a str)>
-        + TryInto<bool, Error = RustyJSError>
-        + TryInto<i32, Error = RustyJSError>
-        + TryInto<u32, Error = RustyJSError>
-        + TryInto<i64, Error = RustyJSError>
-        + TryInto<u64, Error = RustyJSError>
-        + TryInto<f64, Error = RustyJSError>
-        + TryInto<String, Error = RustyJSError>
+        + TryInto<bool, Error = RongJSError>
+        + TryInto<i32, Error = RongJSError>
+        + TryInto<u32, Error = RongJSError>
+        + TryInto<i64, Error = RongJSError>
+        + TryInto<u64, Error = RongJSError>
+        + TryInto<f64, Error = RongJSError>
+        + TryInto<String, Error = RongJSError>
 {
 }
 
@@ -82,7 +82,7 @@ where
 impl<V, T> FromJSValue<V> for T
 where
     V: JSValueImpl,
-    V: TryInto<T, Error = RustyJSError>,
+    V: TryInto<T, Error = RongJSError>,
     T: JSCompatible,
 {
     fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
@@ -102,7 +102,7 @@ where
 impl<V> FromJSValue<V> for String
 where
     V: JSValueImpl,
-    V: TryInto<String, Error = RustyJSError>,
+    V: TryInto<String, Error = RongJSError>,
 {
     fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         value.try_into()
@@ -178,7 +178,7 @@ macro_rules! impl_js_converter_for_int {
             impl<V> FromJSValue<V> for $type
             where
                 V: JSValueImpl,
-                V: TryInto<$intermediate, Error = RustyJSError>,
+                V: TryInto<$intermediate, Error = RongJSError>,
             {
                 fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
                     let intermediate = TryInto::<$intermediate>::try_into(value)?;

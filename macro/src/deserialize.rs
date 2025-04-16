@@ -56,7 +56,7 @@ pub(crate) fn impl_deserialize(input: syn::DeriveInput) -> TokenStream2 {
             quote! {
                 #field_name: match obj.get(#js_name_lit) {
                     Ok(val) => Some(val),
-                    Err(rusty_js::RustyJSError::PropertyNotFound(_)) => None,
+                    Err(rong_js::RongJSError::PropertyNotFound(_)) => None,
                     Err(e) => return Err(e),
                 }
             }
@@ -68,16 +68,16 @@ pub(crate) fn impl_deserialize(input: syn::DeriveInput) -> TokenStream2 {
     });
 
     let expanded = quote! {
-        impl rusty_js::FromJSValue<rusty_js::JSEngineValue> for #name {
-            fn from_js_value(ctx: &rusty_js::JSContext, value: rusty_js::JSEngineValue) -> rusty_js::JSResult<Self> {
-                let obj = rusty_js::JSObject::from_js_value(ctx, value)?;
+        impl rong_js::FromJSValue<rong_js::JSEngineValue> for #name {
+            fn from_js_value(ctx: &rong_js::JSContext, value: rong_js::JSEngineValue) -> rong_js::JSResult<Self> {
+                let obj = rong_js::JSObject::from_js_value(ctx, value)?;
                 Ok(Self {
                     #(#field_extractions,)*
                 })
             }
         }
 
-        impl rusty_js::function::JSParameterType for #name {}
+        impl rong_js::function::JSParameterType for #name {}
     };
 
     expanded

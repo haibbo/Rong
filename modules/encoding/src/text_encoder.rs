@@ -16,7 +16,7 @@
 //! - `encode` creates a new `Uint8Array` for each call, which may allocate memory.
 //! - `encodeInto` allows reusing existing buffers, reducing allocations for repeated operations.
 
-use rusty_js::*;
+use rong_js::*;
 
 /// Implementation of the JavaScript `TextEncoder` interface.
 /// Encodes strings into UTF-8 byte sequences. Currently supports only UTF-8 encoding.
@@ -101,7 +101,7 @@ impl TextEncoder {
         }
 
         // If either check fails, return TypeError
-        Err(RustyJSError::TypeError(
+        Err(RongJSError::TypeError(
             "The \"dest\" argument must be an instance of Uint8Array.".to_string(),
         ))
     }

@@ -1,4 +1,4 @@
-use rustyjs_test::*;
+use rong_test::*;
 
 #[test]
 fn basic() {
@@ -67,10 +67,10 @@ fn from_javascript() {
             1
         );
 
-        let result: Result<String, RustyJSError> = obj.get("None");
+        let result: Result<String, RongJSError> = obj.get("None");
         assert!(result.is_err());
         match result {
-            Err(RustyJSError::PropertyNotFound(_)) => (),
+            Err(RongJSError::PropertyNotFound(_)) => (),
             _ => panic!("Expected PropertyNotFound error"),
         }
         Ok(())

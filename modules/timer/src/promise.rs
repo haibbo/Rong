@@ -1,5 +1,5 @@
 use futures::Stream;
-use rusty_js::{function::*, *};
+use rong_js::{function::*, *};
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;

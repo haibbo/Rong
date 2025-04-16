@@ -1,5 +1,5 @@
 use crate::{jsc, JSCValue};
-use rusty_js_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
+use rong_js_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
 
 impl JSObjectOps for JSCValue {
     fn new_object(ctx: &Self::Context) -> Self {

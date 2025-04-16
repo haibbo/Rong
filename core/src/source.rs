@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{IntoJSResult, JSContext, JSContextImpl, JSResult, RustyJSError};
+use crate::{IntoJSResult, JSContext, JSContextImpl, JSResult, RongJSError};
 
 #[derive(Debug, Clone)]
 pub enum SourceKind {
@@ -72,7 +72,7 @@ impl Source {
 
         // Verify file extension
         if path.as_ref().extension().and_then(|ext| ext.to_str()) != Some("rong") {
-            return Err(RustyJSError::Error(
+            return Err(RongJSError::Error(
                 "Bytecode files must have .rong extension".to_string(),
             ));
         }
@@ -121,20 +121,20 @@ impl Source {
                         // Skip header and null separator
                         SourceKind::ByteCode(code[expected_header.len() + 1..].to_vec())
                     } else {
-                        return Err(RustyJSError::Error(format!(
+                        return Err(RongJSError::Error(format!(
                             "Bytecode was compiled for a different engine. Expected: {}, Found: {}",
                             engine_name,
                             String::from_utf8_lossy(&code[6..])
                         )));
                     }
                 } else {
-                    return Err(RustyJSError::Error(
+                    return Err(RongJSError::Error(
                         "Invalid .rong file format".to_string(),
                     ));
                 }
             }
             _ => {
-                return Err(RustyJSError::Error(format!(
+                return Err(RongJSError::Error(format!(
                 "Unsupported file type. Supported extensions: .js, .ts, .mjs, .rong. Found: {}",
                 path.as_ref().display()
             )))

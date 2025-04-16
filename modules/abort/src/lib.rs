@@ -2,7 +2,7 @@ mod abort_controller;
 mod abort_signal;
 
 use event::EmitterExt;
-use rusty_js::*;
+use rong_js::*;
 
 pub use abort_controller::AbortController;
 pub use abort_signal::{AbortReceiver, AbortSignal};
@@ -18,7 +18,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
     use tokio::sync::mpsc;
 
     #[test]

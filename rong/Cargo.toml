@@ -8,6 +8,6 @@ name = "rong"
 path = "src/main.rs"
 
 [dependencies]
-rusty-js = { workspace = true }
+rong-js = { workspace = true }
 rong_modules = { path = "../rong_modules" }
 

@@ -51,10 +51,10 @@ pub(crate) fn impl_enum_conversions(input: &DeriveInput) -> Result<TokenStream, 
             let variant_names = data.variants.iter().map(|v| &v.ident);
 
             let expanded = quote! {
-                impl rusty_js::FromJSValue<rusty_js::JSEngineValue> for #name {
-                    fn from_js_value(ctx: &JSContext, value: rusty_js::JSEngineValue) -> JSResult<Self> {
+                impl rong_js::FromJSValue<rong_js::JSEngineValue> for #name {
+                    fn from_js_value(ctx: &JSContext, value: rong_js::JSEngineValue) -> JSResult<Self> {
                         #(#from_js_variants)*
-                        Err(RustyJSError::TypeError(format!(
+                        Err(RongJSError::TypeError(format!(
                             "Invalid value for enum {}. Expected one of: {}",
                             stringify!(#name),
                             [#(stringify!(#variant_names)),*].join(", ")
@@ -62,15 +62,15 @@ pub(crate) fn impl_enum_conversions(input: &DeriveInput) -> Result<TokenStream, 
                     }
                 }
 
-                impl rusty_js::IntoJSValue<rusty_js::JSEngineValue> for #name {
-                    fn into_js_value(self, ctx: &JSContext) -> rusty_js::JSEngineValue {
+                impl rong_js::IntoJSValue<rong_js::JSEngineValue> for #name {
+                    fn into_js_value(self, ctx: &JSContext) -> rong_js::JSEngineValue {
                         match self {
                             #(#into_js_variants,)*
                         }
                     }
                 }
 
-                impl rusty_js::function::JSParameterType for #name {}
+                impl rong_js::function::JSParameterType for #name {}
             };
 
             let input_tokens = quote! { #input };

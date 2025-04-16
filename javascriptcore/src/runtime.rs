@@ -1,5 +1,5 @@
 use crate::{jsc, JSCContext, JSCValue};
-use rusty_js_core::{JSEngine, JSRuntimeImpl};
+use rong_js_core::{JSEngine, JSRuntimeImpl};
 
 pub struct JSCRuntime {
     raw: *const jsc::OpaqueJSContextGroup,

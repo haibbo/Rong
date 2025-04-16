@@ -1,6 +1,6 @@
 use crate::{jsc, JSCContext};
-use rusty_js_core::{
-    impl_js_converter, JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RustyJSError,
+use rong_js_core::{
+    impl_js_converter, JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RongJSError,
 };
 use std::ffi::CString;
 use std::hash::Hash;

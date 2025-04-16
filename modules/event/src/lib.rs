@@ -74,7 +74,7 @@ pub use event::Event;
 pub use event_emitter::{EmitError, Emitter, EmitterExt, EventEmitter, EventKey};
 pub use event_target::EventTarget;
 
-use rusty_js::*;
+use rong_js::*;
 
 /// Register event-related classes with the JavaScript engine
 pub fn init(ctx: &JSContext) -> JSResult<()> {
@@ -93,7 +93,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_emit_error() {

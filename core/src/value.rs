@@ -1,4 +1,4 @@
-use crate::{JSContext, JSContextImpl, JSResult, RustyJSError};
+use crate::{JSContext, JSContextImpl, JSResult, RongJSError};
 use std::fmt;
 use std::hash::Hash;
 
@@ -235,7 +235,7 @@ where
         if self.is_exception() {
             let ctx = JSContext::from_borrowed_raw_ptr(self.as_raw_context());
             let err = JSException::from_js_value(&ctx, self)?;
-            Err(RustyJSError::Exception(err.into_error()))
+            Err(RongJSError::Exception(err.into_error()))
         } else {
             Ok(f(self))
         }
@@ -249,12 +249,12 @@ macro_rules! impl_js_converter {
         where
             Self: JSValueImpl,
         {
-            type Error = RustyJSError;
+            type Error = RongJSError;
             fn try_into(self) -> Result<$out_type, Self::Error> {
                 let mut result: $out_type = Default::default();
                 if unsafe { $to_fn(*self.as_raw_context(), *self.as_raw_value(), &mut result) } < 0
                 {
-                    Err(RustyJSError::TypeError(format!(
+                    Err(RongJSError::TypeError(format!(
                         "Expected JSValue to be type {}, but got {:?}",
                         std::any::type_name::<$out_type>(),
                         self.type_of()

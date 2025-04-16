@@ -1,7 +1,7 @@
 use crate::{
     source::{Source, SourceKind},
     ClassSetup, FromJSValue, JSClass, JSException, JSObject, JSObjectOps, JSResult, JSRuntimeImpl,
-    JSTypeOf, JSValue, JSValueImpl, Promise, RustyJSError,
+    JSTypeOf, JSValue, JSValueImpl, Promise, RongJSError,
 };
 use crate::{JSRuntime, JSValueMapper};
 use std::any::TypeId;
@@ -97,10 +97,10 @@ pub trait JSContextImpl {
     ///
     /// # Returns
     /// * `Ok(Vec<u8>)` - The compiled bytecode as bytes if compilation succeeds
-    /// * `Err(RustyJSError)` - If compilation fails with one of these errors:
-    ///   - `RustyJSError::CompileToByteErr`: General compilation error
-    ///   - `RustyJSError::NotSupportByteCode`: Bytecode compilation not supported by runtime
-    fn compile_to_bytecode(&self, source: Source) -> Result<Vec<u8>, RustyJSError>;
+    /// * `Err(RongJSError)` - If compilation fails with one of these errors:
+    ///   - `RongJSError::CompileToByteErr`: General compilation error
+    ///   - `RongJSError::NotSupportByteCode`: Bytecode compilation not supported by runtime
+    fn compile_to_bytecode(&self, source: Source) -> Result<Vec<u8>, RongJSError>;
 
     /// Executes previously compiled bytecode
     ///
@@ -148,7 +148,7 @@ impl<C: JSContextImpl> JSContext<C> {
     ///
     /// # Example
     /// ```
-    /// let rt = RustyJS::runtime();
+    /// let rt = RongJS::runtime();
     /// let ctx = JSContext::new(&rt);
     ///
     /// // Can be safely cloned for async tasks
@@ -232,7 +232,7 @@ impl<C: JSContextImpl> JSContext<C> {
     ///
     /// # Returns
     /// * `Ok(T)` - The result of the evaluation if successful
-    /// * `Err(RustyJSError)` - If evaluation fails or throws an exception
+    /// * `Err(RongJSError)` - If evaluation fails or throws an exception
     ///
     /// # Examples
     /// ```
@@ -287,7 +287,7 @@ impl<C: JSContextImpl> JSContext<C> {
     {
         let registry = self
             .get_class_registry()
-            .ok_or(RustyJSError::Error("No Class registry!".to_string()))?;
+            .ok_or(RongJSError::Error("No Class registry!".to_string()))?;
 
         if registry.borrow().contains_key(&TypeId::of::<JC>()) {
             return Ok(());
@@ -330,7 +330,7 @@ impl<C: JSContextImpl> JSContext<C> {
     ///
     /// # Returns
     /// * `Ok(Source)` - Compiled bytecode wrapped in a Source, ready to be evaluated
-    /// * `Err(RustyJSError)` - If compilation fails
+    /// * `Err(RongJSError)` - If compilation fails
     ///
     /// # Example
     /// ```rust
@@ -359,7 +359,7 @@ impl<C: JSContextImpl> JSContext<C> {
     ///
     /// # Returns
     /// * `Ok(T)` - The result of the evaluation or resolved Promise value
-    /// * `Err(RustyJSError)` - If evaluation fails, throws an exception, or Promise rejects
+    /// * `Err(RongJSError)` - If evaluation fails, throws an exception, or Promise rejects
     pub async fn eval_async<T>(&self, source: Source) -> JSResult<T>
     where
         C::Value: JSTypeOf + JSObjectOps + 'static,
@@ -377,7 +377,7 @@ impl<C: JSContextImpl> JSContext<C> {
             }
             (_, true) => {
                 let err = JSException::from_js_value(self, result)?;
-                Err(RustyJSError::Exception(err.into_error()))
+                Err(RongJSError::Exception(err.into_error()))
             }
             _ => T::from_js_value(self, result),
         }

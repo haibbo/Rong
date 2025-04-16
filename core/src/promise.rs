@@ -2,7 +2,7 @@ use crate::JSException;
 use crate::{
     function::JSParameterType, FromJSValue, IntoJSValue, JSContext, JSContextImpl,
     JSExceptionHandler, JSFunc, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl,
-    RustyJSError,
+    RongJSError,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -13,7 +13,7 @@ use std::rc::Rc;
 use std::task::{Context, Poll, Waker};
 
 /// Type alias for the return value of `promise()` function
-type PromiseResult<V> = Result<(Promise<V>, JSFunc<V>, JSFunc<V>), RustyJSError>;
+type PromiseResult<V> = Result<(Promise<V>, JSFunc<V>, JSFunc<V>), RongJSError>;
 
 /// Represents a JavaScript Promise object.
 ///
@@ -66,7 +66,7 @@ impl<C: JSContextImpl> JSContext<C> {
     /// - The reject function (`JSFunc<V>`)
     ///
     /// # Errors
-    /// Returns a `RustyJSError` if the Promise creation fails.
+    /// Returns a `RongJSError` if the Promise creation fails.
     pub fn promise(&self) -> PromiseResult<C::Value>
     where
         C::Value: JSTypeOf,
@@ -95,7 +95,7 @@ where
     /// - The reject function (`JSFunc<V>`)
     ///
     /// # Errors
-    /// Returns a `RustyJSError` if the Promise creation fails.
+    /// Returns a `RongJSError` if the Promise creation fails.
     pub fn new(ctx: &JSContext<V::Context>) -> PromiseResult<V> {
         ctx.promise()
     }
@@ -106,7 +106,7 @@ where
     /// A `Result` containing the Promise object
     ///
     /// # Errors
-    /// Returns a `RustyJSError` if the Promise creation fails.
+    /// Returns a `RongJSError` if the Promise creation fails.
     pub fn from_future<F, R>(ctx: &JSContext<V::Context>, future: F) -> JSResult<Promise<V>>
     where
         F: Future<Output = R> + 'static,
@@ -156,8 +156,8 @@ pub trait PromiseResolver<V: JSValueImpl> {
     fn resolve_promise(self, resolve: JSFunc<V>, reject: JSFunc<V>);
 }
 
-// Implement for RustyJSError types
-impl<V> PromiseResolver<V> for RustyJSError
+// Implement for RongJSError types
+impl<V> PromiseResolver<V> for RongJSError
 where
     V: JSObjectOps,
     V::Context: JSExceptionHandler,
@@ -265,7 +265,7 @@ where
                     let err = JSException::from_js_value(&ctx, value.into_value()).unwrap();
                     if let PromiseState::Pending(waker) = std::mem::replace(
                         &mut *state,
-                        PromiseState::Resolved(Err(RustyJSError::Exception(err.into_error()))),
+                        PromiseState::Resolved(Err(RongJSError::Exception(err.into_error()))),
                     ) {
                         waker.wake_by_ref();
                     }
@@ -287,7 +287,7 @@ where
                 let mut state = reject_state.borrow_mut();
                 if let PromiseState::Pending(waker) = std::mem::replace(
                     &mut *state,
-                    PromiseState::Resolved(Err(RustyJSError::Exception(err.into_error()))),
+                    PromiseState::Resolved(Err(RongJSError::Exception(err.into_error()))),
                 ) {
                     waker.wake_by_ref();
                 }

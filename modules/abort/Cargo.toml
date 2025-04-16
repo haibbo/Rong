@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rusty-js = { workspace = true }
+rong-js = { workspace = true }
 event = {path="../event"}
 dom-exception = {path="../dom-exception"}
 tokio = { version = "1.0", features = ["rt", "time", "macros"] }
@@ -12,7 +12,7 @@ tokio = { version = "1.0", features = ["rt", "time", "macros"] }
 
 
 [dev-dependencies]
-rustyjs_test = { path = "../../utils/rustyjs_test" }
+rong_test = { path = "../../utils/rong_test" }
 assert = { path="../../modules/assert" }
 event = { path="../../modules/event" }
 dom-exception = { path="../../modules/dom-exception" }

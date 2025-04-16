@@ -13,7 +13,7 @@ pub use class::*;
 pub use context::*;
 pub use iterator::*;
 pub use promise::*;
-pub use result::{IntoJSResult, JSResult, RustyJSError};
+pub use result::{IntoJSResult, JSResult, RongJSError};
 pub use runtime::*;
 pub use source::{Source, SourceKind};
 pub use value::*;

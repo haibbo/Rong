@@ -1,4 +1,4 @@
-use rusty_js::*;
+use rong_js::*;
 
 pub use console;
 pub use navigator;
@@ -36,7 +36,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     console::init(ctx)?;
 
     #[cfg(feature = "url")]
-    lxr_url::init(ctx)?;
+    rong_url::init(ctx)?;
 
     #[cfg(feature = "buffer")]
     buffer::init(ctx)?;

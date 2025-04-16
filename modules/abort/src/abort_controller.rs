@@ -1,5 +1,5 @@
 use crate::AbortSignal;
-use rusty_js::{function::*, *};
+use rong_js::{function::*, *};
 
 #[js_export]
 pub struct AbortController {

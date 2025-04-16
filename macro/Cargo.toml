@@ -1,8 +1,8 @@
 [package]
-name = "rusty-js-macro"
+name = "rong-js-macro"
 version = "0.1.0"
 edition = "2021"
-description = "Macro system for RustyJS to help expose Rust types to JavaScript"
+description = "Macro system for RongJS to help expose Rust types to JavaScript"
 
 [lib]
 proc-macro = true

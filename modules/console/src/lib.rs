@@ -1,4 +1,4 @@
-use rusty_js::{function::*, *};
+use rong_js::{function::*, *};
 use std::collections::HashSet;
 use std::fmt;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -545,8 +545,8 @@ mod tests {
     fn test_console_log_formatted_string() {
         clear_test_output();
 
-        let rt = RustyJS::runtime();
-        let ctx = RustyJS::context(&rt);
+        let rt = RongJS::runtime();
+        let ctx = RongJS::context(&rt);
 
         init(&ctx).unwrap();
         set_writer(Box::new(TestConsoleWriter));
@@ -565,8 +565,8 @@ mod tests {
     fn test_console_log_circular_reference() {
         clear_test_output();
 
-        let rt = RustyJS::runtime();
-        let ctx = RustyJS::context(&rt);
+        let rt = RongJS::runtime();
+        let ctx = RongJS::context(&rt);
 
         init(&ctx).unwrap();
         set_writer(Box::new(TestConsoleWriter));
@@ -592,8 +592,8 @@ mod tests {
     fn test_console_log_max_depth() {
         clear_test_output();
 
-        let rt = RustyJS::runtime();
-        let ctx = RustyJS::context(&rt);
+        let rt = RongJS::runtime();
+        let ctx = RongJS::context(&rt);
 
         init(&ctx).unwrap();
         set_writer(Box::new(TestConsoleWriter));

@@ -4,7 +4,7 @@ mod file;
 pub use blob::Blob;
 pub use file::File;
 
-use rusty_js::*;
+use rong_js::*;
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<Blob>()?;
@@ -16,7 +16,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_path() {

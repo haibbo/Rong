@@ -9,7 +9,7 @@
 //! assert.equal(1, 1);
 //! ```
 
-use rusty_js::{function::*, *};
+use rong_js::{function::*, *};
 
 /// Handles assertion errors with optional custom message
 fn handle_assertion_error(
@@ -129,7 +129,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_event() {

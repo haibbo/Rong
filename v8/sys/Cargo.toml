@@ -1,5 +1,5 @@
 [package]
-name = "rusty-js-v8-sys"
+name = "rong-js-v8-sys"
 version = "0.1.0"
 edition = "2021"
 description = "Low-level V8 bindings for Rust"

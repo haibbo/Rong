@@ -1,4 +1,4 @@
-use rusty_js::{function::Optional, *};
+use rong_js::{function::Optional, *};
 use tokio::{fs, select};
 
 use abort::AbortSignal;
@@ -21,7 +21,7 @@ async fn read_text_file(file: String, option: Optional<ReadFileOptions>) -> JSRe
 
             abort_reason = abort.recv() => {
                 // println!("read_text_file: Received abort signal");
-                Err(RustyJSError::from_jsvalue(abort_reason))
+                Err(RongJSError::from_jsvalue(abort_reason))
             }
         }
     } else {
@@ -45,19 +45,19 @@ async fn read_file(
                 println!("read_file: File read completed");
                 match result {
                     Ok(bytes) => JSArrayBuffer::<u8>::from_bytes_owned(&ctx, bytes),
-                    Err(e) => Err(RustyJSError::TypeError(format!("Failed to read file: {}", e)))
+                    Err(e) => Err(RongJSError::TypeError(format!("Failed to read file: {}", e)))
                 }
             }
 
             abort_reason = abort.recv() => {
                 println!("read_file: Received abort signal");
-                Err(RustyJSError::from_jsvalue(abort_reason))
+                Err(RongJSError::from_jsvalue(abort_reason))
             }
         }
     } else {
         let bytes = fs::read(file)
             .await
-            .map_err(|e| RustyJSError::TypeError(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| RongJSError::TypeError(format!("Failed to read file: {}", e)))?;
 
         JSArrayBuffer::<u8>::from_bytes_owned(&ctx, bytes)
     }

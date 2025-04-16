@@ -1,4 +1,4 @@
-use rusty_js::*;
+use rong_js::*;
 
 mod base64;
 mod text_decoder;
@@ -22,7 +22,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustyjs_test::*;
+    use rong_test::*;
 
     #[test]
     fn test_encoding() {

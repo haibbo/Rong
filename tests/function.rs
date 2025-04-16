@@ -1,4 +1,4 @@
-use rustyjs_test::*;
+use rong_test::*;
 use tokio::time::{sleep, Duration};
 
 #[test]
@@ -202,7 +202,7 @@ fn test_async_rust_fn_reject() {
     async_run!(|ctx: JSContext| async move {
         let async_func = JSFunc::new(&ctx, |_a: i32, _b: i32| async move {
             sleep(Duration::from_millis(100)).await;
-            RustyJSError::Error("Failed to perform add".to_string())
+            RongJSError::Error("Failed to perform add".to_string())
         })?; // PromiseResolver help call reject to propagate error to JS catch
         ctx.global().set("add", async_func)?;
 

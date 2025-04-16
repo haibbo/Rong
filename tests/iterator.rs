@@ -1,5 +1,5 @@
 use futures::stream;
-use rustyjs_test::*;
+use rong_test::*;
 
 #[test]
 fn iterator_sync() {

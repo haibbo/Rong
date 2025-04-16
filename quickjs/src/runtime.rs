@@ -1,5 +1,5 @@
 use crate::{qjs, QJSContext, QJSValue};
-use rusty_js_core::{JSEngine, JSRuntimeImpl};
+use rong_js_core::{JSEngine, JSRuntimeImpl};
 
 pub struct QJSRuntime {
     rt: *mut qjs::JSRuntime,

@@ -1,4 +1,4 @@
-use rusty_js::*;
+use rong_js::*;
 
 mod body;
 mod fetch;
