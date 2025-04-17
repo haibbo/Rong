@@ -10,14 +10,6 @@ pub fn run<F: FnOnce(&JSContext) -> JSResult<()>>(f: F) {
     f(&ctx).unwrap();
 }
 
-// Helper function to run tests with both JS context and runtime
-#[allow(dead_code)]
-pub fn run2<F: FnOnce(&JSContext, &JSRuntime) -> JSResult<()>>(f: F) {
-    let rt = RongJS::runtime();
-    let ctx = RongJS::context(&rt);
-    f(&ctx, &rt).unwrap();
-}
-
 #[macro_export]
 macro_rules! async_run {
     ($block:expr) => {{
