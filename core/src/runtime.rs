@@ -1,12 +1,9 @@
 use crate::function::RustFunc;
-use crate::scheduler::Scheduler;
 use crate::{JSContext, JSContextImpl, JSObjectOps, JSResult, JSValueImpl};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::future::Future;
 use std::rc::Rc;
-use tokio::sync::Notify;
 
 pub trait JSRuntimeImpl {
     /// The raw runtime handle type associated with this runtime.
@@ -46,7 +43,6 @@ pub trait JSRuntimeImpl {
 
 pub struct JSRuntime<R: JSRuntimeImpl> {
     pub(crate) inner: Rc<R>,
-    scheduler: Rc<Scheduler<R>>,
     services: ServiceContainer,
     pub(crate) engine: &'static str,
 }
@@ -55,7 +51,7 @@ impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            scheduler: self.scheduler.clone(),
+            //scheduler: self.scheduler.clone(),
             services: self.services.clone(),
             engine: self.engine,
         }
@@ -63,21 +59,9 @@ impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
 }
 
 impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
-    pub fn block_on<F, T>(&self, future: F) -> JSResult<T>
-    where
-        F: Future<Output = JSResult<T>> + 'static,
-        T: 'static,
-    {
-        self.scheduler.block_on(future)
-    }
-
-    pub(crate) fn scheduler(&self) -> &Rc<Scheduler<R>> {
-        &self.scheduler
-    }
-
-    pub fn get_shutdown_signal(&self) -> Rc<Notify> {
-        self.scheduler.get_shutdown_signal()
-    }
+    // pub fn get_shutdown_signal(&self) -> Rc<Notify> {
+    // todo!()
+    // }
 
     /// Creates a new JavaScript context instance associated with this runtime.
     ///
@@ -163,17 +147,11 @@ pub trait JSEngine: Sized {
     ///
     /// # Key Notes
     /// - One thread have only one runtime instance.
-    /// - Each runtime has its own scheduler for managing asynchronous tasks.
     /// - This ensures proper isolation and thread-safety in JavaScript execution.
-    ///
-    /// # Returns
-    /// A new `JSRuntime` instance with its associated scheduler.
     fn runtime() -> JSRuntime<Self::Runtime> {
         let runtime = Rc::new(Self::Runtime::new());
-        let scheduler = Scheduler::new(runtime.clone());
         JSRuntime {
             inner: runtime,
-            scheduler,
             services: ServiceContainer::new(),
             engine: Self::name(),
         }

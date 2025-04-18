@@ -5,7 +5,6 @@ mod iterator;
 mod promise;
 mod result;
 mod runtime;
-mod scheduler;
 mod source;
 mod value;
 
