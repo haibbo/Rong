@@ -12,11 +12,15 @@ pub fn run<F: FnOnce(&JSContext) -> JSResult<()>>(f: F) {
 
 #[macro_export]
 macro_rules! async_run {
-    ($block:expr) => {{
-        let rt = RongJS::runtime();
-        let ctx = rt.context();
-        let future = async move { $block(ctx).await };
-        rt.block_on(future).unwrap()
+    ($user_fn:expr) => {{
+        let rong = Rong::<RongJS>::builder().build();
+
+        let block_on_closure = |runtime: &JSRuntime, _receiver| {
+            let ctx = runtime.context();
+            $user_fn(ctx)
+        };
+
+        rong.block_on::<_, _, ()>(block_on_closure).unwrap();
     }};
 }
 
