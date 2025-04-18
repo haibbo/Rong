@@ -14,8 +14,7 @@ use crate::{JSContext, JSResult, RongJSError};
 /// cases:
 /// - `FromJSValue` is particularly useful for returning generic types from operations
 ///   such as `eval` and `JSObject.get`.
-/// - `IntoJSValue` allows `JSObject.set` to accept a wider range of types that
-///    can be converted into `JSValue`.
+/// - `IntoJSValue` allows `JSObject.set` to accept a wider range of types that can be converted into `JSValue`.
 ///
 /// help trait contains conversion trait bound
 /// it help simplify trait boud for upper caller

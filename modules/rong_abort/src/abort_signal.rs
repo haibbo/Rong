@@ -226,18 +226,18 @@ impl AbortSignal {
         let instance = Class::get::<AbortSignal>(&ctx)?.instance(signal);
         let instance_clone = instance.clone();
 
-        ctx.spawn_local(async move {
+        tokio::task::spawn_local(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(time)).await;
 
-            let signal = instance_clone.borrow_mut::<AbortSignal>()?;
-            {
-                let mut inner = signal.inner.lock().unwrap();
-                inner.aborted = true;
+            if let Ok(signal) = instance_clone.borrow_mut::<AbortSignal>() {
+                {
+                    let mut inner = signal.inner.lock().unwrap();
+                    inner.aborted = true;
+                }
+                drop(signal);
             }
-            drop(signal);
 
             let _ = Self::do_emit(This(instance_clone), EventKey::from("abort"), Rest(vec![]));
-            Ok(())
         });
 
         Ok(instance)
