@@ -6,7 +6,7 @@ pub use rong::function::{Constructor, Optional, Rest, This, ThisMut};
 #[allow(dead_code)]
 pub fn run<F: FnOnce(&JSContext) -> JSResult<()>>(f: F) {
     let rt = RongJS::runtime();
-    let ctx = RongJS::context(&rt);
+    let ctx = rt.context();
     f(&ctx).unwrap();
 }
 
@@ -14,7 +14,7 @@ pub fn run<F: FnOnce(&JSContext) -> JSResult<()>>(f: F) {
 macro_rules! async_run {
     ($block:expr) => {{
         let rt = RongJS::runtime();
-        let ctx = RongJS::context(&rt);
+        let ctx = rt.context();
         let future = async move { $block(ctx).await };
         rt.block_on(future).unwrap()
     }};

@@ -99,7 +99,7 @@ fn main() -> Result<(), RongJSError> {
     };
 
     let rt = RongJS::runtime();
-    let ctx = RongJS::context(&rt);
+    let ctx = rt.context();
 
     // Initialize all modules
     rong_modules::init(&ctx)?;

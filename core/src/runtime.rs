@@ -74,6 +74,33 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
         self.scheduler.get_shutdown_signal()
     }
 
+    /// Creates a new JavaScript context instance associated with this runtime.
+    ///
+    /// # Key Notes
+    /// - Automatically registers the Rust function class for interop capabilities.
+    /// - Contexts are isolated execution environments within the same runtime.
+    ///
+    /// # Example
+    /// ```rust
+    /// let runtime = JSEngine::runtime();
+    /// let context = runtime.context();
+    /// ```
+    pub fn context(&self) -> JSContext<R::Context>
+    where
+        R::Context: JSContextImpl<Runtime = R>,
+        <R::Context as JSContextImpl>::Value: JSObjectOps + 'static,
+    {
+        let ctx = JSContext::<R::Context>::new(self);
+        ctx.register_builtin_class()
+            .expect("Failed to register builtin class");
+
+        ctx.global()
+            .set("Rong", ctx.rong())
+            .expect("Failed to add Rong object");
+
+        ctx
+    }
+
     /// # Warning
     /// testing purposes only and don't use it in production code.
     #[doc(hidden)]
@@ -145,33 +172,6 @@ pub trait JSEngine: Sized {
             services: ServiceContainer::new(),
             engine: Self::name(),
         }
-    }
-
-    /// Creates a new JavaScript context instance associated with the given runtime.
-    ///
-    /// # Key Notes
-    /// - Each context is tied to a specific runtime instance.
-    /// - Automatically registers the Rust function class for interop capabilities.
-    /// - Contexts are isolated execution environments within the same runtime.
-    ///
-    /// # Example
-    /// ```rust
-    /// let runtime = JSEngine::runtime();
-    /// let context = JSEngine::context(&runtime);
-    /// ```
-    fn context(rt: &JSRuntime<Self::Runtime>) -> JSContext<Self::Context>
-    where
-        Self::Value: JSObjectOps + 'static,
-    {
-        let ctx = JSContext::<Self::Context>::new(rt);
-        ctx.register_builtin_class()
-            .expect("Failed to register builtin class");
-
-        ctx.global()
-            .set("Rong", ctx.rong())
-            .expect("Failed to add Rong object");
-
-        ctx
     }
 }
 

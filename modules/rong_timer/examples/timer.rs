@@ -4,7 +4,7 @@ use tokio::time::sleep;
 
 fn main() {
     let rt = RongJS::runtime();
-    let ctx = RongJS::context(&rt);
+    let ctx = rt.context();
 
     ctx.global()
         .set(
