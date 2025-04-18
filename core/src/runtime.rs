@@ -28,7 +28,12 @@ pub trait JSRuntimeImpl {
 
     /// Runs all pending jobs in the JavaScript runtime.
     /// This includes executing any queued promise callbacks, microtasks, and other pending operations.
-    fn run_pending_jobs(&self);
+    ///
+    /// # Key Notes
+    /// - return -1 means this JSRuntime does not need to call this API
+    fn run_pending_jobs(&self) -> i32 {
+        -1
+    }
 
     /// Runs garbage collection on the JavaScript runtime.
     ///
@@ -104,8 +109,8 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
     /// # Warning
     /// testing purposes only and don't use it in production code.
     #[doc(hidden)]
-    pub fn run_pending_jobs(&self) {
-        self.inner.run_pending_jobs();
+    pub fn run_pending_jobs(&self) -> i32 {
+        self.inner.run_pending_jobs()
     }
 
     /// Runs garbage collection on the JavaScript runtime.

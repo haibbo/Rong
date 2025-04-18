@@ -1,4 +1,4 @@
-use crate::{qjs, QJSContext, QJSValue};
+use crate::{QJSContext, QJSValue, qjs};
 use rong_core::{JSEngine, JSRuntimeImpl};
 
 pub struct QJSRuntime {
@@ -44,13 +44,14 @@ impl JSRuntimeImpl for QJSRuntime {
         self.rt
     }
 
-    fn run_pending_jobs(&self) {
+    fn run_pending_jobs(&self) -> i32 {
         unsafe {
             let mut ctx = std::ptr::null_mut();
             while qjs::JS_IsJobPending(self.rt) != 0 {
                 qjs::JS_ExecutePendingJob(self.rt, &mut ctx);
             }
         }
+        0
     }
 
     fn run_gc(&self) {

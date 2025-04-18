@@ -1,4 +1,4 @@
-use crate::{jsc, JSCContext, JSCValue};
+use crate::{JSCContext, JSCValue, jsc};
 use rong_core::{JSEngine, JSRuntimeImpl};
 
 pub struct JSCRuntime {
@@ -18,9 +18,6 @@ impl JSRuntimeImpl for JSCRuntime {
     fn to_raw(&self) -> Self::RawRuntime {
         self.raw
     }
-
-    // JavaScriptCore has no this API
-    fn run_pending_jobs(&self) {}
 
     // JavaScriptCore  GC works on Conext level, not runtime
     fn run_gc(&self) {}
