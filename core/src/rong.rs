@@ -43,16 +43,16 @@ impl MessageReceiver {
     }
 }
 
-// Type alias for the boxed future eventually produced by the closure in JsTask
+// Type alias for the boxed future eventually produced by the closure in UserAsyncTask
 type BoxedTaskFuture = Pin<Box<dyn Future<Output = JSResult<Box<dyn Any + Send>>>>>;
 
-// Type alias for the boxed closure stored in JsTask
+// Type alias for the boxed closure stored in UserAsyncTask
 type BoxedFutureFn<E> =
     Box<dyn FnOnce(JSRuntime<<E as JSEngine>::Runtime>, MessageReceiver) -> BoxedTaskFuture + Send>;
 
-/// Internal representation of a task submitted to a worker.
+/// Internal representation of a user-submitted asynchronous function submitted to a worker.
 /// Holds the necessary components to invoke the user's future on the worker thread.
-struct JsTask<E: JSEngine + 'static> {
+struct UserAsyncTask<E: JSEngine + 'static> {
     // Store the closure and receiver, not the final future, to avoid !Send issues with JSRuntime
     // The closure produces the boxed Any result type expected by result_tx
     future_fn: BoxedFutureFn<E>,
@@ -61,16 +61,16 @@ struct JsTask<E: JSEngine + 'static> {
     /// Channel to send the final result (or error/abort) back to the caller.
     result_tx: oneshot::Sender<JSResult<Box<dyn Any + Send>>>,
 
-    /// Channel for the worker loop to forward post_message messages to this task.
+    /// Channel for the worker loop to forward post_message messages to this user's async function.
     task_message_tx: mpsc::Sender<Box<dyn Any + Send>>,
 }
 
 /// Worker - Individual JavaScript runtime worker
 ///
 /// Represents a dedicated thread with the following characteristics:
-/// - Runs a single user-provided future at a time
-/// - Creates a fresh JavaScript runtime for each task to ensure isolation
-/// - Supports message passing to the currently executing task
+/// - Runs a single user-provided asynchronous function at a time
+/// - Creates a fresh JavaScript runtime for each user function to ensure isolation
+/// - Supports message passing to the currently executing async function
 /// - Maintains a state (Free/Busy) to indicate availability
 /// - Has a signal for when the worker becomes free
 pub struct Worker<E: JSEngine + 'static> {
@@ -78,14 +78,14 @@ pub struct Worker<E: JSEngine + 'static> {
     id: usize,
     name: Option<String>,
 
-    /// Channel for sending JS tasks to the worker thread
-    task_tx: mpsc::Sender<JsTask<E>>,
+    /// Channel for sending user async functions to the worker thread
+    task_tx: mpsc::Sender<UserAsyncTask<E>>,
 
     /// Notify mechanism for signaling worker termination
     terminate_signal: Arc<tokio::sync::Notify>,
 
-    /// Channel for sending messages to the current task running on this worker
-    /// Since a worker executes only one task at a time, this is a simple MPSC channel
+    /// Channel for sending messages to the current async function running on this worker
+    /// Since a worker executes only one async function at a time, this is a simple MPSC channel
     message_tx: mpsc::Sender<Box<dyn Any + Send>>,
 
     /// Worker state (Free/Busy)
@@ -121,9 +121,9 @@ impl<E: JSEngine + 'static> Worker<E> {
         *self.state.lock().unwrap()
     }
 
-    /// Private helper to create and submit a task future to the worker queue.
-    /// Returns a receiver for the task's final result.
-    fn submit_task<F, Fut, R>(
+    /// Private helper to create and submit a user's async function to the worker queue.
+    /// Returns a receiver for the async function's final result.
+    fn submit_async_fn<F, Fut, R>(
         &self,
         future_fn: F,
     ) -> JSResult<oneshot::Receiver<JSResult<Box<dyn Any + Send>>>>
@@ -132,7 +132,7 @@ impl<E: JSEngine + 'static> Worker<E> {
         Fut: Future<Output = JSResult<R>> + 'static,
         R: Send + 'static,
     {
-        // Set up channels for the task
+        // Set up channels for the async function execution
         let (task_message_tx, task_message_rx) = mpsc::channel(100);
         let (result_tx, result_rx) = oneshot::channel();
 
@@ -151,19 +151,19 @@ impl<E: JSEngine + 'static> Worker<E> {
         });
 
         // Create task with message handler
-        let task = JsTask {
+        let task = UserAsyncTask {
             future_fn: boxed_future_fn,
             message_receiver,
             result_tx,
             task_message_tx,
         };
 
-        // Send task to worker thread
-        // Use blocking send to ensure task is actually sent
+        // Send async function to worker thread
+        // Use blocking send to ensure it is actually sent
         futures::executor::block_on(async {
             if let Err(e) = self.task_tx.send(task).await {
                 return Err(RongJSError::Error(format!(
-                    "Failed to send task to worker {}: {:?}",
+                    "Failed to send async function to worker {}: {:?}",
                     self.id, e
                 )));
             }
@@ -171,14 +171,14 @@ impl<E: JSEngine + 'static> Worker<E> {
         })
     }
 
-    /// Spawn a future on this worker
+    /// Spawn a user's asynchronous function on this worker
     ///
-    /// Submits an asynchronous task to be executed on this worker's thread.
-    /// The future will be executed on the worker's JavaScript thread and receives
+    /// Submits an asynchronous function to be executed on this worker's thread.
+    /// The function will be executed on the worker's JavaScript thread and receives
     /// both the JSRuntime (as a reference) and a MessageReceiver for handling messages.
     ///
-    /// This method returns immediately and does not wait for the task to complete.
-    /// The submitted task can access the JavaScript runtime and receive messages.
+    /// This method returns immediately and does not wait for the async function to complete.
+    /// The submitted function can access the JavaScript runtime and receive messages.
     pub fn spawn_future<F, Fut, R>(&self, future_fn: F) -> JSResult<()>
     where
         F: FnOnce(JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
@@ -207,15 +207,15 @@ impl<E: JSEngine + 'static> Worker<E> {
 
         // Submit the boxed function using the internal helper
         #[allow(clippy::let_underscore_future)]
-        let _ = self.submit_task(boxed_fn)?;
+        let _ = self.submit_async_fn(boxed_fn)?;
         Ok(())
     }
 
-    /// Execute a task and wait for the result
+    /// Execute a user's async function and wait for the result
     ///
     /// This is equivalent to spawn_future + join, but provides a synchronous interface.
-    /// The method blocks until the task completes and returns its result.
-    /// Use this when you need to execute a task and immediately use its return value.
+    /// The method blocks until the async function completes and returns its result.
+    /// Use this when you need to execute an async function and immediately use its return value.
     pub fn block_on<F, Fut, R>(&self, future_fn: F) -> JSResult<R>
     where
         F: FnOnce(JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
@@ -242,7 +242,7 @@ impl<E: JSEngine + 'static> Worker<E> {
             },
         );
 
-        let result_rx = self.submit_task(boxed_fn)?;
+        let result_rx = self.submit_async_fn(boxed_fn)?;
 
         // Wait for the result
         let result = futures::executor::block_on(async {
@@ -273,7 +273,7 @@ impl<E: JSEngine + 'static> Worker<E> {
         }
     }
 
-    /// Wait for this worker to complete its current task
+    /// Wait for this worker to complete its current async function
     ///
     /// Blocks the calling thread until the worker's state changes to Free.
     /// This can be used to ensure that a worker has finished processing before shutdown.
@@ -297,7 +297,7 @@ impl<E: JSEngine + 'static> Worker<E> {
     /// Ask the worker to terminate
     ///
     /// Sends a signal to gracefully stop the worker thread.
-    /// Any running tasks will be interrupted and the worker thread will exit.
+    /// Any running async functions will be interrupted and the worker thread will exit.
     pub fn terminate(&self) -> JSResult<()> {
         // Send the termination signal by notifying
         self.terminate_signal.notify_one();
@@ -306,14 +306,14 @@ impl<E: JSEngine + 'static> Worker<E> {
 
     /// Post a message to this worker
     ///
-    /// Sends a message to the currently executing task on this worker.
-    /// The running task can receive this message through its MessageReceiver.
+    /// Sends a message to the currently executing async function on this worker.
+    /// The running async function can receive this message through its MessageReceiver.
     ///
-    /// If no task is currently running, the message will be dropped.
+    /// If no async function is currently running, the message will be dropped.
     pub fn post_message(&self, value: Box<dyn Any + Send>) -> JSResult<()> {
         // Try to send the message, but don't block if the channel is full
         // This is a non-blocking operation that returns immediately
-        // The worker loop will receive this and forward if a task is running
+        // The worker loop will receive this and forward if an async function is running
         let _ = self.message_tx.try_send(value).map_err(|e| {
             if matches!(e, mpsc::error::TrySendError::Full(_)) {
                 eprintln!("Worker {} message channel full, message dropped", self.id);
@@ -463,16 +463,16 @@ impl<E: JSEngine + 'static> Rong<E> {
         RongBuilder::new()
     }
 
-    /// Execute a task and wait for the result
+    /// Execute a user's async function and wait for the result
     ///
-    /// This method automatically gets a free worker and executes the task on it,
-    /// blocking until the task completes and returning its result.
+    /// This method automatically gets a free worker and executes the async function on it,
+    /// blocking until the function completes and returning its result.
     ///
     /// # Parameters
     /// * `future_fn` - Function that takes a JS runtime and message receiver and returns a future
     ///
     /// # Returns
-    /// * `Result<R, RongJSError>` - The result of the task execution
+    /// * `Result<R, RongJSError>` - The result of the async function execution
     ///
     /// # Example
     /// ```rust
@@ -491,7 +491,7 @@ impl<E: JSEngine + 'static> Rong<E> {
         // Get a free worker
         let worker = self.get_worker()?;
 
-        // Execute the task on the worker
+        // Execute the async function on the worker
         worker.block_on(future_fn)
     }
 
@@ -536,8 +536,8 @@ impl<E: JSEngine + 'static> Rong<E> {
 
             // Pass the worker's message receiver (for post_message) to the thread
             let worker_message_rx_thread = worker_message_rx;
-            // Receiver for tasks is moved into the thread - type is now non-generic JsTask<E>
-            let task_rx_thread: mpsc::Receiver<JsTask<E>> = task_rx;
+            // Receiver for tasks is moved into the thread - type is now non-generic UserAsyncTask<E>
+            let task_rx_thread: mpsc::Receiver<UserAsyncTask<E>> = task_rx;
 
             // Spawn a new thread for this worker
             std::thread::spawn(move || {
@@ -567,14 +567,14 @@ impl<E: JSEngine + 'static> Rong<E> {
     /// Run the worker loop
     ///
     /// Core processing loop for a worker thread. This method:
-    /// 1. Processes incoming tasks and executes them with a JavaScript runtime
+    /// 1. Processes incoming user-provided async functions and executes them with a JavaScript runtime
     /// 2. Handles termination signals
     /// 3. Manages the worker's state based on its current activity
-    /// 4. Ensures proper JavaScript microtask execution during task processing
-    /// 5. Forwards messages from post_message to the current task
+    /// 4. Ensures proper JavaScript microtask execution during async function processing
+    /// 5. Forwards messages from post_message to the currently executing async function
     async fn run_worker_loop(
         worker_id: usize,
-        mut task_rx: mpsc::Receiver<JsTask<E>>,
+        mut task_rx: mpsc::Receiver<UserAsyncTask<E>>,
         mut worker_message_rx: mpsc::Receiver<Box<dyn Any + Send>>,
         terminate_signal: Arc<tokio::sync::Notify>,
         state: Arc<Mutex<WorkerState>>,
@@ -598,7 +598,7 @@ impl<E: JSEngine + 'static> Rong<E> {
 
                 // Main worker event loop
                 while !should_terminate {
-                    // Use tokio::select to handle tasks, messages, termination signal and channel closure
+                    // Use tokio::select to handle async functions, messages, termination signal and channel closure
                     tokio::select! {
                         // Bias select towards checking for termination first
                         biased;
@@ -614,21 +614,21 @@ impl<E: JSEngine + 'static> Rong<E> {
                             should_terminate = true;
                         },
 
-                        // Process worker tasks
+                        // Process worker's user async functions
                         maybe_task = task_rx.recv(), if current_task_message_tx.is_none() && !should_terminate => {
-                            if let Some(task) = maybe_task {
-                                // Create JS Runtime and execute task
+                            if let Some(user_async_task) = maybe_task {
+                                // Create JS Runtime and execute user's async function
                                 let js_runtime = E::runtime();
                                 // Clone message_tx for forwarding
-                                if current_task_message_tx.replace(task.task_message_tx.clone()).is_some() {
-                                    // This should never happen - we only process tasks when current_task_message_tx is None
-                                    eprintln!("Worker {} already had a task running?", worker_id);
+                                if current_task_message_tx.replace(user_async_task.task_message_tx.clone()).is_some() {
+                                    // This should never happen - we only process async functions when current_task_message_tx is None
+                                    eprintln!("Worker {} already had an async function running?", worker_id);
                                 }
 
-                                // Execute the task - we use the task directly now without extracting fields
-                                let user_fn = task.future_fn;
-                                let message_receiver = task.message_receiver;
-                                let result_tx = task.result_tx;
+                                // Execute the user's async function
+                                let user_fn = user_async_task.future_fn;
+                                let message_receiver = user_async_task.message_receiver;
+                                let result_tx = user_async_task.result_tx;
 
                                 // Execute the user function
                                 let user_future = user_fn(js_runtime.clone(), message_receiver);
@@ -811,7 +811,7 @@ impl<E: JSEngine + 'static> Rong<E> {
     /// Shutdown all workers
     ///
     /// This sends termination signals to all workers, regardless of their state.
-    /// Any tasks currently running on workers will be gracefully interrupted.
+    /// Any async functions currently running on workers will be gracefully interrupted.
     /// After calling this method, the worker pool should not be used anymore.
     fn shutdown(&self) -> JSResult<()> {
         let workers = self.workers.lock().unwrap();
