@@ -1,5 +1,5 @@
 // Tiny File Uploader
-// Usage: rong uploader.js <file-path> <server-url>
+// Usage: rong run uploader.js <file-path> <server-url>
 
 async function uploadFile(localPath, serverUrl) {
   try {
@@ -38,13 +38,13 @@ async function uploadFile(localPath, serverUrl) {
 // Get command line arguments
 const args = Rong.args;
 
-if (args.length < 2) {
-  console.log("Usage: rong uploader.js <file-path> <server-url>");
+if (args.length < 3) {
+  console.log("Usage: rong run uploader.js <file-path> <server-url>");
   Rong.exit(1);
 }
 
-const localFile = args[0];
-const serverUrl = args[1];
+const localFile = args[1];
+const serverUrl = args[2];
 
 // Execute the upload
 uploadFile(localFile, serverUrl);
