@@ -132,49 +132,43 @@ impl<E: JSEngine + 'static> Worker<E> {
         Fut: Future<Output = JSResult<R>> + 'static,
         R: Send + 'static,
     {
-        // Create a message channel specifically for this task
-        let (msg_tx, msg_rx) = mpsc::channel(100);
-
-        // Create a channel to receive the task's result
+        // Set up channels for the task
+        let (task_message_tx, task_message_rx) = mpsc::channel(100);
         let (result_tx, result_rx) = oneshot::channel();
-        let message_receiver = MessageReceiver::new(msg_rx);
 
-        // Box the future_fn closure. Inside, map the result R to Box<dyn Any + Send>.
-        let boxed_fn: BoxedFutureFn<E> = Box::new(
-            move |runtime: JSRuntime<E::Runtime>, receiver: MessageReceiver| {
-                let user_fut = future_fn(runtime, receiver);
-                // Map the result R to Box<dyn Any + Send> right after the user future completes
-                let mapped_fut = async move {
-                    match user_fut.await {
-                        Ok(r) => Ok(Box::new(r) as Box<dyn Any + Send>),
-                        Err(e) => Err(e),
-                    }
-                };
-                Box::pin(mapped_fut)
-            },
-        );
+        // Create worker message receiver
+        let message_receiver = MessageReceiver::new(task_message_rx);
 
-        // Create the task struct (no longer generic in R)
-        let task: JsTask<E> = JsTask {
-            future_fn: boxed_fn,
+        // Wrap user's future_fn to convert its result to Box<dyn Any + Send>
+        let boxed_future_fn: BoxedFutureFn<E> = Box::new(move |rt, recv| {
+            // Wrap future to box result
+            let user_future = future_fn(rt, recv);
+            Box::pin(async move {
+                user_future
+                    .await
+                    .map(|result| Box::new(result) as Box<dyn Any + Send>)
+            })
+        });
+
+        // Create task with message handler
+        let task = JsTask {
+            future_fn: boxed_future_fn,
             message_receiver,
             result_tx,
-            task_message_tx: msg_tx,
+            task_message_tx,
         };
 
-        // Send the task to the worker's task queue
-        // Use block_on here as the public methods are synchronous
+        // Send task to worker thread
+        // Use blocking send to ensure task is actually sent
         futures::executor::block_on(async {
-            self.task_tx.send(task).await.map_err(|e| {
-                RongJSError::Error(format!(
+            if let Err(e) = self.task_tx.send(task).await {
+                return Err(RongJSError::Error(format!(
                     "Failed to send task to worker {}: {:?}",
                     self.id, e
-                ))
-            })
-        })?;
-
-        // Return the receiver for the result
-        Ok(result_rx)
+                )));
+            }
+            Ok(result_rx)
+        })
     }
 
     /// Spawn a future on this worker
@@ -612,33 +606,32 @@ impl<E: JSEngine + 'static> Rong<E> {
                         // Process termination signal
                         _ = terminate_signal.notified() => {
                             println!("Worker {} received termination signal", worker_id);
-                            if let Some(handle) = current_task_abort_handle.take() {
+                            // Abort any running task and take the handle to properly drop it
+                            let _ = current_task_abort_handle.take().map(|handle| {
                                 println!("Worker {} aborting current task.", worker_id);
                                 handle.abort();
-                            }
+                            });
                             should_terminate = true;
                         },
 
                         // Process worker tasks
                         maybe_task = task_rx.recv(), if current_task_message_tx.is_none() && !should_terminate => {
                             if let Some(task) = maybe_task {
-                                // Set worker state to Busy
-                                {
-                                    let mut state_guard = state.lock().unwrap();
-                                    *state_guard = WorkerState::Busy;
-                                }
-
-                                // Assign message sender and check for debug purposes
+                                // Create JS Runtime and execute task
+                                let js_runtime = E::runtime();
+                                // Clone message_tx for forwarding
                                 if current_task_message_tx.replace(task.task_message_tx.clone()).is_some() {
                                     // This should never happen - we only process tasks when current_task_message_tx is None
                                     eprintln!("Worker {} already had a task running?", worker_id);
                                 }
 
-                                // Create JS Runtime and execute task
-                                let js_runtime = E::runtime();
+                                // Execute the task - we use the task directly now without extracting fields
                                 let user_fn = task.future_fn;
-                                let receiver = task.message_receiver;
-                                let user_future = user_fn(js_runtime.clone(), receiver);
+                                let message_receiver = task.message_receiver;
+                                let result_tx = task.result_tx;
+
+                                // Execute the user function
+                                let user_future = user_fn(js_runtime.clone(), message_receiver);
 
                                 // Make task abortable and check
                                 let (abortable_future, abort_handle) = futures::future::abortable(user_future);
@@ -687,8 +680,9 @@ impl<E: JSEngine + 'static> Rong<E> {
                                     notifier.notify_one();
                                 }
 
-                                // Clean up
-                                current_task_abort_handle = None;
+                                // Clear any abort handles and message channels
+                                let _old_abort_handle = current_task_abort_handle.take();
+                                let _old_message_tx = current_task_message_tx.take();
 
                                 // Handle result
                                 let final_result: JSResult<Box<dyn Any + Send>> = match result_from_future {
@@ -696,43 +690,49 @@ impl<E: JSEngine + 'static> Rong<E> {
                                     Err(_) => Err(RongJSError::Error("Task aborted by worker shutdown".to_string()))
                                 };
 
-                                // Send result back
-                                if task.result_tx.send(final_result).is_err() {
-                                    // Receiver was dropped
-                                }
+                                // Send the result back to the caller, ignoring send errors (caller may have dropped)
+                                let _ = result_tx.send(final_result);
 
-                                // Cleanup and mark worker as free
-                                current_task_message_tx = None;
+                                // Set worker state back to Free
                                 {
                                     let mut state_guard = state.lock().unwrap();
                                     *state_guard = WorkerState::Free;
                                     free_signal.notify_waiters();
                                 }
                             } else {
-                                break;
+                                // task_rx closed - terminate the worker loop
+                                should_terminate = true;
                             }
                         },
 
-                        // Process messages posted to the worker
-                        maybe_message = worker_message_rx.recv() => {
-                            if let Some(message) = maybe_message {
-                                if let Some(ref task_tx) = current_task_message_tx {
-                                    if let Err(e) = task_tx.try_send(message) {
-                                        eprintln!("Worker {} failed to forward message to task: {}", worker_id, e);
-                                    }
-                                } else {
-                                    eprintln!("Worker {} received message while idle, dropping.", worker_id);
+                        // Process messages to the currently running task
+                        Some(message) = worker_message_rx.recv(), if current_task_message_tx.is_some() => {
+                            // Forward the message to the current task, ignoring errors
+                            if let Some(tx) = &current_task_message_tx {
+                                // Restore error logging on failed send
+                                if let Err(e) = tx.try_send(message) {
+                                    eprintln!("Worker {} failed to forward message to task: {}", worker_id, e);
                                 }
                             }
                         },
 
+                        // If worker_message_rx closed, we should terminate
                         else => {
-                            break;
+                            should_terminate = true;
                         }
                     }
                 }
 
-                println!("Worker {} exited run_worker_loop", worker_id);
+                // Final cleanup - ensure we've dropped any task handles
+                let _ = current_task_abort_handle.take();
+                let _ = current_task_message_tx.take();
+
+                // Set worker state back to Free on exit
+                {
+                    let mut state_guard = state.lock().unwrap();
+                    *state_guard = WorkerState::Free;
+                    free_signal.notify_waiters();
+                }
             })
             .await;
     }
@@ -743,10 +743,10 @@ impl<E: JSEngine + 'static> Rong<E> {
     /// before returning it, ensuring thread-safety in worker allocation.
     /// If no free worker is available, returns an error.
     pub fn get_worker(&self) -> JSResult<Worker<E>> {
-        let workers = self.workers.lock().unwrap();
+        let workers_guard = self.workers.lock().unwrap();
 
         // Find a free worker and immediately mark it as busy
-        for worker in workers.iter() {
+        for worker in workers_guard.iter() {
             // Get mutex lock on worker state
             let mut state_guard = worker.state.lock().unwrap();
 
@@ -813,7 +813,7 @@ impl<E: JSEngine + 'static> Rong<E> {
     /// This sends termination signals to all workers, regardless of their state.
     /// Any tasks currently running on workers will be gracefully interrupted.
     /// After calling this method, the worker pool should not be used anymore.
-    pub fn shutdown(&self) -> JSResult<()> {
+    fn shutdown(&self) -> JSResult<()> {
         let workers = self.workers.lock().unwrap();
 
         // Send terminate signal to all workers
@@ -825,6 +825,13 @@ impl<E: JSEngine + 'static> Rong<E> {
         }
 
         Ok(())
+    }
+}
+
+impl<E: JSEngine + 'static> Drop for Rong<E> {
+    fn drop(&mut self) {
+        // Ensure workers are terminated when Rong is dropped by calling the shutdown logic
+        let _ = self.shutdown();
     }
 }
 
@@ -841,5 +848,16 @@ impl<E: JSEngine + 'static> Clone for Worker<E> {
             free_signal: self.free_signal.clone(),
             rong: self.rong.clone(),
         }
+    }
+}
+
+impl<E: JSEngine + 'static> Drop for Worker<E> {
+    fn drop(&mut self) {
+        // Signal termination when worker is dropped
+        // This ensures termination even if dropped without explicit terminate() call
+        self.terminate_signal.notify_waiters();
+
+        // We don't actually need to do anything with the channels - they'll be
+        // dropped automatically when this Worker instance is dropped
     }
 }
