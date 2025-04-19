@@ -98,24 +98,35 @@ fn main() -> Result<(), RongJSError> {
         }
     };
 
-    let rt = RongJS::runtime();
-    let ctx = rt.context();
+    // Create a single Rong instance for all commands
+    if matches!(command, Command::Help | Command::Version) {
+        // No need to create a Rong instance for these simple commands
+        match command {
+            Command::Help => {
+                usage();
+            }
+            Command::Version => {
+                println!("rong v0.1.0");
+            }
+            _ => unreachable!(),
+        }
+    } else {
+        // For commands that need JS execution, use a single Rong instance
+        Rong::<RongJS>::builder()
+            .build()
+            .block_on(async |runtime, _receiver| {
+                let ctx = runtime.context();
+                // Initialize all modules
+                rong_modules::init(&ctx)?;
+                extension::init(&ctx)?;
 
-    // Initialize all modules
-    rong_modules::init(&ctx)?;
-    extension::init(&ctx)?;
-
-    match command {
-        Command::Run(path) => rt.block_on(async move { run_file(&ctx, path).await })?,
-        Command::Compile { input, output } => {
-            rt.block_on(async move { compile_file(&ctx, input, output).await })?
-        }
-        Command::Help => {
-            usage();
-        }
-        Command::Version => {
-            println!("rong v0.1.0");
-        }
+                // Process the command with the initialized context
+                match command {
+                    Command::Run(path) => run_file(&ctx, path).await,
+                    Command::Compile { input, output } => compile_file(&ctx, input, output).await,
+                    _ => unreachable!(), // Help and Version already handled
+                }
+            })?
     }
 
     Ok(())
