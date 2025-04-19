@@ -1,5 +1,5 @@
 use rong_test::*;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 #[test]
 fn function_with_optional() {
@@ -217,10 +217,12 @@ fn test_async_rust_fn_reject() {
             .into_future::<i32>()
             .await;
 
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Failed to perform add!"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to perform add!")
+        );
         Ok(())
     });
 }
@@ -235,10 +237,12 @@ fn test_new_once() {
         // catch trigger rust resolver callback
         let result = ctx.eval::<i32>(Source::from_bytes("once(2); once(3)"));
 
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("OnceFn had been called"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("OnceFn had been called")
+        );
 
         Ok(())
     });
@@ -271,11 +275,14 @@ fn test_new_once_async() {
             .unwrap();
 
         let result: JSResult<i32> = promise.into_future().await;
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("OnceFn had been called"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("OnceFn had been called")
+        );
 
+        tokio::time::sleep(Duration::from_millis(110)).await;
         Ok(())
     })
 }
