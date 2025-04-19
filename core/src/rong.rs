@@ -47,9 +47,8 @@ impl MessageReceiver {
 type BoxedTaskFuture = Pin<Box<dyn Future<Output = JSResult<Box<dyn Any + Send>>>>>;
 
 // Type alias for the boxed closure stored in JsTask
-type BoxedFutureFn<E> = Box<
-    dyn FnOnce(&JSRuntime<<E as JSEngine>::Runtime>, MessageReceiver) -> BoxedTaskFuture + Send,
->;
+type BoxedFutureFn<E> =
+    Box<dyn FnOnce(JSRuntime<<E as JSEngine>::Runtime>, MessageReceiver) -> BoxedTaskFuture + Send>;
 
 /// Internal representation of a task submitted to a worker.
 /// Holds the necessary components to invoke the user's future on the worker thread.
@@ -129,7 +128,7 @@ impl<E: JSEngine + 'static> Worker<E> {
         future_fn: F,
     ) -> JSResult<oneshot::Receiver<JSResult<Box<dyn Any + Send>>>>
     where
-        F: FnOnce(&JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
+        F: FnOnce(JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
         Fut: Future<Output = JSResult<R>> + 'static,
         R: Send + 'static,
     {
@@ -142,7 +141,7 @@ impl<E: JSEngine + 'static> Worker<E> {
 
         // Box the future_fn closure. Inside, map the result R to Box<dyn Any + Send>.
         let boxed_fn: BoxedFutureFn<E> = Box::new(
-            move |runtime: &JSRuntime<E::Runtime>, receiver: MessageReceiver| {
+            move |runtime: JSRuntime<E::Runtime>, receiver: MessageReceiver| {
                 let user_fut = future_fn(runtime, receiver);
                 // Map the result R to Box<dyn Any + Send> right after the user future completes
                 let mapped_fut = async move {
@@ -188,13 +187,13 @@ impl<E: JSEngine + 'static> Worker<E> {
     /// The submitted task can access the JavaScript runtime and receive messages.
     pub fn spawn_future<F, Fut, R>(&self, future_fn: F) -> JSResult<()>
     where
-        F: FnOnce(&JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
+        F: FnOnce(JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
         Fut: Future<Output = JSResult<R>> + 'static,
         R: Send + 'static,
     {
         // Perform type erasure internally.
         let boxed_fn: BoxedFutureFn<E> = Box::new(
-            move |runtime: &JSRuntime<E::Runtime>, receiver: MessageReceiver| {
+            move |runtime: JSRuntime<E::Runtime>, receiver: MessageReceiver| {
                 // 1. Call user's function to get the anonymous Future `Fut`
                 let user_fut: Fut = future_fn(runtime, receiver);
                 // 2. Box and Pin it *immediately* for type erasure
@@ -225,13 +224,13 @@ impl<E: JSEngine + 'static> Worker<E> {
     /// Use this when you need to execute a task and immediately use its return value.
     pub fn block_on<F, Fut, R>(&self, future_fn: F) -> JSResult<R>
     where
-        F: FnOnce(&JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
+        F: FnOnce(JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
         Fut: Future<Output = JSResult<R>> + 'static,
         R: Send + 'static,
     {
         // Perform type erasure
         let boxed_fn: BoxedFutureFn<E> = Box::new(
-            move |runtime: &JSRuntime<E::Runtime>, receiver: MessageReceiver| {
+            move |runtime: JSRuntime<E::Runtime>, receiver: MessageReceiver| {
                 // 1. Call user's function to get the anonymous Future `Fut`
                 let user_fut: Fut = future_fn(runtime, receiver);
                 // 2. Box and Pin it *immediately* for type erasure
@@ -491,7 +490,7 @@ impl<E: JSEngine + 'static> Rong<E> {
     /// ```
     pub fn block_on<F, Fut, R>(&self, future_fn: F) -> JSResult<R>
     where
-        F: FnOnce(&JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
+        F: FnOnce(JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
         Fut: Future<Output = JSResult<R>> + 'static,
         R: Send + 'static,
     {
@@ -639,7 +638,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                                 let js_runtime = E::runtime();
                                 let user_fn = task.future_fn;
                                 let receiver = task.message_receiver;
-                                let user_future = user_fn(&js_runtime, receiver);
+                                let user_future = user_fn(js_runtime.clone(), receiver);
 
                                 // Make task abortable and check
                                 let (abortable_future, abort_handle) = futures::future::abortable(user_future);
