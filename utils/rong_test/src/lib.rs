@@ -6,25 +6,21 @@ pub use rong::function::{Constructor, Optional, Rest, This, ThisMut};
 #[allow(dead_code)]
 pub fn run<F: FnOnce(&JSContext) -> JSResult<()>>(f: F) {
     let rt = RongJS::runtime();
-    let ctx = RongJS::context(&rt);
+    let ctx = rt.context();
     f(&ctx).unwrap();
-}
-
-// Helper function to run tests with both JS context and runtime
-#[allow(dead_code)]
-pub fn run2<F: FnOnce(&JSContext, &JSRuntime) -> JSResult<()>>(f: F) {
-    let rt = RongJS::runtime();
-    let ctx = RongJS::context(&rt);
-    f(&ctx, &rt).unwrap();
 }
 
 #[macro_export]
 macro_rules! async_run {
-    ($block:expr) => {{
-        let rt = RongJS::runtime();
-        let ctx = RongJS::context(&rt);
-        let future = async move { $block(ctx).await };
-        rt.block_on(future).unwrap()
+    ($user_fn:expr) => {{
+        let rong = Rong::<RongJS>::builder().build();
+
+        let block_on_closure = |runtime: JSRuntime, _receiver| {
+            let ctx = runtime.context();
+            $user_fn(ctx)
+        };
+
+        rong.block_on::<_, _, ()>(block_on_closure).unwrap();
     }};
 }
 

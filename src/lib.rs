@@ -5,7 +5,7 @@ pub use rong_core::{
     JSObject as CoreJSObject, JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService,
     JSSymbol as CoreJSSymbol, JSTypedArray as CoreJSTypedArray, JSTypedArrayKind,
     JSValue as CoreJSValue, JSValueType, JsonToJsValue, Promise as CorePromise,
-    PropertyDescriptor as CorePropertyDescriptor, RongJSError, Source, SourceKind,
+    PropertyDescriptor as CorePropertyDescriptor, Rong, RongJSError, Source, SourceKind,
     ToJSAsyncIterator, ToJSIterator,
 };
 
@@ -44,7 +44,7 @@ pub type JSTypedArray = CoreJSTypedArray<JSEngineValue>;
 pub type PropertyDescriptor = CorePropertyDescriptor<JSEngineValue>;
 
 // re-export macro public symbols to rong
-pub use rong_macro::{js_class, js_export, js_method, FromJSObj, FromJSValue};
+pub use rong_macro::{FromJSObj, FromJSValue, js_class, js_export, js_method};
 
 /// A Trait for conversion from JavaScript values.
 pub trait TryFromJSValue: Sized {

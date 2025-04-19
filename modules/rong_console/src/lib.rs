@@ -507,6 +507,7 @@ pub fn default_hash<T: Hash + ?Sized>(v: &T) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rong_test::run;
     use std::sync::Mutex;
 
     static TEST_OUTPUT: Mutex<String> = Mutex::new(String::new());
@@ -543,80 +544,77 @@ mod tests {
 
     #[test]
     fn test_console_log_formatted_string() {
-        clear_test_output();
+        run(|ctx| {
+            clear_test_output();
+            init(ctx)?;
+            set_writer(Box::new(TestConsoleWriter));
 
-        let rt = RongJS::runtime();
-        let ctx = RongJS::context(&rt);
+            let js_code = r#"console.log("Name: %s, Age: %d", "Alice", 30);"#;
+            ctx.eval::<()>(Source::from_bytes(js_code))?;
 
-        init(&ctx).unwrap();
-        set_writer(Box::new(TestConsoleWriter));
-
-        let js_code = r#"console.log("Name: %s, Age: %d", "Alice", 30);"#;
-        ctx.eval::<()>(Source::from_bytes(js_code)).unwrap();
-
-        let output = get_test_output().trim().to_string();
-        assert_eq!(
-            output, "Name: Alice, Age: 30",
-            "Output should match formatted string"
-        );
+            let output = get_test_output().trim().to_string();
+            assert_eq!(
+                output, "Name: Alice, Age: 30",
+                "Output should match formatted string"
+            );
+            Ok(())
+        });
     }
 
     #[test]
     fn test_console_log_circular_reference() {
-        clear_test_output();
+        run(|ctx| {
+            clear_test_output();
+            init(ctx)?;
+            set_writer(Box::new(TestConsoleWriter));
 
-        let rt = RongJS::runtime();
-        let ctx = RongJS::context(&rt);
+            let js_code = r#"
+                // Create an object with circular reference
+                const obj = { name: "Circular Object" };
+                obj.self = obj;
 
-        init(&ctx).unwrap();
-        set_writer(Box::new(TestConsoleWriter));
+                console.log("Circular object:", obj);
+            "#;
+            ctx.eval::<()>(Source::from_bytes(js_code))?;
 
-        let js_code = r#"
-            // Create an object with circular reference
-            const obj = { name: "Circular Object" };
-            obj.self = obj;
-
-            console.log("Circular object:", obj);
-        "#;
-        ctx.eval::<()>(Source::from_bytes(js_code)).unwrap();
-
-        let output = get_test_output().trim().to_string();
-        assert!(
-            output.contains("[Circular]"),
-            "Output '{}' should contain circular reference marker",
-            output
-        );
+            let output = get_test_output().trim().to_string();
+            assert!(
+                output.contains("[Circular]"),
+                "Output '{}' should contain circular reference marker",
+                output
+            );
+            Ok(())
+        });
     }
 
     #[test]
     fn test_console_log_max_depth() {
-        clear_test_output();
+        run(|ctx| {
+            clear_test_output();
+            init(ctx)?;
+            set_writer(Box::new(TestConsoleWriter));
 
-        let rt = RongJS::runtime();
-        let ctx = RongJS::context(&rt);
+            let js_code = r#"
+                // Function to create a deeply nested object
+                function createDeepObject(depth) {
+                    if (depth <= 0) return {};
+                    return { child: createDeepObject(depth - 1) };
+                }
 
-        init(&ctx).unwrap();
-        set_writer(Box::new(TestConsoleWriter));
+                // Create an object that exceeds maximum recursion depth
+                const deepObj = createDeepObject(15);
 
-        let js_code = r#"
-            // Function to create a deeply nested object
-            function createDeepObject(depth) {
-                if (depth <= 0) return {};
-                return { child: createDeepObject(depth - 1) };
-            }
+                console.log("Deep object:", deepObj);
+            "#;
+            ctx.eval::<()>(Source::from_bytes(js_code))?;
 
-            // Create an object that exceeds maximum recursion depth
-            const deepObj = createDeepObject(15);
-
-            console.log("Deep object:", deepObj);
-        "#;
-        ctx.eval::<()>(Source::from_bytes(js_code)).unwrap();
-
-        let output = get_test_output().trim().to_string();
-        assert!(
-            output.contains("[Maximum recursion depth exceeded]"),
-            "Output '{}' should contain recursion depth warning",
-            output
-        );
+            let output = get_test_output().trim().to_string();
+            assert!(
+                output.contains("[Maximum recursion depth exceeded]"),
+                "Output '{}' should contain recursion depth warning",
+                output
+            );
+            Ok(())
+        });
     }
 }

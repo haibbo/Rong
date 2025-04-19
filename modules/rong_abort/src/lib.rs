@@ -36,15 +36,13 @@ mod tests {
             let callback = JSFunc::new(&ctx, move |obj: JSObject| {
                 let abort = obj.borrow::<AbortSignal>().unwrap();
                 let mut recv = abort.subscribe();
-                let ctx = obj.get_ctx();
 
                 let tx = tx.clone();
-                ctx.spawn_local(async move {
+                tokio::task::spawn_local(async move {
                     let value = recv.recv().await;
-                    let reason: String = value.try_into()?;
+                    let reason: String = value.try_into().unwrap();
                     println!("Got reason:{}", reason);
                     tx.send(reason).await.unwrap();
-                    Ok(())
                 });
             });
 

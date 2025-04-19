@@ -1,5 +1,5 @@
 // Tiny File downloader
-// Usage: rong downloader.js <url> <output-filename>
+// Usage: rong run downloader.js <url> <output-filename>
 
 async function downloadFile(url, outputPath) {
   try {
@@ -7,9 +7,9 @@ async function downloadFile(url, outputPath) {
     console.log(`Saving to: ${outputPath}`);
 
     // Fetch the file
-    console.log("startint fetch");
+    console.log("Starting fetch");
     const response = await fetch(url);
-    console.log("fetch done");
+    console.log("Fetch done");
 
     if (!response.ok) {
       throw new Error(
@@ -40,13 +40,13 @@ async function downloadFile(url, outputPath) {
 const args = Rong.args;
 
 console.log("args:", args);
-if (args.length < 2) {
-  console.log("Usage: rong downloader.js <url> <output-filename>");
+if (args.length < 3) {
+  console.log("Usage: rong run downloader.js <url> <output-filename>");
   Rong.exit(1);
 }
 
-const url = args[0];
-const outputPath = args[1];
+const url = args[1];
+const outputPath = args[2];
 
 // Execute the download
 downloadFile(url, outputPath);

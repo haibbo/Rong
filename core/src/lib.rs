@@ -4,8 +4,8 @@ pub mod function;
 mod iterator;
 mod promise;
 mod result;
+mod rong;
 mod runtime;
-mod scheduler;
 mod source;
 mod value;
 
@@ -14,6 +14,7 @@ pub use context::*;
 pub use iterator::*;
 pub use promise::*;
 pub use result::{IntoJSResult, JSResult, RongJSError};
+pub use rong::*;
 pub use runtime::*;
 pub use source::{Source, SourceKind};
 pub use value::*;

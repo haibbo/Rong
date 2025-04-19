@@ -103,7 +103,7 @@ fn set_timeout_with_repeat(
     registry.register_timer(id, notifier.clone());
     let delay = delay.unwrap_or(0.0).max(0.0) as u64;
 
-    ctx.spawn_local(async move {
+    tokio::task::spawn_local(async move {
         let mut interval = tokio::time::interval(Duration::from_millis(delay.max(1)));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -111,14 +111,14 @@ fn set_timeout_with_repeat(
         if delay > 0 {
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_millis(delay)) => {}
-                _ = notifier.notified() => return Ok(()),
-                _ = shutdown.notified() => return Ok(()),
+                _ = notifier.notified() => return,
+                _ = shutdown.notified() => return,
             }
         }
 
         // First execution
         if registry.is_timer_active(id) && callback.call::<_, ()>(None, ()).is_ok() && !repeat {
-            return Ok(());
+            return;
         }
 
         // Repeat loop
@@ -133,8 +133,6 @@ fn set_timeout_with_repeat(
                 _ = shutdown.notified() => break,
             }
         }
-
-        Ok(())
     });
 
     id

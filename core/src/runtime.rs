@@ -1,10 +1,8 @@
 use crate::function::RustFunc;
-use crate::scheduler::Scheduler;
 use crate::{JSContext, JSContextImpl, JSObjectOps, JSResult, JSValueImpl};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::future::Future;
 use std::rc::Rc;
 use tokio::sync::Notify;
 
@@ -28,7 +26,12 @@ pub trait JSRuntimeImpl {
 
     /// Runs all pending jobs in the JavaScript runtime.
     /// This includes executing any queued promise callbacks, microtasks, and other pending operations.
-    fn run_pending_jobs(&self);
+    ///
+    /// # Key Notes
+    /// - return -1 means this JSRuntime does not need to call this API
+    fn run_pending_jobs(&self) -> i32 {
+        -1
+    }
 
     /// Runs garbage collection on the JavaScript runtime.
     ///
@@ -41,44 +44,69 @@ pub trait JSRuntimeImpl {
 
 pub struct JSRuntime<R: JSRuntimeImpl> {
     pub(crate) inner: Rc<R>,
-    scheduler: Rc<Scheduler<R>>,
     services: ServiceContainer,
     pub(crate) engine: &'static str,
+    shutdown_signal: Rc<Notify>,
 }
 
 impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            scheduler: self.scheduler.clone(),
             services: self.services.clone(),
             engine: self.engine,
+            shutdown_signal: self.shutdown_signal.clone(),
+        }
+    }
+}
+
+impl<R: JSRuntimeImpl> Drop for JSRuntime<R> {
+    fn drop(&mut self) {
+        // Only notify if we're the last reference to the runtime
+        if Rc::strong_count(&self.inner) == 1 {
+            // Notify all components relying on the shutdown signal
+            self.shutdown_signal.notify_waiters();
         }
     }
 }
 
 impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
-    pub fn block_on<F, T>(&self, future: F) -> JSResult<T>
-    where
-        F: Future<Output = JSResult<T>> + 'static,
-        T: 'static,
-    {
-        self.scheduler.block_on(future)
-    }
-
-    pub(crate) fn scheduler(&self) -> &Rc<Scheduler<R>> {
-        &self.scheduler
-    }
-
     pub fn get_shutdown_signal(&self) -> Rc<Notify> {
-        self.scheduler.get_shutdown_signal()
+        self.shutdown_signal.clone()
+    }
+
+    /// Creates a new JavaScript context instance associated with this runtime.
+    ///
+    /// # Key Notes
+    /// - Automatically registers the Rust function class for interop capabilities.
+    /// - Contexts are isolated execution environments within the same runtime.
+    ///
+    /// # Example
+    /// ```rust
+    /// let runtime = JSEngine::runtime();
+    /// let context = runtime.context();
+    /// ```
+    pub fn context(&self) -> JSContext<R::Context>
+    where
+        R::Context: JSContextImpl<Runtime = R>,
+        <R::Context as JSContextImpl>::Value: JSObjectOps + 'static,
+    {
+        let ctx = JSContext::<R::Context>::new(self);
+        ctx.register_builtin_class()
+            .expect("Failed to register builtin class");
+
+        ctx.global()
+            .set("Rong", ctx.rong())
+            .expect("Failed to add Rong object");
+
+        ctx
     }
 
     /// # Warning
     /// testing purposes only and don't use it in production code.
     #[doc(hidden)]
-    pub fn run_pending_jobs(&self) {
-        self.inner.run_pending_jobs();
+    pub fn run_pending_jobs(&self) -> i32 {
+        self.inner.run_pending_jobs()
     }
 
     /// Runs garbage collection on the JavaScript runtime.
@@ -131,47 +159,15 @@ pub trait JSEngine: Sized {
     ///
     /// # Key Notes
     /// - One thread have only one runtime instance.
-    /// - Each runtime has its own scheduler for managing asynchronous tasks.
     /// - This ensures proper isolation and thread-safety in JavaScript execution.
-    ///
-    /// # Returns
-    /// A new `JSRuntime` instance with its associated scheduler.
     fn runtime() -> JSRuntime<Self::Runtime> {
         let runtime = Rc::new(Self::Runtime::new());
-        let scheduler = Scheduler::new(runtime.clone());
         JSRuntime {
             inner: runtime,
-            scheduler,
             services: ServiceContainer::new(),
             engine: Self::name(),
+            shutdown_signal: Rc::new(Notify::new()),
         }
-    }
-
-    /// Creates a new JavaScript context instance associated with the given runtime.
-    ///
-    /// # Key Notes
-    /// - Each context is tied to a specific runtime instance.
-    /// - Automatically registers the Rust function class for interop capabilities.
-    /// - Contexts are isolated execution environments within the same runtime.
-    ///
-    /// # Example
-    /// ```rust
-    /// let runtime = JSEngine::runtime();
-    /// let context = JSEngine::context(&runtime);
-    /// ```
-    fn context(rt: &JSRuntime<Self::Runtime>) -> JSContext<Self::Context>
-    where
-        Self::Value: JSObjectOps + 'static,
-    {
-        let ctx = JSContext::<Self::Context>::new(rt);
-        ctx.register_builtin_class()
-            .expect("Failed to register builtin class");
-
-        ctx.global()
-            .set("Rong", ctx.rong())
-            .expect("Failed to add Rong object");
-
-        ctx
     }
 }
 

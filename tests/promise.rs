@@ -3,7 +3,7 @@ use std::time::Duration;
 
 #[test]
 fn test_rust_promise_with_callback() {
-    run2(|ctx, rt| {
+    run(|ctx| {
         let ctx_clone = ctx.clone();
         // Register a Rust function that returns a promise
         let timeout_fn = JSFunc::new(ctx, move |millis: i32| {
@@ -29,7 +29,7 @@ fn test_rust_promise_with_callback() {
             .unwrap();
 
         // Run pending jobs until the promise resolves
-        rt.run_pending_jobs();
+        ctx.runtime().run_pending_jobs();
         let result: i32 = ctx.eval(Source::from_bytes("result")).unwrap();
 
         assert_eq!(result, 101);
@@ -39,7 +39,7 @@ fn test_rust_promise_with_callback() {
 
 #[test]
 fn test_rust_promise_with_resolve() {
-    run2(|ctx, rt| {
+    run(|ctx| {
         let (promise, resolve, _reject) = ctx.promise().unwrap();
 
         // Use Rc<RefCell> for single-threaded shared mutability
@@ -59,7 +59,7 @@ fn test_rust_promise_with_resolve() {
         resolve.call::<_, ()>(None, ("success!",)).unwrap();
 
         // Run pending jobs to trigger the callback
-        rt.run_pending_jobs();
+        ctx.runtime().run_pending_jobs();
 
         // Now assert the result after jobs have run
         let final_result = result.borrow().clone().expect("Callback was not called");
@@ -253,7 +253,7 @@ fn test_promise_into_future_reject_exception() {
 
 #[test]
 fn test_rust_promise_with_mut_state() {
-    run2(|ctx, rt| {
+    run(|ctx| {
         let ctx_clone = ctx.clone();
         let mut counter = 0;
 
@@ -277,7 +277,7 @@ fn test_rust_promise_with_mut_state() {
         "#;
 
         ctx.eval::<()>(Source::from_bytes(js_code)).unwrap();
-        rt.run_pending_jobs();
+        ctx.runtime().run_pending_jobs();
 
         // Check individual results
         let result1: i32 = ctx.eval(Source::from_bytes("result1")).unwrap();

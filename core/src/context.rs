@@ -1,7 +1,7 @@
 use crate::{
-    source::{Source, SourceKind},
     ClassSetup, FromJSValue, JSClass, JSException, JSObject, JSObjectOps, JSResult, JSRuntimeImpl,
     JSTypeOf, JSValue, JSValueImpl, Promise, RongJSError,
+    source::{Source, SourceKind},
 };
 use crate::{JSRuntime, JSValueMapper};
 use std::any::TypeId;
@@ -150,12 +150,6 @@ impl<C: JSContextImpl> JSContext<C> {
     /// ```
     /// let rt = RongJS::runtime();
     /// let ctx = JSContext::new(&rt);
-    ///
-    /// // Can be safely cloned for async tasks
-    /// let ctx_clone = ctx.clone();
-    /// ctx.spawn_local(async move {
-    ///     ctx_clone.eval_async("...").await?;
-    /// });
     /// ```
     pub(crate) fn new(runtime: &JSRuntime<C::Runtime>) -> Self
     where

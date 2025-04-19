@@ -65,7 +65,7 @@ impl Point {
 fn main() {
     // Create a JavaScript runtime and context
     let rt = RongJS::runtime();
-    let ctx = RongJS::context(&rt);
+    let ctx = rt.context();
 
     // Register our Point class with JavaScript
     ctx.register_class::<Point>();
