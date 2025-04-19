@@ -18,12 +18,12 @@
 //!   to the callback function. Only the callback function and delay are supported.
 //! - Delay is in milliseconds and should be a positive number.
 
-use rong::{function::Optional, JSContext, JSFunc, JSResult, JSRuntimeService};
+use rong::{JSContext, JSFunc, JSResult, JSRuntimeService, function::Optional};
 
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU32, Ordering};
 use tokio::sync::Notify;
 use tokio::time::Duration;
 
@@ -98,7 +98,7 @@ fn set_timeout_with_repeat(
     let notifier = Rc::new(Notify::new());
 
     let ctx = callback.get_ctx();
-    let scheduler_shutdown = ctx.runtime().get_shutdown_signal();
+    let shutdown = ctx.runtime().get_shutdown_signal();
 
     registry.register_timer(id, notifier.clone());
     let delay = delay.unwrap_or(0.0).max(0.0) as u64;
@@ -112,7 +112,7 @@ fn set_timeout_with_repeat(
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_millis(delay)) => {}
                 _ = notifier.notified() => return Ok(()),
-                _ = scheduler_shutdown.notified() => return Ok(()),
+                _ = shutdown.notified() => return Ok(()),
             }
         }
 
@@ -130,7 +130,7 @@ fn set_timeout_with_repeat(
                     }
                 }
                 _ = notifier.notified() => break,
-                _ = scheduler_shutdown.notified() => break,
+                _ = shutdown.notified() => break,
             }
         }
 
