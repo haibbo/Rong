@@ -584,20 +584,24 @@ impl<E: JSEngine + 'static> Rong<E> {
 
         local
             .run_until(async move {
-                // Set worker state to free initially
-                {
-                    let mut state_guard = state.lock().unwrap();
-                    *state_guard = WorkerState::Free;
-                    free_signal.notify_waiters();
-                }
+               let mut should_terminate = false;
 
-                let mut should_terminate = false;
-                let mut current_task_message_tx: Option<mpsc::Sender<Box<dyn Any + Send>>> = None;
+                // State for the currently running task
+                type TaskJoinHandle = tokio::task::JoinHandle<
+                    Result<JSResult<Box<dyn Any + Send>>, futures::future::Aborted>,
+                >;
+                let mut current_task_join_handle: Option<TaskJoinHandle> = None;
                 let mut current_task_abort_handle: Option<futures::future::AbortHandle> = None;
+                let mut current_microtask_runner_handle: Option<tokio::task::JoinHandle<()>> = None;
+                let mut current_task_message_tx: Option<mpsc::Sender<Box<dyn Any + Send>>> = None;
+                let mut current_js_runtime: Option<JSRuntime<E::Runtime>> = None;
+                let mut current_task_result_tx: Option<
+                    oneshot::Sender<JSResult<Box<dyn Any + Send>>>,
+                > = None;
+
 
                 // Main worker event loop
                 while !should_terminate {
-                    // Use tokio::select to handle async functions, messages, termination signal and channel closure
                     tokio::select! {
                         // Bias select towards checking for termination first
                         biased;
@@ -605,128 +609,143 @@ impl<E: JSEngine + 'static> Rong<E> {
                         // Process termination signal
                         _ = terminate_signal.notified() => {
                             println!("Worker {} received termination signal", worker_id);
-                            // Abort any running task and take the handle to properly drop it
-                            let _ = current_task_abort_handle.take().map(|handle| {
-                                println!("Worker {} aborting current task.", worker_id);
+                            if let Some(handle) = current_task_abort_handle.take() {
+                                println!("Worker {} aborting main task.", worker_id);
                                 handle.abort();
-                            });
+                            }
+                            if let Some(handle) = current_microtask_runner_handle.take() {
+                                println!("Worker {} aborting microtask runner.", worker_id);
+                                handle.abort();
+                            }
                             should_terminate = true;
                         },
 
-                        // Process worker's user async functions
-                        maybe_task = task_rx.recv(), if current_task_message_tx.is_none() && !should_terminate => {
+                        // Process new user async functions, only if no task is currently running
+                        maybe_task = task_rx.recv(), if current_task_join_handle.is_none() && !should_terminate => {
                             if let Some(user_async_task) = maybe_task {
-                                // Create JS Runtime and execute user's async function
-                                let js_runtime = E::runtime();
-                                // Clone message_tx for forwarding
-                                if current_task_message_tx.replace(user_async_task.task_message_tx.clone()).is_some() {
-                                    // This should never happen - we only process async functions when current_task_message_tx is None
-                                    eprintln!("Worker {} already had an async function running?", worker_id);
-                                }
-
-                                // Execute the user's async function
-                                let user_fn = user_async_task.future_fn;
-                                let message_receiver = user_async_task.message_receiver;
-                                let result_tx = user_async_task.result_tx;
-
-                                // Execute the user function
-                                let user_future = user_fn(js_runtime.clone(), message_receiver);
-
-                                // Make task abortable and check
-                                let (abortable_future, abort_handle) = futures::future::abortable(user_future);
-                                if current_task_abort_handle.replace(abort_handle).is_some() {
-                                    // This should never happen - an abort handle already existed
-                                    eprintln!("Worker {} already had an abort handle?", worker_id);
-                                }
-
-                                // Only create and run the microtask handler if needed
-                                let microtask_notifier = if js_runtime.run_pending_jobs()>=0 {
-
-                                    // Create a notifier to signal when the user future completes
-                                    let notifier = Arc::new(tokio::sync::Notify::new());
-                                    let notifier_clone = notifier.clone();
-
-                                    // Run pending JS jobs in a local task
-                                    let js_runtime_clone = js_runtime.clone();
-                                    tokio::task::spawn_local(async move {
-                                        loop {
-                                            // Check if completion notification received
-                                            let timeout = tokio::time::timeout(
-                                                std::time::Duration::from_millis(5),
-                                                notifier_clone.notified()
-                                            ).await;
-
-                                            // Run pending JS jobs
-                                            js_runtime_clone.run_pending_jobs();
-
-                                            // Exit loop if future completed
-                                            if timeout.is_ok() {
-                                                break;
-                                            }
-                                        }
-                                    });
-
-                                    Some(notifier)
-                                } else {
-                                    None
-                                };
-
-                                // Wait for user future to complete
-                                let result_from_future = abortable_future.await;
-
-                                // Notify the JS job runner that the user future is complete (if it exists)
-                                if let Some(notifier) = microtask_notifier {
-                                    notifier.notify_one();
-                                }
-
-                                // Clear any abort handles and message channels
-                                let _old_abort_handle = current_task_abort_handle.take();
-                                let _old_message_tx = current_task_message_tx.take();
-
-                                // Handle result
-                                let final_result: JSResult<Box<dyn Any + Send>> = match result_from_future {
-                                    Ok(inner_result) => inner_result,
-                                    Err(_) => Err(RongJSError::Error("Task aborted by worker shutdown".to_string()))
-                                };
-
-                                // Send the result back to the caller, ignoring send errors (caller may have dropped)
-                                let _ = result_tx.send(final_result);
-
-                                // Set worker state back to Free
+                                // Set worker state to Busy
                                 {
                                     let mut state_guard = state.lock().unwrap();
-                                    *state_guard = WorkerState::Free;
-                                    free_signal.notify_waiters();
+                                    *state_guard = WorkerState::Busy;
                                 }
+
+                                // Create JS Runtime for this task
+                                let js_runtime = E::runtime();
+                                current_js_runtime = Some(js_runtime.clone()); // Store for microtasks
+
+                                // Store message sender and result sender
+                                current_task_message_tx = Some(user_async_task.task_message_tx);
+                                current_task_result_tx = Some(user_async_task.result_tx);
+
+                                // Prepare the user's future
+                                let user_fn = user_async_task.future_fn;
+                                let message_receiver = user_async_task.message_receiver;
+                                let user_future = user_fn(js_runtime.clone(), message_receiver); // Pass runtime clone
+
+                                // Make task abortable
+                                let (abortable_future, abort_handle) = futures::future::abortable(user_future);
+                                current_task_abort_handle = Some(abort_handle);
+
+                                // Spawn the user's future onto the LocalSet
+                                let main_task_handle = tokio::task::spawn_local(abortable_future);
+                                current_task_join_handle = Some(main_task_handle);
+
+                                // Start microtask runner if needed
+                                if js_runtime.run_pending_jobs() >= 0 {
+
+                                    let rt_clone = js_runtime.clone(); // Clone for the microtask runner
+                                    let microtask_handle = tokio::task::spawn_local(async move {
+                                        let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
+                                        // Loop indefinitely until aborted by the main loop
+                                        loop {
+                                            interval.tick().await;
+                                            rt_clone.run_pending_jobs();
+                                        }
+                                    });
+                                    current_microtask_runner_handle = Some(microtask_handle);
+                                }
+
                             } else {
                                 // task_rx closed - terminate the worker loop
+                                println!("Worker {} task channel closed.", worker_id);
                                 should_terminate = true;
                             }
                         },
 
-                        // Process messages to the currently running task
-                        Some(message) = worker_message_rx.recv(), if current_task_message_tx.is_some() => {
-                            // Forward the message to the current task, ignoring errors
-                            if let Some(tx) = &current_task_message_tx {
-                                // Restore error logging on failed send
-                                if let Err(e) = tx.try_send(message) {
-                                    eprintln!("Worker {} failed to forward message to task: {}", worker_id, e);
+                        // Process messages for the currently running task
+                        maybe_message = worker_message_rx.recv(), if current_task_message_tx.is_some() => {
+                             if let Some(message) = maybe_message {
+                                // Forward the message to the current task, ignoring errors (task might have ended)
+                                if let Some(tx) = &current_task_message_tx {
+                                    if let Err(e) = tx.try_send(message) {
+                                        // Log only if the channel wasn't closed (task ended normally)
+                                        if matches!(e, mpsc::error::TrySendError::Full(_)) {
+                                            eprintln!("Worker {} task message channel full, dropping message: {}", worker_id, e);
+                                        }
+                                        // Don't log Closed errors, as the task might have just finished
+                                    } else {
+                                        // If send succeeded, run pending jobs as message might queue JS work
+                                        if let Some(rt) = &current_js_runtime {
+                                            rt.run_pending_jobs();
+                                        }
+                                    }
                                 }
-                            }
+                             } else {
+                                 // worker_message_rx closed, might indicate an issue or shutdown
+                                 println!("Worker {} message channel closed.", worker_id);
+                                 // Don't terminate immediately, let running task finish or termination signal handle it
+                             }
                         },
 
-                        // If worker_message_rx closed, we should terminate
-                        else => {
-                            should_terminate = true;
-                        }
+                        // Wait for the current task to complete
+                        maybe_result = async { current_task_join_handle.as_mut().unwrap().await }, if current_task_join_handle.is_some() => {
+                            let final_result: JSResult<Box<dyn Any + Send>> = match maybe_result {
+                                Ok(Ok(inner_result)) => inner_result, // Task finished successfully (Ok from JoinHandle, Ok from AbortableFuture)
+                                Ok(Err(_aborted)) => Err(RongJSError::Error("Task aborted".to_string())), // Ok from JoinHandle, Err from AbortableFuture (aborted)
+                                Err(join_error) => { // Err from JoinHandle (task panicked or runtime dropped)
+                                     eprintln!("Worker {} task panicked or runtime dropped: {:?}", worker_id, join_error);
+                                     Err(RongJSError::Error(format!("Task panicked or runtime dropped: {}", join_error)))
+                                }
+                            };
+
+                            // Send the result back
+                            if let Some(tx) = current_task_result_tx.take() {
+                                let _ = tx.send(final_result);
+                            }
+
+                            // Clean up task state
+                            current_task_join_handle = None;
+                            current_task_abort_handle = None;
+                            current_task_message_tx = None;
+                            current_js_runtime = None;
+
+                            // Stop and cleanup microtask runner if it exists
+                            if let Some(handle) = current_microtask_runner_handle.take() {
+                                handle.abort();
+                            }
+
+                            // Set worker state back to Free
+                            {
+                                let mut state_guard = state.lock().unwrap();
+                                *state_guard = WorkerState::Free;
+                                free_signal.notify_waiters();
+                            }
+                        },
                     }
                 }
 
-                // Final cleanup - ensure we've dropped any task handles
-                let _ = current_task_abort_handle.take();
-                let _ = current_task_message_tx.take();
+                // Final cleanup if terminated while task was running
+                if let Some(handle) = current_task_abort_handle.take() {
+                     handle.abort();
+                }
+                if let Some(handle) = current_microtask_runner_handle.take() {
+                     handle.abort();
+                }
+                // Ensure other state is cleared (Handles already aborted/taken above)
+                let _ = current_task_result_tx.take(); // Drop result sender if not already taken
 
-                // Set worker state back to Free on exit
+
+                // Set worker state back to Free on final exit (safety net)
                 {
                     let mut state_guard = state.lock().unwrap();
                     *state_guard = WorkerState::Free;
