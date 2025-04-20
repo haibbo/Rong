@@ -314,20 +314,19 @@ impl<E: JSEngine + 'static> Worker<E> {
         // Try to send the message, but don't block if the channel is full
         // This is a non-blocking operation that returns immediately
         // The worker loop will receive this and forward if an async function is running
-        let _ = self.message_tx.try_send(value).map_err(|e| {
+        self.message_tx.try_send(value).map_err(|e| {
             if matches!(e, mpsc::error::TrySendError::Full(_)) {
                 eprintln!("Worker {} message channel full, message dropped", self.id);
             } else if matches!(e, mpsc::error::TrySendError::Closed(_)) {
                 // This might happen during shutdown
                 eprintln!("Worker {} message channel closed, message dropped", self.id);
             }
-            // Convert SendError to our error type, although we are ignoring it with let _
+            // Convert SendError to our error type
             RongJSError::Error(format!(
                 "Failed to post message to worker {}: {:?}",
                 self.id, e
             ))
-        });
-        Ok(())
+        })
     }
 }
 
