@@ -4,7 +4,7 @@ members = [
     "macro",
     "quickjs", "javascriptcore", "v8",
     "utils/rong_test",
-    "examples/point",
+    "examples",
     "modules/rong_timer", "modules/rong_navigator", "modules/rong_path",
     "modules/rong_http", "modules/rong_encoding", "modules/rong_event",
     "modules/rong_assert", "modules/rong_exception",

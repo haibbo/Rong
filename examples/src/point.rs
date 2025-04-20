@@ -1,8 +1,8 @@
 use rong::*;
-use rong::{js_export, js_method, js_class};
+use rong::{js_class, js_export, js_method};
 
 // Define the Point struct with js_export macro
-#[js_export(rename = "Point2D")]
+#[js_export]
 #[derive(Debug)]
 struct Point {
     x: i32,
@@ -10,7 +10,7 @@ struct Point {
 }
 
 // Implement methods and expose them to JavaScript
-#[js_class]
+#[js_class(rename = "Point2D")]
 impl Point {
     // Constructor
     #[js_method(constructor)]
@@ -68,7 +68,7 @@ fn main() {
     let ctx = rt.context();
 
     // Register our Point class with JavaScript
-    ctx.register_class::<Point>();
+    let _ = ctx.register_class::<Point>();
 
     // Run some JavaScript code that uses our Point class
     let result = ctx
