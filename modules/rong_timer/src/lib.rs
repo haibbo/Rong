@@ -22,7 +22,7 @@ use rong::{JSContext, JSFunc, JSResult, JSRuntimeService, function::Optional};
 
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Mutex;
+use std::sync::{Mutex, Condvar, Arc};
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio::sync::Notify;
 use tokio::time::Duration;
@@ -32,6 +32,8 @@ mod promise;
 #[derive(Clone)]
 pub struct TimerRegistry {
     inner: Rc<TimerRegistryInner>,
+    // Track number of active timers for shutdown synchronization
+    active_count: Arc<(Mutex<usize>, Condvar)>,
 }
 
 struct TimerRegistryInner {
@@ -41,7 +43,19 @@ struct TimerRegistryInner {
 
 impl JSRuntimeService for TimerRegistry {
     fn on_shutdown(&self) {
+        // First, notify all timers to stop
         self.shutdown();
+        
+        // Then wait for all timer tasks to complete
+        let (lock, cvar) = &*self.active_count;
+        let count = lock.lock().unwrap();
+        
+        // Wait while there are still active timers, with timeout protection
+        if *count > 0 {
+            // Wait with a single reasonable timeout
+            let _ = cvar.wait_timeout(count, Duration::from_secs(2)).unwrap();
+            // No need to loop, one timeout is sufficient
+        }
     }
 }
 
@@ -52,6 +66,7 @@ impl Default for TimerRegistry {
                 next_id: AtomicU32::new(0),
                 notifiers: Mutex::new(HashMap::new()),
             }),
+            active_count: Arc::new((Mutex::new(0), Condvar::new())),
         }
     }
 }
@@ -63,11 +78,36 @@ impl TimerRegistry {
 
     fn register_timer(&self, id: u32, notifier: Rc<Notify>) {
         self.inner.notifiers.lock().unwrap().insert(id, notifier);
+        
+        // Increment active count
+        let (lock, _cvar) = &*self.active_count;
+        let mut count = lock.lock().unwrap();
+        *count += 1;
     }
 
     fn cancel_timer(&self, id: u32) {
-        if let Some(notifier) = self.inner.notifiers.lock().unwrap().remove(&id) {
+        let canceled = if let Some(notifier) = self.inner.notifiers.lock().unwrap().remove(&id) {
             notifier.notify_waiters();
+            true
+        } else {
+            false
+        };
+        
+        // Decrement active count only if we actually canceled a timer
+        if canceled {
+            self.decrement_active_count();
+        }
+    }
+    
+    fn decrement_active_count(&self) {
+        let (lock, cvar) = &*self.active_count;
+        let mut count = lock.lock().unwrap();
+        if *count > 0 {
+            *count -= 1;
+            if *count == 0 {
+                // Notify that all timers are complete
+                cvar.notify_all();
+            }
         }
     }
 
@@ -80,9 +120,13 @@ impl TimerRegistry {
         if notifiers.is_empty() {
             return;
         }
-
-        for (_id, notifier) in notifiers.drain() {
-            // println!("Cleaning up timer {}", _id);
+        
+        // Copy the notifiers before draining to avoid deadlock
+        let notifiers_copy: Vec<Rc<Notify>> = notifiers.values().cloned().collect();
+        notifiers.clear();
+        
+        // Notify all timers outside the lock
+        for notifier in notifiers_copy {
             notifier.notify_waiters();
         }
     }
@@ -97,11 +141,9 @@ fn set_timeout_with_repeat(
     let id = registry.next_id();
     let notifier = Rc::new(Notify::new());
 
-    let ctx = callback.get_ctx();
-    let shutdown = ctx.runtime().get_shutdown_signal();
-
     registry.register_timer(id, notifier.clone());
     let delay = delay.unwrap_or(0.0).max(0.0) as u64;
+    let registry_clone = registry.clone();
 
     tokio::task::spawn_local(async move {
         let mut interval = tokio::time::interval(Duration::from_millis(delay.max(1)));
@@ -111,18 +153,21 @@ fn set_timeout_with_repeat(
         if delay > 0 {
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_millis(delay)) => {}
-                _ = notifier.notified() => return,
-                _ = shutdown.notified() => return,
+                _ = notifier.notified() => {
+                    registry_clone.decrement_active_count();
+                    return;
+                }
             }
         }
 
         // First execution
-        if registry.is_timer_active(id) && callback.call::<_, ()>(None, ()).is_ok() && !repeat {
+        if registry_clone.is_timer_active(id) && callback.call::<_, ()>(None, ()).is_ok() && !repeat {
+            registry_clone.decrement_active_count();
             return;
         }
 
         // Repeat loop
-        while registry.is_timer_active(id) {
+        while registry_clone.is_timer_active(id) {
             tokio::select! {
                 _ = interval.tick() => {
                     if callback.call::<_, ()>(None,()).is_err() {
@@ -130,9 +175,11 @@ fn set_timeout_with_repeat(
                     }
                 }
                 _ = notifier.notified() => break,
-                _ = shutdown.notified() => break,
             }
         }
+        
+        // Ensure we decrement the count when the task finishes
+        registry_clone.decrement_active_count();
     });
 
     id
