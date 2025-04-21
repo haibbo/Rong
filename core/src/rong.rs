@@ -3,8 +3,8 @@ use std::any::Any;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
-use tokio::sync::{mpsc, oneshot};
+use std::sync::Arc;
+use tokio::sync::{Mutex as TokioMutex, Notify, mpsc, oneshot};
 
 /// Worker states
 ///
@@ -109,10 +109,10 @@ pub struct Worker<E: JSEngine + 'static> {
     message_tx: mpsc::Sender<WorkerMessage>,
 
     /// Worker state (Free/Busy)
-    state: Arc<Mutex<WorkerState>>,
+    state: Arc<TokioMutex<WorkerState>>,
 
     /// Signal for when the worker becomes free
-    free_signal: Arc<tokio::sync::Notify>,
+    free_signal: Arc<Notify>,
 
     /// Parent Rong instance
     rong: Arc<Rong<E>>,
@@ -137,8 +137,8 @@ impl<E: JSEngine + 'static> Worker<E> {
     }
 
     /// Get the worker's current state
-    pub fn state(&self) -> WorkerState {
-        *self.state.lock().unwrap()
+    pub async fn state(&self) -> WorkerState {
+        *self.state.lock().await
     }
 
     /// Spawn a user's asynchronous function on this worker
@@ -295,22 +295,21 @@ impl<E: JSEngine + 'static> Worker<E> {
 
     /// Wait for this worker to complete its current async function
     ///
-    /// Blocks the calling thread until the worker's state changes to Free.
-    /// This can be used to ensure that a worker has finished processing before shutdown.
+    /// Returns a future that resolves when the worker's state changes to Free.
+    /// This can be awaited to ensure that a worker has finished processing before shutdown.
     pub async fn join(&self) -> JSResult<()> {
         loop {
             // Check state first
             {
-                let state = self.state.lock().unwrap();
-                if *state == WorkerState::Free {
+                let state_guard = self.state.lock().await;
+                if *state_guard == WorkerState::Free {
                     return Ok(());
                 }
-            } // Lock released before await
+                // state_guard implicitly dropped here before await
+            }
 
             // Wait for notification that state *might* be Free
             self.free_signal.notified().await;
-
-            // Loop will re-check state after notification
         }
     }
 
@@ -437,7 +436,7 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
     /// ```
     pub fn build(self) -> Arc<Rong<E>> {
         let rong = Arc::new(Rong {
-            workers: Mutex::new(Vec::with_capacity(self.worker_count)),
+            workers: Arc::new(TokioMutex::new(Vec::with_capacity(self.worker_count))),
             worker_count: self.worker_count,
             task_queue_size: self.task_queue_size,
             message_queue_size: self.message_queue_size,
@@ -462,7 +461,7 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
 /// JavaScript runtime, ensuring isolation and thread safety.
 pub struct Rong<E: JSEngine + 'static> {
     /// Worker pool
-    workers: Mutex<Vec<Worker<E>>>,
+    workers: Arc<TokioMutex<Vec<Worker<E>>>>,
 
     /// Number of worker threads
     worker_count: usize,
@@ -508,7 +507,8 @@ impl<E: JSEngine + 'static> Rong<E> {
         R: Send + 'static,
     {
         // Get a free worker
-        let worker = self.get_worker()?;
+        // Need to block here as Rong::block_on is synchronous
+        let worker = futures::executor::block_on(self.get_worker())?;
 
         // Execute the async function on the worker
         worker.block_on(future_fn)
@@ -521,66 +521,69 @@ impl<E: JSEngine + 'static> Rong<E> {
     /// task queue and message channel.
     fn initialize_workers(self: &Arc<Self>) {
         // Use Arc<Self> to easily clone for workers
-        let mut workers = self.workers.lock().unwrap();
+        // Use block_on here as initialize_workers is synchronous
+        futures::executor::block_on(async {
+            let mut workers_guard = self.workers.lock().await;
 
-        for i in 0..self.worker_count {
-            // Create channels for worker communication
-            let (task_tx, task_rx) = mpsc::channel(self.task_queue_size);
-            let terminate_signal = Arc::new(tokio::sync::Notify::new());
-            // This channel is for messages sent via post_message
-            let (worker_message_tx, worker_message_rx) = mpsc::channel(self.message_queue_size);
+            for i in 0..self.worker_count {
+                // Create channels for worker communication
+                let (task_tx, task_rx) = mpsc::channel(self.task_queue_size);
+                let terminate_signal = Arc::new(Notify::new());
+                // This channel is for messages sent via post_message
+                let (worker_message_tx, worker_message_rx) = mpsc::channel(self.message_queue_size);
 
-            // Create shared state
-            let state = Arc::new(Mutex::new(WorkerState::Free));
-            let free_signal = Arc::new(tokio::sync::Notify::new());
+                // Create shared state using TokioMutex and Notify
+                let state = Arc::new(TokioMutex::new(WorkerState::Free));
+                let free_signal = Arc::new(Notify::new());
 
-            // Create worker
-            let worker = Worker {
-                id: i,
-                name: None,
-                task_tx: task_tx.clone(),
-                terminate_signal: terminate_signal.clone(),
-                message_tx: worker_message_tx, // Sender for post_message
-                state: state.clone(),
-                free_signal: free_signal.clone(),
-                rong: self.clone(),
-            };
+                // Create worker
+                let worker = Worker {
+                    id: i,
+                    name: None,
+                    task_tx: task_tx.clone(),
+                    terminate_signal: terminate_signal.clone(),
+                    message_tx: worker_message_tx, // Sender for post_message
+                    state: state.clone(),
+                    free_signal: free_signal.clone(),
+                    rong: self.clone(),
+                };
 
-            // Add worker to pool
-            workers.push(worker);
+                // Add worker to pool
+                workers_guard.push(worker);
 
-            // Start worker thread
-            let state_clone = state.clone();
-            let free_signal_clone = free_signal.clone(); // Clone free signal for thread
+                // Start worker thread
+                let state_clone = state.clone();
+                let free_signal_clone = free_signal.clone(); // Clone free signal for thread
 
-            // Pass the worker's message receiver (for post_message) to the thread
-            let worker_message_rx_thread: mpsc::Receiver<WorkerMessage> = worker_message_rx;
-            // Receiver for tasks is moved into the thread - type is now non-generic UserAsyncTask<E>
-            let task_rx_thread: mpsc::Receiver<UserAsyncTask<E>> = task_rx;
+                // Pass the worker's message receiver (for post_message) to the thread
+                let worker_message_rx_thread: mpsc::Receiver<WorkerMessage> = worker_message_rx;
+                // Receiver for tasks is moved into the thread - type is now non-generic UserAsyncTask<E>
+                let task_rx_thread: mpsc::Receiver<UserAsyncTask<E>> = task_rx;
 
-            // Spawn a new thread for this worker
-            std::thread::spawn(move || {
-                // Create a Tokio runtime for this worker
-                let rt = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .thread_name(format!("worker-{}", i))
-                    .build()
-                    .expect("Failed to create worker runtime");
+                // Spawn a new thread for this worker
+                std::thread::spawn(move || {
+                    // Create a Tokio runtime for this worker
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .thread_name(format!("worker-{}", i))
+                        .build()
+                        .expect("Failed to create worker runtime");
 
-                // Run the worker loop
-                rt.block_on(async {
-                    Self::run_worker_loop(
-                        i,
-                        task_rx_thread,           // Pass the worker message receiver
-                        worker_message_rx_thread, // Pass the worker message receiver
-                        terminate_signal,
-                        state_clone,
-                        free_signal_clone, // Pass the free signal notifier
-                    )
-                    .await;
+                    // Run the worker loop
+                    rt.block_on(async {
+                        Self::run_worker_loop(
+                            i,
+                            task_rx_thread, // Pass the worker message receiver
+                            worker_message_rx_thread, // Pass the worker message receiver
+                            terminate_signal,
+                            state_clone,
+                            free_signal_clone, // Pass the free signal notifier
+                        )
+                        .await;
+                    });
                 });
-            });
-        }
+            }
+        });
     }
 
     /// Run the worker loop
@@ -596,8 +599,8 @@ impl<E: JSEngine + 'static> Rong<E> {
         mut task_rx: mpsc::Receiver<UserAsyncTask<E>>,
         mut worker_message_rx: mpsc::Receiver<WorkerMessage>,
         terminate_signal: Arc<tokio::sync::Notify>,
-        state: Arc<Mutex<WorkerState>>,
-        free_signal: Arc<tokio::sync::Notify>,
+        state: Arc<TokioMutex<WorkerState>>,
+        free_signal: Arc<Notify>,
     ) {
         // Create a local task executor to ensure all tasks run on this OS thread
         let local = tokio::task::LocalSet::new();
@@ -643,7 +646,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                             if let Some(user_async_task) = maybe_task {
                                 // Set worker state to Busy
                                 {
-                                    let mut state_guard = state.lock().unwrap();
+                                    let mut state_guard = state.lock().await;
                                     *state_guard = WorkerState::Busy;
                                 }
 
@@ -759,7 +762,7 @@ impl<E: JSEngine + 'static> Rong<E> {
 
                             // Set worker state back to Free
                             {
-                                let mut state_guard = state.lock().unwrap();
+                                let mut state_guard = state.lock().await;
                                 *state_guard = WorkerState::Free;
                                 free_signal.notify_waiters();
                             }
@@ -780,7 +783,7 @@ impl<E: JSEngine + 'static> Rong<E> {
 
                 // Set worker state back to Free on final exit (safety net)
                 {
-                    let mut state_guard = state.lock().unwrap();
+                    let mut state_guard = state.lock().await;
                     *state_guard = WorkerState::Free;
                     free_signal.notify_waiters();
                 }
@@ -788,30 +791,28 @@ impl<E: JSEngine + 'static> Rong<E> {
             .await;
     }
 
-    /// Get a free worker from the pool
+    /// Asynchronously gets a free worker from the pool.
     ///
-    /// This method atomically finds an available worker and marks it as busy
-    /// before returning it, ensuring thread-safety in worker allocation.
-    /// If no free worker is available, returns an error.
-    pub fn get_worker(&self) -> JSResult<Worker<E>> {
-        let workers_guard = self.workers.lock().unwrap();
+    /// This method safely finds an available worker, marks it as busy, and returns it,
+    /// ensuring exclusive access during allocation.
+    /// If no free worker is available, the returned future resolves to an error.
+    pub async fn get_worker(&self) -> JSResult<Worker<E>> {
+        let workers_guard = self.workers.lock().await;
 
         // Find a free worker and immediately mark it as busy
         for worker in workers_guard.iter() {
-            // Get mutex lock on worker state
-            let mut state_guard = worker.state.lock().unwrap();
+            let mut state_guard = worker.state.lock().await;
 
-            // Check if worker is free and atomically mark it as busy if it is
             if *state_guard == WorkerState::Free {
                 // Mark as busy immediately to prevent race conditions
                 *state_guard = WorkerState::Busy;
+                // Drop the state guard before returning the worker clone
+                drop(state_guard);
 
-                // Return the worker (already marked as busy)
                 return Ok(worker.clone());
             }
         }
 
-        // No free worker available
         Err(RongJSError::Error("No free worker available".to_string()))
     }
 
@@ -819,44 +820,45 @@ impl<E: JSEngine + 'static> Rong<E> {
     ///
     /// Returns the number of workers currently in the Free state.
     /// This can be used to monitor pool availability.
-    pub fn free_workers_count(&self) -> usize {
-        let workers = self.workers.lock().unwrap();
-
-        workers
-            .iter()
-            .filter(|w| *w.state.lock().unwrap() == WorkerState::Free)
-            .count()
+    pub async fn free_workers_count(&self) -> usize {
+        let workers = self.workers.lock().await;
+        let mut count = 0;
+        for w in workers.iter() {
+            if *w.state.lock().await == WorkerState::Free {
+                count += 1;
+            }
+        }
+        count
     }
 
     /// Get total number of workers in the pool
     ///
     /// Returns the total number of workers, regardless of their state.
-    pub fn total_workers_count(&self) -> usize {
-        let workers = self.workers.lock().unwrap();
+    pub async fn total_workers_count(&self) -> usize {
+        let workers = self.workers.lock().await;
         workers.len()
     }
 
     /// Wait for all workers to become free
     ///
-    /// Blocks the calling thread until all workers in the pool have completed
+    /// Returns a future that resolves when all workers in the pool have completed
     /// their current tasks and returned to the Free state.
-    pub fn join_all(&self) -> JSResult<()> {
-        let workers_guard = self.workers.lock().unwrap();
+    pub async fn join_all(&self) -> JSResult<()> {
+        let workers_guard = self.workers.lock().await;
+
         // Clone workers needed for the async block (Arc clones are cheap)
         let workers_to_join = workers_guard.iter().cloned().collect::<Vec<_>>();
-        drop(workers_guard); // Release the lock early (Corrected: drop the guard)
+        // Drop the guard *before* creating/awaiting futures
+        drop(workers_guard);
 
         // Collect the async join futures from each worker
         let join_futures = workers_to_join.iter().map(|w| w.join());
 
-        // Wait for all async join operations to complete by blocking the current thread
-        futures::executor::block_on(async {
-            match futures::future::try_join_all(join_futures).await {
-                Ok(_) => Ok(()),
-                // Propagate the first error encountered during join
-                Err(e) => Err(e),
-            }
-        })
+        // Wait for all async join operations to complete
+        match futures::future::try_join_all(join_futures).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
     }
 
     /// Shutdown all workers
@@ -865,16 +867,16 @@ impl<E: JSEngine + 'static> Rong<E> {
     /// Any async functions currently running on workers will be gracefully interrupted.
     /// After calling this method, the worker pool should not be used anymore.
     fn shutdown(&self) -> JSResult<()> {
-        let workers = self.workers.lock().unwrap();
-
-        // Send terminate signal to all workers
-        for worker in workers.iter() {
-            if let Err(e) = worker.terminate() {
-                eprintln!("Error while terminating worker {}: {:?}", worker.id, e);
-                // Continue with other workers even if one fails
+        // Use block_on since shutdown is called from Drop (synchronous context)
+        futures::executor::block_on(async {
+            let workers = self.workers.lock().await;
+            // Send terminate signal to all workers
+            for worker in workers.iter() {
+                if let Err(e) = worker.terminate() {
+                    eprintln!("Error while terminating worker {}: {:?}", worker.id, e);
+                }
             }
-        }
-
+        });
         Ok(())
     }
 }
