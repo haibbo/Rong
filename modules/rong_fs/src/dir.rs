@@ -85,12 +85,13 @@ async fn mkdir(path: String, option: Optional<MkdirOptions>) -> JSResult<()> {
     Ok(())
 }
 
+type FileTypeFuture =
+    Pin<Box<dyn futures::Future<Output = Result<std::fs::FileType, std::io::Error>> + Send>>;
+
 pub struct DirEntryStream {
     entries: fs::ReadDir,
     current_entry: Option<fs::DirEntry>,
-    current_file_type_fut: Option<
-        Pin<Box<dyn futures::Future<Output = Result<std::fs::FileType, std::io::Error>> + Send>>,
-    >,
+    current_file_type_fut: Option<FileTypeFuture>,
 }
 
 impl DirEntryStream {
@@ -252,7 +253,7 @@ async fn chmod(path: String, mode: u32) -> JSResult<()> {
 
 #[cfg(unix)]
 async fn chown(path: String, uid: u32, gid: u32) -> JSResult<()> {
-    use nix::unistd::{chown as nix_chown, Gid, Uid};
+    use nix::unistd::{Gid, Uid, chown as nix_chown};
     nix_chown(
         path.as_str(),
         Some(Uid::from_raw(uid)),
