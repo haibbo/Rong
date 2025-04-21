@@ -61,6 +61,15 @@ type BoxedTaskFuture = Pin<Box<dyn Future<Output = JSResult<Box<dyn Any + Send>>
 type BoxedFutureFn<E> =
     Box<dyn FnOnce(JSRuntime<<E as JSEngine>::Runtime>, MessageReceiver) -> BoxedTaskFuture + Send>;
 
+// Type alias for the complex callback used in UserAsyncReturnType::BlockOn
+type BlockOnCallback = Box<dyn FnOnce(JSResult<Box<dyn Any + Send>>) + Send>;
+
+/// Enum to differentiate how results are handled
+enum UserAsyncReturnType {
+    BlockOn(BlockOnCallback),
+    Spawn, // No callback needed
+}
+
 /// Internal representation of a user-submitted asynchronous function submitted to a worker.
 /// Holds the necessary components to invoke the user's future on the worker thread.
 struct UserAsyncTask<E: JSEngine + 'static> {
@@ -69,11 +78,11 @@ struct UserAsyncTask<E: JSEngine + 'static> {
     future_fn: BoxedFutureFn<E>,
     message_receiver: MessageReceiver,
 
-    /// Channel to send the final result (or error/abort) back to the caller.
-    result_tx: oneshot::Sender<JSResult<Box<dyn Any + Send>>>,
-
     /// Channel for the worker loop to forward post_message messages to this user's async function.
     task_message_tx: mpsc::Sender<WorkerMessage>,
+
+    /// How to send the result back to the caller (or not).
+    return_type: UserAsyncReturnType,
 }
 
 /// Worker - Individual JavaScript runtime worker
@@ -132,56 +141,6 @@ impl<E: JSEngine + 'static> Worker<E> {
         *self.state.lock().unwrap()
     }
 
-    /// Private helper to create and submit a user's async function to the worker queue.
-    /// Returns a receiver for the async function's final result.
-    fn submit_async_fn<F, Fut, R>(
-        &self,
-        future_fn: F,
-    ) -> JSResult<oneshot::Receiver<JSResult<Box<dyn Any + Send>>>>
-    where
-        F: FnOnce(JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
-        Fut: Future<Output = JSResult<R>> + 'static,
-        R: Send + 'static,
-    {
-        // Set up channels for the async function execution
-        let (task_message_tx, task_message_rx) = mpsc::channel(100);
-        let (result_tx, result_rx) = oneshot::channel();
-
-        // Create worker message receiver
-        let message_receiver = MessageReceiver::new(task_message_rx);
-
-        // Wrap user's future_fn to convert its result to Box<dyn Any + Send>
-        let boxed_future_fn: BoxedFutureFn<E> = Box::new(move |rt, recv| {
-            // Wrap future to box result
-            let user_future = future_fn(rt, recv);
-            Box::pin(async move {
-                user_future
-                    .await
-                    .map(|result| Box::new(result) as Box<dyn Any + Send>)
-            })
-        });
-
-        // Create task with message handler
-        let task = UserAsyncTask {
-            future_fn: boxed_future_fn,
-            message_receiver,
-            result_tx,
-            task_message_tx,
-        };
-
-        // Send async function to worker thread
-        // Use blocking send to ensure it is actually sent
-        futures::executor::block_on(async {
-            if let Err(e) = self.task_tx.send(task).await {
-                return Err(RongJSError::Error(format!(
-                    "Failed to send async function to worker {}: {:?}",
-                    self.id, e
-                )));
-            }
-            Ok(result_rx)
-        })
-    }
-
     /// Spawn a user's asynchronous function on this worker
     ///
     /// Submits an asynchronous function to be executed on this worker's thread.
@@ -196,7 +155,7 @@ impl<E: JSEngine + 'static> Worker<E> {
         Fut: Future<Output = JSResult<R>> + 'static,
         R: Send + 'static,
     {
-        // Perform type erasure internally.
+        // Prepare the future_fn that produces Box<dyn Any>
         let boxed_fn: BoxedFutureFn<E> = Box::new(
             move |runtime: JSRuntime<E::Runtime>, receiver: MessageReceiver| {
                 // 1. Call user's function to get the anonymous Future `Fut`
@@ -206,19 +165,38 @@ impl<E: JSEngine + 'static> Worker<E> {
                 // 3. Create the mapping future that awaits the boxed future
                 //    and converts the result R to Box<dyn Any + Send>
                 let mapped_fut = async move {
-                    match user_fut_boxed.await {
-                        Ok(r) => Ok(Box::new(r) as Box<dyn Any + Send>),
-                        Err(e) => Err(e),
-                    }
+                    user_fut_boxed
+                        .await
+                        .map(|r| Box::new(r) as Box<dyn Any + Send>)
                 };
                 // 4. Return the pinned, boxed mapping future, cast to BoxedTaskFuture
                 Box::pin(mapped_fut) as BoxedTaskFuture
             },
         );
 
-        // Submit the boxed function using the internal helper
-        #[allow(clippy::let_underscore_future)]
-        let _ = self.submit_async_fn(boxed_fn)?;
+        // Setup message passing channels for this task
+        let (task_message_tx, task_message_rx) = mpsc::channel(100);
+        let message_receiver = MessageReceiver::new(task_message_rx);
+
+        // Create task with Spawn mechanism
+        let task = UserAsyncTask {
+            future_fn: boxed_fn,
+            message_receiver,
+            task_message_tx,
+            return_type: UserAsyncReturnType::Spawn, // Indicate no result needed back
+        };
+
+        // Send task (non-blocking)
+        if let Err(e) = self.task_tx.try_send(task) {
+            eprintln!(
+                "[spawn_future Worker {}] Failed to send task: {:?}",
+                self.id, e
+            );
+            return Err(RongJSError::Error(format!(
+                "Failed to spawn future on worker {}: channel error: {:?}",
+                self.id, e
+            )));
+        }
         Ok(())
     }
 
@@ -233,55 +211,86 @@ impl<E: JSEngine + 'static> Worker<E> {
         Fut: Future<Output = JSResult<R>> + 'static,
         R: Send + 'static,
     {
-        // Perform type erasure
+        // Channel for the *final* R result (after downcast in the callback)
+        let (final_result_tx, final_result_rx) = oneshot::channel::<JSResult<R>>();
+
+        // Prepare the closure that handles the Box<dyn Any> result from the worker
+        let result_callback = move |worker_result: JSResult<Box<dyn Any + Send>>| {
+            let final_result = match worker_result {
+                Ok(v_any) => {
+                    // Downcast happens *here*, just before sending the final result back
+                    match v_any.downcast::<R>() {
+                        Ok(boxed_r) => Ok(*boxed_r),
+                        Err(original_box) => {
+                            // Handle the specific case where R is () and the box contains ()
+                            if std::any::TypeId::of::<R>() == std::any::TypeId::of::<()>()
+                                && original_box.is::<()>()
+                            {
+                                // SAFETY: We checked R is () and the box contains (), so zeroed is safe.
+                                Ok(unsafe { std::mem::zeroed::<R>() })
+                            } else {
+                                Err(RongJSError::Error(
+                                    "Downcast failed in block_on callback".to_string(),
+                                ))
+                            }
+                        }
+                    }
+                }
+                Err(e) => Err(e),
+            };
+            // Send the final JSResult<R> back to the original caller, ignore error if receiver dropped
+            let _ = final_result_tx.send(final_result);
+        };
+
+        // Box the callback for sending
+        let return_type = UserAsyncReturnType::BlockOn(Box::new(result_callback));
+
+        // Prepare the future_fn that produces Box<dyn Any> (same as before)
         let boxed_fn: BoxedFutureFn<E> = Box::new(
             move |runtime: JSRuntime<E::Runtime>, receiver: MessageReceiver| {
-                // 1. Call user's function to get the anonymous Future `Fut`
                 let user_fut: Fut = future_fn(runtime, receiver);
-                // 2. Box and Pin it *immediately* for type erasure
                 let user_fut_boxed = Box::pin(user_fut);
-                // 3. Create the mapping future that awaits the boxed future
-                //    and converts the result R to Box<dyn Any + Send>
                 let mapped_fut = async move {
-                    match user_fut_boxed.await {
-                        Ok(r) => Ok(Box::new(r) as Box<dyn Any + Send>),
-                        Err(e) => Err(e),
-                    }
+                    user_fut_boxed
+                        .await
+                        .map(|r| Box::new(r) as Box<dyn Any + Send>)
                 };
-                // 4. Return the pinned, boxed mapping future, cast to BoxedTaskFuture
                 Box::pin(mapped_fut) as BoxedTaskFuture
             },
         );
 
-        let result_rx = self.submit_async_fn(boxed_fn)?;
+        // Setup message passing channels for this task
+        let (task_message_tx, task_message_rx) = mpsc::channel(100);
+        let message_receiver = MessageReceiver::new(task_message_rx);
 
-        // Wait for the result
-        let result = futures::executor::block_on(async {
-            result_rx.await.map_err(|e| {
+        // Create task
+        let task = UserAsyncTask {
+            future_fn: boxed_fn,
+            message_receiver,
+            task_message_tx,
+            return_type,
+        };
+
+        // Send task to worker thread (blocking send)
+        futures::executor::block_on(async {
+            if let Err(e) = self.task_tx.send(task).await {
+                return Err(RongJSError::Error(format!(
+                    "[block_on Worker {}] Failed to send task: {:?}",
+                    self.id, e
+                )));
+            }
+            Ok(())
+        })?;
+
+        // Wait for the final JSResult<R> from the callback
+        futures::executor::block_on(async {
+            final_result_rx.await.map_err(|e| {
                 RongJSError::Error(format!(
-                    "Failed to receive result from worker {}: {:?}",
+                    "[block_on Worker {}] Failed to receive final result: {:?}",
                     self.id, e
                 ))
             })
-        })?;
-
-        // Downcast the result
-        match result {
-            Ok(v_any) => {
-                // Special handling for () type
-                if std::any::TypeId::of::<R>() == std::any::TypeId::of::<()>() {
-                    // Using zeroed memory is safe here because () has no fields
-                    let unit_value = unsafe { std::mem::zeroed::<R>() };
-                    return Ok(unit_value);
-                }
-
-                // For non-() types, perform normal downcast
-                Ok(*(v_any.downcast::<R>().map_err(|_| {
-                    RongJSError::Error("Failed to downcast result to expected type R".to_string())
-                })?))
-            }
-            Err(e) => Err(e),
-        }
+        })?
     }
 
     /// Wait for this worker to complete its current async function
@@ -606,9 +615,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                 let mut current_microtask_runner_handle: Option<tokio::task::JoinHandle<()>> = None;
                 let mut current_task_message_tx: Option<mpsc::Sender<WorkerMessage>> = None;
                 let mut current_js_runtime: Option<JSRuntime<E::Runtime>> = None;
-                let mut current_task_result_tx: Option<
-                    oneshot::Sender<JSResult<Box<dyn Any + Send>>>,
-                > = None;
+                let mut current_task_result_callback: Option<BlockOnCallback> = None;
 
 
                 // Main worker event loop
@@ -644,22 +651,30 @@ impl<E: JSEngine + 'static> Rong<E> {
                                 let js_runtime = E::runtime();
                                 current_js_runtime = Some(js_runtime.clone()); // Store for microtasks
 
-                                // Store message sender and result sender
+                                // Store message sender and result callback
                                 current_task_message_tx = Some(user_async_task.task_message_tx);
-                                current_task_result_tx = Some(user_async_task.result_tx);
+                                // Store the result callback if it's BlockOn
+                                match user_async_task.return_type {
+                                    UserAsyncReturnType::BlockOn(callback) => {
+                                        current_task_result_callback = Some(callback);
+                                    }
+                                    UserAsyncReturnType::Spawn => {
+                                        current_task_result_callback = None;
+                                    }
+                                }
 
                                 // Prepare the user's future
                                 let user_fn = user_async_task.future_fn;
                                 let message_receiver = user_async_task.message_receiver;
-                                let user_future = user_fn(js_runtime.clone(), message_receiver); // Pass runtime clone
+                                let user_future = user_fn(js_runtime.clone(), message_receiver);
 
                                 // Make task abortable
                                 let (abortable_future, abort_handle) = futures::future::abortable(user_future);
                                 current_task_abort_handle = Some(abort_handle);
 
                                 // Spawn the user's future onto the LocalSet
-                                let main_task_handle = tokio::task::spawn_local(abortable_future);
-                                current_task_join_handle = Some(main_task_handle);
+                                let task_handle = tokio::task::spawn_local(abortable_future);
+                                current_task_join_handle = Some(task_handle);
 
                                 // Start microtask runner if needed
                                 if js_runtime.run_pending_jobs() >= 0 {
@@ -708,27 +723,34 @@ impl<E: JSEngine + 'static> Rong<E> {
                              }
                         },
 
-                        // Wait for the current task to complete
+                        // Wait for the current *user task* (returning dyn Any) to complete
                         maybe_result = async { current_task_join_handle.as_mut().unwrap().await }, if current_task_join_handle.is_some() => {
+                            // The user future returns Result<Box<dyn Any>, Aborted> wrapped in Result<_, JoinError>
                             let final_result: JSResult<Box<dyn Any + Send>> = match maybe_result {
                                 Ok(Ok(inner_result)) => inner_result, // Task finished successfully (Ok from JoinHandle, Ok from AbortableFuture)
                                 Ok(Err(_aborted)) => Err(RongJSError::Error("Task aborted".to_string())), // Ok from JoinHandle, Err from AbortableFuture (aborted)
                                 Err(join_error) => { // Err from JoinHandle (task panicked or runtime dropped)
-                                     eprintln!("Worker {} task panicked or runtime dropped: {:?}", worker_id, join_error);
-                                     Err(RongJSError::Error(format!("Task panicked or runtime dropped: {}", join_error)))
+                                     eprintln!("[Worker {}] User task panicked or runtime dropped: {:?}", worker_id, join_error);
+                                     Err(RongJSError::Error(format!("User task panicked or runtime dropped: {}", join_error)))
                                 }
                             };
 
-                            // Send the result back
-                            if let Some(tx) = current_task_result_tx.take() {
-                                let _ = tx.send(final_result);
+                            // Execute the result callback if it exists, passing the Box<dyn Any> result
+                            if let Some(callback) = current_task_result_callback.take() {
+                                 callback(final_result);
+                            } else {
+                                 // Spawn task, just log errors maybe
+                                 if let Err(e) = final_result {
+                                     eprintln!("[Worker {}] Spawned task failed: {:?}", worker_id, e);
+                                 }
                             }
 
-                            // Clean up task state
+                            // Clean up task state (regardless of runner result)
                             current_task_join_handle = None;
                             current_task_abort_handle = None;
                             current_task_message_tx = None;
                             current_js_runtime = None;
+                            // current_task_result_callback already taken
 
                             // Stop and cleanup microtask runner if it exists
                             if let Some(handle) = current_microtask_runner_handle.take() {
@@ -752,9 +774,9 @@ impl<E: JSEngine + 'static> Rong<E> {
                 if let Some(handle) = current_microtask_runner_handle.take() {
                      handle.abort();
                 }
-                // Ensure other state is cleared (Handles already aborted/taken above)
-                let _ = current_task_result_tx.take(); // Drop result sender if not already taken
 
+                // Ensure other state is cleared (Handles already aborted/taken above)
+                let _ = current_task_result_callback.take();
 
                 // Set worker state back to Free on final exit (safety net)
                 {
