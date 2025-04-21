@@ -4,7 +4,6 @@ use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use tokio::sync::Notify;
 
 pub trait JSRuntimeImpl {
     /// The raw runtime handle type associated with this runtime.
@@ -46,7 +45,6 @@ pub struct JSRuntime<R: JSRuntimeImpl> {
     pub(crate) inner: Rc<R>,
     services: ServiceContainer,
     pub(crate) engine: &'static str,
-    shutdown_signal: Rc<Notify>,
 }
 
 impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
@@ -55,26 +53,11 @@ impl<R: JSRuntimeImpl> Clone for JSRuntime<R> {
             inner: self.inner.clone(),
             services: self.services.clone(),
             engine: self.engine,
-            shutdown_signal: self.shutdown_signal.clone(),
-        }
-    }
-}
-
-impl<R: JSRuntimeImpl> Drop for JSRuntime<R> {
-    fn drop(&mut self) {
-        // Only notify if we're the last reference to the runtime
-        if Rc::strong_count(&self.inner) == 1 {
-            // Notify all components relying on the shutdown signal
-            self.shutdown_signal.notify_waiters();
         }
     }
 }
 
 impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
-    pub fn get_shutdown_signal(&self) -> Rc<Notify> {
-        self.shutdown_signal.clone()
-    }
-
     /// Creates a new JavaScript context instance associated with this runtime.
     ///
     /// # Key Notes
@@ -166,7 +149,6 @@ pub trait JSEngine: Sized {
             inner: runtime,
             services: ServiceContainer::new(),
             engine: Self::name(),
-            shutdown_signal: Rc::new(Notify::new()),
         }
     }
 }
