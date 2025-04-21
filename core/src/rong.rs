@@ -17,28 +17,39 @@ pub enum WorkerState {
     Busy,
 }
 
-/// Message receiver for workers to receive posted messages
+/// Represents messages intended for consumption by the user's asynchronous function
+/// running within a worker, received via the `MessageReceiver`.
+#[derive(Debug)]
+pub enum WorkerMessage {
+    String(String),
+    Usize(usize),
+    /// Container for any other user-defined message type.
+    Custom(Box<dyn Any + Send>),
+}
+
+/// Message receiver for the user's asynchronous function to receive messages.
 ///
-/// Each user task running on a worker receives its own MessageReceiver instance,
-/// allowing it to receive messages posted to the worker.
+/// An instance of `MessageReceiver` is passed to the user-provided async function
+/// when it's executed by a worker. It allows the function to receive messages
+/// sent specifically to it via `Worker::post_message` (or its helpers).
 pub struct MessageReceiver {
     /// Channel for receiving messages from the worker's broadcast channel
-    receiver: mpsc::Receiver<Box<dyn Any + Send>>,
+    receiver: mpsc::Receiver<WorkerMessage>,
 }
 
 impl MessageReceiver {
     /// Create a new message receiver from a channel
-    fn new(receiver: mpsc::Receiver<Box<dyn Any + Send>>) -> Self {
+    fn new(receiver: mpsc::Receiver<WorkerMessage>) -> Self {
         Self { receiver }
     }
 
     /// Try to receive a message without blocking
-    pub fn try_recv(&mut self) -> Result<Box<dyn Any + Send>, mpsc::error::TryRecvError> {
+    pub fn try_recv(&mut self) -> Result<WorkerMessage, mpsc::error::TryRecvError> {
         self.receiver.try_recv()
     }
 
     /// Receive a message asynchronously
-    pub async fn recv(&mut self) -> Option<Box<dyn Any + Send>> {
+    pub async fn recv(&mut self) -> Option<WorkerMessage> {
         self.receiver.recv().await
     }
 }
@@ -62,7 +73,7 @@ struct UserAsyncTask<E: JSEngine + 'static> {
     result_tx: oneshot::Sender<JSResult<Box<dyn Any + Send>>>,
 
     /// Channel for the worker loop to forward post_message messages to this user's async function.
-    task_message_tx: mpsc::Sender<Box<dyn Any + Send>>,
+    task_message_tx: mpsc::Sender<WorkerMessage>,
 }
 
 /// Worker - Individual JavaScript runtime worker
@@ -86,7 +97,7 @@ pub struct Worker<E: JSEngine + 'static> {
 
     /// Channel for sending messages to the current async function running on this worker
     /// Since a worker executes only one async function at a time, this is a simple MPSC channel
-    message_tx: mpsc::Sender<Box<dyn Any + Send>>,
+    message_tx: mpsc::Sender<WorkerMessage>,
 
     /// Worker state (Free/Busy)
     state: Arc<Mutex<WorkerState>>,
@@ -310,11 +321,11 @@ impl<E: JSEngine + 'static> Worker<E> {
     /// The running async function can receive this message through its MessageReceiver.
     ///
     /// If no async function is currently running, the message will be dropped.
-    pub fn post_message(&self, value: Box<dyn Any + Send>) -> JSResult<()> {
+    pub fn post_message(&self, message: WorkerMessage) -> JSResult<()> {
         // Try to send the message, but don't block if the channel is full
         // This is a non-blocking operation that returns immediately
         // The worker loop will receive this and forward if an async function is running
-        self.message_tx.try_send(value).map_err(|e| {
+        self.message_tx.try_send(message).map_err(|e| {
             if matches!(e, mpsc::error::TrySendError::Full(_)) {
                 eprintln!("Worker {} message channel full, message dropped", self.id);
             } else if matches!(e, mpsc::error::TrySendError::Closed(_)) {
@@ -534,7 +545,7 @@ impl<E: JSEngine + 'static> Rong<E> {
             let free_signal_clone = free_signal.clone(); // Clone free signal for thread
 
             // Pass the worker's message receiver (for post_message) to the thread
-            let worker_message_rx_thread = worker_message_rx;
+            let worker_message_rx_thread: mpsc::Receiver<WorkerMessage> = worker_message_rx;
             // Receiver for tasks is moved into the thread - type is now non-generic UserAsyncTask<E>
             let task_rx_thread: mpsc::Receiver<UserAsyncTask<E>> = task_rx;
 
@@ -574,7 +585,7 @@ impl<E: JSEngine + 'static> Rong<E> {
     async fn run_worker_loop(
         worker_id: usize,
         mut task_rx: mpsc::Receiver<UserAsyncTask<E>>,
-        mut worker_message_rx: mpsc::Receiver<Box<dyn Any + Send>>,
+        mut worker_message_rx: mpsc::Receiver<WorkerMessage>,
         terminate_signal: Arc<tokio::sync::Notify>,
         state: Arc<Mutex<WorkerState>>,
         free_signal: Arc<tokio::sync::Notify>,
@@ -593,7 +604,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                 let mut current_task_join_handle: Option<TaskJoinHandle> = None;
                 let mut current_task_abort_handle: Option<futures::future::AbortHandle> = None;
                 let mut current_microtask_runner_handle: Option<tokio::task::JoinHandle<()>> = None;
-                let mut current_task_message_tx: Option<mpsc::Sender<Box<dyn Any + Send>>> = None;
+                let mut current_task_message_tx: Option<mpsc::Sender<WorkerMessage>> = None;
                 let mut current_js_runtime: Option<JSRuntime<E::Runtime>> = None;
                 let mut current_task_result_tx: Option<
                     oneshot::Sender<JSResult<Box<dyn Any + Send>>>,

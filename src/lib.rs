@@ -6,7 +6,7 @@ pub use rong_core::{
     JSSymbol as CoreJSSymbol, JSTypedArray as CoreJSTypedArray, JSTypedArrayKind,
     JSValue as CoreJSValue, JSValueType, JsonToJsValue, Promise as CorePromise,
     PropertyDescriptor as CorePropertyDescriptor, Rong, RongJSError, Source, SourceKind,
-    ToJSAsyncIterator, ToJSIterator,
+    ToJSAsyncIterator, ToJSIterator, WorkerMessage,
 };
 
 pub use rong_core::function;
