@@ -5,7 +5,13 @@ edition = "2024"
 
 [dependencies]
 rong = { path = "../" }
+rong_modules = { path = "../rong_modules" }
+tokio = { version = "1.0", features = ["rt", "time", "macros"] }
 
 [[example]]
-name="point"
-path="src/point.rs"
+name = "worker"
+path = "src/worker.rs"
+
+[[example]]
+name = "point"
+path = "src/point.rs"
