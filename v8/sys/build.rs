@@ -1,10 +1,19 @@
 use std::env;
+use std::process::Command;
 
-fn is_debug() -> bool {
-    match env::var("PROFILE").unwrap().as_str() {
-        "debug" => true,
-        "release" => false,
-        profile => panic!("Unknown profile: {}", profile),
+fn checkout_submodule() {
+    let output = Command::new("git")
+        .args(["submodule", "status"])
+        .output()
+        .expect("Failed to exec `git submodule status`");
+
+    let stdout = std::str::from_utf8(&output.stdout).unwrap();
+    if stdout.lines().any(|line| line.starts_with('-')) {
+        println!("Initializing v8 submodule...");
+        Command::new("git")
+            .args(["submodule", "update", "--init"])
+            .output()
+            .expect("Failed to checkout v8");
     }
 }
 
@@ -12,6 +21,8 @@ fn generate_bindings() {}
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
+
+    checkout_submodule();
 
     generate_bindings();
 
