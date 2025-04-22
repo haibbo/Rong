@@ -559,30 +559,12 @@ struct EventEmitterInner {
     max_listener: u32,
 }
 
-// Ensure listeners are cleared when the emitter is dropped
-impl Drop for EventEmitterInner {
-    fn drop(&mut self) {
-        // Clear all listeners and ensure proper cleanup
-        for (_, listeners) in self.listeners.iter_mut() {
-            // Use drain to ensure each listener is properly dropped
-            listeners.drain(..).for_each(|_| {});
-        }
-        // Finally clear the collection
-        self.listeners.clear();
-    }
-}
-
-// Ensure EventEmitter attempts to acquire lock and release resources when dropped
+// Ensure EventEmitter releases resources when dropped
 impl Drop for EventEmitter {
     fn drop(&mut self) {
-        if let Ok(mut inner) = self.inner.lock() {
-            // Clear all listeners and ensure proper cleanup
-            for (_, listeners) in inner.listeners.iter_mut() {
-                // Use drain to ensure each listener is properly dropped
-                listeners.drain(..).for_each(|_| {});
-            }
-            // Finally clear the collection
-            inner.listeners.clear();
+        let count = Rc::strong_count(&self.inner);
+        if count == 1 {
+            let _ = self.remove_all_listeners(None);
         }
     }
 }
