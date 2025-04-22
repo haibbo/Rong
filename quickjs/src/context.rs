@@ -1,4 +1,4 @@
-use crate::{qjs, QJSRuntime, QJSValue};
+use crate::{QJSRuntime, QJSValue, qjs};
 use rong_core::{
     JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSTypeOf, JSValueImpl, RongJSError,
     Source,
@@ -135,7 +135,7 @@ impl JSContextImpl for QJSContext {
             qjs::JS_Call(
                 self.ctx,
                 *function.as_raw_value(),
-                this.into_raw_value(),
+                *this.as_raw_value(),
                 args.len() as std::ffi::c_int,
                 args.as_mut_ptr(),
             )
