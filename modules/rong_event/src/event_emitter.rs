@@ -479,9 +479,10 @@ impl EventEmitter {
                 }
             }
 
-            // Remove once listeners after iteration
+            // Remove once listeners after iteration and ensure they are properly dropped
             if !listeners_to_remove.is_empty() {
                 listeners.retain(|l| !listeners_to_remove.contains(&l.listener));
+
                 if listeners.is_empty() {
                     *is_empty = true;
                 }
@@ -499,6 +500,11 @@ impl EventEmitter {
                 events.listeners.remove(&key);
             }
             None => {
+                // Clear all listeners and ensure proper cleanup
+                for (_, listeners) in events.listeners.iter_mut() {
+                    // Use drain to ensure each listener is properly dropped
+                    listeners.drain(..).for_each(|_| {});
+                }
                 events.listeners.clear();
             }
         }
@@ -551,6 +557,34 @@ pub struct EventEmitter {
 struct EventEmitterInner {
     listeners: HashMap<EventKey, VecDeque<EventListener>>,
     max_listener: u32,
+}
+
+// Ensure listeners are cleared when the emitter is dropped
+impl Drop for EventEmitterInner {
+    fn drop(&mut self) {
+        // Clear all listeners and ensure proper cleanup
+        for (_, listeners) in self.listeners.iter_mut() {
+            // Use drain to ensure each listener is properly dropped
+            listeners.drain(..).for_each(|_| {});
+        }
+        // Finally clear the collection
+        self.listeners.clear();
+    }
+}
+
+// Ensure EventEmitter attempts to acquire lock and release resources when dropped
+impl Drop for EventEmitter {
+    fn drop(&mut self) {
+        if let Ok(mut inner) = self.inner.lock() {
+            // Clear all listeners and ensure proper cleanup
+            for (_, listeners) in inner.listeners.iter_mut() {
+                // Use drain to ensure each listener is properly dropped
+                listeners.drain(..).for_each(|_| {});
+            }
+            // Finally clear the collection
+            inner.listeners.clear();
+        }
+    }
 }
 
 impl Default for EventEmitter {
