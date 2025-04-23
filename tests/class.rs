@@ -1,3 +1,4 @@
+use rong::JSEngineValue;
 use rong_macro::js_export;
 use rong_test::*;
 
@@ -5,6 +6,7 @@ use rong_test::*;
 struct Point {
     x: i32,
     y: i32,
+    jsobj: Option<JSObject>,
 }
 
 impl Point {
@@ -12,11 +14,20 @@ impl Point {
         Self {
             x: self.x + p.x,
             y: self.y + p.y,
+            jsobj: None,
         }
     }
 
     fn sadd(x: i32, y: i32) -> Self {
-        Self { x: x + 1, y: y + 1 }
+        Self {
+            x: x + 1,
+            y: y + 1,
+            jsobj: None,
+        }
+    }
+
+    fn set_jsobj(&mut self, obj: JSObject) {
+        self.jsobj = Some(obj);
     }
 }
 
@@ -24,11 +35,10 @@ impl JSClass<JSEngineValue> for Point {
     const NAME: &'static str = "Point";
 
     fn data_constructor() -> Constructor<JSEngineValue> {
-        Constructor::new(|x, y| Point { x, y })
+        Constructor::new(|x, y| Point { x, y, jsobj: None })
     }
 
     fn class_setup(class: &ClassSetup<JSEngineValue>) -> JSResult<()> {
-        // Define instance property with getter and setter
         class.property("x", |builder| {
             let getter = class.new_func(|this: This<Point>| this.x)?;
             let setter = class.new_func(|mut this: ThisMut<Point>, x: i32| this.x = x)?;
@@ -41,9 +51,12 @@ impl JSClass<JSEngineValue> for Point {
             Ok(builder.getter(getter).setter(setter).configurable(true))
         })?;
 
-        // Define static property with getter and setter
         class.static_property("origin", |builder| {
-            let getter = class.new_func(|| Point { x: 0x5a, y: 0xa5 })?;
+            let getter = class.new_func(|| Point {
+                x: 0x5a,
+                y: 0xa5,
+                jsobj: None,
+            })?;
             let setter = class.new_func(|| {
                 // Read-only property, setter does nothing
             })?;
@@ -52,7 +65,13 @@ impl JSClass<JSEngineValue> for Point {
 
         class.method("add", |this: This<Point>, p: Point| this.add(p))?;
 
-        // Define static method
+        class.method(
+            "setJSObj",
+            |mut this: ThisMut<Point>, callback: JSObject| {
+                this.set_jsobj(callback);
+            },
+        )?;
+
         class.static_method("sadd", |x: i32, y: i32| Self::sadd(x, y))?;
         Ok(())
     }
@@ -147,21 +166,24 @@ fn test_property_getter_setter() {
         assert_eq!(point.x, 15);
 
         // Test property descriptor
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(
                 b"Object.getOwnPropertyDescriptor(Point.prototype, 'x').configurable"
             ))
-            .unwrap());
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(
+            .unwrap()
+        );
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(
                 b"Object.getOwnPropertyDescriptor(Point.prototype, 'x').get !== undefined"
             ))
-            .unwrap());
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(
+            .unwrap()
+        );
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(
                 b"Object.getOwnPropertyDescriptor(Point.prototype, 'x').set !== undefined"
             ))
-            .unwrap());
+            .unwrap()
+        );
         Ok(())
     });
 }
@@ -181,14 +203,16 @@ fn test_instance_method() {
         assert_eq!(result.y, 6); // 2 + 4
 
         // Test method exists on prototype
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(b"'add' in Point.prototype"))
-            .unwrap());
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(b"'add' in Point.prototype"))
+                .unwrap()
+        );
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(
                 b"typeof Point.prototype.add === 'function'"
             ))
-            .unwrap());
+            .unwrap()
+        );
         Ok(())
     });
 }
@@ -206,12 +230,14 @@ fn test_static_method() {
         assert_eq!(result.y, 8); // 7 + 1
 
         // Test static method exists on constructor
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(b"'sadd' in Point"))
-            .unwrap());
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(b"typeof Point.sadd === 'function'"))
-            .unwrap());
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(b"'sadd' in Point"))
+                .unwrap()
+        );
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(b"typeof Point.sadd === 'function'"))
+                .unwrap()
+        );
         Ok(())
     });
 }
@@ -229,34 +255,40 @@ fn test_static_property() {
         assert_eq!(origin.y, 0xa5);
 
         // Test property exists on constructor
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(b"'origin' in Point"))
-            .unwrap());
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(b"'origin' in Point"))
+                .unwrap()
+        );
 
         // Test property descriptor
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(
                 b"Object.getOwnPropertyDescriptor(Point, 'origin').configurable"
             ))
-            .unwrap());
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(
+            .unwrap()
+        );
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(
                 b"Object.getOwnPropertyDescriptor(Point, 'origin').get !== undefined"
             ))
-            .unwrap());
-        assert!(ctx
-            .eval::<bool>(Source::from_bytes(
+            .unwrap()
+        );
+        assert!(
+            ctx.eval::<bool>(Source::from_bytes(
                 b"Object.getOwnPropertyDescriptor(Point, 'origin').set !== undefined"
             ))
-            .unwrap());
+            .unwrap()
+        );
 
         // Test property is not on prototype or instances
-        assert!(!ctx
-            .eval::<bool>(Source::from_bytes(b"'origin' in Point.prototype"))
-            .unwrap());
-        assert!(!ctx
-            .eval::<bool>(Source::from_bytes(b"'origin' in (new Point(0, 0))"))
-            .unwrap());
+        assert!(
+            !ctx.eval::<bool>(Source::from_bytes(b"'origin' in Point.prototype"))
+                .unwrap()
+        );
+        assert!(
+            !ctx.eval::<bool>(Source::from_bytes(b"'origin' in (new Point(0, 0))"))
+                .unwrap()
+        );
         Ok(())
     });
 }
@@ -302,6 +334,30 @@ fn test_extend_class() {
             ))
             .unwrap();
         assert_eq!(result, 0x5fa5);
+        Ok(())
+    });
+}
+
+#[test]
+fn test_instance_hold_object_fromjs() {
+    run(|ctx| {
+        ctx.register_class::<Point>()?;
+
+        // Add print function to the global object
+        ctx.global()
+            .set("print", JSFunc::new(ctx, |msg: String| println!("{}", msg)))?;
+
+        // Create a Point and register a callback function
+        ctx.eval::<()>(Source::from_bytes(
+            br#"
+            let point = new Point(10, 20);
+
+            point.setJSObj( {
+                a:1,
+            });
+        "#,
+        ))?;
+
         Ok(())
     });
 }
