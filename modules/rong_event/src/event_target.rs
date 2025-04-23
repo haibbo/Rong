@@ -24,7 +24,7 @@ impl Default for EventTarget {
 }
 
 impl Emitter for EventTarget {
-    fn get_event_emitter(&self) -> &EventEmitter {
-        &self.events
+    fn get_event_emitter(&self) -> EventEmitter {
+        self.events.clone()
     }
 }

@@ -104,7 +104,7 @@ pub struct EventListener {
 /// }
 ///
 /// impl Emitter for MyEmitter {
-///     fn get_events_emitter(&self) -> &EventEmitter {
+///     fn get_event_emitter(&self) -> EventEmitter {
 ///         &self.events
 ///     }
 /// }
@@ -116,8 +116,8 @@ pub trait Emitter
 where
     Self: JSClass<JSEngineValue>,
 {
-    /// Get a reference to the internal events container
-    fn get_event_emitter(&self) -> &EventEmitter;
+    /// Get the internal events container
+    fn get_event_emitter(&self) -> EventEmitter;
 
     /// Callback triggered when an event listener is added or removed
     ///
@@ -359,7 +359,7 @@ where
     }
 
     fn set_max_listeners(this: This<JSObject>, num: u32) -> JSResult<JSObject> {
-        let target = this.borrow_mut::<Self>()?;
+        let target = this.borrow::<Self>()?;
         let events = target.get_event_emitter();
         events.set_max_listeners(num);
         Ok(this.0.clone())
@@ -589,7 +589,7 @@ impl EventEmitter {
 }
 
 impl Emitter for EventEmitter {
-    fn get_event_emitter(&self) -> &EventEmitter {
-        self
+    fn get_event_emitter(&self) -> EventEmitter {
+        self.clone()
     }
 }

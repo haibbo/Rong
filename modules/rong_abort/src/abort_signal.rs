@@ -70,10 +70,6 @@ impl AbortSignal {
         }
         Ok(())
     }
-
-    fn get_inner_emitter(&self) -> &EventEmitter {
-        unsafe { &*(&self.inner.lock().unwrap().emitter as *const EventEmitter) }
-    }
 }
 
 impl AbortReceiver {
@@ -276,7 +272,7 @@ fn get_reason_or_dom_exception(
 }
 
 impl Emitter for AbortSignal {
-    fn get_event_emitter(&self) -> &EventEmitter {
-        self.get_inner_emitter()
+    fn get_event_emitter(&self) -> EventEmitter {
+        self.inner.lock().unwrap().emitter.clone()
     }
 }

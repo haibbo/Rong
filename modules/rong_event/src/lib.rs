@@ -121,8 +121,8 @@ mod tests {
             }
 
             impl Emitter for TestEmitter {
-                fn get_event_emitter(&self) -> &EventEmitter {
-                    &self.events
+                fn get_event_emitter(&self) -> EventEmitter {
+                    self.events.clone()
                 }
             }
 
