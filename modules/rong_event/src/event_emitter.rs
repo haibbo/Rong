@@ -173,7 +173,7 @@ where
                 let err = err.to_string();
                 let value = JSValue::from(ctx, err.as_str());
 
-                match M::do_emit(This(this.0.clone()), key.clone(), Rest(vec![value])) {
+                match M::do_emit(this, key.clone(), Rest(vec![value])) {
                     Ok(has) if has => Ok(true),
                     _ => Err(RongJSError::Error(err)),
                 }
@@ -295,25 +295,25 @@ where
         listener: JSFunc,
         prepend: bool,
         once: bool,
-    ) -> JSResult<JSObject> {
+    ) -> JSResult<()> {
         let target = this.borrow::<Self>()?;
         let events = target.get_event_emitter();
         let is_new = events.add_listener(key.clone(), listener, prepend, once)?;
         if is_new {
             target.on_event_changed(key, true)?;
         }
-        Ok(this.0.clone())
+        Ok(())
     }
 
     fn remove_event_listener(
         this: This<JSObject>,
         key: EventKey,
         listener: JSFunc,
-    ) -> JSResult<JSObject> {
+    ) -> JSResult<()> {
         let target = this.borrow::<Self>()?;
         let events = target.get_event_emitter();
         events.remove_listener(key, listener);
-        Ok(this.0.clone())
+        Ok(())
     }
 
     fn event_names(this: This<JSObject>) -> JSResult<Vec<EventKey>> {
@@ -365,11 +365,11 @@ where
         Ok(this.0.clone())
     }
 
-    fn remove_all_listeners(this: This<JSObject>, key: Optional<EventKey>) -> JSResult<JSObject> {
+    fn remove_all_listeners(this: This<JSObject>, key: Optional<EventKey>) -> JSResult<()> {
         let target = this.borrow::<Self>()?;
         let events = target.get_event_emitter();
         events.remove_all_listeners(key.0)?;
-        Ok(this.0.clone())
+        Ok(())
     }
 
     fn listener_count(
