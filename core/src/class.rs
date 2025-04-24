@@ -31,12 +31,21 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
     /// Configures the class prototype and constructor with methods and properties
     fn class_setup(class: &ClassSetup<V>) -> JSResult<()>;
 
-    /// Returns a vector of JavaScript values that should be marked by the garbage collector.
+    /// Marks JavaScript values held by this object to prevent garbage collection.
     ///
-    /// KeyNote:
-    /// Don't use Clone in gc_mark
-    fn gc_mark(&self) -> Vec<&JSValue<V>> {
-        Vec::new()
+    /// Used primarily by the QuickJS engine. Some engines like JavaScriptCore
+    /// handle reference tracking automatically.
+    ///
+    /// IMPORTANT: Do NOT use clone() inside this method as it may break reference
+    /// counting in the garbage collector.
+    ///
+    /// Default implementation does nothing. Override this when you need to prevent
+    /// JS objects referenced by Rust from being garbage collected.
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue<V>),
+    {
+        // Default implementation does nothing
     }
 }
 

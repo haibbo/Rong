@@ -76,14 +76,13 @@ impl JSClass<JSEngineValue> for Point {
         Ok(())
     }
 
-    fn gc_mark(&self) -> Vec<&JSValue> {
-        let mut refs = Vec::new();
-
-        if let Some(m) = &self.jsobj {
-            refs.push(m.as_jsvalue());
+    fn gc_mark_with<F>(&self, mut mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        if let Some(obj) = &self.jsobj {
+            mark_fn(obj.as_jsvalue());
         }
-
-        refs
     }
 }
 

@@ -46,15 +46,15 @@ pub(crate) unsafe extern "C" fn gc_mark<JC>(
     JC: JSClass<QJSValue>,
 {
     unsafe {
-        // Extract the Rust object and call collect_js_references on it
+        // Extract the Rust object and call gc_mark_with on it
         let ptr = qjs::QJS_ObjectGetPrivate(val) as *mut RefCell<JC>;
         if !ptr.is_null() {
             if let Ok(borrowed) = (*ptr).try_borrow() {
-                // Mark each value
-                for root in borrowed.gc_mark() {
-                    let v = *root.as_value().as_raw_value();
+                // Use the callback-based approach for marking
+                borrowed.gc_mark_with(|value| {
+                    let v = *value.as_value().as_raw_value();
                     qjs::JS_MarkValue(rt, v, mark_func);
-                }
+                });
             }
         }
     }
