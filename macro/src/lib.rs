@@ -193,6 +193,7 @@ pub fn js_class(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - `enumerable`: Make the property visible in enumerations
 /// - `rename = "name"`: Use a different name in JavaScript
 /// - `constructor`: Mark as the class constructor
+/// - `gc_mark`: Use this method to implement garbage collection marking
 ///
 /// # Property Attributes
 /// - All properties are configurable by default

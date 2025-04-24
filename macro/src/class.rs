@@ -60,6 +60,7 @@ struct MethodOpts {
     getter: bool,
     setter: bool,
     enumerable: bool,
+    gc_mark: bool,
 }
 
 /// Process method attributes and generate JavaScript bindings
@@ -88,6 +89,7 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
     let mut instance_methods = Vec::new();
     let mut static_methods = Vec::new();
     let mut constructor = None;
+    let mut gc_mark_impl = None;
 
     // Type alias for property definition tuple
     type PropertyDef = (Option<TokenStream>, Option<TokenStream>, bool);
@@ -131,6 +133,8 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
                                     opts.setter = true;
                                 } else if path.is_ident("enumerable") {
                                     opts.enumerable = true;
+                                } else if path.is_ident("gc_mark") {
+                                    opts.gc_mark = true;
                                 }
                             }
                             Meta::NameValue(nv) => {
@@ -153,6 +157,26 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
             &opts.rename.unwrap_or_else(|| method_name.to_string()),
             method_name.span(),
         );
+
+        // Check if this is a gc_mark method (special handling)
+        if opts.gc_mark {
+            // Make sure it's a method with &self receiver (not static)
+            if let Some(receiver) = method.sig.receiver() {
+                if receiver.mutability.is_none() {
+                    // Generate direct JSClass::gc_mark_with implementation
+                    gc_mark_impl = Some(quote! {
+                        // Implement gc_mark_with by calling the user's method
+                        fn gc_mark_with<F>(&self, mark_fn: F)
+                        where 
+                            F: FnMut(&rong::JSValue)
+                        {
+                            Self::#method_name(self, mark_fn);
+                        }
+                    });
+                    continue;
+                }
+            }
+        }
 
         // Check if this is a constructor
         if method.attrs.iter().any(|attr| {
@@ -404,6 +428,8 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
                 #(#static_methods)*
                 Ok(())
             }
+
+            #gc_mark_impl
         }
     };
 
