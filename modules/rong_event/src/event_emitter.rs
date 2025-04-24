@@ -586,6 +586,24 @@ impl EventEmitter {
     pub fn new() -> Self {
         Self::default()
     }
+
+    #[js_method(gc_mark)]
+    pub fn gc_mark_callback<F>(&self, mut mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        if let Ok(events) = self.inner.lock() {
+            for (key, listeners) in &events.listeners {
+                if let EventKey::Symbol(symbol) = key {
+                    mark_fn(symbol.as_jsvalue());
+                }
+
+                for listener in listeners {
+                    mark_fn(listener.listener.as_jsvalue());
+                }
+            }
+        }
+    }
 }
 
 impl Emitter for EventEmitter {

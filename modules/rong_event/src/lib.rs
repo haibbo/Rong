@@ -118,6 +118,14 @@ mod tests {
                     let result: Result<(), String> = Err("Test error message".to_string());
                     result.emit_error::<Self>(this, &ctx, "do_operation")
                 }
+
+                #[js_method(gc_mark)]
+                fn gc_mark_callback<F>(&self, mark_fn: F)
+                where
+                    F: FnMut(&JSValue),
+                {
+                    self.events.gc_mark_callback(mark_fn);
+                }
             }
 
             impl Emitter for TestEmitter {
