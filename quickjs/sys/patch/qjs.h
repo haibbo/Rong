@@ -39,7 +39,7 @@ int QJS_GetRefCount(JSValue v);
 * caller is responsible for avoid duplicated registration
 */
 JSValue QJS_CreateClass(JSContext *ctx, const char *class_name, JSCFunction *constructorCb,
-                        JSClassCall *callAsFuncCb, JSClassFinalizer *finalizer);
+                        JSClassCall *callAsFuncCb, JSClassFinalizer *finalizer, JSClassGCMark *gc_mark);
 
 /*
  * create object of class represented by @param constructor

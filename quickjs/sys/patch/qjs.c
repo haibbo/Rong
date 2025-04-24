@@ -7,7 +7,7 @@ extern bool _QJS_SetCFuncMagic(JSValue func_obj, int magic);
 extern int _QJS_GetCFuncMagic(JSValue func_obj);
 
 JSValue QJS_CreateClass(JSContext *ctx, const char *class_name, JSCFunction *constructorCb,
-                        JSClassCall *callAsFuncCb, JSClassFinalizer *finalizer) {
+                        JSClassCall *callAsFuncCb, JSClassFinalizer *finalizer, JSClassGCMark *gc_mark) {
 
     JSRuntime *rt=JS_GetRuntime(ctx);
 
@@ -19,7 +19,7 @@ JSValue QJS_CreateClass(JSContext *ctx, const char *class_name, JSCFunction *con
         class_name,
         .call = callAsFuncCb,
         .finalizer = finalizer,
-        .gc_mark = NULL,
+        .gc_mark = gc_mark,
         .exotic = NULL,
     };
 
