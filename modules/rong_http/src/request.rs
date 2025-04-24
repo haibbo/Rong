@@ -250,6 +250,16 @@ impl Request {
         // TODO: Implement form data parsing
         Err(RongJSError::TypeError("Not implemented".to_string()))
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        if let Some(signal) = &self.signal {
+            signal.gc_mark_with(mark_fn);
+        }
+    }
 }
 
 impl Default for Request {
