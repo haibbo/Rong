@@ -204,6 +204,10 @@ impl<V: JSValueImpl> JSObject<V> {
         self.0
     }
 
+    pub fn as_jsvalue(&self) -> &JSValue<V> {
+        &self.0
+    }
+
     /// Returns a mutable reference to the underlying/raw JSValue
     pub fn as_mut_value(&mut self) -> &mut V {
         &mut self.0.inner

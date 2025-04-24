@@ -1,7 +1,7 @@
 use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
     FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
-    JSResult, JSValueImpl, PropertyDescriptor, PropertyKey, RongJSError,
+    JSResult, JSValue, JSValueImpl, PropertyDescriptor, PropertyKey, RongJSError,
 };
 
 use std::any::TypeId;
@@ -30,6 +30,14 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
 
     /// Configures the class prototype and constructor with methods and properties
     fn class_setup(class: &ClassSetup<V>) -> JSResult<()>;
+
+    /// Returns a vector of JavaScript values that should be marked by the garbage collector.
+    ///
+    /// KeyNote:
+    /// Don't use Clone in gc_mark
+    fn gc_mark(&self) -> Vec<&JSValue<V>> {
+        Vec::new()
+    }
 }
 
 pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
