@@ -1,5 +1,5 @@
-use crate::qjs;
 use crate::QJSValue;
+use crate::qjs;
 use rong_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
 use std::mem::MaybeUninit;
 
@@ -101,7 +101,7 @@ impl JSObjectOps for QJSValue {
             qjs::JS_FreeAtom(self.ctx, atom);
             v
         };
-        if unsafe { qjs::QJS_IsUndefined(self.ctx, v) != 0 } {
+        if unsafe { qjs::QJS_IsUndefined(self.ctx, v) } {
             None
         } else {
             Some(QJSValue::from_owned_raw(key.ctx, v))
@@ -143,7 +143,7 @@ impl JSObjectOps for QJSValue {
             for i in 0..count {
                 let atom = *enums.add(i as usize);
                 let prop = qjs::JS_AtomToString(ctx, atom.atom);
-                if qjs::QJS_IsException(ctx, prop) == 0 {
+                if !qjs::QJS_IsException(ctx, prop) {
                     properties.push(QJSValue::from_owned_raw(ctx, prop));
                 }
                 qjs::JS_FreeAtom(ctx, atom.atom);

@@ -87,11 +87,11 @@ impl JSContextImpl for QJSContext {
                 bytes.len(),
                 qjs::JS_READ_OBJ_BYTECODE as i32,
             );
-            if qjs::QJS_IsException(self.ctx, obj) != 0 {
+            if qjs::QJS_IsException(self.ctx, obj) {
                 QJSValue::from_owned_raw(self.ctx, obj).with_exception()
             } else {
                 let eval_result = qjs::JS_EvalFunction(self.ctx, obj);
-                if qjs::QJS_IsException(self.ctx, eval_result) != 0 {
+                if qjs::QJS_IsException(self.ctx, eval_result) {
                     QJSValue::from_owned_raw(self.ctx, eval_result).with_exception()
                 } else {
                     QJSValue::from_owned_raw(self.ctx, eval_result)
@@ -141,7 +141,7 @@ impl JSContextImpl for QJSContext {
             )
         };
 
-        if unsafe { qjs::QJS_IsException(self.ctx, val) != 0 } {
+        if unsafe { qjs::QJS_IsException(self.ctx, val) } {
             let exception = unsafe { qjs::JS_GetException(self.ctx) };
             QJSValue::from_owned_raw(self.ctx, exception).with_exception()
         } else {
@@ -198,7 +198,7 @@ impl QJSContext {
     /// - QJSValue containing either the converted value or the exception
     pub(crate) fn to_owned_value(&self, raw: qjs::JSValue) -> QJSValue {
         let ctx = self.to_raw();
-        if unsafe { qjs::QJS_IsException(ctx, raw) != 0 } {
+        if unsafe { qjs::QJS_IsException(ctx, raw) } {
             let exception = unsafe { qjs::JS_GetException(ctx) };
             QJSValue::from_owned_raw(ctx, exception).with_exception()
         } else {
@@ -268,7 +268,7 @@ impl QJSContext {
                 c_filename.as_ptr(),
                 flags,
             );
-            if qjs::QJS_IsException(self.ctx, val) != 0 {
+            if qjs::QJS_IsException(self.ctx, val) {
                 let exception = qjs::JS_GetException(self.ctx);
                 QJSValue::from_owned_raw(self.ctx, exception).with_exception()
             } else {

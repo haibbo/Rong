@@ -1,6 +1,6 @@
-use crate::{qjs, QJSContext};
+use crate::{QJSContext, qjs};
 use rong_core::{
-    impl_js_converter, JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RongJSError,
+    JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RongJSError, impl_js_converter,
 };
 use std::ffi::CString;
 use std::hash::Hash;
@@ -190,9 +190,9 @@ impl QJSValue {
 impl_js_converter!(
     QJSValue,
     bool,
-    |ctx, value| qjs::QJS_NewBool(ctx, value as i32),
+    |ctx, value| qjs::QJS_NewBool(ctx, value),
     |ctx, value, result: *mut bool| {
-        if qjs::QJS_IsBool(ctx, value) > 0 {
+        if qjs::QJS_IsBool(ctx, value) {
             let status = qjs::JS_ToBool(ctx, value);
             *result = status != 0;
             0
@@ -208,7 +208,7 @@ impl_js_converter!(
     |ctx, value| { qjs::QJS_NewInt32(ctx, value) },
     |ctx, value, result| {
         // not number
-        if qjs::QJS_IsNumber(ctx, value) == 0 {
+        if !qjs::QJS_IsNumber(ctx, value) {
             return -1;
         }
 
@@ -222,7 +222,7 @@ impl_js_converter!(
     |ctx, value| { qjs::QJS_NewUint32(ctx, value) },
     |ctx, value, result| {
         // not number
-        if qjs::QJS_IsNumber(ctx, value) == 0 {
+        if !qjs::QJS_IsNumber(ctx, value) {
             return -1;
         }
 
@@ -235,9 +235,9 @@ impl_js_converter!(
     i64,
     |ctx, value| { qjs::JS_NewBigInt64(ctx, value) },
     |ctx, value, result: &mut i64| {
-        if qjs::QJS_IsBigInt(ctx, value) == 0 {
+        if !qjs::QJS_IsBigInt(ctx, value) {
             // not number
-            if qjs::QJS_IsNumber(ctx, value) == 0 {
+            if !qjs::QJS_IsNumber(ctx, value) {
                 return -1;
             }
 
@@ -257,9 +257,9 @@ impl_js_converter!(
     |ctx, value| { qjs::JS_NewBigUint64(ctx, value) },
     |ctx, value, result| {
         // not big int
-        if qjs::QJS_IsBigInt(ctx, value) == 0 {
+        if !qjs::QJS_IsBigInt(ctx, value) {
             // not number
-            if qjs::QJS_IsNumber(ctx, value) == 0 {
+            if !qjs::QJS_IsNumber(ctx, value) {
                 return -1;
             }
 
@@ -276,7 +276,7 @@ impl_js_converter!(
     |ctx, value| qjs::QJS_NewFloat64(ctx, value),
     |ctx, value, result| {
         // not number
-        if qjs::QJS_IsNumber(ctx, value) == 0 {
+        if !qjs::QJS_IsNumber(ctx, value) {
             return -1;
         }
         qjs::JS_ToFloat64(ctx, result, value)

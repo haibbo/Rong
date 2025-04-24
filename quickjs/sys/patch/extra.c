@@ -1,4 +1,4 @@
-JS_BOOL _QJS_SetCFuncMagic(JSValue func_obj, int magic){
+bool _QJS_SetCFuncMagic(JSValue func_obj, int magic){
     JSObject *p;
     if (JS_VALUE_GET_TAG(func_obj) != JS_TAG_OBJECT)
         return FALSE;

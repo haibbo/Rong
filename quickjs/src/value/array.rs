@@ -1,5 +1,5 @@
-use crate::qjs;
 use crate::QJSValue;
+use crate::qjs;
 use rong_core::{JSArrayOps, JSValueImpl};
 
 impl JSArrayOps for QJSValue {
@@ -8,7 +8,7 @@ impl JSArrayOps for QJSValue {
         unsafe {
             let v = qjs::JS_NewArray(ctx);
 
-            if qjs::QJS_IsException(ctx, v) != 0 {
+            if qjs::QJS_IsException(ctx, v) {
                 QJSValue::from_owned_raw(ctx, v).with_exception()
             } else {
                 QJSValue::from_owned_raw(ctx, v)
@@ -21,7 +21,7 @@ impl JSArrayOps for QJSValue {
         unsafe {
             let v = qjs::JS_GetPropertyUint32(ctx, self.value, index);
 
-            if qjs::QJS_IsException(ctx, v) != 0 {
+            if qjs::QJS_IsException(ctx, v) {
                 QJSValue::from_owned_raw(ctx, v).with_exception()
             } else {
                 QJSValue::from_owned_raw(ctx, v)

@@ -1,5 +1,5 @@
-use crate::qjs;
 use crate::QJSValue;
+use crate::qjs;
 use rong_core::{JSTypedArrayKind, JSTypedArrayOps, JSValueImpl};
 
 impl JSTypedArrayOps for QJSValue {
@@ -39,7 +39,7 @@ impl JSTypedArrayOps for QJSValue {
             let mut args = [buffer.value, offset_val, length_val];
             let array = qjs::JS_NewTypedArray(ctx, 3, args.as_mut_ptr(), array_type);
 
-            if qjs::QJS_IsException(ctx, array) != 0 {
+            if qjs::QJS_IsException(ctx, array) {
                 let exception = qjs::JS_GetException(ctx);
                 QJSValue::from_owned_raw(ctx, exception).with_exception()
             } else {
@@ -84,7 +84,7 @@ impl JSTypedArrayOps for QJSValue {
                 &mut pbyte_length as *mut _,
                 &mut pbytes_per_element as *mut _,
             );
-            if qjs::QJS_IsException(self.ctx, buffer) != 0 {
+            if qjs::QJS_IsException(self.ctx, buffer) {
                 None
             } else {
                 Some(QJSValue::from_owned_raw(self.ctx, buffer))

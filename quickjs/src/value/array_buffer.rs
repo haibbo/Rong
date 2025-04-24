@@ -1,5 +1,5 @@
-use crate::qjs;
 use crate::QJSValue;
+use crate::qjs;
 use rong_core::{JSArrayBufferOps, JSValueImpl};
 use std::ptr;
 use std::slice;
@@ -13,7 +13,7 @@ impl JSArrayBufferOps for QJSValue {
                 bytes.len() as _,
             );
 
-            if qjs::QJS_IsException(ctx.to_raw(), array_buffer) != 0 {
+            if qjs::QJS_IsException(ctx.to_raw(), array_buffer) {
                 let exception = qjs::JS_GetException(ctx.to_raw());
                 QJSValue::from_owned_raw(ctx.to_raw(), exception).with_exception()
             } else {
@@ -38,7 +38,7 @@ impl JSArrayBufferOps for QJSValue {
                 0, // is_shared = false
             );
 
-            if qjs::QJS_IsException(ctx.to_raw(), array_buffer) != 0 {
+            if qjs::QJS_IsException(ctx.to_raw(), array_buffer) {
                 // Clean up the memory if creation fails
                 let _ = Box::from_raw(ptr);
                 let exception = qjs::JS_GetException(ctx.to_raw());
@@ -53,11 +53,7 @@ impl JSArrayBufferOps for QJSValue {
         unsafe {
             let mut len: usize = 0;
             let ptr = qjs::JS_GetArrayBuffer(self.ctx, &mut len as *mut _, self.value);
-            if !ptr.is_null() {
-                len
-            } else {
-                0
-            }
+            if !ptr.is_null() { len } else { 0 }
         }
     }
 
@@ -93,6 +89,8 @@ unsafe extern "C" fn deallocator_callback(
     _ptr: *mut ::std::os::raw::c_void,
 ) {
     if !opaque.is_null() {
-        unsafe { let _ = Box::from_raw(opaque as *mut u8); }
+        unsafe {
+            let _ = Box::from_raw(opaque as *mut u8);
+        }
     }
 }

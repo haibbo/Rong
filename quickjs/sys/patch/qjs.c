@@ -2,7 +2,7 @@
 #include "qjs.h"
 
 // used for set class ID to constructor
-extern JS_BOOL _QJS_SetCFuncMagic(JSValue func_obj, int magic);
+extern bool _QJS_SetCFuncMagic(JSValue func_obj, int magic);
 // used for get class ID from constructor
 extern int _QJS_GetCFuncMagic(JSValue func_obj);
 
@@ -61,7 +61,7 @@ void *QJS_ObjectGetPrivate(JSValue object) {
     return JS_GetOpaque(object, class_id);
 }
 
-JS_BOOL QJS_IsPromise(JSContext *ctx, JSValue promise)
+bool QJS_IsPromise(JSContext *ctx, JSValue promise)
 {
     // JSValue resolving_funcs[2];
     // JSValue promise = JS_NewPromiseCapability(ctx, resolving_funcs);
