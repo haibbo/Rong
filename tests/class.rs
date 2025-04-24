@@ -75,6 +75,16 @@ impl JSClass<JSEngineValue> for Point {
         class.static_method("sadd", |x: i32, y: i32| Self::sadd(x, y))?;
         Ok(())
     }
+
+    fn gc_mark(&self) -> Vec<&JSValue> {
+        let mut refs = Vec::new();
+
+        if let Some(m) = &self.jsobj {
+            refs.push(m.as_jsvalue());
+        }
+
+        refs
+    }
 }
 
 #[test]
@@ -351,11 +361,9 @@ fn test_instance_hold_object_fromjs() {
         ctx.eval::<()>(Source::from_bytes(
             br#"
             let point = new Point(10, 20);
-
-            point.setJSObj( {
-                a:1,
-            });
-        "#,
+            point.name="hello";
+            point.setJSObj( { a:1, });
+         "#,
         ))?;
 
         Ok(())
