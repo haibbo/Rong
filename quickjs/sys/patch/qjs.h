@@ -2,7 +2,6 @@
 #define QJS_H
 
 #include "quickjs.h"
-#include <stdbool.h>
 
 JSValue QJS_NewBool(JSContext *ctx, bool val);
 
@@ -23,7 +22,6 @@ bool QJS_IsNull(JSContext *ctx, JSValue v);
 bool QJS_IsString(JSContext *ctx, JSValue v);
 bool QJS_IsSymbol(JSContext *ctx, JSValue v);
 bool QJS_IsObject(JSContext *ctx, JSValue v);
-bool QJS_IsPromise(JSContext *ctx, JSValue v);
 
 /* Debug Only */
 int QJS_GetRefCount(JSValue v);

@@ -60,13 +60,3 @@ void *QJS_ObjectGetPrivate(JSValue object) {
     int class_id=JS_GetClassID(object);
     return JS_GetOpaque(object, class_id);
 }
-
-bool QJS_IsPromise(JSContext *ctx, JSValue promise)
-{
-    // JSValue resolving_funcs[2];
-    // JSValue promise = JS_NewPromiseCapability(ctx, resolving_funcs);
-    // JSClassID class_id = JS_GetClassID(promise);
-    // printf("Promise's Class ID: %d\n", class_id);
-
-    return JS_GetClassID(promise)==49;
-}

@@ -47,7 +47,7 @@ impl JSRuntimeImpl for QJSRuntime {
     fn run_pending_jobs(&self) -> i32 {
         unsafe {
             let mut ctx = std::ptr::null_mut();
-            while qjs::JS_IsJobPending(self.rt) != 0 {
+            while qjs::JS_IsJobPending(self.rt) {
                 qjs::JS_ExecutePendingJob(self.rt, &mut ctx);
             }
         }

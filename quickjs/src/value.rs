@@ -172,9 +172,8 @@ impl JSValueImpl for QJSValue {
     }
 
     fn create_symbol(ctx: &Self::Context, description: &str) -> Self {
-        let len = description.len();
         let description = CString::new(description).unwrap();
-        let raw = unsafe { qjs::JS_NewSymbol(ctx.to_raw(), description.as_ptr(), len as _) };
+        let raw = unsafe { qjs::JS_NewSymbol(ctx.to_raw(), description.as_ptr(), false) };
         ctx.to_owned_value(raw)
     }
 }
@@ -295,7 +294,7 @@ impl_js_converter!(
         // This intentionally skips QJS_IsString check to allow any value that
         // the JS engine can convert to a string, providing more flexible type coercion
         let mut len: usize = 0;
-        let ptr = qjs::JS_ToCStringLen2(ctx, &mut len as _, value, 0);
+        let ptr = qjs::JS_ToCStringLen2(ctx, &mut len as _, value, false);
         if ptr.is_null() {
             return -1;
         }

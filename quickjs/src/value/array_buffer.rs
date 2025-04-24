@@ -35,7 +35,7 @@ impl JSArrayBufferOps for QJSValue {
                 len as _,
                 Some(deallocator_callback),
                 ptr::null_mut(),
-                0, // is_shared = false
+                false, // is_shared = false
             );
 
             if qjs::QJS_IsException(ctx.to_raw(), array_buffer) {

@@ -15,20 +15,20 @@ impl JSTypeOf for QJSValue {
         if self._is_err() {
             true
         } else {
-            unsafe { qjs::JS_IsError(self.ctx, self.value) != 0 }
+            unsafe { qjs::JS_IsError(self.ctx, self.value) }
         }
     }
 
     fn is_array(&self) -> bool {
-        unsafe { qjs::JS_IsArray(self.ctx, self.value) != 0 }
+        unsafe { qjs::JS_IsArray(self.value) }
     }
 
     fn is_array_buffer(&self) -> bool {
-        unsafe { qjs::JS_IsArrayBuffer(self.value) != 0 }
+        unsafe { qjs::JS_IsArrayBuffer(self.value) }
     }
 
     fn is_promise(&self) -> bool {
-        unsafe { qjs::QJS_IsPromise(self.ctx, self.value) }
+        unsafe { qjs::JS_IsPromise(self.value) }
     }
 
     fn is_undefined(&self) -> bool {
@@ -56,11 +56,11 @@ impl JSTypeOf for QJSValue {
     }
 
     fn is_function(&self) -> bool {
-        unsafe { qjs::JS_IsFunction(self.ctx, self.value) != 0 }
+        unsafe { qjs::JS_IsFunction(self.ctx, self.value) }
     }
 
     fn is_constructor(&self) -> bool {
-        unsafe { qjs::JS_IsConstructor(self.ctx, self.value) != 0 }
+        unsafe { qjs::JS_IsConstructor(self.ctx, self.value) }
     }
 
     fn is_object(&self) -> bool {
