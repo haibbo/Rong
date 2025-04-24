@@ -117,6 +117,11 @@ impl JSContextImpl for QJSContext {
                 Some(crate::class::generic_constructor::<JC>),
                 Some(crate::class::call::<JC>),
                 Some(crate::class::finalizer::<JC>),
+                if std::any::type_name::<JC>().contains("RustFunc") {
+                    None
+                } else {
+                    Some(crate::class::gc_mark::<JC>)
+                },
             )
         };
         QJSValue::from_owned_raw(self.ctx, raw)

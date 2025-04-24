@@ -20,7 +20,7 @@ index 9cac6de..562b486 100644
 ```
 2. run
 ```sh
-DUMPFLAGS=1 cargo run
+DUMPFLAGS=0x200 cargo run
 
 ```
 3. use address printed by JS_DumpGCObject to find which object had been freed.

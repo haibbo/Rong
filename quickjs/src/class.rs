@@ -1,5 +1,6 @@
 use crate::{QJSContext, QJSValue, qjs};
 use rong_core::{JSClass, JSClassExt, JSContextImpl, JSTypeOf, JSValueImpl};
+use std::cell::RefCell;
 
 pub(crate) unsafe extern "C" fn generic_constructor<JC>(
     ctx: *mut qjs::JSContext,
@@ -32,6 +33,31 @@ where
     let ctx: *mut qjs::JSContext = std::ptr::null_mut();
     let value = QJSValue::from_borrowed_raw(ctx, obj);
     <JC as JSClassExt<QJSValue>>::free(value);
+}
+
+/// GC mark function for QuickJS
+/// This function is called by the QuickJS GC when marking objects
+/// It collects and marks JavaScript values held by Rust objects
+pub(crate) unsafe extern "C" fn gc_mark<JC>(
+    rt: *mut qjs::JSRuntime,
+    val: qjs::JSValue,
+    mark_func: qjs::JS_MarkFunc,
+) where
+    JC: JSClass<QJSValue>,
+{
+    unsafe {
+        // Extract the Rust object and call collect_js_references on it
+        let ptr = qjs::QJS_ObjectGetPrivate(val) as *mut RefCell<JC>;
+        if !ptr.is_null() {
+            if let Ok(borrowed) = (*ptr).try_borrow() {
+                // Mark each value
+                for root in borrowed.gc_mark() {
+                    let v = *root.as_value().as_raw_value();
+                    qjs::JS_MarkValue(rt, v, mark_func);
+                }
+            }
+        }
+    }
 }
 
 /// FFI calling function.
