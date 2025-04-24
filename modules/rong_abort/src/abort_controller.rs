@@ -32,4 +32,15 @@ impl AbortController {
         AbortSignal::broadcast_abort(&ctx, This(self.abort_signal.clone()))?;
         Ok(())
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, mut mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        let m = &self.abort_signal;
+        if !m.is_undefined() {
+            mark_fn(m.as_jsvalue());
+        }
+    }
 }

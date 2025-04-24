@@ -257,6 +257,20 @@ impl AbortSignal {
         inner.reason = reason;
         Ok(())
     }
+
+    #[js_method(gc_mark)]
+    pub fn gc_mark_with<F>(&self, mut mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        if let Ok(inner) = self.inner.lock() {
+            if !inner.reason.is_undefined() {
+                mark_fn(&inner.reason);
+            }
+
+            inner.emitter.gc_mark_callback(mark_fn);
+        }
+    }
 }
 
 fn get_reason_or_dom_exception(
