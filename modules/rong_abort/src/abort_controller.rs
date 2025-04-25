@@ -3,7 +3,7 @@ use rong::{function::*, *};
 
 #[js_export]
 pub struct AbortController {
-    abort_signal: JSObject, // AbortSignal
+    abort_signal: AbortSignal,
 }
 
 #[js_class]
@@ -11,36 +11,34 @@ impl AbortController {
     #[js_method(constructor)]
     fn new(ctx: JSContext) -> JSResult<Self> {
         Ok(Self {
-            abort_signal: Class::get::<AbortSignal>(&ctx)?.instance(AbortSignal::new(&ctx)),
+            abort_signal: AbortSignal::new(&ctx),
         })
     }
 
     #[js_method(getter)]
-    pub fn signal(&self) -> JSObject {
+    pub fn signal(&self) -> AbortSignal {
         self.abort_signal.clone()
     }
 
     #[js_method]
     pub fn abort(&self, ctx: JSContext, reason: Optional<JSValue>) -> JSResult<()> {
-        let abort = self.abort_signal.borrow_mut::<AbortSignal>()?;
+        let abort = &self.abort_signal;
         if abort.aborted() {
             //only once
             return Ok(());
         }
         abort.set_reason(reason);
-        drop(abort);
-        AbortSignal::broadcast_abort(&ctx, This(self.abort_signal.clone()))?;
+
+        let obj = Class::get::<AbortSignal>(&ctx)?.instance(abort.clone());
+        AbortSignal::broadcast_abort(&ctx, This(obj))?;
         Ok(())
     }
 
     #[js_method(gc_mark)]
-    fn gc_mark_with<F>(&self, mut mark_fn: F)
+    fn gc_mark_with<F>(&self, mark_fn: F)
     where
         F: FnMut(&JSValue),
     {
-        let m = &self.abort_signal;
-        if !m.is_undefined() {
-            mark_fn(m.as_jsvalue());
-        }
+        self.abort_signal.gc_mark_with(mark_fn);
     }
 }
