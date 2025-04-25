@@ -31,16 +31,31 @@ pub struct UnitJSRunner<'a> {
 impl<'a> UnitJSRunner<'a> {
     /// Load and execute the specified JavaScript test script, returning a UnitJSRunner instance
     pub async fn load_script(ctx: &'a JSContext, unit: &str) -> JSResult<Self> {
-        let current_dir = std::env::current_dir().unwrap();
+        // Use CARGO_MANIFEST_DIR to find the test files relative to the crate root
+        let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let base_path = manifest_dir.join("../../tests/unit");
+
+        // Canonicalize the path to resolve any potential issues (like '..')
+        let test_base_dir = match std::fs::canonicalize(&base_path) {
+            Ok(path) => path,
+            Err(e) => {
+                // Provide more context in case of error
+                return Err(RongJSError::Error(format!(
+                    "Failed to canonicalize test base path '{}': {}",
+                    base_path.display(),
+                    e
+                )));
+            }
+        };
 
         // First, load the test runner
-        let runner = current_dir.join("../../tests/unit/test-runner.js");
-        let source = Source::from_path(ctx, runner).await?;
+        let runner_path = test_base_dir.join("test-runner.js");
+        let source = Source::from_path(ctx, runner_path).await?;
         ctx.eval_async::<()>(source).await?;
 
         // Then, load the test file
-        let test = current_dir.join("../../tests/unit/").join(unit);
-        let source = Source::from_path(ctx, test).await?;
+        let test_path = test_base_dir.join(unit);
+        let source = Source::from_path(ctx, test_path).await?;
         ctx.eval_async::<()>(source).await?;
 
         Ok(Self { ctx })
