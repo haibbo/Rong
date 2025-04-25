@@ -267,8 +267,7 @@ impl AbortSignal {
             if !inner.reason.is_undefined() {
                 mark_fn(&inner.reason);
             }
-
-            inner.emitter.gc_mark_callback(mark_fn);
+            inner.emitter.gc_mark(mark_fn);
         }
     }
 }
