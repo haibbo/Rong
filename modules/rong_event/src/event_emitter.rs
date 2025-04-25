@@ -588,7 +588,7 @@ impl EventEmitter {
     }
 
     #[js_method(gc_mark)]
-    pub fn gc_mark<F>(&self, mut mark_fn: F)
+    pub fn gc_mark_with<F>(&self, mut mark_fn: F)
     where
         F: FnMut(&JSValue),
     {

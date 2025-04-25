@@ -120,11 +120,11 @@ mod tests {
                 }
 
                 #[js_method(gc_mark)]
-                fn gc_mark_callback<F>(&self, mark_fn: F)
+                fn gc_mark_with<F>(&self, mark_fn: F)
                 where
                     F: FnMut(&JSValue),
                 {
-                    self.events.gc_mark_callback(mark_fn);
+                    self.events.gc_mark_with(mark_fn);
                 }
             }
 
