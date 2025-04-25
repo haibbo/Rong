@@ -87,7 +87,7 @@ impl Source {
             .into_result()?;
 
         // Write header with separator
-        file.write_all(b"DANITY").await.into_result()?;
+        file.write_all(b"RONG").await.into_result()?;
         file.write_all(ctx.runtime().engine.as_bytes())
             .await
             .into_result()?;
@@ -99,7 +99,14 @@ impl Source {
         Ok(())
     }
 
-    /// Create a Source from a file path
+    /// Load JavaScript source code from a file path asynchronously
+    ///
+    /// Detects file type (.js,.rong) and handles bytecode verification
+    /// if a .rong file is loaded.
+    ///
+    /// # Returns
+    /// * `Ok(Source)` - The loaded source code, ready for evaluation or compilation
+    /// * `Err(RongJSError)` - If file reading fails, type is unsupported, or bytecode is invalid
     pub async fn from_path<C: JSContextImpl>(
         ctx: &JSContext<C>,
         path: impl AsRef<Path>,
@@ -107,12 +114,12 @@ impl Source {
         let code = tokio::fs::read(path.as_ref()).await.into_result()?;
 
         let kind = match path.as_ref().extension().and_then(|ext| ext.to_str()) {
-            Some("js") | Some("ts") | Some("mjs") => SourceKind::JavaScript(code),
+            Some("js") => SourceKind::JavaScript(code),
             Some("rong") => {
                 // Verify bytecode header
-                if code.len() >= 6 && &code[0..6] == b"DANITY" {
+                if code.len() >= 6 && &code[0..4] == b"RONG" {
                     let engine_name = ctx.runtime().engine.to_string();
-                    let expected_header = format!("DANITY{}", engine_name);
+                    let expected_header = format!("RONG{}", engine_name);
 
                     if code.len() > expected_header.len()
                         && &code[0..expected_header.len()] == expected_header.as_bytes()
@@ -128,16 +135,14 @@ impl Source {
                         )));
                     }
                 } else {
-                    return Err(RongJSError::Error(
-                        "Invalid .rong file format".to_string(),
-                    ));
+                    return Err(RongJSError::Error("Invalid .rong file format".to_string()));
                 }
             }
             _ => {
                 return Err(RongJSError::Error(format!(
-                "Unsupported file type. Supported extensions: .js, .ts, .mjs, .rong. Found: {}",
-                path.as_ref().display()
-            )))
+                    "Unsupported file type. Supported extensions: .js,.rong. Found: {}",
+                    path.as_ref().display()
+                )));
             }
         };
 
