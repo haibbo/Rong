@@ -36,7 +36,6 @@ v8 = ["rong_v8"]
 default = ["quickjs"]
 
 [dev-dependencies]
-tokio = { version = "1.0", features = ["rt", "time", "macros"] }
 rong_test = { path = "utils/rong_test" }
 
 [profile.test]
