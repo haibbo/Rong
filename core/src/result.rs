@@ -63,8 +63,14 @@ pub enum RongJSError {
     #[error("{0}")]
     Exception(#[from] JSError),
 
+    /// Represents a raw JSValue pointer stored as usize
+    ///
+    /// # Safety
+    /// - Should not be constructed directly
+    /// - Must use RongJSError::from_jsvalue() to properly construct
+    /// - The usize value must be a valid pointer to a Box<JSValue>
     #[error("{0}")]
-    JSValue(#[from] JSValueErr),
+    JSValue(usize),
 }
 
 impl RongJSError {
@@ -100,7 +106,7 @@ impl RongJSError {
             | RongJSError::OnceFnCalled
             | RongJSError::NotSupportByteCode => ctx.as_ref().throw_error(self.to_string()),
 
-            RongJSError::JSValue(JSValueErr(value)) => {
+            RongJSError::JSValue(value) => {
                 let value = unsafe { Box::from_raw(value as *mut JSValue<V>) };
                 ctx.throw(*value).into_value()
             }
@@ -118,7 +124,7 @@ impl RongJSError {
 
     pub fn from_jsvalue<V: JSValueImpl>(value: JSValue<V>) -> Self {
         let addr = Box::new(value);
-        RongJSError::JSValue(JSValueErr(Box::into_raw(addr) as usize))
+        RongJSError::JSValue(Box::into_raw(addr) as usize)
     }
 }
 
@@ -183,14 +189,3 @@ where
         self.map_err(|e| RongJSError::TypeError(e.to_string()))
     }
 }
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct JSValueErr(usize);
-
-impl std::fmt::Display for JSValueErr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "JSValue Error")
-    }
-}
-
-impl std::error::Error for JSValueErr {}
