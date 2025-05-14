@@ -232,7 +232,7 @@ where
     where
         F: FnOnce(Self) -> T,
     {
-        if self.is_exception() {
+        if self.is_exception() || self.is_error() {
             let ctx = JSContext::from_borrowed_raw_ptr(self.as_raw_context());
             let err = JSException::from_js_value(&ctx, self)?;
             Err(RongJSError::Exception(err.into_error()))
