@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, JSContext, JSFunc, JSResult, JSTypeOf, JSValue, JSValueConversion, JSValueImpl,
-    RongJSError,
+    JsonToJsValue, RongJSError,
 };
 use std::fmt;
 use std::ops::Deref;
@@ -134,6 +134,18 @@ where
     /// Creates a JSObject from a raw JSValue and context
     pub fn from_raw(ctx: &JSContext<V::Context>, value: V) -> Self {
         JSValue::from_raw(ctx, value).into()
+    }
+
+    /// Creates a JSObject from a JSON string
+    ///
+    /// # Example
+    /// ```
+    /// let json = r#"{"name":"John","age":30}"#;
+    /// let obj = JSObject::from_json_string(&ctx, json)?;
+    /// ```
+    pub fn from_json_string(ctx: &JSContext<V::Context>, json: &str) -> JSResult<Self> {
+        let v = json.json_to_jsvalue(ctx)?;
+        Ok(JSObject(v))
     }
 
     /// Convert JSObject to JSON string using JavaScript's JSON.stringify
