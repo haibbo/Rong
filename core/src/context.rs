@@ -1,6 +1,6 @@
 use crate::{
-    ClassSetup, FromJSValue, JSClass, JSException, JSObject, JSObjectOps, JSResult, JSRuntimeImpl,
-    JSTypeOf, JSValue, JSValueImpl, Promise, RongJSError,
+    ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSResult, JSRuntimeImpl, JSTypeOf,
+    JSValue, JSValueImpl, Promise, RongJSError,
     source::{Source, SourceKind},
 };
 use crate::{JSRuntime, JSValueMapper};
@@ -364,16 +364,11 @@ impl<C: JSContextImpl> JSContext<C> {
             SourceKind::JavaScript(code) => self.rc.inner.eval(Source::from_bytes(code.clone())),
         };
 
-        match (result.is_promise(), result.is_exception()) {
-            (true, _) => {
-                let promise = Promise::from_js_value(self, result)?;
-                promise.into_future::<T>().await
-            }
-            (_, true) => {
-                let err = JSException::from_js_value(self, result)?;
-                Err(RongJSError::Exception(err.into_error()))
-            }
-            _ => T::from_js_value(self, result),
+        if result.is_promise() {
+            let promise = Promise::from_js_value(self, result)?;
+            promise.into_future::<T>().await
+        } else {
+            result.try_convert::<T>()
         }
     }
 
