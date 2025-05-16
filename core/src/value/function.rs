@@ -1,7 +1,7 @@
 use crate::function::{FromParams, IntoJSCallable, IntoOnceJSCallable, JSParameterType, RustFunc};
 use crate::{
     Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
-    JSTypeOf, JSValueImpl, JSValueMapper, RongJSError,
+    JSTypeOf, JSValueImpl, JSValueMapper, Promise, RongJSError,
 };
 use std::ops::Deref;
 
@@ -116,6 +116,49 @@ impl<V: JSObjectOps> JSFunc<V> {
         let argv = args.into_js_args(ctx);
         let result = ctx.as_ref().call(self.as_value(), this, argv);
         result.try_convert::<R>()
+    }
+
+    /// Calls the JavaScript function asynchronously with the given arguments.
+    /// If the function returns a Promise, waits for it to resolve.
+    ///
+    /// # Arguments
+    /// * `this` - Optional this value for the function call
+    /// * `args` - Arguments to pass to the function. Can be:
+    ///   - A single value implementing `IntoJSArg`
+    ///   - A tuple of values implementing `IntoJSArg` (up to 12 arguments)
+    ///
+    /// # Returns
+    /// Returns `Ok(R)` if the call succeeds, where `R` is the return type.
+    /// Returns `Err(RongJSError)` if the call fails or throws an exception.
+    ///
+    /// # Examples
+    /// ```rust
+    /// // Call async function with single argument
+    /// let result: i32 = func.call_async(None,(42,)).await?;
+    ///
+    /// // Call async function with multiple arguments
+    /// let result: String = func.call_async(None,(1, "two", 3.0)).await?;
+    /// ```
+    pub async fn call_async<Args, R>(&self, this: Option<JSObject<V>>, args: Args) -> JSResult<R>
+    where
+        Args: IntoJSArgs<V>,
+        R: FromJSValue<V> + 'static,
+        V: JSObjectOps + JSTypeOf + 'static,
+    {
+        let ctx = &self.get_ctx();
+        let this = match this {
+            Some(obj) => obj.into_value(),
+            None => V::create_undefined(ctx.as_ref()),
+        };
+        let argv = args.into_js_args(ctx);
+        let result = ctx.as_ref().call(self.as_value(), this, argv);
+
+        if result.is_promise() {
+            let promise = Promise::from_js_value(ctx, result)?;
+            promise.into_future::<R>().await
+        } else {
+            result.try_convert::<R>()
+        }
     }
 
     /// set name of JS Function

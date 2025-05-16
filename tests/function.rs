@@ -286,3 +286,102 @@ fn test_new_once_async() {
         Ok(())
     })
 }
+
+#[test]
+fn test_call_async_sync_return() {
+    async_run!(|ctx: JSContext| async move {
+        // Test regular synchronous function with call_async
+        let js_func: JSFunc = ctx
+            .eval(Source::from_bytes(b"(function(a, b) { return a + b; })"))
+            .unwrap();
+
+        let result: i32 = js_func.call_async(None, (2, 3)).await?;
+        assert_eq!(result, 5);
+
+        Ok(())
+    });
+}
+
+#[test]
+fn test_call_async_promise_return() {
+    async_run!(|ctx: JSContext| async move {
+        // Create a sleep function using Rust
+        let sleep_fn = JSFunc::new(&ctx, |ms: u32| async move {
+            sleep(Duration::from_millis(ms as u64)).await;
+        })?;
+        ctx.global().set("sleep", sleep_fn)?;
+
+        // Test async function that returns a Promise
+        let js_func: JSFunc = ctx
+            .eval(Source::from_bytes(
+                b"(async function(a, b) {
+                    await sleep(100);
+                    return a * b;
+                })",
+            ))
+            .unwrap();
+
+        let result: i32 = js_func.call_async(None, (4, 5)).await?;
+        assert_eq!(result, 20);
+
+        Ok(())
+    });
+}
+
+#[test]
+fn test_call_async_with_this() {
+    async_run!(|ctx: JSContext| async move {
+        // Create a sleep function using Rust
+        let sleep_fn = JSFunc::new(&ctx, |ms: u32| async move {
+            sleep(Duration::from_millis(ms as u64)).await;
+        })?;
+        ctx.global().set("sleep", sleep_fn)?;
+
+        // Create an object with a method that uses 'this'
+        let obj: JSObject = ctx
+            .eval(Source::from_bytes(
+                b"({
+                    value: 10,
+                    asyncMethod: async function(x) {
+                        await sleep(50);
+                        return this.value + x;
+                    }
+                })",
+            ))
+            .unwrap();
+
+        let method: JSFunc = obj.get("asyncMethod")?;
+
+        // Call with 'this' context
+        let result: i32 = method.call_async(Some(obj.clone()), (5,)).await?;
+        assert_eq!(result, 15); // 10 + 5
+
+        Ok(())
+    });
+}
+
+#[test]
+fn test_call_async_error_handling() {
+    async_run!(|ctx: JSContext| async move {
+        // Create a sleep function using Rust
+        let sleep_fn = JSFunc::new(&ctx, |ms: u32| async move {
+            sleep(Duration::from_millis(ms as u64)).await;
+        })?;
+        ctx.global().set("sleep", sleep_fn)?;
+
+        // Function that throws an error after a delay
+        let js_func: JSFunc = ctx
+            .eval(Source::from_bytes(
+                b"(async function() {
+                    await sleep(50);
+                    throw new Error('test error');
+                })",
+            ))
+            .unwrap();
+
+        let result: Result<i32, _> = js_func.call_async(None, ()).await;
+        assert!(result.is_err());
+
+        Ok(())
+    });
+}
