@@ -18,12 +18,12 @@
 //!   to the callback function. Only the callback function and delay are supported.
 //! - Delay is in milliseconds and should be a positive number.
 
-use rong::{JSContext, JSFunc, JSResult, JSRuntimeService, function::Optional};
+use rong::{JSContext, JSFunc, JSResult, JSRuntimeService, JSValue, function::Optional};
 
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::{Mutex, Condvar, Arc};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
 use tokio::sync::Notify;
 use tokio::time::Duration;
 
@@ -45,11 +45,11 @@ impl JSRuntimeService for TimerRegistry {
     fn on_shutdown(&self) {
         // First, notify all timers to stop
         self.shutdown();
-        
+
         // Then wait for all timer tasks to complete
         let (lock, cvar) = &*self.active_count;
         let count = lock.lock().unwrap();
-        
+
         // Wait while there are still active timers, with timeout protection
         if *count > 0 {
             // Wait with a single reasonable timeout
@@ -78,7 +78,7 @@ impl TimerRegistry {
 
     fn register_timer(&self, id: u32, notifier: Rc<Notify>) {
         self.inner.notifiers.lock().unwrap().insert(id, notifier);
-        
+
         // Increment active count
         let (lock, _cvar) = &*self.active_count;
         let mut count = lock.lock().unwrap();
@@ -92,13 +92,13 @@ impl TimerRegistry {
         } else {
             false
         };
-        
+
         // Decrement active count only if we actually canceled a timer
         if canceled {
             self.decrement_active_count();
         }
     }
-    
+
     fn decrement_active_count(&self) {
         let (lock, cvar) = &*self.active_count;
         let mut count = lock.lock().unwrap();
@@ -120,11 +120,11 @@ impl TimerRegistry {
         if notifiers.is_empty() {
             return;
         }
-        
+
         // Copy the notifiers before draining to avoid deadlock
         let notifiers_copy: Vec<Rc<Notify>> = notifiers.values().cloned().collect();
         notifiers.clear();
-        
+
         // Notify all timers outside the lock
         for notifier in notifiers_copy {
             notifier.notify_waiters();
@@ -177,7 +177,7 @@ fn set_timeout_with_repeat(
                 _ = notifier.notified() => break,
             }
         }
-        
+
         // Ensure we decrement the count when the task finishes
         registry_clone.decrement_active_count();
     });
@@ -199,8 +199,10 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     });
 
     let registry_clone = registry.clone();
-    let clear_timeout = JSFunc::new(ctx, move |id: u32| {
-        registry_clone.cancel_timer(id);
+    let clear_timeout = JSFunc::new(ctx, move |id: JSValue| {
+        if let Ok(id) = id.try_into::<u32>() {
+            registry_clone.cancel_timer(id);
+        }
     });
 
     let registry_clone = registry.clone();
@@ -208,8 +210,10 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
         set_timeout_with_repeat(registry_clone.clone(), callback, delay, true)
     });
 
-    let clear_interval = JSFunc::new(ctx, move |id: u32| {
-        registry.cancel_timer(id);
+    let clear_interval = JSFunc::new(ctx, move |id: JSValue| {
+        if let Ok(id) = id.try_into::<u32>() {
+            registry.cancel_timer(id);
+        }
     });
 
     global.set("setTimeout", set_timeout)?;
