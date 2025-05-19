@@ -161,16 +161,27 @@ fn set_timeout_with_repeat(
         }
 
         // First execution
-        if registry_clone.is_timer_active(id) && callback.call::<_, ()>(None, ()).is_ok() && !repeat {
-            registry_clone.decrement_active_count();
-            return;
+        if registry_clone.is_timer_active(id) {
+            let call_result = callback.call_async::<_, ()>(None, ()).await;
+
+            // If not a repeating timer, always clean up and return, regardless of call result
+            if !repeat {
+                registry_clone.decrement_active_count();
+                return;
+            }
+
+            // For repeating timers, exit if the callback failed
+            if call_result.is_err() {
+                registry_clone.decrement_active_count();
+                return;
+            }
         }
 
-        // Repeat loop
+        // Repeat loop - only reached for repeating timers where the first call succeeded
         while registry_clone.is_timer_active(id) {
             tokio::select! {
                 _ = interval.tick() => {
-                    if callback.call::<_, ()>(None,()).is_err() {
+                    if callback.call_async::<_, ()>(None,()).await.is_err() {
                         break;
                     }
                 }
