@@ -119,11 +119,13 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
 
 impl<R: JSRuntimeImpl> Drop for JSRuntime<R> {
     fn drop(&mut self) {
-        let services_map = self.services.services.borrow();
+        if Rc::strong_count(&self.inner) == 1 {
+            let services_map = self.services.services.borrow();
 
-        for (_type_id, service) in services_map.iter() {
-            // Call on_shutdown for each service before the inner runtime is dropped
-            service.on_shutdown();
+            for (_type_id, service) in services_map.iter() {
+                // Call on_shutdown for each service before the inner runtime is dropped
+                service.on_shutdown();
+            }
         }
     }
 }
