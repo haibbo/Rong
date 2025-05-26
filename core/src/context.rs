@@ -8,7 +8,7 @@ use std::any::{Any, TypeId};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
-use std::sync::{Arc, LazyLock, RwLock};
+use std::sync::{LazyLock, RwLock};
 
 /// JSContextImpl represents a JavaScript context
 ///
@@ -392,12 +392,9 @@ impl<C: JSContextImpl> JSContext<C> {
     ///
     /// This allows storing arbitrary user data associated with the context.
     /// The data is stored by type, so only one instance of each type can be stored.
-    /// Supports both owned values and Arc-wrapped values for sharing.
     ///
     /// # Arguments
-    /// * `data` - The user data to store. Can be:
-    ///   - Direct value: `T` (will be boxed internally)
-    ///   - Arc-wrapped: `Arc<T>` (for sharing across contexts/threads)
+    /// * `data` - The user data to store
     ///
     /// # Example
     /// ```rust
@@ -406,44 +403,16 @@ impl<C: JSContextImpl> JSContext<C> {
     ///     user_id: String,
     /// }
     ///
-    /// // Direct value
     /// let controller = UserController {
     ///     user_id: "user123".to_string(),
     /// };
     /// ctx.set_user_data(controller);
-    ///
-    /// // Arc-wrapped for sharing
-    /// let shared_controller = Arc::new(UserController {
-    ///     user_id: "user456".to_string(),
-    /// });
-    /// ctx.set_user_data(shared_controller.clone());
     /// ```
     pub fn set_user_data<T: Any + 'static>(&self, data: T) {
         self.rc
             .user_data
             .borrow_mut()
             .insert(TypeId::of::<T>(), Box::new(data));
-    }
-
-    /// Set user context data with Arc for sharing
-    ///
-    /// This is a convenience method for setting Arc-wrapped data.
-    /// Useful when the same data needs to be shared across multiple contexts.
-    ///
-    /// # Arguments
-    /// * `data` - Arc-wrapped user data to store
-    ///
-    /// # Example
-    /// ```rust
-    /// let shared_data = Arc::new(MySharedData::new());
-    /// ctx.set_user_data_arc(shared_data.clone());
-    /// // shared_data can be used elsewhere while also stored in context
-    /// ```
-    pub fn set_user_data_arc<T: Any + 'static>(&self, data: Arc<T>) {
-        self.rc
-            .user_data
-            .borrow_mut()
-            .insert(TypeId::of::<Arc<T>>(), Box::new(data));
     }
 
     /// Get user context data of a specific type
@@ -475,36 +444,10 @@ impl<C: JSContextImpl> JSContext<C> {
         }
     }
 
-    /// Get Arc-wrapped user context data
-    ///
-    /// Retrieves previously stored Arc-wrapped user data. This allows
-    /// cloning the Arc for use outside the context.
-    ///
-    /// # Returns
-    /// * `Some(Arc<T>)` - Cloned Arc to the stored data if found
-    /// * `None` - If no Arc<T> data has been stored
-    ///
-    /// # Example
-    /// ```rust
-    /// if let Some(controller_arc) = ctx.get_user_data_arc::<UserController>() {
-    ///     // Can clone and use the Arc elsewhere
-    ///     let cloned = controller_arc.clone();
-    ///     println!("User ID: {}", controller_arc.user_id);
-    /// }
-    /// ```
-    pub fn get_user_data_arc<T: Any + 'static>(&self) -> Option<Arc<T>> {
-        let user_data = self.rc.user_data.borrow();
-        user_data
-            .get(&TypeId::of::<Arc<T>>())
-            .and_then(|boxed| boxed.downcast_ref::<Arc<T>>())
-            .cloned()
-    }
-
     /// Get mutable user context data of a specific type
     ///
     /// Retrieves previously stored user data by type with mutable access.
     /// Returns None if no data of the specified type has been stored.
-    /// Note: This doesn't work with Arc<T> - use get_user_data_arc for shared data.
     ///
     /// # Returns
     /// * `Some(RefMut<T>)` - Mutable reference to the stored data if found
