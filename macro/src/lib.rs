@@ -1,12 +1,13 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, ItemImpl};
+use syn::{DeriveInput, ItemImpl, parse_macro_input};
 
 mod class;
 mod deserialize;
 mod r#enum;
 mod instance;
+mod serialize;
 
 /// Expose a Rust struct or enum as a JavaScript object.
 ///
@@ -310,4 +311,48 @@ pub fn derive_from_js_value(input: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(expanded)
+}
+
+/// Derive macro for implementing serialization from Rust structs to JavaScript objects.
+///
+/// This macro automatically implements the `IntoJSValue` trait for a struct, allowing it
+/// to be serialized to JavaScript objects. Fields can be renamed using the `rename`
+/// attribute to match different JavaScript property names.
+///
+/// # Attributes
+/// - `rename = "name"`: Use a different name for the field in JavaScript
+///
+/// # Field Types
+/// - All field types must implement `IntoJSValue`
+/// - Optional fields (`Option<T>`) will be omitted if `None`, or set to the value if `Some(T)`
+/// - Common types like `String`, `i32`, `f64`, `bool`, etc. are already supported
+///
+/// # Example
+/// ```ignore
+/// #[derive(IntoJSObj)]
+/// struct Person {
+///     #[rename = "firstName"]
+///     first_name: String,
+///     #[rename = "lastName"]
+///     last_name: String,
+///     age: i32,
+///     // Optional field - will be omitted if None
+///     nickname: Option<String>,
+/// }
+/// ```
+///
+/// # JavaScript Usage
+/// ```javascript
+/// // The struct will be converted to:
+/// {
+///     firstName: "John",
+///     lastName: "Doe",
+///     age: 30,
+///     nickname: "Johnny"  // Only present if Some(value)
+/// }
+/// ```
+#[proc_macro_derive(IntoJSObj, attributes(rename))]
+pub fn derive_into_js_object(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    TokenStream::from(serialize::impl_serialize(input))
 }
