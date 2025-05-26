@@ -5,4 +5,4 @@ edition = "2024"
 
 [dependencies]
 rong_v8_sys={path="./sys/"}
-rong_core = { path = "../core" }
+rong_core = { workspace = true }

@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rong = { path = "../" }
-rong_modules = { path = "../rong_modules" }
-tokio = { version = "1.0", features = ["rt", "time", "macros"] }
+rong = { workspace = true }
+rong_modules = { workspace = true }
+tokio = { workspace = true }
 
 [[example]]
 name = "worker"

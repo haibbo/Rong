@@ -5,4 +5,6 @@ edition = "2024"
 description = "Test utilities for rong"
 
 [dependencies]
-rong = { path = "../.."}
+rong = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }

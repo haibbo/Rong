@@ -26,7 +26,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     #[cfg(feature = "assert")]
     rong_assert::init(ctx)?;
 
-    #[cfg(feature = "dom-exception")]
+    #[cfg(feature = "exception")]
     rong_exception::init(ctx)?;
 
     #[cfg(feature = "abort")]

@@ -5,10 +5,10 @@ edition = "2024"
 
 [dependencies]
 rong = { workspace = true }
-tokio = { version = "1.0", features = ["rt", "time", "macros"] }
-futures = "0.3"
+tokio = { workspace = true }
+futures = { workspace = true }
 
 [dev-dependencies]
-rong_test = { path = "../../utils/rong_test" }
-rong_console = { path = "../rong_console" }
-rong_assert = { path = "../rong_assert" }
+rong_test = { workspace = true }
+rong_console = { workspace = true }
+rong_assert = { workspace = true }

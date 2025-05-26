@@ -5,23 +5,22 @@ edition = "2024"
 
 [dependencies]
 rong = { workspace = true }
-rong_timer = { path = "../modules/rong_timer", optional = true }
-rong_navigator = { path = "../modules/rong_navigator", optional = true }
-rong_path = { path = "../modules/rong_path", optional = true }
-rong_http = { path = "../modules/rong_http", optional = true }
-rong_encoding = { path = "../modules/rong_encoding", optional = true }
-rong_event = { path = "../modules/rong_event", optional = true }
-rong_assert = { path = "../modules/rong_assert", optional = true }
-rong_exception = { path = "../modules/rong_exception", optional = true }
-rong_abort = { path = "../modules/rong_abort", optional = true }
-rong_console = { path = "../modules/rong_console", optional = true }
-rong_url = { path = "../modules/rong_url", optional = true }
-rong_buffer = { path = "../modules/rong_buffer", optional = true }
-rong_fs = { path = "../modules/rong_fs", optional = true }
+rong_timer = { workspace = true, optional = true }
+rong_navigator = { workspace = true, optional = true }
+rong_path = { workspace = true, optional = true }
+rong_http = { workspace = true, optional = true }
+rong_encoding = { workspace = true, optional = true }
+rong_event = { workspace = true, optional = true }
+rong_assert = { workspace = true, optional = true }
+rong_exception = { workspace = true, optional = true }
+rong_abort = { workspace = true, optional = true }
+rong_console = { workspace = true, optional = true }
+rong_url = { workspace = true, optional = true }
+rong_buffer = { workspace = true, optional = true }
+rong_fs = { workspace = true, optional = true }
 
 [features]
-default = ["all"]
-all = [
+default = [
     "timer",
     "navigator",
     "path",
@@ -29,24 +28,23 @@ all = [
     "encoding",
     "event",
     "assert",
-    "dom-exception",
+    "exception",
     "abort",
     "console",
     "url",
     "buffer",
-    "fs",
+    "fs"
 ]
-
-timer = ["dep:rong_timer"]
-navigator = ["dep:rong_navigator"]
-path = ["dep:rong_path"]
-http = ["dep:rong_http"]
-encoding = ["dep:rong_encoding"]
-event = ["dep:rong_event"]
-assert = ["dep:rong_assert"]
-dom-exception = ["dep:rong_exception"]
-abort = ["dep:rong_abort"]
-console = ["dep:rong_console"]
-url = ["dep:rong_url"]
-buffer = ["dep:rong_buffer"]
-fs = ["dep:rong_fs"]
+timer = ["rong_timer"]
+navigator = ["rong_navigator"]
+path = ["rong_path"]
+http = ["rong_http"]
+encoding = ["rong_encoding"]
+event = ["rong_event"]
+assert = ["rong_assert"]
+exception = ["rong_exception"]
+abort = ["rong_abort"]
+console = ["rong_console"]
+url = ["rong_url"]
+buffer = ["rong_buffer"]
+fs = ["rong_fs"]

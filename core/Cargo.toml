@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-futures = "0.3.31"
-thiserror = "2.0.9"
-tokio = { version = "1.42.0", features = ["full"] }
+futures = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }

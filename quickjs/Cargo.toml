@@ -5,4 +5,4 @@ edition = "2024"
 
 [dependencies]
 rong_quickjs_sys={path="./sys/"}
-rong_core = { path = "../core" }
+rong_core = { workspace = true }

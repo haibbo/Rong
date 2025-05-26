@@ -13,7 +13,49 @@ members = [
 ]
 
 [workspace.dependencies]
+# Internal dependencies
 rong = { path = "."}
+rong_core = { path = "core" }
+rong_quickjs = { path = "quickjs" }
+rong_jscore = { path = "javascriptcore" }
+rong_v8 = { path = "v8" }
+rong_macro = { path = "macro" }
+rong_test = { path = "utils/rong_test" }
+rong_modules = { path = "rong_modules" }
+
+# Module dependencies
+rong_timer = { path = "modules/rong_timer" }
+rong_console = { path = "modules/rong_console" }
+rong_assert = { path = "modules/rong_assert" }
+rong_fs = { path = "modules/rong_fs" }
+rong_http = { path = "modules/rong_http" }
+rong_encoding = { path = "modules/rong_encoding" }
+rong_event = { path = "modules/rong_event" }
+rong_exception = { path = "modules/rong_exception" }
+rong_abort = { path = "modules/rong_abort" }
+rong_url = { path = "modules/rong_url" }
+rong_buffer = { path = "modules/rong_buffer" }
+rong_navigator = { path = "modules/rong_navigator" }
+rong_path = { path = "modules/rong_path" }
+
+# External dependencies
+tokio = { version = "1.0", features = ["rt", "time", "macros", "sync", "fs", "io-util"] }
+futures = "0.3.31"
+thiserror = "2.0.9"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Additional common dependencies
+http = { package = "http", version = "1.2" }
+hyper = { version = "1.6.0", features = ["client", "http1"] }
+hyper-util = { version = "0.1.10", features = ["client", "http1", "tokio"] }
+hyper-rustls = { version = "0.27.5", features = ["webpki-roots", "http1", "aws-lc-rs"] }
+rustls = { version = "0.23", default-features = false }
+flate2 = { version = "1.1.0" }
+uuid = { version = "1.16.0", features = ["v4"] }
+axum = { version = "0.8.1", features = ["http1"] }
+nix = { version = "0.29.0", features = ["user", "fs"] }
+syn = { version = "2.0", features = ["full"] }
 
 [package]
 name = "rong"
@@ -21,13 +63,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rong_core = { path = "core" }
-rong_quickjs = { path = "quickjs", optional = true }
-rong_jscore = { path = "javascriptcore", optional = true }
-rong_v8 = { path = "v8", optional = true }
-rong_macro = { path = "macro" }
-tokio = { version = "1.0", features = ["rt", "time", "macros"] }
-futures = "0.3.31"
+rong_core = { workspace = true }
+rong_quickjs = { workspace = true, optional = true }
+rong_jscore = { workspace = true, optional = true }
+rong_v8 = { workspace = true, optional = true }
+rong_macro = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
 
 [features]
 quickjs = ["rong_quickjs"]
@@ -36,7 +78,7 @@ v8 = ["rong_v8"]
 default = ["quickjs"]
 
 [dev-dependencies]
-rong_test = { path = "utils/rong_test" }
+rong_test = { workspace = true }
 
 [profile.test]
 debug = true
