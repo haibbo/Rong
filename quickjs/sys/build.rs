@@ -17,6 +17,24 @@ fn checkout_submodule() {
     }
 }
 
+fn harmony_setup() {
+    let ndk = env::var("OHOS_NDK_HOME").expect("OHOS_NDK_HOME is not set!");
+    unsafe {
+        env::set_var(
+            "CC",
+            format!("{ndk}/native/llvm/bin/aarch64-unknown-linux-ohos-clang"),
+        );
+
+        env::set_var("AR", format!("{ndk}/native/llvm/bin/llvm-ar"));
+
+        // for bindgen
+        env::set_var(
+            "BINDGEN_EXTRA_CLANG_ARGS",
+            format!("--sysroot {ndk}/native/sysroot"),
+        );
+    }
+}
+
 fn android_setup() {
     let ndk = env::var("ANDROID_NDK_HOME").expect("ANDROID_NDK_HOME is not set!");
     let arch = env::consts::ARCH;
@@ -93,9 +111,14 @@ fn build_static_archive() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
 
     match target_os.as_str() {
+        "linux" => {
+            if env::var("CARGO_CFG_TARGET_ENV").unwrap() == "ohos" {
+                harmony_setup()
+            }
+        }
         "android" => android_setup(),
         "ios" => ios_setup(),
-        _ => {}
+        _ => {} // do nothing for other os, like masosx
     }
 
     // PROFILE(debug or release) is set automatically by cargo
