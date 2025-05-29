@@ -3,9 +3,9 @@ use std::collections::HashSet;
 use std::fmt;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, IsTerminal, Write};
-use std::sync::Mutex;
+use std::sync::OnceLock;
 
-static CONSOLE_WRITER: Mutex<Option<Box<dyn ConsoleWriter>>> = Mutex::new(None);
+static CONSOLE_WRITER: OnceLock<Box<dyn ConsoleWriter>> = OnceLock::new();
 
 #[derive(Debug)]
 pub enum LogLevel {
@@ -47,19 +47,21 @@ impl ConsoleWriter for DefaultWriter {
     }
 }
 
-/// Set a custom console writer. This can be called multiple times to replace the writer.
+/// Set a custom console writer. This can only be called once before any console operations.
+/// If called after the writer has been initialized, it will be ignored.
 pub fn set_writer(writer: Box<dyn ConsoleWriter>) {
-    let mut console_writer = CONSOLE_WRITER.lock().unwrap();
-    *console_writer = Some(writer);
+    let _ = CONSOLE_WRITER.set(writer);
 }
 
-/// Initialize the console module with default writer
-pub fn init(ctx: &JSContext) -> JSResult<()> {
-    // Initialize with default writer if not yet initialized
-    if CONSOLE_WRITER.lock().unwrap().is_none() {
-        set_writer(Box::new(DefaultWriter));
-    }
+/// Get the console writer, initializing with default writer if not set
+fn get_writer() -> &'static dyn ConsoleWriter {
+    CONSOLE_WRITER
+        .get_or_init(|| Box::new(DefaultWriter))
+        .as_ref()
+}
 
+/// Initialize the console module
+pub fn init(ctx: &JSContext) -> JSResult<()> {
     let console = JSObject::new(ctx);
 
     console
@@ -76,22 +78,19 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 }
 
 fn log_message(level: LogLevel, message: String) {
-    if let Some(writer) = &*CONSOLE_WRITER.lock().unwrap() {
-        writer.write(level, message);
-    }
+    get_writer().write(level, message);
 }
 
 fn clear() {
-    if let Some(writer) = &*CONSOLE_WRITER.lock().unwrap() {
-        if writer.is_tty() {
-            // ANSI clear screen sequence
-            print!("\x1B[2J\x1B[1;1H");
-            // Ensure immediate output flush
-            io::stdout().flush().unwrap();
-        } else {
-            // In non-terminal environment, print a newline
-            println!();
-        }
+    let writer = get_writer();
+    if writer.is_tty() {
+        // ANSI clear screen sequence
+        print!("\x1B[2J\x1B[1;1H");
+        // Ensure immediate output flush
+        io::stdout().flush().unwrap();
+    } else {
+        // In non-terminal environment, print a newline
+        println!();
     }
 }
 
