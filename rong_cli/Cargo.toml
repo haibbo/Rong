@@ -11,3 +11,8 @@ path = "src/main.rs"
 rong = { workspace = true }
 rong_modules = { path = "../rong_modules" }
 
+[features]
+# Forward JS engine features to the main rong crate
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+v8 = ["rong/v8"]

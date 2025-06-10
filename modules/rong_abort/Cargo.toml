@@ -5,14 +5,18 @@ edition = "2024"
 
 [dependencies]
 rong = { workspace = true }
-rong_event = {path="../rong_event"}
-rong_exception = {path="../rong_exception"}
-tokio = { version = "1.0", features = ["rt", "time", "macros"] }
+tokio = { workspace = true }
+rong_event = { workspace = true }
+rong_exception = { workspace = true }
 
-
+[features]
+# Forward JS engine features to the main rong crate
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+v8 = ["rong/v8"]
 
 [dev-dependencies]
-rong_test = { path = "../../utils/rong_test" }
+rong_test = { workspace = true }
 rong_assert = { path="../../modules/rong_assert" }
 rong_event = { path="../../modules/rong_event" }
 rong_exception = { path="../../modules/rong_exception" }

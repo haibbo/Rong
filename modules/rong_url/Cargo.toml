@@ -7,8 +7,13 @@ edition = "2024"
 rong = { workspace = true }
 url = "2.5.4"
 
+[features]
+# Forward JS engine features to the main rong crate
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+v8 = ["rong/v8"]
 
 [dev-dependencies]
-rong_test = { path = "../../utils/rong_test" }
+rong_test = { workspace = true }
 rong_assert = { path="../../modules/rong_assert" }
 rong_console = { path="../../modules/rong_console" }

@@ -17,7 +17,7 @@ mod engine {
     pub type RongJS = QuickJS;
 }
 
-#[cfg(feature = "jscore")]
+#[cfg(all(feature = "jscore", not(feature = "quickjs")))]
 mod engine {
     use rong_jscore::JavaScriptCore;
     pub type RongJS = JavaScriptCore;

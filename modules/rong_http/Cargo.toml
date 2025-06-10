@@ -4,25 +4,31 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+rustls = { workspace = true }
 rong = { workspace = true }
-tokio = { version = "1.0", features = ["rt", "time", "macros"] }
-http = { package = "http", version = "1.2" }
-rong_url = { path = "../rong_url" }
-rong_abort = { path = "../rong_abort" }
-rong_buffer = { path = "../rong_buffer" }
-rong_navigator = { path = "../rong_navigator" }
-rong_exception = { path = "../rong_exception" }
-hyper = { version = "1.6.0", features = ["client", "http1"] }
-hyper-util = { version = "0.1.10", features = ["client", "http1", "tokio"] }
-hyper-rustls = { version = "0.27.5", features = ["webpki-roots", "http1", "aws-lc-rs"] }
-rustls = { version = "0.23", default-features = false }
+tokio = { workspace = true }
 bytes = "1.10.1"
+rong_abort = { workspace = true }
+rong_exception = { workspace = true }
+rong_buffer = { workspace = true }
+flate2 = { workspace = true }
+http = { workspace = true }
 http-body-util = "0.1.2"
-flate2 = { version = "1.1.0" }
-uuid = { version = "1.16.0", features = ["v4"] }
+hyper = { workspace = true }
+hyper-rustls = { workspace = true }
+hyper-util = { workspace = true }
+rong_navigator = { workspace = true }
+rong_url = { workspace = true }
+uuid = { workspace = true }
+
+[features]
+# Forward JS engine features to the main rong crate
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+v8 = ["rong/v8"]
 
 [dev-dependencies]
-rong_test = { path = "../../utils/rong_test" }
+rong_test = { workspace = true }
 rong_encoding = { path="../rong_encoding" }
 rong_console = { path="../rong_console" }
 rong_assert = { path="../rong_assert" }

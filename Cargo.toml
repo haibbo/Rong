@@ -14,7 +14,7 @@ members = [
 
 [workspace.dependencies]
 # Internal dependencies
-rong = { path = "."}
+rong = { path = ".", default-features = false}
 rong_core = { path = "core" }
 rong_quickjs = { path = "quickjs" }
 rong_jscore = { path = "javascriptcore" }
@@ -75,7 +75,6 @@ futures = { workspace = true }
 quickjs = ["rong_quickjs"]
 jscore = ["rong_jscore"]
 v8 = ["rong_v8"]
-default = ["quickjs"]
 
 [dev-dependencies]
 rong_test = { workspace = true }
