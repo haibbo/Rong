@@ -6,4 +6,4 @@ description = "Low-level V8 bindings for Rust"
 license = "MIT"
 
 [build-dependencies]
-bindgen = "0.71.1"
+bindgen = "0.72"
