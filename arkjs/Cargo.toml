@@ -1,0 +1,8 @@
+[package]
+name = "rong_arkjs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rong_arkjs_sys={path="./sys/"}
+rong_core = { path = "../core" }

@@ -2,7 +2,7 @@
 members = [
     "core",
     "macro",
-    "quickjs", "javascriptcore", "v8",
+    "quickjs", "javascriptcore", "v8", "arkjs",
     "utils/rong_test",
     "examples",
     "modules/rong_timer", "modules/rong_navigator", "modules/rong_path",
@@ -19,6 +19,7 @@ rong_core = { path = "core" }
 rong_quickjs = { path = "quickjs" }
 rong_jscore = { path = "javascriptcore" }
 rong_v8 = { path = "v8" }
+rong_arkjs = { path = "arkjs" }
 rong_macro = { path = "macro" }
 rong_test = { path = "utils/rong_test" }
 rong_modules = { path = "rong_modules" }
