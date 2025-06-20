@@ -1,0 +1,439 @@
+use crate::{ArkJSContext, arkjs};
+use rong_core::{
+    JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RongJSError, impl_js_converter,
+};
+use std::ffi::CString;
+use std::hash::Hash;
+use std::ptr;
+
+mod array;
+mod array_buffer;
+mod object;
+mod typed_array;
+mod valuetype;
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub(crate) enum ArkJSValueType {
+    Object,
+    Error,
+    Exception,
+    Other,
+}
+
+pub struct ArkJSValue {
+    value: arkjs::JSVM_Value,
+    env: arkjs::JSVM_Env,
+    value_type: ArkJSValueType,
+    reference: Option<arkjs::JSVM_Ref>, // Track reference for proper cleanup
+}
+
+impl PartialEq for ArkJSValue {
+    fn eq(&self, other: &Self) -> bool {
+        unsafe {
+            let mut result = false;
+            let status =
+                arkjs::OH_JSVM_StrictEquals(self.env, self.value, other.value, &mut result);
+            status == arkjs::JSVM_Status_JSVM_OK && result
+        }
+    }
+}
+
+impl Hash for ArkJSValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (self.value as usize).hash(state);
+        (self.env as usize).hash(state);
+        self.value_type.hash(state);
+    }
+}
+
+impl ArkJSValue {
+    pub(crate) fn new(env: arkjs::JSVM_Env, value: arkjs::JSVM_Value) -> Self {
+        Self {
+            env,
+            value,
+            value_type: ArkJSValueType::Other,
+            reference: None,
+        }
+    }
+
+    pub(crate) fn with_exception(mut self) -> Self {
+        self.value_type = ArkJSValueType::Exception;
+        self
+    }
+
+    pub(crate) fn with_object(mut self) -> Self {
+        self.value_type = ArkJSValueType::Object;
+        self
+    }
+
+    pub(crate) fn with_error(mut self) -> Self {
+        self.value_type = ArkJSValueType::Error;
+        self
+    }
+
+    pub(crate) fn _is_err(&self) -> bool {
+        self.value_type == ArkJSValueType::Error
+    }
+
+    pub(crate) fn _is_exception(&self) -> bool {
+        self.value_type == ArkJSValueType::Exception
+    }
+
+    pub(crate) fn _is_object(&self) -> bool {
+        self.value_type == ArkJSValueType::Object
+    }
+
+    /// Protects the current value from garbage collection by creating a reference
+    pub(crate) fn protect(mut self) -> Self {
+        unsafe {
+            let mut ref_value: arkjs::JSVM_Ref = ptr::null_mut();
+            let status = arkjs::OH_JSVM_CreateReference(self.env, self.value, 1, &mut ref_value);
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                self.reference = Some(ref_value);
+            }
+        }
+        self
+    }
+}
+
+impl Drop for ArkJSValue {
+    fn drop(&mut self) {
+        // Release the reference if we have one
+        if let Some(reference) = self.reference {
+            unsafe {
+                arkjs::OH_JSVM_DeleteReference(self.env, reference);
+            }
+        }
+    }
+}
+
+impl JSRawContext for ArkJSValue {
+    type RawContext = arkjs::JSVM_Env;
+}
+
+impl JSValueImpl for ArkJSValue {
+    type RawValue = arkjs::JSVM_Value;
+    type Context = ArkJSContext;
+
+    fn from_borrowed_raw(
+        ctx: <Self::Context as JSContextImpl>::RawContext,
+        value: Self::RawValue,
+    ) -> Self {
+        ArkJSValue::new(ctx, value).protect()
+    }
+
+    fn from_owned_raw(
+        ctx: <Self::Context as JSContextImpl>::RawContext,
+        value: Self::RawValue,
+    ) -> Self {
+        ArkJSValue::new(ctx, value)
+    }
+
+    fn into_raw_value(self) -> Self::RawValue {
+        let value = self.value;
+        std::mem::forget(self); // Prevent drop from being called
+        value
+    }
+
+    fn as_raw_value(&self) -> &Self::RawValue {
+        &self.value
+    }
+
+    fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext {
+        &self.env
+    }
+
+    fn create_null(ctx: &Self::Context) -> Self {
+        let env = ctx.to_raw();
+        unsafe {
+            let mut null_value: arkjs::JSVM_Value = ptr::null_mut();
+            arkjs::OH_JSVM_GetNull(env, &mut null_value);
+            Self::from_owned_raw(env, null_value)
+        }
+    }
+
+    fn create_undefined(ctx: &Self::Context) -> Self {
+        let env = ctx.to_raw();
+        unsafe {
+            let mut undefined_value: arkjs::JSVM_Value = ptr::null_mut();
+            arkjs::OH_JSVM_GetUndefined(env, &mut undefined_value);
+            Self::from_owned_raw(env, undefined_value)
+        }
+    }
+
+    fn from_json_str(ctx: &Self::Context, str: &str) -> Self {
+        let env = ctx.to_raw();
+        let c_str = CString::new(str).unwrap();
+        unsafe {
+            let mut json_string: arkjs::JSVM_Value = ptr::null_mut();
+            let status = arkjs::OH_JSVM_CreateStringUtf8(
+                env,
+                c_str.as_ptr() as *const u8,
+                str.len(),
+                &mut json_string,
+            );
+
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                let mut result: arkjs::JSVM_Value = ptr::null_mut();
+                let status = arkjs::OH_JSVM_JsonParse(env, json_string, &mut result);
+
+                if status == arkjs::JSVM_Status_JSVM_OK {
+                    Self::from_owned_raw(env, result)
+                } else {
+                    Self::create_undefined(ctx)
+                }
+            } else {
+                Self::create_undefined(ctx)
+            }
+        }
+    }
+
+    fn create_symbol(ctx: &Self::Context, description: &str) -> Self {
+        let env = ctx.to_raw();
+        unsafe {
+            // First create a string for the description
+            let c_str = CString::new(description).unwrap();
+            let mut desc_string: arkjs::JSVM_Value = ptr::null_mut();
+            let status = arkjs::OH_JSVM_CreateStringUtf8(
+                env,
+                c_str.as_ptr() as *const u8,
+                description.len(),
+                &mut desc_string,
+            );
+
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                let mut symbol_value: arkjs::JSVM_Value = ptr::null_mut();
+                let status = arkjs::OH_JSVM_CreateSymbol(env, desc_string, &mut symbol_value);
+
+                if status == arkjs::JSVM_Status_JSVM_OK {
+                    Self::from_owned_raw(env, symbol_value)
+                } else {
+                    Self::create_undefined(ctx)
+                }
+            } else {
+                Self::create_undefined(ctx)
+            }
+        }
+    }
+}
+
+impl Clone for ArkJSValue {
+    fn clone(&self) -> Self {
+        let mut cloned = ArkJSValue::new(self.env, self.value);
+        cloned.value_type = self.value_type;
+        cloned.protect()
+    }
+}
+
+impl_js_converter!(
+    ArkJSValue,
+    bool,
+    |ctx, value| unsafe {
+        let mut bool_value: arkjs::JSVM_Value = ptr::null_mut();
+        let status = arkjs::OH_JSVM_GetBoolean(ctx, value, &mut bool_value);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            bool_value
+        } else {
+            ptr::null_mut()
+        }
+    },
+    |env, value, result: *mut bool| unsafe {
+        let mut bool_result = false;
+        let status = arkjs::OH_JSVM_GetValueBool(env, value, &mut bool_result);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            *result = bool_result;
+            0
+        } else {
+            -1
+        }
+    }
+);
+
+impl_js_converter!(
+    ArkJSValue,
+    i32,
+    |ctx, value| unsafe {
+        let mut number_value: arkjs::JSVM_Value = ptr::null_mut();
+        let status = arkjs::OH_JSVM_CreateInt32(ctx, value, &mut number_value);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            number_value
+        } else {
+            ptr::null_mut()
+        }
+    },
+    |env, value, result: &mut i32| unsafe {
+        let mut int_result = 0i32;
+        let status = arkjs::OH_JSVM_GetValueInt32(env, value, &mut int_result);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            *result = int_result;
+            0
+        } else {
+            -1
+        }
+    }
+);
+
+impl_js_converter!(
+    ArkJSValue,
+    f64,
+    |ctx, value| unsafe {
+        let mut number_value: arkjs::JSVM_Value = ptr::null_mut();
+        let status = arkjs::OH_JSVM_CreateDouble(ctx, value, &mut number_value);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            number_value
+        } else {
+            ptr::null_mut()
+        }
+    },
+    |env, value, result: &mut f64| unsafe {
+        let mut double_result = 0.0f64;
+        let status = arkjs::OH_JSVM_GetValueDouble(env, value, &mut double_result);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            *result = double_result;
+            0
+        } else {
+            -1
+        }
+    }
+);
+
+impl_js_converter!(
+    ArkJSValue,
+    &str,
+    String,
+    |ctx, value: &str| unsafe {
+        let mut string_value: arkjs::JSVM_Value = ptr::null_mut();
+        let status =
+            arkjs::OH_JSVM_CreateStringUtf8(ctx, value.as_ptr(), value.len(), &mut string_value);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            string_value
+        } else {
+            ptr::null_mut()
+        }
+    },
+    |env, value, result: *mut String| unsafe {
+        let mut length: usize = 0;
+        // First get the length
+        let status = arkjs::OH_JSVM_GetValueStringUtf8(env, value, ptr::null_mut(), 0, &mut length);
+
+        if status == arkjs::JSVM_Status_JSVM_OK && length > 0 {
+            let mut buffer = vec![0u8; length + 1];
+            let mut written: usize = 0;
+            let status = arkjs::OH_JSVM_GetValueStringUtf8(
+                env,
+                value,
+                buffer.as_mut_ptr(),
+                buffer.len(),
+                &mut written,
+            );
+
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                buffer.truncate(written);
+                match String::from_utf8(buffer) {
+                    Ok(s) => {
+                        *result = s;
+                        0
+                    }
+                    Err(_) => -1,
+                }
+            } else {
+                -1
+            }
+        } else {
+            *result = String::new();
+            0
+        }
+    }
+);
+
+impl_js_converter!(
+    ArkJSValue,
+    u32,
+    |ctx, value| unsafe {
+        let mut number_value: arkjs::JSVM_Value = ptr::null_mut();
+        let status = arkjs::OH_JSVM_CreateUint32(ctx, value, &mut number_value);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            number_value
+        } else {
+            ptr::null_mut()
+        }
+    },
+    |env, value, result: &mut u32| unsafe {
+        let mut uint_result = 0u32;
+        let status = arkjs::OH_JSVM_GetValueUint32(env, value, &mut uint_result);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            *result = uint_result;
+            0
+        } else {
+            -1
+        }
+    }
+);
+
+impl_js_converter!(
+    ArkJSValue,
+    i64,
+    |ctx, value| unsafe {
+        let mut bigint_value: arkjs::JSVM_Value = ptr::null_mut();
+        let status = arkjs::OH_JSVM_CreateBigintInt64(ctx, value, &mut bigint_value);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            bigint_value
+        } else {
+            ptr::null_mut()
+        }
+    },
+    |env, value, result: &mut i64| unsafe {
+        let mut int64_result = 0i64;
+        let mut lossless = false;
+        let status =
+            arkjs::OH_JSVM_GetValueBigintInt64(env, value, &mut int64_result, &mut lossless);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            *result = int64_result;
+            0
+        } else {
+            // Fallback to number conversion
+            let mut double_result = 0.0f64;
+            let status = arkjs::OH_JSVM_GetValueDouble(env, value, &mut double_result);
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                *result = double_result as i64;
+                0
+            } else {
+                -1
+            }
+        }
+    }
+);
+
+impl_js_converter!(
+    ArkJSValue,
+    u64,
+    |ctx, value| unsafe {
+        let mut bigint_value: arkjs::JSVM_Value = ptr::null_mut();
+        let status = arkjs::OH_JSVM_CreateBigintUint64(ctx, value, &mut bigint_value);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            bigint_value
+        } else {
+            ptr::null_mut()
+        }
+    },
+    |env, value, result: &mut u64| unsafe {
+        let mut uint64_result = 0u64;
+        let mut lossless = false;
+        let status =
+            arkjs::OH_JSVM_GetValueBigintUint64(env, value, &mut uint64_result, &mut lossless);
+        if status == arkjs::JSVM_Status_JSVM_OK {
+            *result = uint64_result;
+            0
+        } else {
+            // Fallback to number conversion
+            let mut double_result = 0.0f64;
+            let status = arkjs::OH_JSVM_GetValueDouble(env, value, &mut double_result);
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                *result = double_result as u64;
+                0
+            } else {
+                -1
+            }
+        }
+    }
+);
