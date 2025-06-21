@@ -16,3 +16,4 @@ rong_modules = { path = "../rong_modules" }
 quickjs = ["rong/quickjs"]
 jscore = ["rong/jscore"]
 v8 = ["rong/v8"]
+arkjs = ["rong/arkjs"]

@@ -17,10 +17,16 @@ mod engine {
     pub type RongJS = QuickJS;
 }
 
-#[cfg(all(feature = "jscore", not(feature = "quickjs")))]
+#[cfg(all(feature = "jscore", not(feature = "quickjs"), not(feature = "arkjs")))]
 mod engine {
     use rong_jscore::JavaScriptCore;
     pub type RongJS = JavaScriptCore;
+}
+
+#[cfg(all(feature = "arkjs", not(feature = "quickjs"), not(feature = "jscore")))]
+mod engine {
+    use rong_arkjs::HarmonyArkJS;
+    pub type RongJS = HarmonyArkJS;
 }
 
 pub use engine::*;

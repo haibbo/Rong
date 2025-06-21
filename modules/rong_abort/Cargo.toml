@@ -14,6 +14,7 @@ rong_exception = { workspace = true }
 quickjs = ["rong/quickjs"]
 jscore = ["rong/jscore"]
 v8 = ["rong/v8"]
+arkjs = ["rong/arkjs"]
 
 [dev-dependencies]
 rong_test = { workspace = true }
