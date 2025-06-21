@@ -69,7 +69,7 @@ fn build_harmony_arkjs() {
         .join("lib");
 
     println!("cargo:rustc-link-search=native={}", lib_path.to_string_lossy());
-    println!("cargo:rustc-link-lib=dylib=ark_jsruntime");
+    println!("cargo:rustc-link-lib=dylib=jsvm");
 
     let bindings = bindgen::Builder::default()
         .header(jsvm_header.to_string_lossy())
