@@ -1,3 +1,4 @@
+use crate::grant_file_access;
 use futures::Stream;
 use rong::{function::Optional, *};
 use std::pin::Pin;
@@ -53,6 +54,7 @@ struct MkdirOptions {
 }
 
 async fn mkdir(path: String, option: Optional<MkdirOptions>) -> JSResult<()> {
+    grant_file_access(&path)?;
     let options = option.0.unwrap_or_default();
 
     // Check if directory exists first
@@ -162,6 +164,7 @@ impl Stream for DirEntryStream {
 }
 
 async fn readdir(ctx: JSContext, path: String) -> JSResult<JSObject> {
+    grant_file_access(&path)?;
     let entries = fs::read_dir(&path)
         .await
         .map_err(|e| RongJSError::TypeError(format!("Failed to read directory: {}", e)))?;
@@ -177,6 +180,7 @@ struct RemoveOptions {
 }
 
 async fn remove(path: String, option: Optional<RemoveOptions>) -> JSResult<()> {
+    grant_file_access(&path)?;
     let options = option.0.unwrap_or_default();
 
     // Check if path exists and get its type
@@ -211,6 +215,8 @@ async fn remove(path: String, option: Optional<RemoveOptions>) -> JSResult<()> {
 }
 
 async fn symlink(old_path: String, new_path: String) -> JSResult<()> {
+    grant_file_access(&old_path)?;
+    grant_file_access(&new_path)?;
     #[cfg(unix)]
     {
         fs::symlink(&old_path, &new_path)
@@ -236,6 +242,7 @@ async fn symlink(old_path: String, new_path: String) -> JSResult<()> {
 }
 
 async fn readlink(path: String) -> JSResult<String> {
+    grant_file_access(&path)?;
     fs::read_link(&path)
         .await
         .map(|p| p.to_string_lossy().into_owned())
@@ -244,6 +251,7 @@ async fn readlink(path: String) -> JSResult<String> {
 
 #[cfg(unix)]
 async fn chmod(path: String, mode: u32) -> JSResult<()> {
+    grant_file_access(&path)?;
     use std::os::unix::fs::PermissionsExt;
     let permissions = std::fs::Permissions::from_mode(mode);
     fs::set_permissions(&path, permissions)
@@ -253,6 +261,7 @@ async fn chmod(path: String, mode: u32) -> JSResult<()> {
 
 #[cfg(unix)]
 async fn chown(path: String, uid: u32, gid: u32) -> JSResult<()> {
+    grant_file_access(&path)?;
     use nix::unistd::{Gid, Uid, chown as nix_chown};
     nix_chown(
         path.as_str(),
@@ -263,6 +272,7 @@ async fn chown(path: String, uid: u32, gid: u32) -> JSResult<()> {
 }
 
 async fn chdir(directory: String) -> JSResult<()> {
+    grant_file_access(&directory)?;
     std::env::set_current_dir(&directory)
         .map_err(|e| RongJSError::TypeError(format!("Failed to change directory: {}", e)))
 }
@@ -274,6 +284,7 @@ struct UTimeOptions {
 }
 
 async fn utime(path: String, options: UTimeOptions) -> JSResult<()> {
+    grant_file_access(&path)?;
     use filetime::FileTime;
 
     let atime = options

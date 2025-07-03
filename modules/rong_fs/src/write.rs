@@ -3,6 +3,7 @@ use rong::{function::Optional, *};
 use tokio::io::AsyncWriteExt;
 use tokio::{fs, select};
 
+use crate::grant_file_access;
 use rong_abort::AbortSignal;
 
 #[derive(FromJSObj, Default)]
@@ -27,6 +28,7 @@ async fn write_text_file(
     text: String,
     option: Optional<WriteFileOptions>,
 ) -> JSResult<()> {
+    grant_file_access(&file)?;
     let options = option.0.unwrap_or_default();
 
     // Handle createNew option
@@ -82,6 +84,7 @@ async fn write_file(
     data: JSTypedArray,
     option: Optional<WriteFileOptions>,
 ) -> JSResult<()> {
+    grant_file_access(&file)?;
     let options = option.0.unwrap_or_default();
 
     // Get bytes from TypedArray
@@ -140,6 +143,8 @@ async fn write_file(
 }
 
 async fn copy_file(from: String, to: String) -> JSResult<()> {
+    grant_file_access(&from)?;
+    grant_file_access(&to)?;
     fs::copy(&from, &to)
         .await
         .map(|_| ())
@@ -147,6 +152,7 @@ async fn copy_file(from: String, to: String) -> JSResult<()> {
 }
 
 async fn truncate(path: String, len: Optional<f64>) -> JSResult<()> {
+    grant_file_access(&path)?;
     let len = len.unwrap_or(0.0);
     fs::OpenOptions::new()
         .write(true)

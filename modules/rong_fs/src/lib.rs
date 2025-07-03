@@ -1,4 +1,5 @@
 use rong::*;
+use std::cell::RefCell;
 use tokio::fs;
 
 mod dir;
@@ -6,13 +7,57 @@ mod read;
 mod stat;
 mod write;
 
+/// File access guard trait for controlling file access permissions
+pub trait FileAccessGuard: Send + Sync {
+    /// Check if access to the given file path is allowed
+    /// Returns Ok(()) if access is granted, Err with error message if denied
+    fn check_access(&self, path: &str) -> JSResult<()>;
+}
+
+/// Default implementation that allows all file access
+struct DefaultFileAccessGuard;
+
+impl FileAccessGuard for DefaultFileAccessGuard {
+    fn check_access(&self, _path: &str) -> JSResult<()> {
+        Ok(()) // Allow all access by default
+    }
+}
+
+// Thread-local storage for the file access guard
+thread_local! {
+    static FILE_ACCESS_GUARD: RefCell<Option<Box<dyn FileAccessGuard>>> = RefCell::new(None);
+}
+
+/// Set a custom file access guard
+pub fn set_file_access_guard(guard: Box<dyn FileAccessGuard>) {
+    FILE_ACCESS_GUARD.with(|g| {
+        *g.borrow_mut() = Some(guard);
+    });
+}
+
+/// Internal function to grant file access if allowed
+fn grant_file_access(path: &str) -> JSResult<()> {
+    FILE_ACCESS_GUARD.with(|g| {
+        let guard_ref = g.borrow();
+        let guard = guard_ref
+            .as_ref()
+            .map(|g| g.as_ref())
+            .unwrap_or(&DefaultFileAccessGuard as &dyn FileAccessGuard);
+
+        guard.check_access(path)
+    })
+}
+
 async fn rename(from: String, to: String) -> JSResult<()> {
+    grant_file_access(&from)?;
+    grant_file_access(&to)?;
     fs::rename(&from, &to)
         .await
         .map_err(|e| RongJSError::TypeError(format!("Failed to rename file: {}", e)))
 }
 
 async fn real_path(path: String) -> JSResult<String> {
+    grant_file_access(&path)?;
     fs::canonicalize(&path)
         .await
         .map(|p| p.to_string_lossy().into_owned())

@@ -1,6 +1,7 @@
 use rong::{function::Optional, *};
 use tokio::{fs, select};
 
+use crate::grant_file_access;
 use rong_abort::AbortSignal;
 
 #[derive(FromJSObj)]
@@ -9,6 +10,7 @@ struct ReadFileOptions {
 }
 
 async fn read_text_file(file: String, option: Optional<ReadFileOptions>) -> JSResult<String> {
+    grant_file_access(&file)?;
     let options = option.0.unwrap_or(ReadFileOptions { signal: None });
 
     if let Some(signal) = options.signal {
@@ -34,6 +36,7 @@ async fn read_file(
     file: String,
     option: Optional<ReadFileOptions>,
 ) -> JSResult<JSArrayBuffer<u8>> {
+    grant_file_access(&file)?;
     let options = option.0.unwrap_or(ReadFileOptions { signal: None });
 
     if let Some(signal) = options.signal {
