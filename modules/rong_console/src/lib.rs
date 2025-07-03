@@ -1,11 +1,13 @@
 use rong::{function::*, *};
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, IsTerminal, Write};
-use std::sync::OnceLock;
 
-static CONSOLE_WRITER: OnceLock<Box<dyn ConsoleWriter>> = OnceLock::new();
+thread_local! {
+    static CONSOLE_WRITER: RefCell<Option<Box<dyn ConsoleWriter>>> = RefCell::new(None);
+}
 
 #[derive(Debug)]
 pub enum LogLevel {
@@ -47,17 +49,33 @@ impl ConsoleWriter for DefaultWriter {
     }
 }
 
-/// Set a custom console writer. This can only be called once before any console operations.
-/// If called after the writer has been initialized, it will be ignored.
+/// Set a custom console writer for the current thread.
 pub fn set_writer(writer: Box<dyn ConsoleWriter>) {
-    let _ = CONSOLE_WRITER.set(writer);
+    CONSOLE_WRITER.with(|w| {
+        *w.borrow_mut() = Some(writer);
+    });
 }
 
-/// Get the console writer, initializing with default writer if not set
-fn get_writer() -> &'static dyn ConsoleWriter {
-    CONSOLE_WRITER
-        .get_or_init(|| Box::new(DefaultWriter))
-        .as_ref()
+/// Write a message using the thread-local console writer
+fn write_console(level: LogLevel, message: String) {
+    CONSOLE_WRITER.with(|w| {
+        let mut writer = w.borrow_mut();
+        if writer.is_none() {
+            *writer = Some(Box::new(DefaultWriter));
+        }
+        writer.as_ref().unwrap().write(level, message);
+    });
+}
+
+/// Check if the console writer is a TTY
+fn console_writer_is_tty() -> bool {
+    CONSOLE_WRITER.with(|w| {
+        let mut writer = w.borrow_mut();
+        if writer.is_none() {
+            *writer = Some(Box::new(DefaultWriter));
+        }
+        writer.as_ref().unwrap().is_tty()
+    })
 }
 
 /// Initialize the console module
@@ -78,12 +96,11 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 }
 
 fn log_message(level: LogLevel, message: String) {
-    get_writer().write(level, message);
+    write_console(level, message);
 }
 
 fn clear() {
-    let writer = get_writer();
-    if writer.is_tty() {
+    if console_writer_is_tty() {
         // ANSI clear screen sequence
         print!("\x1B[2J\x1B[1;1H");
         // Ensure immediate output flush
@@ -532,7 +549,6 @@ mod tests {
     impl ConsoleWriter for TestConsoleWriter {
         fn write(&self, _level: LogLevel, message: String) {
             println!("{}", message);
-            clear_test_output(); // Clear any previous output
             append_test_output(&message);
         }
 
@@ -545,6 +561,10 @@ mod tests {
     fn test_console_log_formatted_string() {
         run(|ctx| {
             clear_test_output();
+            // Reset thread-local storage
+            CONSOLE_WRITER.with(|w| {
+                *w.borrow_mut() = None;
+            });
             init(ctx)?;
             set_writer(Box::new(TestConsoleWriter));
 
@@ -564,6 +584,10 @@ mod tests {
     fn test_console_log_circular_reference() {
         run(|ctx| {
             clear_test_output();
+            // Reset thread-local storage
+            CONSOLE_WRITER.with(|w| {
+                *w.borrow_mut() = None;
+            });
             init(ctx)?;
             set_writer(Box::new(TestConsoleWriter));
 
@@ -590,6 +614,10 @@ mod tests {
     fn test_console_log_max_depth() {
         run(|ctx| {
             clear_test_output();
+            // Reset thread-local storage
+            CONSOLE_WRITER.with(|w| {
+                *w.borrow_mut() = None;
+            });
             init(ctx)?;
             set_writer(Box::new(TestConsoleWriter));
 
