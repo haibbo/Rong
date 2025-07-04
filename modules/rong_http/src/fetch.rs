@@ -13,6 +13,7 @@ use tokio::select;
 use crate::formdata::FormData;
 use crate::request::{Request, RequestInit};
 use crate::response::Response;
+use crate::security::grant_network_access;
 
 // Global client instance
 static CLIENT: OnceLock<
@@ -89,6 +90,10 @@ async fn to_hyper_request(request: Request) -> JSResult<HttpRequest<BoxBody<Byte
 pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Response> {
     // Create Request object from input and init
     let request = Request::new(input, init).map_err(|e| RongJSError::TypeError(e.to_string()))?;
+
+    // Check network access permission
+    let domain = request.domain()?;
+    grant_network_access(&domain)?;
 
     // Get abort signal if present
     let mut abort_receiver = request.abort_signal().map(|signal| signal.subscribe());
@@ -256,5 +261,42 @@ mod tests {
 
             Ok(())
         });
+    }
+
+    #[test]
+    fn test_network_access_guard() {
+        use crate::security::{set_network_access_guard, grant_network_access, NetworkAccessGuard};
+        use rong::RongJSError;
+
+        // Test default guard allows all domains
+        let result = grant_network_access("httpbin.org");
+        assert!(result.is_ok());
+
+        // Define restricted network guard
+        struct RestrictedNetworkGuard;
+
+        impl NetworkAccessGuard for RestrictedNetworkGuard {
+            fn check_access(&self, domain: &str) -> JSResult<()> {
+                if domain == "allowed.example.com" {
+                    Ok(())
+                } else {
+                    Err(RongJSError::TypeError("Network access denied".to_string()))
+                }
+            }
+        }
+
+        // Set restricted network guard
+        set_network_access_guard(Box::new(RestrictedNetworkGuard));
+
+        // Test allowed domain - should succeed
+        let allowed_result = grant_network_access("allowed.example.com");
+        assert!(allowed_result.is_ok());
+
+        // Test denied domain - should fail
+        let denied_result = grant_network_access("denied.example.com");
+        assert!(denied_result.is_err());
+        if let Err(err) = denied_result {
+            assert!(err.to_string().contains("Network access denied"));
+        }
     }
 }

@@ -20,6 +20,14 @@ impl Request {
     pub(crate) fn abort_signal(&self) -> Option<&AbortSignal> {
         self.signal.as_ref()
     }
+
+    /// Extract domain from the request URL
+    pub(crate) fn domain(&self) -> JSResult<String> {
+        self.url
+            .host()
+            .ok_or_else(|| RongJSError::TypeError("URL has no host".to_string()))
+            .map(|host| host.to_string())
+    }
 }
 
 #[derive(Default, Clone)]

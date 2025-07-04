@@ -2,6 +2,7 @@ use rong::*;
 
 pub use rong_console as console;
 pub use rong_fs as fs;
+pub use rong_http as http;
 pub use rong_navigator as navigator;
 
 /// Initialize all enabled modules in the JavaScript context
