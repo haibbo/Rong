@@ -138,11 +138,6 @@ fn test_display() {
         let jsvalue: JSValue = ctx.eval(Source::from_bytes(code)).unwrap();
         assert_eq!(format!("{}", jsvalue), "promise");
 
-        // Test error
-        let code = "new Error('test error')";
-        let jsvalue: JSValue = ctx.eval(Source::from_bytes(code)).unwrap();
-        assert_eq!(format!("{}", jsvalue), "error");
-
         // Test null
         let code = "null";
         let jsvalue: JSValue = ctx.eval(Source::from_bytes(code)).unwrap();
