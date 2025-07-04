@@ -676,14 +676,14 @@ impl<E: JSEngine + 'static> Rong<E> {
                                 current_task_abort_handle = Some(abort_handle);
 
                                 // Spawn the user's future onto the LocalSet
-                                let task_handle = tokio::task::spawn_local(abortable_future);
+                                let task_handle = spawn(abortable_future);
                                 current_task_join_handle = Some(task_handle);
 
                                 // Start microtask runner if needed
                                 if js_runtime.run_pending_jobs() >= 0 {
 
                                     let rt_clone = js_runtime.clone(); // Clone for the microtask runner
-                                    let microtask_handle = tokio::task::spawn_local(async move {
+                                    let microtask_handle = spawn(async move {
                                         let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
                                         // Loop indefinitely until aborted by the main loop
                                         loop {
@@ -886,6 +886,16 @@ impl<E: JSEngine + 'static> Drop for Rong<E> {
         // Ensure workers are terminated when Rong is dropped by calling the shutdown logic
         let _ = self.shutdown();
     }
+}
+
+/// Spawn a local async task
+///
+/// Convenience wrapper around `tokio::task::spawn_local`.
+pub fn spawn<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+    F: Future + 'static,
+{
+    tokio::task::spawn_local(future)
 }
 
 // Manual implementation because derive Clone fails due to E not being Clone bound

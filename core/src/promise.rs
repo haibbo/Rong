@@ -2,6 +2,7 @@ use crate::JSException;
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject,
     JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl, RongJSError, function::JSParameterType,
+    spawn,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -115,7 +116,7 @@ where
         let (promise, resolve, reject) = ctx.promise()?;
 
         // Spawn a new async task to handle the future
-        tokio::task::spawn_local(async move {
+        spawn(async move {
             let result = future.await;
             result.resolve_promise(resolve, reject);
         });

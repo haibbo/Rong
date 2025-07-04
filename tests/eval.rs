@@ -42,7 +42,7 @@ fn test_eval_async() {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
                 callback.call::<_, ()>(None, ()).unwrap()
             };
-            tokio::task::spawn_local(future);
+            spawn(future);
             Ok(())
         })?;
         ctx.global().set("setTimeout", set_timeout)?;

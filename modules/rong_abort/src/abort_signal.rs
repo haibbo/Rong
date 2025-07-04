@@ -222,7 +222,7 @@ impl AbortSignal {
         let instance = Class::get::<AbortSignal>(&ctx)?.instance(signal);
         let instance_clone = instance.clone();
 
-        tokio::task::spawn_local(async move {
+        spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_millis(time)).await;
 
             if let Ok(signal) = instance_clone.borrow_mut::<AbortSignal>() {

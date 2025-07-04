@@ -6,7 +6,7 @@ pub use rong_core::{
     JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
     JSTypedArray as CoreJSTypedArray, JSTypedArrayKind, JSValue as CoreJSValue, JSValueType,
     JsonToJsValue, Promise as CorePromise, PropertyDescriptor as CorePropertyDescriptor, Rong,
-    RongJSError, Source, SourceKind, Worker, WorkerMessage,
+    RongJSError, Source, SourceKind, Worker, WorkerMessage, spawn,
 };
 
 pub use rong_core::function;

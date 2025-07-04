@@ -18,7 +18,7 @@
 //!   to the callback function. Only the callback function and delay are supported.
 //! - Delay is in milliseconds and should be a positive number.
 
-use rong::{JSContext, JSFunc, JSResult, JSRuntimeService, JSValue, function::Optional};
+use rong::{JSContext, JSFunc, JSResult, JSRuntimeService, JSValue, function::Optional, spawn};
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -145,7 +145,7 @@ fn set_timeout_with_repeat(
     let delay = delay.unwrap_or(0.0).max(0.0) as u64;
     let registry_clone = registry.clone();
 
-    tokio::task::spawn_local(async move {
+    spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_millis(delay.max(1)));
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 

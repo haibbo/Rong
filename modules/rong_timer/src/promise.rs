@@ -140,7 +140,7 @@ pub fn set_interval(ctx: JSContext, delay: Optional<f64>) -> JSResult<JSObject> 
     let canceled_clone = canceled.clone();
 
     // Setup a background task that will relay cancellation signal to the channel
-    tokio::task::spawn_local(async move {
+    spawn(async move {
         notifier_clone.notified().await;
         let _ = notify_tx.send(()).await;
         canceled_clone.store(true, Ordering::SeqCst);

@@ -38,7 +38,7 @@ mod tests {
                 let mut recv = abort.subscribe();
 
                 let tx = tx.clone();
-                tokio::task::spawn_local(async move {
+                spawn(async move {
                     let value = recv.recv().await;
                     let reason: String = value.try_into().unwrap();
                     println!("Got reason:{}", reason);

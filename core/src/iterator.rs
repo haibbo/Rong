@@ -1,6 +1,6 @@
 use crate::{
     IntoJSValue, JSContext, JSExceptionHandler, JSFunc, JSObject, JSObjectOps, JSResult, JSSymbol,
-    JSValue,
+    JSValue, spawn,
 };
 use futures::{Stream, StreamExt};
 use std::cell::RefCell;
@@ -185,7 +185,7 @@ where
                     let iterator_clone = iterator_instance.clone();
 
                     // Spawn a task to handle the async operation
-                    tokio::task::spawn_local(async move {
+                    spawn(async move {
                         match iterator_clone.next(&ctx).await {
                             Ok(result) => {
                                 let _ = resolve.call::<_, ()>(None, (result,));
