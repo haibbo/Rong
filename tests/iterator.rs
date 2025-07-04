@@ -8,7 +8,7 @@ fn iterator_sync() {
             .set("print", JSFunc::new(ctx, |msg: String| println!("{}", msg)))?;
 
         let data = vec![1, 2, 3, 4, 5];
-        let iterator = JSFunc::new(ctx, move |ctx: JSContext| data.to_js_iter(&ctx));
+        let iterator = JSFunc::new(ctx, move |ctx: JSContext| data.clone().to_js_iter(&ctx));
 
         ctx.global().set("iterator", iterator)?;
         let result: i32 = ctx.eval(Source::from_bytes(
@@ -38,7 +38,9 @@ fn iterator_async() {
         )?;
 
         let data = stream::iter(1..=5);
-        let iterator = JSFunc::new(&ctx, move |ctx: JSContext| data.to_js_async_iter(&ctx))?;
+        let iterator = JSFunc::new(&ctx, move |ctx: JSContext| {
+            data.clone().to_js_async_iter(&ctx)
+        })?;
 
         ctx.global().set("iterator", iterator)?;
         let result: i32 = ctx

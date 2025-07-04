@@ -170,7 +170,7 @@ async fn readdir(ctx: JSContext, path: String) -> JSResult<JSObject> {
         .map_err(|e| RongJSError::TypeError(format!("Failed to read directory: {}", e)))?;
 
     let stream = DirEntryStream::new(entries);
-    stream.into_js_async_iter(&ctx)
+    stream.to_js_async_iter(&ctx)
 }
 
 #[derive(FromJSObj, Default)]

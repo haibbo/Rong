@@ -150,7 +150,7 @@ impl FormData {
             entries: self.entries.clone(),
             pos: 0,
         }
-        .into_js_iter(&ctx)
+        .to_js_iter(&ctx)
     }
 
     /// returns an iterator which iterates through all key/value pairs contained
@@ -163,7 +163,7 @@ impl FormData {
             pos: 0,
             ctx: ctx.clone(),
         }
-        .into_js_iter(&ctx)
+        .to_js_iter(&ctx)
     }
 
     /// returns an iterator which iterates through all keys contained in the FormData
@@ -173,7 +173,7 @@ impl FormData {
             entries: self.entries.clone(),
             pos: 0,
         }
-        .into_js_iter(&ctx)
+        .to_js_iter(&ctx)
     }
 }
 

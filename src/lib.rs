@@ -1,12 +1,12 @@
 pub use rong_core::{
-    Class as CoreClass, ClassSetup, FromJSValue, IntoJSAsyncIterator, IntoJSIterator, IntoJSResult,
-    IntoJSValue, JSArray as CoreJSArray, JSArrayBuffer as CoreJSArrayBuffer, JSClass,
-    JSContext as CoreJSContext, JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc,
-    JSObject as CoreJSObject, JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService,
-    JSSymbol as CoreJSSymbol, JSTypedArray as CoreJSTypedArray, JSTypedArrayKind,
-    JSValue as CoreJSValue, JSValueType, JsonToJsValue, Promise as CorePromise,
-    PropertyDescriptor as CorePropertyDescriptor, Rong, RongJSError, Source, SourceKind,
-    ToJSAsyncIterator, ToJSIterator, Worker, WorkerMessage,
+    Class as CoreClass, ClassSetup, FromJSValue, IntoJSAsyncIteratorExt, IntoJSIteratorExt,
+    IntoJSResult, IntoJSValue, JSArray as CoreJSArray, JSArrayBuffer as CoreJSArrayBuffer,
+    JSAsyncIterator, JSClass, JSContext as CoreJSContext, JSEngine, JSException as CoreJSException,
+    JSFunc as CoreJSFunc, JSIterator, JSObject as CoreJSObject, JSResult,
+    JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
+    JSTypedArray as CoreJSTypedArray, JSTypedArrayKind, JSValue as CoreJSValue, JSValueType,
+    JsonToJsValue, Promise as CorePromise, PropertyDescriptor as CorePropertyDescriptor, Rong,
+    RongJSError, Source, SourceKind, Worker, WorkerMessage,
 };
 
 pub use rong_core::function;

@@ -1,7 +1,7 @@
 use http::header::{self, HeaderMap, HeaderName, HeaderValue};
 use rong::{
     function::{Optional, This},
-    js_class, js_export, js_method, IntoJSIterator, *,
+    js_class, js_export, js_method, *,
 };
 
 #[js_export]
@@ -19,63 +19,6 @@ impl Headers {
     // Get a reference to the inner HeaderMap
     pub fn as_header_map(&self) -> &HeaderMap<HeaderValue> {
         &self.headers
-    }
-}
-
-struct HeaderEntriesIter {
-    entries: Vec<(String, String)>,
-    pos: usize,
-}
-
-impl Iterator for HeaderEntriesIter {
-    type Item = Vec<String>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < self.entries.len() {
-            let (name, value) = &self.entries[self.pos];
-            self.pos += 1;
-            Some(vec![name.clone(), value.clone()])
-        } else {
-            None
-        }
-    }
-}
-
-struct HeaderKeysIter {
-    keys: Vec<String>,
-    pos: usize,
-}
-
-impl Iterator for HeaderKeysIter {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < self.keys.len() {
-            let key = &self.keys[self.pos];
-            self.pos += 1;
-            Some(key.clone())
-        } else {
-            None
-        }
-    }
-}
-
-struct HeaderValuesIter {
-    values: Vec<String>,
-    pos: usize,
-}
-
-impl Iterator for HeaderValuesIter {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < self.values.len() {
-            let value = &self.values[self.pos];
-            self.pos += 1;
-            Some(value.clone())
-        } else {
-            None
-        }
     }
 }
 
@@ -276,14 +219,15 @@ impl Headers {
             .headers
             .iter()
             .map(|(name, value)| {
-                (
+                vec![
                     name.as_str().to_lowercase(),
                     value.to_str().unwrap_or_default().to_string(),
-                )
+                ]
             })
             .collect::<Vec<_>>();
 
-        HeaderEntriesIter { entries, pos: 0 }.into_js_iter(&ctx)
+        // Use new simplified API
+        entries.to_js_iter(&ctx)
     }
 
     /// The Headers.keys() method returns an iterator allowing to go through all
@@ -296,7 +240,8 @@ impl Headers {
             .map(|name| name.as_str().to_lowercase())
             .collect::<Vec<_>>();
 
-        HeaderKeysIter { keys, pos: 0 }.into_js_iter(&ctx)
+        // Use new simplified API
+        keys.to_js_iter(&ctx)
     }
 
     /// The Headers.values() method returns an iterator allowing to go through all
@@ -309,7 +254,8 @@ impl Headers {
             .filter_map(|value| value.to_str().ok().map(|s| s.to_string()))
             .collect::<Vec<_>>();
 
-        HeaderValuesIter { values, pos: 0 }.into_js_iter(&ctx)
+        // Use new simplified API
+        values.to_js_iter(&ctx)
     }
 
     /// getSetCookie() returns an array containing the values of all Set-Cookie

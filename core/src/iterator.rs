@@ -1,7 +1,6 @@
 use crate::{
-    function::{Constructor, ThisMut},
-    Class, IntoJSValue, JSClass, JSContext, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
-    JSResult, JSSymbol, JSValue,
+    IntoJSValue, JSContext, JSExceptionHandler, JSFunc, JSObject, JSObjectOps, JSResult, JSSymbol,
+    JSValue,
 };
 use futures::{Stream, StreamExt};
 use std::cell::RefCell;
@@ -9,352 +8,282 @@ use std::pin::Pin;
 use std::rc::Rc;
 use tokio::sync::Mutex;
 
-/// Converts an iterator into a JavaScript iterable object by consuming self
+/// Core JavaScript iterator that wraps Rust iterators
 ///
-/// This trait provides a method to convert any Rust iterator into a JavaScript iterable
-/// that follows the JavaScript iteration protocol. The resulting object can be used
-/// with `for...of` loops and other JavaScript constructs that expect iterables.
+/// This provides a unified way to create JavaScript iterators from Rust iterators.
+/// It follows the JavaScript iteration protocol and can be used with `for...of` loops.
 ///
-/// # Example
-/// ```rust
-/// use crate::IntoJSIterator;
-///
-/// let vec = vec![1, 2, 3];
-/// let iterable = vec.into_js_iter(ctx)?;
-/// ```
-pub trait IntoJSIterator<T>
+/// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_iterable_protocol
+/// In order to be iterable, an object must implement the [Symbol.iterator]() method,
+/// meaning that the object (or one of the objects up its prototype chain) must have
+/// a property with a [Symbol.iterator] key which is available via constant Symbol.iterator.
+pub struct JSIterator<V, T>
 where
-    Self: IntoIterator<Item = T> + 'static + Sized,
+    V: JSObjectOps + 'static,
+    T: IntoJSValue<V> + 'static,
 {
-    fn into_js_iter<V>(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>
+    /// The underlying Rust iterator wrapped in Rc<RefCell<>> for shared mutable access
+    inner: Rc<RefCell<Box<dyn Iterator<Item = T> + 'static>>>,
+    /// Cached result object to avoid creating new objects on each iteration
+    result: JSObject<V>,
+}
+
+impl<V, T> JSIterator<V, T>
+where
+    V: JSObjectOps + 'static,
+    T: IntoJSValue<V> + 'static,
+{
+    /// Create a new JSIterator from any type that implements IntoIterator
+    pub fn from<I>(iterable: I, ctx: &JSContext<V::Context>) -> Self
     where
-        T: IntoJSValue<V>,
-        V: JSObjectOps + 'static,
-        V::Context: JSExceptionHandler,
+        I: IntoIterator<Item = T> + 'static,
+        I::IntoIter: 'static,
     {
-        let iterable = JSObject::new(ctx);
+        Self {
+            inner: Rc::new(RefCell::new(Box::new(iterable.into_iter()))),
+            result: JSObject::new(ctx),
+        }
+    }
 
-        // Wrap self in an Rc to avoid moving it into the closure
-        let iter_rc = Rc::new(RefCell::new(self.into_iter()));
+    /// The next() method of the iterator protocol
+    pub fn next(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
+        let result = self.result.clone();
+        let mut iter = self.inner.borrow_mut();
 
-        // MDN:
-        // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_iterable_protocol
-        // In order to be iterable, an object must implement the [Symbol.iterator]()
-        // method, meaning that the object (or one of the objects up its prototype
-        // chain) must have a property with a [Symbol.iterator] key which is available
-        // via constant Symbol.iterator.
-        let iterator = JSFunc::new(ctx, {
-            let iter_rc = iter_rc.clone();
-            move |ctx: JSContext<V::Context>| {
-                let obj = JSObject::new(&ctx);
-
-                // store result of next to avoid create object on each next
-                let result = JSObject::new(&ctx);
-
-                let next = JSFunc::new(&ctx, {
-                    let iter_rc = iter_rc.clone();
-                    move |ctx: JSContext<V::Context>| {
-                        let result = result.clone();
-                        let mut iter = iter_rc.borrow_mut();
-                        match iter.next() {
-                            Some(i) => {
-                                let _ = result.set("done", false);
-                                let value = i.into_js_value(&ctx);
-                                let value = JSValue::from_raw(&ctx, value);
-                                result.set("value", value)?;
-                            }
-                            None => {
-                                result.set("done", true)?;
-                            }
-                        }
-                        Ok(result)
-                    }
-                })?;
-
-                obj.set("next", next)?;
-                Ok(obj)
+        match iter.next() {
+            Some(item) => {
+                result.set("done", false)?;
+                let js_value = item.into_js_value(ctx);
+                let js_value = JSValue::from_raw(ctx, js_value);
+                result.set("value", js_value)?;
             }
-        })?;
+            None => {
+                result.set("done", true)?;
+                result.set("value", JSValue::undefined(ctx))?;
+            }
+        }
 
-        let constant = ctx
-            .global()
-            .get::<_, JSObject<V>>("Symbol")?
-            .get::<_, JSSymbol<V>>("iterator")?;
-        iterable.set(constant, iterator)?;
-        Ok(iterable)
+        Ok(result)
     }
-}
 
-/// Auto-implementation of IntoJSIterator for all types that satisfy the trait bounds
-impl<T, I> IntoJSIterator<T> for I
-where
-    I: IntoIterator<Item = T>,
-    I: 'static,
-{
-}
-
-/// Converts an iterator into a JavaScript iterable object
-///
-/// This trait provides a method to convert any Rust iterator into a JavaScript iterable
-/// that follows the JavaScript iteration protocol. The resulting object can be used
-/// with `for...of` loops and other JavaScript constructs that expect iterables.
-///
-/// # Example
-/// ```rust
-/// use crate::ToJSIterator;
-///
-/// let vec = vec![1, 2, 3];
-/// let iterable = vec.to_js_iter(ctx)?;
-/// ```
-///
-/// This will create a JavaScript iterable that yields the values 1, 2, and 3
-pub trait ToJSIterator<T>
-where
-    Self: IntoIterator<Item = T> + 'static + Sized + Clone,
-{
-    fn to_js_iter<V>(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>
+    /// Convert this iterator to a JavaScript iterable object
+    pub fn to_js_iterable(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>
     where
-        T: IntoJSValue<V>,
-        V: JSObjectOps + 'static,
         V::Context: JSExceptionHandler,
     {
         let iterable = JSObject::new(ctx);
-        let target = self.clone();
 
-        let iterator = JSFunc::new(ctx, move |ctx: JSContext<V::Context>| {
-            let obj = JSObject::new(&ctx);
-            let mut iter = target.clone().into_iter();
+        // Create a simple object that has the iterator protocol
+        let iterator_obj = JSObject::new(ctx);
 
-            // store result of next to avoid create object on each next
-            let result = JSObject::new(&ctx);
-
-            let next = JSFunc::new(&ctx, move |ctx: JSContext<V::Context>| {
-                let result = result.clone();
-                match iter.next() {
-                    Some(i) => {
-                        let _ = result.set("done", false);
-                        let value = i.into_js_value(&ctx);
-                        let value = JSValue::from_raw(&ctx, value);
-                        result.set("value", value)?;
-                    }
-                    None => {
-                        result.set("done", true)?;
-                    }
-                }
-                Ok(result)
-            })?;
-
-            obj.set("next", next)?;
-            Ok(obj)
+        // Add the next method to the iterator object
+        let iterator_instance = self.clone();
+        let next_fn = JSFunc::new(ctx, move |ctx: JSContext<V::Context>| -> JSObject<V> {
+            iterator_instance.next(&ctx).unwrap_or_else(|_| {
+                let result = JSObject::new(&ctx);
+                result.set("done", true).ok();
+                result.set("value", JSValue::undefined(&ctx)).ok();
+                result
+            })
         })?;
 
-        let constant = ctx
+        iterator_obj.set("next", next_fn)?;
+
+        // Create Symbol.iterator function that returns the iterator object
+        let iter_obj_clone = iterator_obj.clone();
+        let iterator_fn = JSFunc::new(ctx, move || iter_obj_clone.clone())?;
+
+        // Get Symbol.iterator and set it on the iterable object
+        let symbol = ctx
             .global()
             .get::<_, JSObject<V>>("Symbol")?
             .get::<_, JSSymbol<V>>("iterator")?;
-        iterable.set(constant, iterator)?;
+
+        iterable.set(symbol, iterator_fn)?;
         Ok(iterable)
     }
 }
 
-/// Auto-implementation of ToJSIterator for all types that satisfy the trait bounds
-impl<T, I> ToJSIterator<T> for I
+impl<V, T> Clone for JSIterator<V, T>
 where
-    I: IntoIterator<Item = T>,
-    I: Clone,
-    I: 'static,
+    V: JSObjectOps + 'static,
+    T: IntoJSValue<V> + 'static,
 {
-}
-
-/// Converts an async iterator (Stream) into a JavaScript async iterable object
-///
-/// This trait provides a method to convert any Rust async iterator (Stream) into
-/// a JavaScript async iterable that follows the JavaScript async iteration protocol.
-/// The resulting object can be used with `for await...of` loops and other JavaScript
-/// constructs that expect async iterables.
-///
-/// # Example
-/// ```rust
-/// use crate::ToJSAsyncIterator;
-/// use futures::stream;
-///
-/// let stream = stream::iter(vec![1, 2, 3]);
-/// let async_iterable = stream.to_js_async_iter(ctx)?;
-///
-pub trait ToJSAsyncIterator<T>
-where
-    Self: Stream<Item = T> + 'static + Sized + Clone,
-{
-    fn to_js_async_iter<V>(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>
-    where
-        T: IntoJSValue<V> + 'static,
-        V: JSObjectOps + 'static,
-        V::Context: JSExceptionHandler,
-        Self: Send,
-    {
-        ctx.register_class::<JSAsyncIterator<V, T>>()?;
-
-        let iterable = JSObject::new(ctx);
-        let target = self.clone();
-
-        let async_iterator = JSFunc::new(ctx, move |ctx: JSContext<V::Context>| {
-            let stream: Rc<Mutex<Pin<Box<dyn Stream<Item = T> + Send>>>> =
-                Rc::new(Mutex::new(Box::pin(target.clone())));
-            let obj = Class::get::<JSAsyncIterator<V, T>>(&ctx)?
-                .instance(JSAsyncIterator::new(stream.clone(), &ctx));
-
-            let next = JSFunc::new(
-                &ctx,
-                async move |this: ThisMut<JSAsyncIterator<V, T>>, ctx: JSContext<V::Context>| {
-                    let result = this.result.clone();
-
-                    let mut stream = this.stream.lock().await;
-                    match stream.next().await {
-                        Some(value) => {
-                            result.set("done", false)?;
-                            let js_value = value.into_js_value(&ctx);
-                            let js_value = JSValue::from_raw(&ctx, js_value);
-                            result.set("value", js_value)?;
-                        }
-                        None => {
-                            result.set("done", true)?;
-                            result.set("value", JSValue::undefined(&ctx))?;
-                        }
-                    }
-
-                    Ok(result)
-                },
-            )?;
-            obj.set("next", next)?;
-            Ok(obj)
-        })?;
-
-        // constant of Symbol.asyncIterator
-        let symbol = ctx.global().get::<_, JSObject<V>>("Symbol")?;
-        let symbol_iterator = symbol.get::<_, JSSymbol<V>>("asyncIterator")?;
-
-        iterable.set(symbol_iterator, async_iterator)?;
-        Ok(iterable)
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            result: self.result.clone(),
+        }
     }
 }
 
-/// Auto-implementation of ToJSAsyncIterator for all types that satisfy the trait bounds
-impl<T, S> ToJSAsyncIterator<T> for S where S: Stream<Item = T> + Clone + 'static {}
-
+/// Core JavaScript async iterator that wraps Rust streams
 pub struct JSAsyncIterator<V, T>
 where
-    V: JSObjectOps,
+    V: JSObjectOps + 'static,
+    T: IntoJSValue<V> + Send + 'static,
 {
+    /// The underlying Rust stream wrapped in Rc<Mutex<>> for async shared access
     stream: Rc<Mutex<Pin<Box<dyn Stream<Item = T> + Send + 'static>>>>,
+    /// Cached result object to avoid creating new objects on each iteration
     result: JSObject<V>,
 }
 
 impl<V, T> JSAsyncIterator<V, T>
 where
-    V: JSObjectOps,
+    V: JSObjectOps + 'static,
+    T: IntoJSValue<V> + Send + 'static,
 {
-    fn new(
-        stream: Rc<Mutex<Pin<Box<dyn Stream<Item = T> + Send + 'static>>>>,
-        ctx: &JSContext<V::Context>,
-    ) -> Self {
+    /// Create a new JSAsyncIterator from any type that implements Stream
+    pub fn from<S>(stream: S, ctx: &JSContext<V::Context>) -> Self
+    where
+        S: Stream<Item = T> + Send + 'static,
+    {
         Self {
-            stream,
+            stream: Rc::new(Mutex::new(Box::pin(stream))),
             result: JSObject::new(ctx),
         }
     }
-}
 
-impl<V, T> JSClass<V> for JSAsyncIterator<V, T>
-where
-    V: JSObjectOps + 'static,
-    T: 'static,
-{
-    const NAME: &'static str = "AsyncIterator";
+    /// The next() method of the async iterator protocol
+    pub async fn next(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
+        let result = self.result.clone();
+        let mut stream = self.stream.lock().await;
 
-    // empty constructor
-    fn data_constructor() -> Constructor<V> {
-        Constructor::new(|| {})
+        match stream.next().await {
+            Some(item) => {
+                result.set("done", false)?;
+                let js_value = item.into_js_value(ctx);
+                let js_value = JSValue::from_raw(ctx, js_value);
+                result.set("value", js_value)?;
+            }
+            None => {
+                result.set("done", true)?;
+                result.set("value", JSValue::undefined(ctx))?;
+            }
+        }
+
+        Ok(result)
     }
 
-    fn class_setup(_class: &crate::ClassSetup<V>) -> JSResult<()> {
-        // We don't need to add a next method here
-        Ok(())
-    }
-}
-
-/// Converts an async iterator (Stream) into a JavaScript async iterable object by consuming self
-///
-/// This trait provides a method to convert any Rust async iterator (Stream) into
-/// a JavaScript async iterable that follows the JavaScript async iteration protocol.
-/// The resulting object can be used with `for await...of` loops and other JavaScript
-/// constructs that expect async iterables.
-///
-/// # Example
-/// ```rust
-/// use crate::IntoJSAsyncIterator;
-/// use futures::stream;
-///
-/// let stream = stream::iter(vec![1, 2, 3]);
-/// let async_iterable = stream.into_js_async_iter(ctx)?;
-/// ```
-pub trait IntoJSAsyncIterator<T>
-where
-    Self: Stream<Item = T> + 'static + Sized,
-{
-    fn into_js_async_iter<V>(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>
+    /// Convert this async iterator to a JavaScript async iterable object
+    pub fn to_js_async_iterable(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>
     where
-        T: IntoJSValue<V> + 'static,
-        V: JSObjectOps + 'static,
         V::Context: JSExceptionHandler,
-        Self: Send,
     {
-        ctx.register_class::<JSAsyncIterator<V, T>>()?;
-
         let iterable = JSObject::new(ctx);
 
-        // Wrap self in an Rc to avoid moving it into the closure
-        let stream_rc = Rc::new(Mutex::new(
-            Box::pin(self) as Pin<Box<dyn Stream<Item = T> + Send>>
-        ));
+        // Create a simple object that has the async iterator protocol
+        let iterator_obj = JSObject::new(ctx);
 
-        let async_iterator = JSFunc::new(ctx, move |ctx: JSContext<V::Context>| {
-            let obj = Class::get::<JSAsyncIterator<V, T>>(&ctx)?
-                .instance(JSAsyncIterator::new(stream_rc.clone(), &ctx));
+        // Add the next method to the async iterator object
+        let iterator_instance = self.clone();
+        let next_fn = JSFunc::new(ctx, move |ctx: JSContext<V::Context>| -> JSObject<V> {
+            // For async iterators, we need to return a Promise that resolves to the result
+            match ctx.promise() {
+                Ok((promise, resolve, _reject)) => {
+                    let iterator_clone = iterator_instance.clone();
 
-            let next = JSFunc::new(
-                &ctx,
-                async move |this: ThisMut<JSAsyncIterator<V, T>>, ctx: JSContext<V::Context>| {
-                    let result = this.result.clone();
-
-                    let mut stream = this.stream.lock().await;
-                    match stream.next().await {
-                        Some(value) => {
-                            result.set("done", false)?;
-                            let js_value = value.into_js_value(&ctx);
-                            let js_value = JSValue::from_raw(&ctx, js_value);
-                            result.set("value", js_value)?;
+                    // Spawn a task to handle the async operation
+                    tokio::task::spawn_local(async move {
+                        match iterator_clone.next(&ctx).await {
+                            Ok(result) => {
+                                let _ = resolve.call::<_, ()>(None, (result,));
+                            }
+                            Err(_) => {
+                                let result = JSObject::new(&ctx);
+                                result.set("done", true).ok();
+                                result.set("value", JSValue::undefined(&ctx)).ok();
+                                let _ = resolve.call::<_, ()>(None, (result,));
+                            }
                         }
-                        None => {
-                            result.set("done", true)?;
-                            result.set("value", JSValue::undefined(&ctx))?;
-                        }
-                    }
+                    });
 
-                    Ok(result)
-                },
-            )?;
-            obj.set("next", next)?;
-            Ok(obj)
+                    promise.into_object()
+                }
+                Err(_) => {
+                    // Fallback: return a resolved promise with done: true
+                    let result = JSObject::new(&ctx);
+                    result.set("done", true).ok();
+                    result.set("value", JSValue::undefined(&ctx)).ok();
+                    result
+                }
+            }
         })?;
 
-        // constant of Symbol.asyncIterator
-        let symbol = ctx.global().get::<_, JSObject<V>>("Symbol")?;
-        let symbol_iterator = symbol.get::<_, JSSymbol<V>>("asyncIterator")?;
+        iterator_obj.set("next", next_fn)?;
 
-        iterable.set(symbol_iterator, async_iterator)?;
+        // Create Symbol.asyncIterator function that returns the iterator object
+        let iter_obj_clone = iterator_obj.clone();
+        let iterator_fn = JSFunc::new(ctx, move |_ctx: JSContext<V::Context>| -> JSObject<V> {
+            iter_obj_clone.clone()
+        })?;
+
+        // Get Symbol.asyncIterator and set it on the iterable object
+        let symbol = ctx
+            .global()
+            .get::<_, JSObject<V>>("Symbol")?
+            .get::<_, JSSymbol<V>>("asyncIterator")?;
+
+        iterable.set(symbol, iterator_fn)?;
         Ok(iterable)
     }
 }
 
-/// Auto-implementation of IntoJSAsyncIterator for all types that satisfy the trait bounds
-impl<T, S> IntoJSAsyncIterator<T> for S where S: Stream<Item = T> + 'static {}
+impl<V, T> Clone for JSAsyncIterator<V, T>
+where
+    V: JSObjectOps + 'static,
+    T: IntoJSValue<V> + Send + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            stream: self.stream.clone(),
+            result: self.result.clone(),
+        }
+    }
+}
+
+/// Extension trait for converting iterables to JavaScript iterators
+pub trait IntoJSIteratorExt<V, T>
+where
+    V: JSObjectOps + 'static,
+{
+    fn to_js_iter(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>;
+}
+
+/// Auto-implementation for all IntoIterator types
+impl<V, T, I> IntoJSIteratorExt<V, T> for I
+where
+    V: JSObjectOps + 'static,
+    T: IntoJSValue<V> + 'static,
+    I: IntoIterator<Item = T> + 'static,
+    I::IntoIter: 'static,
+    V::Context: JSExceptionHandler,
+{
+    fn to_js_iter(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
+        let js_iter = JSIterator::from(self, ctx);
+        js_iter.to_js_iterable(ctx)
+    }
+}
+
+/// Extension trait for converting streams to JavaScript async iterators
+pub trait IntoJSAsyncIteratorExt<V, T>
+where
+    V: JSObjectOps + 'static,
+{
+    fn to_js_async_iter(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>;
+}
+
+/// Auto-implementation for all Stream types
+impl<V, T, S> IntoJSAsyncIteratorExt<V, T> for S
+where
+    V: JSObjectOps + 'static,
+    T: IntoJSValue<V> + Send + 'static,
+    S: Stream<Item = T> + Send + 'static,
+    V::Context: JSExceptionHandler,
+{
+    fn to_js_async_iter(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
+        let js_iter = JSAsyncIterator::from(self, ctx);
+        js_iter.to_js_async_iterable(ctx)
+    }
+}
