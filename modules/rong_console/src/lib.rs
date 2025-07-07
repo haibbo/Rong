@@ -253,6 +253,12 @@ fn format_raw_inner(
             }
         }
 
+        JSValueType::Date => {
+            if let Ok(s) = value.try_into::<String>() {
+                result.push_str(&s);
+            }
+        }
+
         JSValueType::Object | JSValueType::Array => {
             let obj: JSObject = value.clone().into();
             let hash = default_hash(&value);
