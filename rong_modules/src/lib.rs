@@ -4,6 +4,7 @@ pub use rong_console as console;
 pub use rong_fs as fs;
 pub use rong_http as http;
 pub use rong_navigator as navigator;
+pub use rong_storage as storage;
 
 /// Initialize all enabled modules in the JavaScript context
 pub fn init(ctx: &JSContext) -> JSResult<()> {
@@ -46,5 +47,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     #[cfg(feature = "fs")]
     rong_fs::init(ctx)?;
 
+    #[cfg(feature = "storage")]
+    rong_storage::init(ctx)?;
     Ok(())
 }
