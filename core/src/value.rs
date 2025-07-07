@@ -313,6 +313,13 @@ where
                     write!(f, "string")
                 }
             }
+            JSValueType::Date => {
+                if let Ok(val) = self.clone().try_into::<String>() {
+                    write!(f, "{}", val)
+                } else {
+                    write!(f, "Date")
+                }
+            }
             JSValueType::Undefined => write!(f, "undefined"),
             JSValueType::Null => write!(f, "null"),
             JSValueType::BigInt => write!(f, "bigint"),

@@ -17,6 +17,7 @@ pub enum JSValueType {
     Constructor,
     Promise,
     Symbol,
+    Date,
     Unknown,
 }
 
@@ -36,6 +37,7 @@ pub trait JSTypeOf: JSValueImpl {
     fn is_function(&self) -> bool;
     fn is_object(&self) -> bool;
     fn is_constructor(&self) -> bool;
+    fn is_date(&self) -> bool;
 
     fn type_of(&self) -> JSValueType {
         if self.is_exception() {
@@ -64,6 +66,8 @@ pub trait JSTypeOf: JSValueImpl {
             JSValueType::BigInt
         } else if self.is_string() {
             JSValueType::String
+        } else if self.is_date() {
+            JSValueType::Date
         } else if self.is_symbol() {
             JSValueType::Symbol
         } else if self.is_object() {
@@ -122,5 +126,6 @@ generate_is_type!(
     take_is_number => is_number,
     take_is_bigint => is_bigint,
     take_is_string => is_string,
-    take_is_symbol => is_symbol
+    take_is_symbol => is_symbol,
+    take_is_date => is_date
 );
