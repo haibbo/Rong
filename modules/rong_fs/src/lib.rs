@@ -1,8 +1,8 @@
 use rong::*;
 use std::cell::RefCell;
-use tokio::fs;
 
 mod dir;
+mod misc;
 mod read;
 mod stat;
 mod write;
@@ -48,35 +48,12 @@ fn grant_file_access(path: &str) -> JSResult<()> {
     })
 }
 
-async fn rename(from: String, to: String) -> JSResult<()> {
-    grant_file_access(&from)?;
-    grant_file_access(&to)?;
-    fs::rename(&from, &to)
-        .await
-        .map_err(|e| RongJSError::TypeError(format!("Failed to rename file: {}", e)))
-}
-
-async fn real_path(path: String) -> JSResult<String> {
-    grant_file_access(&path)?;
-    fs::canonicalize(&path)
-        .await
-        .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|e| RongJSError::TypeError(format!("Failed to resolve real path: {}", e)))
-}
-
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    let rong = ctx.rong();
-
-    let rename_fn = JSFunc::new(ctx, rename)?.name("rename")?;
-    rong.set("rename", rename_fn)?;
-
-    let real_path_fn = JSFunc::new(ctx, real_path)?.name("realPath")?;
-    rong.set("realPath", real_path_fn)?;
-
     read::init(ctx)?;
     write::init(ctx)?;
     dir::init(ctx)?;
     stat::init(ctx)?;
+    misc::init(ctx)?;
 
     Ok(())
 }

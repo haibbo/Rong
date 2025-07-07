@@ -5,7 +5,7 @@ use std::time::SystemTime;
 use tokio::fs;
 
 #[js_export]
-struct FileInfo {
+pub(crate) struct FileInfo {
     is_file: bool,
     is_directory: bool,
     is_symlink: bool,
