@@ -1,6 +1,6 @@
-use crate::{jsc, JSCContext};
+use crate::{JSCContext, jsc};
 use rong_core::{
-    impl_js_converter, JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RongJSError,
+    JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RongJSError, impl_js_converter,
 };
 use std::ffi::CString;
 use std::hash::Hash;
@@ -216,11 +216,7 @@ impl_js_converter!(
 
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
         *result = jsc::JSValueToInt32(ctx, value, &mut exception);
-        if exception.is_null() {
-            0
-        } else {
-            -1
-        }
+        if exception.is_null() { 0 } else { -1 }
     }
 );
 
@@ -235,11 +231,7 @@ impl_js_converter!(
 
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
         *result = jsc::JSValueToNumber(ctx, value, &mut exception);
-        if exception.is_null() {
-            0
-        } else {
-            -1
-        }
+        if exception.is_null() { 0 } else { -1 }
     }
 );
 
@@ -294,50 +286,80 @@ impl_js_converter!(
 
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
         *result = jsc::JSValueToUInt32(ctx, value, &mut exception);
-        if exception.is_null() {
-            0
-        } else {
-            -1
-        }
+        if exception.is_null() { 0 } else { -1 }
     }
 );
 
-// Warning: Numbers larger than 2^53 may lose precision when converted to JavaScript number
 impl_js_converter!(
     JSCValue,
     i64,
-    |ctx, value| unsafe { jsc::JSBigIntCreateWithInt64(ctx, value, std::ptr::null_mut()) },
-    |ctx, value, result: &mut i64| unsafe {
-        if !jsc::JSValueIsNumber(ctx, value) && !jsc::JSValueIsBigInt(ctx, value) {
-            return -1;
-        }
+    |ctx, value| unsafe {
+        // For values that fit in JavaScript's safe integer range, use regular number
+        // JavaScript safe integer range: -(2^53 - 1) to (2^53 - 1)
+        const JS_MAX_SAFE_INTEGER: i64 = (1i64 << 53) - 1;
+        const JS_MIN_SAFE_INTEGER: i64 = -JS_MAX_SAFE_INTEGER;
 
-        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-        *result = jsc::JSValueToInt64(ctx, value, &mut exception);
-        if exception.is_null() {
-            0
+        if value >= JS_MIN_SAFE_INTEGER && value <= JS_MAX_SAFE_INTEGER {
+            jsc::JSValueMakeNumber(ctx, value as f64)
         } else {
+            jsc::JSBigIntCreateWithInt64(ctx, value, std::ptr::null_mut())
+        }
+    },
+    |ctx, value, result: &mut i64| unsafe {
+        if jsc::JSValueIsBigInt(ctx, value) {
+            // It's a BigInt, extract as i64
+            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+            *result = jsc::JSValueToInt64(ctx, value, &mut exception);
+            if exception.is_null() { 0 } else { -1 }
+        } else if jsc::JSValueIsNumber(ctx, value) {
+            // It's a regular number, convert to double first then to i64
+            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+            let num = jsc::JSValueToNumber(ctx, value, &mut exception);
+            if exception.is_null() {
+                *result = num as i64;
+                0
+            } else {
+                -1
+            }
+        } else {
+            // Not a number or BigInt
             -1
         }
     }
 );
 
-// Warning: Numbers larger than 2^53 may lose precision when converted to JavaScript number
-// Unlike QuickJS, JavaScriptCore doesn't have native BigInt support
 impl_js_converter!(
     JSCValue,
     u64,
-    |ctx, value| unsafe { jsc::JSBigIntCreateWithUInt64(ctx, value, std::ptr::null_mut()) },
-    |ctx, value, result: &mut u64| unsafe {
-        if !jsc::JSValueIsNumber(ctx, value) && !jsc::JSValueIsBigInt(ctx, value) {
-            return -1;
-        }
+    |ctx, value| unsafe {
+        // For values that fit in JavaScript's safe integer range, use regular number
+        // JavaScript safe integer range: 0 to (2^53 - 1) for unsigned
+        const JS_MAX_SAFE_INTEGER: u64 = (1u64 << 53) - 1;
 
-        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-        *result = jsc::JSValueToUInt64(ctx, value, &mut exception);
-        if exception.is_null() {
-            0
+        if value <= JS_MAX_SAFE_INTEGER {
+            jsc::JSValueMakeNumber(ctx, value as f64)
         } else {
+            jsc::JSBigIntCreateWithUInt64(ctx, value, std::ptr::null_mut())
+        }
+    },
+    |ctx, value, result: &mut u64| unsafe {
+        if jsc::JSValueIsBigInt(ctx, value) {
+            // It's a BigInt, extract as u64
+            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+            *result = jsc::JSValueToUInt64(ctx, value, &mut exception);
+            if exception.is_null() { 0 } else { -1 }
+        } else if jsc::JSValueIsNumber(ctx, value) {
+            // It's a regular number, convert to double first then to u64
+            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+            let num = jsc::JSValueToNumber(ctx, value, &mut exception);
+            if exception.is_null() && num >= 0.0 {
+                *result = num as u64;
+                0
+            } else {
+                -1
+            }
+        } else {
+            // Not a number or BigInt
             -1
         }
     }

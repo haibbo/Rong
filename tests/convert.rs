@@ -16,12 +16,46 @@ fn test_convert() {
         let jsvalue = JSValue::from(ctx, u32::MAX);
         assert_eq!(u32::MAX, jsvalue.try_into().unwrap());
 
+        // Test i64: small values should be regular numbers, large values should be BigInt
+        let small_i64: i64 = 42;
+        let jsvalue = JSValue::from(ctx, small_i64);
+        assert!(jsvalue.is_number(), "Small i64 should be a regular number");
+        assert_eq!(small_i64, jsvalue.try_into().unwrap());
+
         let jsvalue = JSValue::from(ctx, i64::MIN);
+        assert!(jsvalue.is_bigint(), "i64::MIN should be a BigInt");
         assert_eq!(i64::MIN, jsvalue.try_into().unwrap());
 
+        // Test u64: small values should be regular numbers, large values should be BigInt
+        let small_u64: u64 = 42;
+        let jsvalue = JSValue::from(ctx, small_u64);
+        assert!(jsvalue.is_number(), "Small u64 should be a regular number");
+        assert_eq!(small_u64, jsvalue.try_into().unwrap());
+
         let jsvalue = JSValue::from(ctx, u64::MAX);
-        assert!(jsvalue.is_bigint());
+        assert!(jsvalue.is_bigint(), "u64::MAX should be a BigInt");
         assert_eq!(u64::MAX, jsvalue.try_into().unwrap());
+
+        // Test JavaScript safe integer boundary (2^53 - 1)
+        let safe_max: i64 = (1i64 << 53) - 1;
+        let jsvalue = JSValue::from(ctx, safe_max);
+        assert!(
+            jsvalue.is_number(),
+            "JS safe max should be a regular number"
+        );
+        assert_eq!(safe_max, jsvalue.try_into().unwrap());
+
+        let unsafe_max: i64 = 1i64 << 53;
+        let jsvalue = JSValue::from(ctx, unsafe_max);
+        assert!(jsvalue.is_bigint(), "Beyond JS safe max should be a BigInt");
+        assert_eq!(unsafe_max, jsvalue.try_into().unwrap());
+
+        // Test conversion from JS number and BigInt
+        let js_num: JSValue = ctx.eval(Source::from_bytes("42")).unwrap();
+        assert_eq!(42i64, js_num.try_into().unwrap());
+
+        let js_bigint: JSValue = ctx.eval(Source::from_bytes("9007199254740992n")).unwrap();
+        assert_eq!(1i64 << 53, js_bigint.try_into().unwrap());
 
         let jsvalue = JSValue::from(ctx, f64::MIN);
         assert_eq!(f64::MIN, jsvalue.try_into().unwrap());
@@ -35,17 +69,20 @@ fn test_convert() {
         let jsvalue = JSValue::undefined(ctx);
         assert!(jsvalue.is_undefined());
 
-        // Test usize conversion
+        // Test usize conversion: small values should be regular numbers
         let test_usize: usize = 42;
         let jsvalue = JSValue::from(ctx, test_usize);
-        assert!(jsvalue.is_bigint());
+        assert!(
+            jsvalue.is_number(),
+            "Small usize should be a regular number"
+        );
         let output: usize = jsvalue.try_into().unwrap();
         assert_eq!(test_usize, output);
 
-        // Test large usize conversion
+        // Test large usize conversion: large values should be BigInt
         let large_usize: usize = usize::MAX;
         let jsvalue = JSValue::from(ctx, large_usize);
-        assert!(jsvalue.is_bigint());
+        assert!(jsvalue.is_bigint(), "Large usize should be a BigInt");
         let output: usize = jsvalue.try_into().unwrap();
         assert_eq!(large_usize, output);
 

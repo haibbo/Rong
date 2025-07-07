@@ -232,20 +232,31 @@ impl_js_converter!(
 impl_js_converter!(
     QJSValue,
     i64,
-    |ctx, value| { qjs::JS_NewBigInt64(ctx, value) },
-    |ctx, value, result: &mut i64| {
-        if !qjs::QJS_IsBigInt(ctx, value) {
-            // not number
-            if !qjs::QJS_IsNumber(ctx, value) {
-                return -1;
-            }
+    |ctx, value| {
+        // For values within JavaScript safe integer range, use regular number
+        // JavaScript safe integer range: -(2^53 - 1) to (2^53 - 1)
+        const JS_MAX_SAFE_INTEGER: i64 = (1i64 << 53) - 1;
+        const JS_MIN_SAFE_INTEGER: i64 = -JS_MAX_SAFE_INTEGER;
 
-            let mut temp: i32 = 0;
-            let ret = qjs::JS_ToInt32(ctx, &mut temp, value);
-            *result = temp as _;
+        if value >= JS_MIN_SAFE_INTEGER && value <= JS_MAX_SAFE_INTEGER {
+            qjs::QJS_NewFloat64(ctx, value as f64)
+        } else {
+            qjs::JS_NewBigInt64(ctx, value)
+        }
+    },
+    |ctx, value, result: &mut i64| {
+        if qjs::QJS_IsBigInt(ctx, value) {
+            // It's a BigInt, extract as i64
+            qjs::JS_ToBigInt64(ctx, result, value)
+        } else if qjs::QJS_IsNumber(ctx, value) {
+            // It's a regular number, convert to f64 first then to i64
+            let mut temp: f64 = 0.0;
+            let ret = qjs::JS_ToFloat64(ctx, &mut temp, value);
+            *result = temp as i64;
             ret
         } else {
-            qjs::JS_ToBigInt64(ctx, result, value)
+            // Not a number or BigInt
+            -1
         }
     }
 );
@@ -253,18 +264,34 @@ impl_js_converter!(
 impl_js_converter!(
     QJSValue,
     u64,
-    |ctx, value| { qjs::JS_NewBigUint64(ctx, value) },
-    |ctx, value, result| {
-        // not big int
-        if !qjs::QJS_IsBigInt(ctx, value) {
-            // not number
-            if !qjs::QJS_IsNumber(ctx, value) {
-                return -1;
-            }
+    |ctx, value| {
+        // For values within JavaScript safe integer range, use regular number
+        // JavaScript safe integer range: 0 to (2^53 - 1) for unsigned
+        const JS_MAX_SAFE_INTEGER: u64 = (1u64 << 53) - 1;
 
-            qjs::QJS_ToUint32(ctx, result as _, value)
+        if value <= JS_MAX_SAFE_INTEGER {
+            qjs::QJS_NewFloat64(ctx, value as f64)
         } else {
+            qjs::JS_NewBigUint64(ctx, value)
+        }
+    },
+    |ctx, value, result| {
+        if qjs::QJS_IsBigInt(ctx, value) {
+            // It's a BigInt, extract as u64
             qjs::JS_ToBigUint64(ctx, result, value)
+        } else if qjs::QJS_IsNumber(ctx, value) {
+            // It's a regular number, convert to f64 first then to u64
+            let mut temp: f64 = 0.0;
+            let ret = qjs::JS_ToFloat64(ctx, &mut temp, value);
+            if temp >= 0.0 {
+                *result = temp as u64;
+                ret
+            } else {
+                -1 // Negative numbers can't be converted to u64
+            }
+        } else {
+            // Not a number or BigInt
+            -1
         }
     }
 );
