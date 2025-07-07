@@ -213,15 +213,11 @@ async fn remove(path: String, option: Optional<RemoveOptions>) -> JSResult<()> {
     }
 }
 
-
-
 async fn chdir(directory: String) -> JSResult<()> {
     grant_file_access(&directory)?;
     std::env::set_current_dir(&directory)
         .map_err(|e| RongJSError::TypeError(format!("Failed to change directory: {}", e)))
 }
-
-
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
     let rong = ctx.rong();

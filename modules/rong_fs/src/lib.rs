@@ -2,6 +2,7 @@ use rong::*;
 use std::cell::RefCell;
 
 mod dir;
+mod file;
 mod misc;
 mod read;
 mod stat;
@@ -54,6 +55,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     dir::init(ctx)?;
     stat::init(ctx)?;
     misc::init(ctx)?;
+    file::init(ctx)?;
 
     Ok(())
 }

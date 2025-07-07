@@ -1,8 +1,6 @@
 use rong::*;
-#[cfg(unix)]
-use std::os::unix::fs::MetadataExt;
-use std::time::SystemTime;
-use tokio::fs;
+use std::{fs, time::SystemTime};
+use tokio::fs as tokio_fs;
 
 #[js_export]
 pub(crate) struct FileInfo {
@@ -14,6 +12,30 @@ pub(crate) struct FileInfo {
     accessed: Option<SystemTime>,
     created: Option<SystemTime>,
     mode: Option<u32>,
+}
+
+impl FileInfo {
+    /// Create a new FileInfo from fs::Metadata
+    pub(crate) fn from_metadata(metadata: fs::Metadata) -> Self {
+        #[cfg(unix)]
+        let mode = {
+            use std::os::unix::fs::MetadataExt;
+            Some(metadata.mode())
+        };
+        #[cfg(not(unix))]
+        let mode = None;
+
+        Self {
+            is_file: metadata.is_file(),
+            is_directory: metadata.is_dir(),
+            is_symlink: metadata.is_symlink(),
+            size: metadata.len() as f64,
+            modified: metadata.modified().ok(),
+            accessed: metadata.accessed().ok(),
+            created: metadata.created().ok(),
+            mode,
+        }
+    }
 }
 
 #[js_class]
@@ -86,51 +108,17 @@ impl FileInfo {
 }
 
 async fn stat(path: String) -> JSResult<FileInfo> {
-    let metadata = fs::metadata(&path)
+    tokio_fs::metadata(&path)
         .await
-        .map_err(|e| RongJSError::TypeError(format!("Failed to get file info: {}", e)))?;
-
-    #[cfg(unix)]
-    let mode = Some(metadata.mode());
-    #[cfg(not(unix))]
-    let mode = None;
-
-    let info = FileInfo {
-        is_file: metadata.is_file(),
-        is_directory: metadata.is_dir(),
-        is_symlink: metadata.is_symlink(),
-        size: metadata.len() as f64,
-        modified: metadata.modified().ok(),
-        accessed: metadata.accessed().ok(),
-        created: metadata.created().ok(),
-        mode,
-    };
-
-    Ok(info)
+        .map(FileInfo::from_metadata)
+        .map_err(|e| RongJSError::TypeError(format!("Failed to get file info: {}", e)))
 }
 
 async fn lstat(path: String) -> JSResult<FileInfo> {
-    let metadata = fs::symlink_metadata(&path)
+    tokio_fs::symlink_metadata(&path)
         .await
-        .map_err(|e| RongJSError::TypeError(format!("Failed to get file info: {}", e)))?;
-
-    #[cfg(unix)]
-    let mode = Some(metadata.mode());
-    #[cfg(not(unix))]
-    let mode = None;
-
-    let info = FileInfo {
-        is_file: metadata.is_file(),
-        is_directory: metadata.is_dir(),
-        is_symlink: metadata.is_symlink(),
-        size: metadata.len() as f64,
-        modified: metadata.modified().ok(),
-        accessed: metadata.accessed().ok(),
-        created: metadata.created().ok(),
-        mode,
-    };
-
-    Ok(info)
+        .map(FileInfo::from_metadata)
+        .map_err(|e| RongJSError::TypeError(format!("Failed to get file info: {}", e)))
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {

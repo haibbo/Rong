@@ -436,4 +436,243 @@ describe("Filesystem", () => {
 
     await cleanupTempDir();
   });
+
+  it("FsFile - basic operations", async () => {
+    await ensureTempDir();
+    const testFile = getTempPath("basic.txt");
+
+    // Create test file
+    await Rong.writeTextFile(testFile, "Hello from FsFile!");
+
+    // Test open, stat, truncate, sync, close
+    const file = await Rong.open(testFile, { read: true, write: true });
+
+    const stats = await file.stat();
+    assert(stats.isFile && !stats.isDirectory && !stats.isSymlink);
+    assert(stats.size > 0 && typeof stats.modified === "number");
+
+    await file.truncate(5);
+    const statAfterTruncate = await file.stat();
+    assert.equal(
+      statAfterTruncate.size,
+      5,
+      "File should be truncated to 5 bytes",
+    );
+
+    await file.sync();
+    await file.close();
+
+    await cleanupTempDir();
+  });
+
+  it("FsFile - read/write operations", async () => {
+    await ensureTempDir();
+
+    const testFile = getTempPath("readwrite.dat");
+    const testData = new Uint8Array([1, 2, 3, 4, 5, 255, 0, 128]);
+
+    // Write binary data
+    const file1 = await Rong.open(testFile, { write: true, create: true });
+    const arrayBuffer = testData.buffer.slice(
+      testData.byteOffset,
+      testData.byteOffset + testData.byteLength,
+    );
+    const bytesWritten = await file1.write(arrayBuffer);
+    assert.equal(bytesWritten, 8, "Should write 8 bytes");
+    await file1.close();
+
+    // Read and verify data
+    const file2 = await Rong.open(testFile, { read: true });
+    const readBuffer = new ArrayBuffer(8);
+    const bytesRead = await file2.read(readBuffer);
+    assert.equal(bytesRead, 8, "Should read 8 bytes");
+
+    const readArray = new Uint8Array(readBuffer);
+    for (let i = 0; i < testData.length; i++) {
+      assert.equal(readArray[i], testData[i], `Byte ${i} should match`);
+    }
+
+    // Test EOF
+    const eofBuffer = new ArrayBuffer(4);
+    const eofResult = await file2.read(eofBuffer);
+    assert.equal(eofResult, null, "Should return null at EOF");
+    await file2.close();
+
+    // Test append mode
+    const file3 = await Rong.open(testFile, { write: true, append: true });
+    const appendData = new Uint8Array([9, 10]);
+    await file3.write(
+      appendData.buffer.slice(
+        appendData.byteOffset,
+        appendData.byteOffset + appendData.byteLength,
+      ),
+    );
+    await file3.close();
+
+    // Verify append
+    const file4 = await Rong.open(testFile, { read: true });
+    const fullBuffer = new ArrayBuffer(10);
+    const totalRead = await file4.read(fullBuffer);
+    assert.equal(totalRead, 10, "Should read 10 bytes after append");
+    await file4.close();
+
+    await cleanupTempDir();
+  });
+
+  it("FsFile - OpenOptions", async () => {
+    await ensureTempDir();
+
+    const testFile = getTempPath("options.dat");
+
+    // Test createNew - should create new file
+    const file1 = await Rong.open(testFile, { write: true, createNew: true });
+    await file1.write(new TextEncoder().encode("new file").buffer);
+    await file1.close();
+
+    // Test createNew - should fail if file exists
+    let failed = false;
+    try {
+      await Rong.open(testFile, { write: true, createNew: true });
+    } catch (e) {
+      failed = true;
+    }
+    assert(failed, "createNew should fail if file already exists");
+
+    // Test truncate - should clear file and write new content
+    const file2 = await Rong.open(testFile, { write: true, truncate: true });
+    await file2.write(new TextEncoder().encode("truncated").buffer);
+    await file2.close();
+
+    const content = await Rong.readTextFile(testFile);
+    assert.equal(
+      content,
+      "truncated",
+      "File should be truncated and contain new content",
+    );
+
+    await cleanupTempDir();
+  });
+
+  it("FsFile - error handling", async () => {
+    await ensureTempDir();
+
+    // Test constructor should not be callable
+    let constructorFailed = false;
+    try {
+      new FsFile();
+    } catch (e) {
+      constructorFailed = true;
+    }
+    assert(
+      constructorFailed,
+      "Should not be able to construct FsFile directly",
+    );
+
+    // Test opening non-existent file without create
+    let openFailed = false;
+    try {
+      await Rong.open(getTempPath("nonexistent.txt"), { read: true });
+    } catch (e) {
+      openFailed = true;
+    }
+    assert(openFailed, "Opening non-existent file should fail");
+
+    await cleanupTempDir();
+  });
+
+  it("FsFile - seek operations", async () => {
+    await ensureTempDir();
+
+    const testFile = getTempPath("seek.txt");
+    const testData = "Hello, World! This is a test file for seeking.";
+
+    // Create test file with known content
+    {
+      const file = await Rong.open(testFile, { write: true, create: true });
+      const encoder = new TextEncoder();
+      const data = encoder.encode(testData);
+      await file.write(
+        data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+      );
+      await file.close();
+    }
+
+    // Test seek operations
+    {
+      const file = await Rong.open(testFile, { read: true, write: true });
+
+      // Test seek from start (default) - using Rong.SeekMode.Start
+      let position = await file.seek(7, Rong.SeekMode.Start); // Position at "World!"
+      assert.equal(position, 7, "Should seek to position 7");
+
+      // Read from current position to verify
+      const buffer1 = new ArrayBuffer(6);
+      const bytesRead1 = await file.read(buffer1);
+      assert.equal(bytesRead1, 6, "Should read 6 bytes");
+      const text1 = new TextDecoder().decode(new Uint8Array(buffer1));
+      assert.equal(text1, "World!", "Should read 'World!' from position 7");
+
+      // Test seek from current position
+      position = await file.seek(-6, Rong.SeekMode.Current); // Go back to "World!"
+      assert.equal(position, 7, "Should be back at position 7");
+
+      // Test seek from end
+      position = await file.seek(-5, Rong.SeekMode.End); // Position 5 bytes from end
+      const buffer2 = new ArrayBuffer(5);
+      const bytesRead2 = await file.read(buffer2);
+      assert.equal(bytesRead2, 5, "Should read 5 bytes");
+      const text2 = new TextDecoder().decode(new Uint8Array(buffer2));
+      // Read the actual last 5 characters from the expected position
+      const expectedText = testData.slice(-5); // Last 5 characters: "ing."
+      assert.equal(
+        text2,
+        expectedText,
+        `Should read '${expectedText}' from end-5 position`,
+      );
+
+      // Test seek to start explicitly
+      position = await file.seek(0, Rong.SeekMode.Start);
+      assert.equal(position, 0, "Should be at start of file");
+
+      const buffer3 = new ArrayBuffer(5);
+      const bytesRead3 = await file.read(buffer3);
+      assert.equal(bytesRead3, 5, "Should read 5 bytes");
+      const text3 = new TextDecoder().decode(new Uint8Array(buffer3));
+      assert.equal(text3, "Hello", "Should read 'Hello' from start");
+
+      // Test seek beyond file end (should work)
+      position = await file.seek(1000, Rong.SeekMode.Start);
+      assert.equal(position, 1000, "Should seek beyond file end");
+
+      // Reading from beyond end should return null
+      const bufferEOF = new ArrayBuffer(10);
+      const eofResult = await file.read(bufferEOF);
+      assert.equal(
+        eofResult,
+        null,
+        "Should return null when reading beyond EOF",
+      );
+
+      await file.close();
+    }
+
+    // Test error handling
+    {
+      const file = await Rong.open(testFile, { read: true });
+
+      // Test invalid whence value
+      let errorThrown = false;
+      try {
+        await file.seek(0, 999); // Invalid seek mode
+      } catch (e) {
+        errorThrown = true;
+        console.log("Invalid whence error (expected):", e.message);
+      }
+      assert(errorThrown, "Should throw error for invalid whence value");
+
+      await file.close();
+    }
+
+    await cleanupTempDir();
+  });
 });
