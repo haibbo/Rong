@@ -249,10 +249,13 @@ pub fn js_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Attributes
 /// - `rename = "name"`: Use a different name for the field in JavaScript
+/// - `js_default`: Use `Default::default()` if the field is missing
+/// - `js_default = "value"`: Use a specific default value if the field is missing
 ///
 /// # Field Types
-/// - Required fields must exist in the JavaScript object
-/// - Optional fields should use `Option<T>` type
+/// - **Required fields**: Must exist in the JavaScript object, will error if missing
+/// - **Optional fields**: Use `Option<T>` type, will be `None` if missing
+/// - **Fields with defaults**: Use `#[js_default]` or `#[js_default = "value"]`, will use default if missing
 /// - All field types must implement `FromJSValue`
 ///
 /// # Example
@@ -264,8 +267,14 @@ pub fn js_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     #[rename = "lastName"]
 ///     last_name: String,
 ///     age: i32,
-///     // Optional field
+///     // Optional field - will be None if missing
 ///     nickname: Option<String>,
+///     // Field with default value
+///     #[js_default = "active"]
+///     status: String,
+///     // Field using Default::default()
+///     #[js_default]
+///     score: i32,
 /// }
 /// ```
 ///
@@ -276,16 +285,35 @@ pub fn js_method(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     firstName: "John",
 ///     lastName: "Doe",
 ///     age: 30,
-///     nickname: "Johnny"
+///     nickname: "Johnny",
+///     status: "premium"
 /// };
+/// // Result: Person { first_name: "John", last_name: "Doe", age: 30,
+/// //                  nickname: Some("Johnny"), status: "premium", score: 0 }
 ///
-/// // This will fail because required field 'age' is missing
+/// // This will also work (using defaults)
+/// const minimal = {
+///     firstName: "Jane",
+///     lastName: "Smith",
+///     age: 25
+/// };
+/// // Result: Person { first_name: "Jane", last_name: "Smith", age: 25,
+/// //                  nickname: None, status: "active", score: 0 }
+///
+/// // This will fail with clear error message
 /// const incomplete = {
 ///     firstName: "John",
 ///     lastName: "Doe"
+///     // Missing required field 'age'
 /// };
+/// // Error: "Required field 'age' is missing"
 /// ```
-#[proc_macro_derive(FromJSObj, attributes(rename))]
+///
+/// # Error Handling
+/// The macro provides detailed error messages:
+/// - Missing required fields: "Required field 'field_name' is missing"
+/// - Type conversion errors: "Failed to convert field 'field_name': [original error]"
+#[proc_macro_derive(FromJSObj, attributes(rename, js_default))]
 pub fn derive_from_js_object(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     TokenStream::from(deserialize::impl_deserialize(input))

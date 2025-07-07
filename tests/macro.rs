@@ -96,7 +96,22 @@ struct Person {
     last_name: String,
     age: i32,
     nickname: Option<String>,
-    required_field: String,
+    #[js_default = "active"]
+    status: String,
+    #[js_default]
+    score: i32,
+}
+
+#[derive(FromJSObj, Debug)]
+struct Config {
+    name: String,
+    // Optional field
+    description: Option<String>,
+    // Required field
+    version: String,
+    // Field with default
+    #[js_default = "production"]
+    environment: String,
 }
 
 #[cfg(test)]
@@ -109,6 +124,81 @@ mod tests {
             ctx.register_class::<Point>()?;
             let point: Point = ctx.eval(Source::from_bytes("new PointX(2, 3)"))?;
             assert_eq!(point, Point { x: 2, y: 3 });
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_from_js_obj_with_defaults() {
+        run(|ctx| {
+            // Test complete object
+            let person: Person = ctx.eval(Source::from_bytes(r#"
+                ({
+                    firstName: "John",
+                    lastName: "Doe",
+                    age: 30,
+                    nickname: "Johnny",
+                    status: "premium",
+                    score: 100
+                })
+            "#))?;
+
+            assert_eq!(person.first_name, "John");
+            assert_eq!(person.last_name, "Doe");
+            assert_eq!(person.age, 30);
+            assert_eq!(person.nickname, Some("Johnny".to_string()));
+            assert_eq!(person.status, "premium");
+            assert_eq!(person.score, 100);
+
+            // Test object with defaults
+            let person_minimal: Person = ctx.eval(Source::from_bytes(r#"
+                ({
+                    firstName: "Jane",
+                    lastName: "Smith",
+                    age: 25
+                })
+            "#))?;
+
+            assert_eq!(person_minimal.first_name, "Jane");
+            assert_eq!(person_minimal.last_name, "Smith");
+            assert_eq!(person_minimal.age, 25);
+            assert_eq!(person_minimal.nickname, None);
+            assert_eq!(person_minimal.status, "active"); // default value
+            assert_eq!(person_minimal.score, 0); // Default::default()
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_from_js_obj_error_handling() {
+        run(|ctx| {
+            // Test missing required field
+            let result: Result<Config, _> = ctx.eval(Source::from_bytes(r#"
+                ({
+                    name: "MyApp"
+                    // Missing required 'version' field
+                })
+            "#));
+
+            assert!(result.is_err());
+            let error_msg = result.unwrap_err().to_string();
+            assert!(error_msg.contains("Required field 'version' is missing"));
+
+            // Test successful parsing with optional and default fields
+            let config: Config = ctx.eval(Source::from_bytes(r#"
+                ({
+                    name: "MyApp",
+                    version: "1.0.0",
+                    description: "A test application"
+                })
+            "#))?;
+
+            assert_eq!(config.name, "MyApp");
+            assert_eq!(config.version, "1.0.0");
+            assert_eq!(config.description, Some("A test application".to_string()));
+            assert_eq!(config.environment, "production"); // default value
+
             Ok(())
         });
     }
@@ -299,7 +389,7 @@ mod tests {
             assert_eq!(person.last_name, "Doe");
             assert_eq!(person.age, 30);
             assert_eq!(person.nickname, None);
-            assert_eq!(person.required_field, "test");
+            assert_eq!(person.status, "active"); // default value
             Ok(())
         });
     }
@@ -307,13 +397,12 @@ mod tests {
     #[test]
     fn test_missing_required_field() {
         run(|ctx| {
-            // Test deserialization with missing required field
-            let result = ctx.eval::<Person>(Source::from_bytes(
+            // Test deserialization with missing required field (using Config which has required fields)
+            let result = ctx.eval::<Config>(Source::from_bytes(
                 r#"
                 ({
-                    firstName: "John",
-                    lastName: "Doe",
-                    age: 30
+                    name: "MyApp"
+                    // Missing required 'version' field
                 })
             "#,
             ));
@@ -340,7 +429,7 @@ mod tests {
             assert_eq!(result.first_name, "John");
             assert_eq!(result.last_name, "Doe");
             assert_eq!(result.age, 30);
-            assert_eq!(result.required_field, "test");
+            assert_eq!(result.status, "active");
             assert_eq!(result.nickname, Some("Johnny".to_string()));
             Ok(())
         });
