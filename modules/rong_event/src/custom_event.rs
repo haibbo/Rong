@@ -2,6 +2,18 @@ use rong::{function::*, *};
 
 use super::Event;
 
+/// CustomEvent constructor options
+#[derive(FromJSObj, Default)]
+pub struct CustomEventOptions {
+    #[js_default]
+    pub bubbles: bool,
+    #[js_default]
+    pub cancelable: bool,
+    #[js_default]
+    pub composed: bool,
+    pub detail: Option<JSValue>,
+}
+
 /// Represents a custom event object
 #[js_export]
 pub struct CustomEvent {
@@ -12,17 +24,20 @@ pub struct CustomEvent {
 #[js_class]
 impl CustomEvent {
     #[js_method(constructor)]
-    pub fn new(type_: String, options: Optional<JSObject>) -> Self {
-        // Clone the options object to avoid borrowing issues
-        let detail = options
-            .0
-            .as_ref()
-            .and_then(|opts| opts.get::<_, JSValue>("detail").ok());
+    pub fn new(type_: String, options: Optional<CustomEventOptions>) -> Self {
+        let opts = options.0.unwrap_or_default();
 
-        // Create new Event with cloned options
+        // Create Event with the same options
+        use super::event::EventOptions;
+        let event_opts = EventOptions {
+            bubbles: opts.bubbles,
+            cancelable: opts.cancelable,
+            composed: opts.composed,
+        };
+
         Self {
-            detail,
-            event: Event::new(type_, options),
+            detail: opts.detail,
+            event: Event::new(type_, Optional(Some(event_opts))),
         }
     }
 

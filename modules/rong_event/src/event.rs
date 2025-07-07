@@ -1,5 +1,16 @@
 use rong::{function::*, *};
 
+/// Event constructor options
+#[derive(FromJSObj, Default)]
+pub struct EventOptions {
+    #[js_default]
+    pub bubbles: bool,
+    #[js_default]
+    pub cancelable: bool,
+    #[js_default]
+    pub composed: bool,
+}
+
 /// Represents an event object
 #[js_export]
 #[derive(Default)]
@@ -14,23 +25,14 @@ pub struct Event {
 #[js_class]
 impl Event {
     #[js_method(constructor)]
-    pub fn new(type_: String, options: Optional<JSObject>) -> Self {
-        let mut event = Self::default();
-
-        // Parse options if provided
-        if let Some(opts) = options.0 {
-            if let Ok(b) = opts.get::<_, bool>("bubbles") {
-                event.bubbles = b;
-            }
-            if let Ok(c) = opts.get::<_, bool>("cancelable") {
-                event.cancelable = c;
-            }
-            if let Ok(comp) = opts.get::<_, bool>("composed") {
-                event.composed = comp;
-            }
+    pub fn new(type_: String, options: Optional<EventOptions>) -> Self {
+        let opts = options.0.unwrap_or_default();
+        Self {
+            type_,
+            bubbles: opts.bubbles,
+            cancelable: opts.cancelable,
+            composed: opts.composed,
         }
-        event.type_ = type_;
-        event
     }
 
     // Returns the type of the event
