@@ -1,4 +1,4 @@
-use crate::{jsc, JSCValue};
+use crate::{JSCValue, jsc};
 use rong_core::JSTypeOf;
 
 impl JSTypeOf for JSCValue {
@@ -136,5 +136,9 @@ impl JSTypeOf for JSCValue {
             let obj = self.as_obj();
             jsc::JSObjectIsConstructor(self.ctx, obj)
         }
+    }
+
+    fn is_date(&self) -> bool {
+        unsafe { jsc::JSValueIsDate(self.ctx, self.as_value()) }
     }
 }

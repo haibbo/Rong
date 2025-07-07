@@ -66,4 +66,8 @@ impl JSTypeOf for QJSValue {
     fn is_object(&self) -> bool {
         unsafe { qjs::QJS_IsObject(self.ctx, self.value) }
     }
+
+    fn is_date(&self) -> bool {
+        unsafe { qjs::JS_IsDate(self.value) }
+    }
 }
