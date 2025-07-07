@@ -1,0 +1,257 @@
+use super::*;
+
+/// Set a key-value pair in storage
+pub fn storage_set(key: String, value: JSValue) -> JSResult<()> {
+    let db = get_storage_db().ok_or_else(|| {
+        RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
+    })?;
+
+    // Validate key size
+    if key.len() > DEFAULT_MAX_KEY_SIZE {
+        return Err(RongJSError::TypeError(format!(
+            "Key size exceeds maximum limit of {} bytes",
+            DEFAULT_MAX_KEY_SIZE
+        )));
+    }
+
+    // Convert value to JSON string to preserve type information
+    let value_str = if value.is_string() {
+        // For strings, store as JSON string to preserve type
+        let s: String = value
+            .clone()
+            .try_into()
+            .map_err(|_| RongJSError::TypeError("Failed to convert string value".to_string()))?;
+        serde_json::to_string(&s)
+            .map_err(|e| RongJSError::TypeError(format!("Failed to serialize string: {}", e)))?
+    } else if value.is_number() {
+        // First get as f64 to avoid truncation issues
+        let f: f64 = value
+            .clone()
+            .try_into()
+            .map_err(|_| RongJSError::TypeError("Failed to convert number value".to_string()))?;
+
+        // Check if it's actually an integer (no fractional part)
+        if f.fract() == 0.0 {
+            // It's an integer, try to fit in appropriate integer type
+            if f >= i32::MIN as f64 && f <= i32::MAX as f64 {
+                // Fits in i32
+                serde_json::to_string(&(f as i32)).map_err(|e| {
+                    RongJSError::TypeError(format!("Failed to serialize i32: {}", e))
+                })?
+            } else if f >= 0.0 && f <= u32::MAX as f64 {
+                // Fits in u32
+                serde_json::to_string(&(f as u32)).map_err(|e| {
+                    RongJSError::TypeError(format!("Failed to serialize u32: {}", e))
+                })?
+            } else {
+                // Large integer, store as f64
+                serde_json::to_string(&f).map_err(|e| {
+                    RongJSError::TypeError(format!(
+                        "Failed to serialize large integer as f64: {}",
+                        e
+                    ))
+                })?
+            }
+        } else {
+            // It's a floating point number
+            serde_json::to_string(&f)
+                .map_err(|e| RongJSError::TypeError(format!("Failed to serialize f64: {}", e)))?
+        }
+    } else if value.is_bigint() {
+        // Handle BigInt values (i64/u64)
+        if let Ok(i) = value.clone().try_into::<i64>() {
+            serde_json::to_string(&i).map_err(|e| {
+                RongJSError::TypeError(format!("Failed to serialize bigint i64: {}", e))
+            })?
+        } else if let Ok(u) = value.clone().try_into::<u64>() {
+            serde_json::to_string(&u).map_err(|e| {
+                RongJSError::TypeError(format!("Failed to serialize bigint u64: {}", e))
+            })?
+        } else {
+            return Err(RongJSError::TypeError("Invalid bigint value".to_string()));
+        }
+    } else if value.is_boolean() {
+        let b: bool = value
+            .clone()
+            .try_into()
+            .map_err(|_| RongJSError::TypeError("Failed to convert boolean value".to_string()))?;
+        serde_json::to_string(&b)
+            .map_err(|e| RongJSError::TypeError(format!("Failed to serialize boolean: {}", e)))?
+    } else if value.is_null() {
+        "null".to_string()
+    } else if value.is_undefined() {
+        return Err(RongJSError::TypeError(
+            "Cannot store undefined values".to_string(),
+        ));
+    } else if value.is_object() {
+        // Handle objects by converting to JSON string
+        let obj: JSObject = value
+            .clone()
+            .try_into()
+            .map_err(|_| RongJSError::TypeError("Failed to convert to object".to_string()))?;
+        obj.json_stringify()
+            .map_err(|e| RongJSError::TypeError(format!("Failed to stringify object: {}", e)))?
+    } else {
+        // Fallback: convert to string
+        let s: String = value.try_into().map_err(|_| {
+            RongJSError::TypeError("Value must be convertible to string".to_string())
+        })?;
+        serde_json::to_string(&s).map_err(|e| {
+            RongJSError::TypeError(format!("Failed to serialize fallback string: {}", e))
+        })?
+    };
+
+    // Validate value size
+    if value_str.len() > DEFAULT_MAX_VALUE_SIZE {
+        return Err(RongJSError::TypeError(format!(
+            "Value size exceeds maximum limit of {} bytes",
+            DEFAULT_MAX_VALUE_SIZE
+        )));
+    }
+
+    // Store in database
+    let write_txn = db
+        .begin_write()
+        .map_err(|e| RongJSError::TypeError(format!("Failed to begin write transaction: {}", e)))?;
+
+    {
+        let mut table = write_txn
+            .open_table(STORAGE_TABLE)
+            .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+
+        table
+            .insert(key.as_str(), value_str.as_bytes())
+            .map_err(|e| RongJSError::TypeError(format!("Failed to insert value: {}", e)))?;
+    }
+
+    write_txn
+        .commit()
+        .map_err(|e| RongJSError::TypeError(format!("Failed to commit transaction: {}", e)))?;
+
+    Ok(())
+}
+
+/// Get a value from storage
+pub fn storage_get(ctx: JSContext, key: String) -> JSResult<JSValue> {
+    let db = get_storage_db().ok_or_else(|| {
+        RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
+    })?;
+
+    let read_txn = db
+        .begin_read()
+        .map_err(|e| RongJSError::TypeError(format!("Failed to begin read transaction: {}", e)))?;
+
+    let table = read_txn
+        .open_table(STORAGE_TABLE)
+        .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+
+    match table.get(key.as_str()) {
+        Ok(Some(value)) => {
+            let value_str = String::from_utf8(value.value().to_vec()).map_err(|e| {
+                RongJSError::TypeError(format!("Failed to decode value as UTF-8: {}", e))
+            })?;
+
+            // Parse JSON back to appropriate JavaScript type
+            match serde_json::from_str::<serde_json::Value>(&value_str) {
+                Ok(json_value) => {
+                    match json_value {
+                        serde_json::Value::String(s) => Ok(JSValue::from(&ctx, s)),
+                        serde_json::Value::Number(n) => {
+                            // Let JSValue::from handle the intelligent number conversion
+                            if let Some(i) = n.as_i64() {
+                                Ok(JSValue::from(&ctx, i))
+                            } else if let Some(u) = n.as_u64() {
+                                Ok(JSValue::from(&ctx, u))
+                            } else if let Some(f) = n.as_f64() {
+                                Ok(JSValue::from(&ctx, f))
+                            } else {
+                                Ok(JSValue::from(&ctx, value_str))
+                            }
+                        }
+                        serde_json::Value::Bool(b) => Ok(JSValue::from(&ctx, b)),
+                        serde_json::Value::Null => Ok(JSValue::null(&ctx)),
+                        serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
+                            // For objects and arrays, parse them back using JavaScript's JSON.parse
+                            value_str.as_str().json_to_jsvalue(&ctx)
+                        }
+                    }
+                }
+                Err(_) => {
+                    // If not valid JSON, return as string
+                    Ok(JSValue::from(&ctx, value_str))
+                }
+            }
+        }
+        Ok(None) => Ok(JSValue::undefined(&ctx)),
+        Err(e) => Err(RongJSError::TypeError(format!(
+            "Failed to get value: {}",
+            e
+        ))),
+    }
+}
+
+/// Delete a key from storage
+pub fn storage_delete(key: String) -> JSResult<()> {
+    let db = get_storage_db().ok_or_else(|| {
+        RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
+    })?;
+
+    let write_txn = db
+        .begin_write()
+        .map_err(|e| RongJSError::TypeError(format!("Failed to begin write transaction: {}", e)))?;
+
+    {
+        let mut table = write_txn
+            .open_table(STORAGE_TABLE)
+            .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+
+        table
+            .remove(key.as_str())
+            .map_err(|e| RongJSError::TypeError(format!("Failed to remove key: {}", e)))?;
+    }
+
+    write_txn
+        .commit()
+        .map_err(|e| RongJSError::TypeError(format!("Failed to commit transaction: {}", e)))?;
+
+    Ok(())
+}
+
+/// Clear all data from storage
+pub fn storage_clear() -> JSResult<()> {
+    let db = get_storage_db().ok_or_else(|| {
+        RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
+    })?;
+
+    let write_txn = db
+        .begin_write()
+        .map_err(|e| RongJSError::TypeError(format!("Failed to begin write transaction: {}", e)))?;
+
+    {
+        let mut table = write_txn
+            .open_table(STORAGE_TABLE)
+            .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+
+        // Remove all entries
+        let keys: Vec<String> = table
+            .iter()
+            .map_err(|e| RongJSError::TypeError(format!("Failed to iterate table: {}", e)))?
+            .map(|item| {
+                item.map(|(key, _)| key.value().to_string())
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to read key: {}", e)))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        for key in keys {
+            table
+                .remove(key.as_str())
+                .map_err(|e| RongJSError::TypeError(format!("Failed to remove key: {}", e)))?;
+        }
+    }
+
+    write_txn
+        .commit()
+        .map_err(|e| RongJSError::TypeError(format!("Failed to commit transaction: {}", e)))?;
+
+    Ok(())
+}
