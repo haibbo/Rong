@@ -187,6 +187,22 @@ impl JSValueImpl for JSCValue {
         };
         Self::from_owned_raw(ctx, raw)
     }
+
+    fn create_date(ctx: &Self::Context, epoch_ms: f64) -> Self {
+        let ctx = ctx.to_raw();
+        let raw = unsafe {
+            let args = [jsc::JSValueMakeNumber(ctx, epoch_ms)];
+            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+            let date = jsc::JSObjectMakeDate(ctx, 1, args.as_ptr(), &mut exception);
+            if !exception.is_null() {
+                // Handle exception - for now just return undefined
+                jsc::JSValueMakeUndefined(ctx)
+            } else {
+                date
+            }
+        };
+        Self::from_owned_raw(ctx, raw)
+    }
 }
 
 impl_js_converter!(
