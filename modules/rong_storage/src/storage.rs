@@ -116,6 +116,52 @@ pub fn storage_set(key: String, value: JSValue) -> JSResult<()> {
         )));
     }
 
+    // Check total storage size before adding new data
+    let read_txn = db
+        .begin_read()
+        .map_err(|e| RongJSError::TypeError(format!("Failed to begin read transaction: {}", e)))?;
+
+    let table = read_txn
+        .open_table(STORAGE_TABLE)
+        .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+
+    let mut current_size = 0;
+    let mut existing_key_size = 0;
+
+    // Calculate current storage size and check if key already exists
+    let iter = table
+        .iter()
+        .map_err(|e| RongJSError::TypeError(format!("Failed to create iterator: {}", e)))?;
+
+    for item in iter {
+        let (existing_key, existing_value) =
+            item.map_err(|e| RongJSError::TypeError(format!("Failed to read item: {}", e)))?;
+
+        let key_size = existing_key.value().len();
+        let value_size = existing_value.value().len();
+
+        if existing_key.value().as_bytes() == key.as_bytes() {
+            existing_key_size = key_size + value_size;
+        }
+        current_size += key_size + value_size;
+    }
+
+    drop(table);
+    drop(read_txn);
+
+    // Calculate new size after this operation
+    let new_entry_size = key.len() + value_str.len();
+    let new_total_size = current_size - existing_key_size + new_entry_size;
+
+    if new_total_size > DEFAULT_MAX_USER_DATA_SIZE {
+        return Err(RongJSError::TypeError(format!(
+            "Storage size would exceed maximum limit of {} bytes (current: {}, new entry: {})",
+            DEFAULT_MAX_USER_DATA_SIZE,
+            current_size - existing_key_size,
+            new_entry_size
+        )));
+    }
+
     // Store in database
     let write_txn = db
         .begin_write()

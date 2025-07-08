@@ -30,8 +30,6 @@ use redb::{Database, ReadableTable, TableDefinition};
 use rong::{IntoJSIteratorExt, function::Optional, *};
 use serde_json;
 use std::cell::RefCell;
-#[cfg(test)]
-use std::env;
 use std::fs;
 use std::path::Path;
 use std::rc::Rc;
@@ -43,7 +41,9 @@ use storage::*;
 const STORAGE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("storage");
 
 // Default size limits
-const DEFAULT_MAX_STORAGE_SIZE: usize = 20 * 1024 * 1024; // 20MB
+const REDB_INIT_OVERHEAD: usize = (1.5 * 1024.0 * 1024.0) as usize; // ~1.5MB redb database initialization overhead
+const DEFAULT_MAX_TOTAL_SIZE: usize = 20 * 1024 * 1024; // 20MB total storage limit
+const DEFAULT_MAX_USER_DATA_SIZE: usize = DEFAULT_MAX_TOTAL_SIZE + REDB_INIT_OVERHEAD;
 const DEFAULT_MAX_KEY_SIZE: usize = 1024; // 1KB
 const DEFAULT_MAX_VALUE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
@@ -205,6 +205,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 mod tests {
     use super::*;
     use rong_test::*;
+    use std::env;
 
     #[test]
     fn test_storage() {
