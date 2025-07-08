@@ -65,6 +65,22 @@ pub fn set_storage_path<P: AsRef<Path>>(path: P) -> Result<(), String> {
     let db = Database::create(db_path)
         .map_err(|e| format!("Failed to open database at {:?}: {}", db_path, e))?;
 
+    // Create the storage table if it doesn't exist
+    let write_txn = db
+        .begin_write()
+        .map_err(|e| format!("Failed to begin write transaction: {}", e))?;
+
+    {
+        // This will create the table if it doesn't exist, or do nothing if it does
+        let _table = write_txn
+            .open_table(STORAGE_TABLE)
+            .map_err(|e| format!("Failed to create/open storage table: {}", e))?;
+    } // table is dropped here
+
+    write_txn
+        .commit()
+        .map_err(|e| format!("Failed to commit table creation: {}", e))?;
+
     // Store in thread-local storage
     STORAGE_DB.with(|storage| {
         *storage.borrow_mut() = Some(Rc::new(db));

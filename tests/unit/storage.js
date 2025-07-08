@@ -4,6 +4,23 @@ describe("Storage API", () => {
     Rong.storage.clear();
   });
 
+  it("should allow immediate info() call without table creation error", () => {
+    let errorThrown = false;
+    try {
+      const info = Rong.storage.info();
+      assert(typeof info.currentSize === "number");
+      assert(typeof info.limitSize === "number");
+      assert(typeof info.keyCount === "number");
+    } catch (e) {
+      errorThrown = true;
+      console.error("Immediate info() call failed:", e.message);
+    }
+    assert(
+      !errorThrown,
+      "info() should work immediately without table creation errors",
+    );
+  });
+
   it("should set and get string values", () => {
     Rong.storage.set("test_string", "hello world");
     const value = Rong.storage.get("test_string");
