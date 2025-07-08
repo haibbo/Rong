@@ -29,6 +29,9 @@ pub use function::*;
 mod symbol;
 pub use symbol::*;
 
+mod date;
+pub use date::*;
+
 pub trait JSValueImpl: Clone + PartialEq + Hash {
     /// the JS engine specific type of JavaScript Value
     type RawValue: Copy;
@@ -69,6 +72,9 @@ pub trait JSValueImpl: Clone + PartialEq + Hash {
 
     /// Creates a JSValue by parsing a JSON string
     fn from_json_str(ctx: &Self::Context, str: &str) -> Self;
+
+    /// Create a Date object from epoch milliseconds
+    fn create_date(ctx: &Self::Context, epoch_ms: f64) -> Self;
 }
 
 pub struct JSValue<V: JSValueImpl> {

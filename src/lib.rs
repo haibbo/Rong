@@ -1,9 +1,9 @@
 pub use rong_core::{
     Class as CoreClass, ClassSetup, FromJSValue, IntoJSAsyncIteratorExt, IntoJSIteratorExt,
     IntoJSResult, IntoJSValue, JSArray as CoreJSArray, JSArrayBuffer as CoreJSArrayBuffer,
-    JSAsyncIterator, JSClass, JSContext as CoreJSContext, JSEngine, JSException as CoreJSException,
-    JSFunc as CoreJSFunc, JSIterator, JSObject as CoreJSObject, JSResult,
-    JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
+    JSAsyncIterator, JSClass, JSContext as CoreJSContext, JSDate as CoreJSDate, JSEngine,
+    JSException as CoreJSException, JSFunc as CoreJSFunc, JSIterator, JSObject as CoreJSObject,
+    JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
     JSTypedArray as CoreJSTypedArray, JSTypedArrayKind, JSValue as CoreJSValue, JSValueType,
     JsonToJsValue, Promise as CorePromise, PropertyDescriptor as CorePropertyDescriptor, Rong,
     RongJSError, Source, SourceKind, Worker, WorkerMessage, spawn,
@@ -41,6 +41,7 @@ pub type JSValue = CoreJSValue<JSEngineValue>;
 pub type JSObject = CoreJSObject<JSEngineValue>;
 pub type JSSymbol = CoreJSSymbol<JSEngineValue>;
 pub type JSFunc = CoreJSFunc<JSEngineValue>;
+pub type JSDate = CoreJSDate<JSEngineValue>;
 pub type Class = CoreClass<JSEngineValue>;
 pub type Promise = CorePromise<JSEngineValue>;
 pub type JSException = CoreJSException<JSEngineValue>;
