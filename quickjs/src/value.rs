@@ -176,6 +176,11 @@ impl JSValueImpl for QJSValue {
         let raw = unsafe { qjs::JS_NewSymbol(ctx.to_raw(), description.as_ptr(), false) };
         ctx.to_owned_value(raw)
     }
+
+    fn create_date(ctx: &Self::Context, epoch_ms: f64) -> Self {
+        let raw = unsafe { qjs::JS_NewDate(ctx.to_raw(), epoch_ms) };
+        ctx.to_owned_value(raw)
+    }
 }
 
 impl QJSValue {
