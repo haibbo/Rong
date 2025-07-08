@@ -163,13 +163,21 @@ describe("Storage API", () => {
   });
 
   it("should provide storage info", () => {
-    Rong.storage.set("test", { some: "data", with: ["nested", "content"] });
+    // Clear storage first to get accurate counts
+    Rong.storage.clear();
+
+    // Add some test data
+    Rong.storage.set("test1", { some: "data", with: ["nested", "content"] });
+    Rong.storage.set("test2", "simple string");
+    Rong.storage.set("test3", 42);
 
     const info = Rong.storage.info();
     assert(typeof info.currentSize === "number");
     assert(typeof info.limitSize === "number");
+    assert(typeof info.keyCount === "number");
     assert(info.currentSize > 0);
     assert(info.limitSize > 0);
+    assert.equal(info.keyCount, 3, "Should have 3 keys");
   });
 
   it("should reject undefined values", () => {

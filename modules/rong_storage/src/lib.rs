@@ -90,9 +90,11 @@ pub fn close_all_storages() {
 #[derive(IntoJSObj)]
 pub struct StorageInfo {
     #[rename = "currentSize"]
-    current_size: usize,
+    current_size: u32,
     #[rename = "limitSize"]
-    limit_size: usize,
+    limit_size: u32,
+    #[rename = "keyCount"]
+    key_count: u32,
 }
 
 /// Storage list function that returns an iterator
@@ -149,6 +151,7 @@ fn storage_info() -> JSResult<StorageInfo> {
         .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
 
     let mut current_size = 0;
+    let mut key_count = 0;
     let iter = table
         .iter()
         .map_err(|e| RongJSError::TypeError(format!("Failed to create iterator: {}", e)))?;
@@ -158,11 +161,13 @@ fn storage_info() -> JSResult<StorageInfo> {
             item.map_err(|e| RongJSError::TypeError(format!("Failed to read item: {}", e)))?;
 
         current_size += key.value().len() + value.value().len();
+        key_count += 1;
     }
 
     Ok(StorageInfo {
-        current_size,
-        limit_size: DEFAULT_MAX_STORAGE_SIZE,
+        current_size: current_size as u32,
+        limit_size: DEFAULT_MAX_USER_DATA_SIZE as u32,
+        key_count: key_count as u32,
     })
 }
 
