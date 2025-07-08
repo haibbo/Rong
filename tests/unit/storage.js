@@ -182,4 +182,51 @@ describe("Storage API", () => {
     }
     assert(errorThrown, "Should throw error for undefined values");
   });
+
+  it("should handle Date values", () => {
+    // Test storing and retrieving Date objects
+    const testDate = new Date("2023-12-25T10:30:00.000Z");
+    Rong.storage.set("test_date", testDate);
+
+    const retrieved = Rong.storage.get("test_date");
+    assert(retrieved instanceof Date, "Retrieved value should be a Date");
+    assert.equal(
+      retrieved.getTime(),
+      testDate.getTime(),
+      "Date timestamps should match",
+    );
+    assert.equal(
+      retrieved.toISOString(),
+      "2023-12-25T10:30:00.000Z",
+      "Date should preserve exact value",
+    );
+
+    // Test with current date
+    const now = new Date();
+    Rong.storage.set("test_date_now", now);
+    const retrievedNow = Rong.storage.get("test_date_now");
+    assert(
+      retrievedNow instanceof Date,
+      "Retrieved current date should be a Date",
+    );
+    assert.equal(
+      retrievedNow.getTime(),
+      now.getTime(),
+      "Current date timestamps should match",
+    );
+
+    // Test with epoch timestamp
+    const epochDate = new Date(1640995200000); // 2022-01-01 00:00:00 UTC
+    Rong.storage.set("test_epoch_date", epochDate);
+    const retrievedEpoch = Rong.storage.get("test_epoch_date");
+    assert(
+      retrievedEpoch instanceof Date,
+      "Retrieved epoch date should be a Date",
+    );
+    assert.equal(
+      retrievedEpoch.getTime(),
+      1640995200000,
+      "Epoch date should preserve timestamp",
+    );
+  });
 });

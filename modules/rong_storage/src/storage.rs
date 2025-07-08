@@ -83,22 +83,29 @@ pub fn storage_set(key: String, value: JSValue) -> JSResult<()> {
         return Err(RongJSError::TypeError(
             "Cannot store undefined values".to_string(),
         ));
-    } else if value.is_object() {
+    } else if let Ok(date) = value.clone().try_into::<JSDate>() {
+        // Handle Date objects by storing timestamp with type marker
+        let timestamp = date
+            .get_time()
+            .map_err(|e| RongJSError::TypeError(format!("Failed to get Date timestamp: {}", e)))?;
+        serde_json::to_string(&serde_json::json!({
+            "__type": "Date",
+            "timestamp": timestamp
+        }))
+        .map_err(|e| RongJSError::TypeError(format!("Failed to serialize Date: {}", e)))?
+    } else if let Ok(obj) = value.clone().try_into::<JSObject>() {
         // Handle objects by converting to JSON string
-        let obj: JSObject = value
-            .clone()
-            .try_into()
-            .map_err(|_| RongJSError::TypeError("Failed to convert to object".to_string()))?;
         obj.json_stringify()
             .map_err(|e| RongJSError::TypeError(format!("Failed to stringify object: {}", e)))?
-    } else {
+    } else if let Ok(s) = value.clone().try_into::<String>() {
         // Fallback: convert to string
-        let s: String = value.try_into().map_err(|_| {
-            RongJSError::TypeError("Value must be convertible to string".to_string())
-        })?;
         serde_json::to_string(&s).map_err(|e| {
             RongJSError::TypeError(format!("Failed to serialize fallback string: {}", e))
         })?
+    } else {
+        return Err(RongJSError::TypeError(
+            "Value cannot be converted to a storable type".to_string(),
+        ));
     };
 
     // Validate value size
@@ -170,8 +177,28 @@ pub fn storage_get(ctx: JSContext, key: String) -> JSResult<JSValue> {
                         }
                         serde_json::Value::Bool(b) => Ok(JSValue::from(&ctx, b)),
                         serde_json::Value::Null => Ok(JSValue::null(&ctx)),
-                        serde_json::Value::Object(_) | serde_json::Value::Array(_) => {
-                            // For objects and arrays, parse them back using JavaScript's JSON.parse
+                        serde_json::Value::Object(ref obj) => {
+                            // Check if this is a Date object
+                            if obj.get("__type")
+                                == Some(&serde_json::Value::String("Date".to_string()))
+                            {
+                                if let Some(timestamp) =
+                                    obj.get("timestamp").and_then(|v| v.as_f64())
+                                {
+                                    let date = JSDate::new(&ctx, timestamp);
+                                    Ok(date.into_value())
+                                } else {
+                                    Err(RongJSError::TypeError(
+                                        "Invalid Date object: missing timestamp".to_string(),
+                                    ))
+                                }
+                            } else {
+                                // Regular object, parse using JavaScript's JSON.parse
+                                value_str.as_str().json_to_jsvalue(&ctx)
+                            }
+                        }
+                        serde_json::Value::Array(_) => {
+                            // For arrays, parse them back using JavaScript's JSON.parse
                             value_str.as_str().json_to_jsvalue(&ctx)
                         }
                     }
