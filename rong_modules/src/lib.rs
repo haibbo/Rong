@@ -1,10 +1,33 @@
 use rong::*;
 
+#[cfg(feature = "abort")]
+pub use rong_abort as abort;
+#[cfg(feature = "assert")]
+pub use rong_assert as assert;
+#[cfg(feature = "buffer")]
+pub use rong_buffer as buffer;
+#[cfg(feature = "console")]
 pub use rong_console as console;
+#[cfg(feature = "encoding")]
+pub use rong_encoding as encoding;
+#[cfg(feature = "event")]
+pub use rong_event as event;
+#[cfg(feature = "exception")]
+pub use rong_exception as exception;
+#[cfg(feature = "fs")]
 pub use rong_fs as fs;
+#[cfg(feature = "http")]
 pub use rong_http as http;
+#[cfg(feature = "navigator")]
 pub use rong_navigator as navigator;
+#[cfg(feature = "path")]
+pub use rong_path as path;
+#[cfg(feature = "storage")]
 pub use rong_storage as storage;
+#[cfg(feature = "timer")]
+pub use rong_timer as timer;
+#[cfg(feature = "url")]
+pub use rong_url as url;
 
 /// Initialize all enabled modules in the JavaScript context
 pub fn init(ctx: &JSContext) -> JSResult<()> {
