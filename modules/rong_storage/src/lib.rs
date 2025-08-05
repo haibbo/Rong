@@ -189,14 +189,6 @@ fn storage_info() -> JSResult<StorageInfo> {
 
 /// Initialize the Storage module
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    // Create default storage database if not already created
-    if get_storage_db().is_none() {
-        // Use default path if no path was set
-        let default_path = "storage.db";
-        set_storage_path(default_path).map_err(|e| {
-            RongJSError::TypeError(format!("Failed to initialize default storage: {}", e))
-        })?;
-    }
 
     let rong = ctx.rong();
 
