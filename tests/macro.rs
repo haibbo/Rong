@@ -1,4 +1,4 @@
-use rong_macro::{js_class, js_export, js_method, FromJSObj};
+use rong_macro::{FromJSObj, js_class, js_export, js_method};
 use rong_test::*;
 use std::sync::{Mutex, OnceLock};
 use tokio::time::Duration;
@@ -132,7 +132,8 @@ mod tests {
     fn test_from_js_obj_with_defaults() {
         run(|ctx| {
             // Test complete object
-            let person: Person = ctx.eval(Source::from_bytes(r#"
+            let person: Person = ctx.eval(Source::from_bytes(
+                r#"
                 ({
                     firstName: "John",
                     lastName: "Doe",
@@ -141,7 +142,8 @@ mod tests {
                     status: "premium",
                     score: 100
                 })
-            "#))?;
+            "#,
+            ))?;
 
             assert_eq!(person.first_name, "John");
             assert_eq!(person.last_name, "Doe");
@@ -151,13 +153,15 @@ mod tests {
             assert_eq!(person.score, 100);
 
             // Test object with defaults
-            let person_minimal: Person = ctx.eval(Source::from_bytes(r#"
+            let person_minimal: Person = ctx.eval(Source::from_bytes(
+                r#"
                 ({
                     firstName: "Jane",
                     lastName: "Smith",
                     age: 25
                 })
-            "#))?;
+            "#,
+            ))?;
 
             assert_eq!(person_minimal.first_name, "Jane");
             assert_eq!(person_minimal.last_name, "Smith");
@@ -174,25 +178,29 @@ mod tests {
     fn test_from_js_obj_error_handling() {
         run(|ctx| {
             // Test missing required field
-            let result: Result<Config, _> = ctx.eval(Source::from_bytes(r#"
+            let result: Result<Config, _> = ctx.eval(Source::from_bytes(
+                r#"
                 ({
                     name: "MyApp"
                     // Missing required 'version' field
                 })
-            "#));
+            "#,
+            ));
 
             assert!(result.is_err());
             let error_msg = result.unwrap_err().to_string();
             assert!(error_msg.contains("Required field 'version' is missing"));
 
             // Test successful parsing with optional and default fields
-            let config: Config = ctx.eval(Source::from_bytes(r#"
+            let config: Config = ctx.eval(Source::from_bytes(
+                r#"
                 ({
                     name: "MyApp",
                     version: "1.0.0",
                     description: "A test application"
                 })
-            "#))?;
+            "#,
+            ))?;
 
             assert_eq!(config.name, "MyApp");
             assert_eq!(config.version, "1.0.0");

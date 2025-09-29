@@ -1,5 +1,5 @@
-use crate::jsc;
 use crate::JSCValue;
+use crate::jsc;
 use rong_core::{JSExceptionHandler, JSTypedArrayKind, JSTypedArrayOps, JSValueImpl};
 use std::ptr;
 
@@ -144,11 +144,7 @@ impl JSTypedArrayOps for JSCValue {
             let mut exception: jsc::JSValueRef = ptr::null_mut();
             let offset =
                 jsc::JSObjectGetTypedArrayByteOffset(self.ctx, self.as_obj(), &mut exception);
-            if !exception.is_null() {
-                0
-            } else {
-                offset
-            }
+            if !exception.is_null() { 0 } else { offset }
         }
     }
 
@@ -156,11 +152,7 @@ impl JSTypedArrayOps for JSCValue {
         unsafe {
             let mut exception: jsc::JSValueRef = ptr::null_mut();
             let length = jsc::JSObjectGetTypedArrayLength(self.ctx, self.as_obj(), &mut exception);
-            if !exception.is_null() {
-                0
-            } else {
-                length
-            }
+            if !exception.is_null() { 0 } else { length }
         }
     }
 
@@ -169,11 +161,7 @@ impl JSTypedArrayOps for JSCValue {
             let mut exception: jsc::JSValueRef = ptr::null_mut();
             let byte_length =
                 jsc::JSObjectGetTypedArrayByteLength(self.ctx, self.as_obj(), &mut exception);
-            if !exception.is_null() {
-                0
-            } else {
-                byte_length
-            }
+            if !exception.is_null() { 0 } else { byte_length }
         }
     }
 }

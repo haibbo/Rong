@@ -265,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_network_access_guard() {
-        use crate::security::{set_network_access_guard, grant_network_access, NetworkAccessGuard};
+        use crate::security::{NetworkAccessGuard, grant_network_access, set_network_access_guard};
         use rong::RongJSError;
 
         // Test default guard allows all domains

@@ -139,4 +139,3 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
 
     Ok(())
 }
-

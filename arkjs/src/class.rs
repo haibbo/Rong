@@ -152,4 +152,3 @@ pub(crate) fn get_finalizer_by_constructor(constructor: ArkJSValue) -> arkjs::JS
     }
     None
 }
-

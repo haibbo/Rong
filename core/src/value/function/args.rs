@@ -1,4 +1,4 @@
-use crate::{function::JSParameterType, IntoJSValue, JSContext, JSValueImpl};
+use crate::{IntoJSValue, JSContext, JSValueImpl, function::JSParameterType};
 
 pub trait IntoJSArg<V: JSValueImpl> {
     fn push_js_arg(self, ctx: &JSContext<V::Context>, vec: &mut Vec<V>);

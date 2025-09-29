@@ -53,4 +53,3 @@ pub fn set_network_access_guard(guard: Box<dyn NetworkAccessGuard>) {
 pub fn grant_network_access(domain: &str) -> JSResult<()> {
     NETWORK_ACCESS_GUARD.with(|guard| guard.borrow().check_access(domain))
 }
-

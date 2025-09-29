@@ -189,7 +189,6 @@ fn storage_info() -> JSResult<StorageInfo> {
 
 /// Initialize the Storage module
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-
     let rong = ctx.rong();
 
     // Create storage object with methods

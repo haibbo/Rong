@@ -1,4 +1,4 @@
-use crate::{jsc, JSCValue};
+use crate::{JSCValue, jsc};
 use rong_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
 
 impl JSObjectOps for JSCValue {

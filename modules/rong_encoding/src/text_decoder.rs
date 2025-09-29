@@ -56,7 +56,7 @@ impl TextDecoder {
                     return Err(RongJSError::TypeError(format!(
                         "Unsupported encoding: {}",
                         label
-                    )))
+                    )));
                 }
             }
         }

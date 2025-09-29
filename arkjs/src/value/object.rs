@@ -236,4 +236,3 @@ fn to_arkjs_attributes(attr: PropertyAttributes) -> arkjs::JSVM_PropertyAttribut
 
     flags
 }
-

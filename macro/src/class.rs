@@ -167,7 +167,7 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
                     gc_mark_impl = Some(quote! {
                         // Implement gc_mark_with by calling the user's method
                         fn gc_mark_with<F>(&self, mark_fn: F)
-                        where 
+                        where
                             F: FnMut(&rong::JSValue)
                         {
                             Self::#method_name(self, mark_fn);

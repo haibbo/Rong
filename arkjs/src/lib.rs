@@ -11,4 +11,3 @@ mod arkjs {
 pub use context::ArkJSContext;
 pub use runtime::{ArkJSRuntime, HarmonyArkJS};
 pub use value::ArkJSValue;
-

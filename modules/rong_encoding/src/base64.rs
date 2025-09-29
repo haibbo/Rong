@@ -1,4 +1,4 @@
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use rong::{JSResult, RongJSError};
 
 /// Decodes a string of data which has been encoded using base-64 encoding

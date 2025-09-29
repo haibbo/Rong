@@ -414,4 +414,3 @@ unsafe extern "C" fn reject_callback(
         undefined
     }
 }
-

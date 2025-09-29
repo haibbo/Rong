@@ -1,6 +1,5 @@
 use crate::{
-    IntoJSValue, JSClass, JSObjectOps, JSResult, JSValueImpl, Promise, PromiseResolver,
-    RongJSError,
+    IntoJSValue, JSClass, JSObjectOps, JSResult, JSValueImpl, Promise, PromiseResolver, RongJSError,
 };
 use std::cell::RefCell;
 use std::future::Future;

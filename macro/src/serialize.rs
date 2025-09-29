@@ -75,4 +75,3 @@ pub(crate) fn impl_serialize(input: syn::DeriveInput) -> TokenStream2 {
 
     expanded
 }
-

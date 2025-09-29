@@ -37,7 +37,10 @@ fn build_harmony_arkjs() {
         .join("include")
         .join("ark_runtime");
 
-    println!("cargo:warning=Ark Runtime header path: {:?}", ark_runtime_path);
+    println!(
+        "cargo:warning=Ark Runtime header path: {:?}",
+        ark_runtime_path
+    );
 
     if !ark_runtime_path.exists() {
         panic!(
@@ -55,7 +58,10 @@ fn build_harmony_arkjs() {
     }
 
     if !jsvm_types_header.exists() {
-        panic!("jsvm_types.h not found at: {}", jsvm_types_header.to_string_lossy());
+        panic!(
+            "jsvm_types.h not found at: {}",
+            jsvm_types_header.to_string_lossy()
+        );
     }
 
     println!("cargo:rerun-if-changed=build.rs");
@@ -68,7 +74,10 @@ fn build_harmony_arkjs() {
         .join("usr")
         .join("lib");
 
-    println!("cargo:rustc-link-search=native={}", lib_path.to_string_lossy());
+    println!(
+        "cargo:rustc-link-search=native={}",
+        lib_path.to_string_lossy()
+    );
     println!("cargo:rustc-link-lib=dylib=jsvm");
 
     let bindings = bindgen::Builder::default()
