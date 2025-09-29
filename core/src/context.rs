@@ -430,7 +430,7 @@ impl<C: JSContextImpl> JSContext<C> {
     ///     println!("User ID: {}", controller.user_id);
     /// }
     /// ```
-    pub fn get_user_data<T: Any + 'static>(&self) -> Option<std::cell::Ref<T>> {
+    pub fn get_user_data<T: Any + 'static>(&self) -> Option<std::cell::Ref<'_, T>> {
         let user_data = self.rc.user_data.borrow();
         if user_data.contains_key(&TypeId::of::<T>()) {
             Some(std::cell::Ref::map(user_data, |map| {
@@ -459,7 +459,7 @@ impl<C: JSContextImpl> JSContext<C> {
     ///     controller.user_id = "new_user456".to_string();
     /// }
     /// ```
-    pub fn get_user_data_mut<T: Any + 'static>(&self) -> Option<std::cell::RefMut<T>> {
+    pub fn get_user_data_mut<T: Any + 'static>(&self) -> Option<std::cell::RefMut<'_, T>> {
         let user_data = self.rc.user_data.borrow_mut();
         if user_data.contains_key(&TypeId::of::<T>()) {
             Some(std::cell::RefMut::map(user_data, |map| {

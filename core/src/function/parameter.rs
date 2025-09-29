@@ -226,13 +226,6 @@ impl<T> ParameterKind for RestKind<T> {
     }
 }
 
-pub struct ParamKind<T>(PhantomData<T>);
-impl<T> ParameterKind for ParamKind<T> {
-    fn param_requirement() -> ParamRequirement {
-        ParamRequirement::single()
-    }
-}
-
 impl<C: JSContextImpl> ParameterKind for JSContext<C> {
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()

@@ -67,7 +67,7 @@ pub trait JSValueImpl: Clone + PartialEq + Hash {
     /// Create JavaScript undefined value
     fn create_undefined(ctx: &Self::Context) -> Self;
 
-    /// Create JavaScript undefined value
+    /// Create a JavaScript Symbol with the given description
     fn create_symbol(ctx: &Self::Context, descripiton: &str) -> Self;
 
     /// Creates a JSValue by parsing a JSON string
