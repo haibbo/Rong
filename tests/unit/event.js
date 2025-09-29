@@ -152,6 +152,22 @@ describe("EventEmitter", () => {
       expect(errorThrown).toBeFalsy();
     });
 
+    it("should allow removing a listener during emit", () => {
+      const payloads = [];
+
+      function handlePing(payload) {
+        payloads.push(payload.count);
+        emitter.off("ping", handlePing);
+      }
+
+      emitter.on("ping", handlePing);
+
+      expect(emitter.emit("ping", { count: 1 })).toBe(true);
+      expect(emitter.emit("ping", { count: 2 })).toBe(false);
+
+      expect(payloads).toEqual([1]);
+    });
+
     it("should handle async listeners", async () => {
       let resolved = false;
       emitter.on("test", async () => {

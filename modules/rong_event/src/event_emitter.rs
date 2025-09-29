@@ -463,34 +463,56 @@ impl EventEmitter {
         args: Vec<JSValue>,
         is_empty: &mut bool,
     ) -> JSResult<bool> {
-        let mut events = self.inner.lock().into_result()?;
-        if let Some(listeners) = events.listeners.get_mut(&key) {
-            // Clone listeners to avoid mutable borrow issues
-            let mut listeners_to_remove = Vec::new();
-            let listeners_clone: Vec<_> = listeners.iter().cloned().collect();
-
-            // Process listeners in order
-            for listener in listeners_clone.iter() {
-                let _ = listener
-                    .listener
-                    .call::<_, ()>(Some(this.clone()), (args.clone(),));
-                if listener.once {
-                    listeners_to_remove.push(listener.listener.clone());
+        // Capture the listeners in a temporary vector so callback execution does not hold the lock.
+        let listeners_snapshot = {
+            let events = self.inner.lock().into_result()?;
+            match events.listeners.get(&key) {
+                Some(listeners) if !listeners.is_empty() => {
+                    let mut snapshot = Vec::with_capacity(listeners.len());
+                    snapshot.extend(listeners.iter().cloned());
+                    snapshot
                 }
+                _ => return Ok(false),
             }
+        };
 
-            // Remove once listeners after iteration and ensure they are properly dropped
-            if !listeners_to_remove.is_empty() {
-                listeners.retain(|l| !listeners_to_remove.contains(&l.listener));
+        let mut listeners_to_remove: Option<Vec<JSFunc>> = None;
+
+        // Execute callbacks without holding the mutex to avoid deadlocks when listeners mutate state.
+        for listener in listeners_snapshot.iter() {
+            let _ = listener
+                .listener
+                .call::<_, ()>(Some(this.clone()), (args.clone(),));
+            if listener.once {
+                listeners_to_remove
+                    .get_or_insert_with(|| Vec::with_capacity(1))
+                    .push(listener.listener.clone());
+            }
+        }
+
+        let mut events = self.inner.lock().into_result()?;
+        let mut should_mark_empty = false;
+
+        {
+            if let Some(listeners) = events.listeners.get_mut(&key) {
+                if let Some(listeners_to_remove) = listeners_to_remove.as_ref() {
+                    listeners.retain(|l| !listeners_to_remove.contains(&l.listener));
+                }
 
                 if listeners.is_empty() {
-                    *is_empty = true;
+                    should_mark_empty = true;
                 }
+            } else {
+                should_mark_empty = true;
             }
-            Ok(true)
-        } else {
-            Ok(false)
         }
+
+        if should_mark_empty {
+            events.listeners.remove(&key);
+            *is_empty = true;
+        }
+
+        Ok(true)
     }
 
     fn remove_all_listeners(&self, key: Option<EventKey>) -> JSResult<()> {
