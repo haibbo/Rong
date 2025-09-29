@@ -92,10 +92,10 @@ describe("Timer", () => {
   });
 
   describe("Asynchronous APIs", () => {
-    describe("timer.setTimeout", () => {
+    describe("timers.setTimeout", () => {
       it("should resolve after delay", async () => {
         const start = Date.now();
-        const now = await timer.setTimeout(100);
+        const now = await timers.setTimeout(100);
         const elapsed = Date.now() - start;
         assert.ok(
           elapsed >= 100 && elapsed <= 150,
@@ -109,7 +109,7 @@ describe("Timer", () => {
 
       it("should handle zero delay", async () => {
         const start = Date.now();
-        const now = await timer.setTimeout(0);
+        const now = await timers.setTimeout(0);
         assert.ok(
           now >= start && now <= Date.now(),
           "Resolved value should be a valid timestamp",
@@ -118,7 +118,7 @@ describe("Timer", () => {
 
       it("should handle negative delay", async () => {
         const start = Date.now();
-        const now = await timer.setTimeout(-100);
+        const now = await timers.setTimeout(-100);
         const elapsed = Date.now() - start;
         assert.ok(elapsed >= 0, "Negative delay should be treated as 0");
         assert.ok(
@@ -128,10 +128,10 @@ describe("Timer", () => {
       });
     });
 
-    describe("timer.setImmediate", () => {
+    describe("timers.setImmediate", () => {
       it("should execute on next tick", async () => {
         const start = Date.now();
-        const now = await timer.setImmediate();
+        const now = await timers.setImmediate();
         assert.ok(
           now >= start && now <= Date.now(),
           "Resolved value should be a valid timestamp",
@@ -140,7 +140,7 @@ describe("Timer", () => {
 
       it("should execute after current task", async () => {
         const order = [];
-        const promise = timer.setImmediate();
+        const promise = timers.setImmediate();
         order.push(1);
         await promise;
         order.push(2);
@@ -152,10 +152,10 @@ describe("Timer", () => {
       });
     });
 
-    describe("timer.setInterval", () => {
+    describe("timers.setInterval", () => {
       it("should create async iterator with correct timing", async () => {
         const start = Date.now();
-        const interval = timer.setInterval(50);
+        const interval = timers.setInterval(50);
         const times = [];
 
         for await (const now of interval) {
@@ -180,7 +180,7 @@ describe("Timer", () => {
       });
 
       it("should execute repeatedly", async () => {
-        const interval = timer.setInterval(50);
+        const interval = timers.setInterval(50);
         let count = 0;
 
         for await (const _ of interval) {
@@ -192,7 +192,7 @@ describe("Timer", () => {
       });
 
       it("should handle break in loop", async () => {
-        const interval = timer.setInterval(50);
+        const interval = timers.setInterval(50);
         let count = 0;
 
         for await (const _ of interval) {

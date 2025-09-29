@@ -176,6 +176,6 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
             JSFunc::new(ctx, set_interval)?.name("setInterval")?,
         )?;
 
-    ctx.global().set("timer", timer)?;
+    ctx.global().set("timers", timer)?;
     Ok(())
 }
