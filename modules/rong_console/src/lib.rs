@@ -530,23 +530,26 @@ pub fn default_hash<T: Hash + ?Sized>(v: &T) -> usize {
 mod tests {
     use super::*;
     use rong_test::run;
-    use std::sync::Mutex;
 
-    static TEST_OUTPUT: Mutex<String> = Mutex::new(String::new());
+    // Use thread-local buffer to avoid cross-test interleaving when tests run in parallel
+    thread_local! {
+        static TEST_OUTPUT: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+    }
 
     fn clear_test_output() {
-        let mut output = TEST_OUTPUT.lock().unwrap();
-        *output = String::new();
+        TEST_OUTPUT.with(|s| s.borrow_mut().clear());
     }
 
     fn get_test_output() -> String {
-        TEST_OUTPUT.lock().unwrap().clone()
+        TEST_OUTPUT.with(|s| s.borrow().clone())
     }
 
     fn append_test_output(message: &str) {
-        let mut output = TEST_OUTPUT.lock().unwrap();
-        output.push_str(message);
-        output.push('\n');
+        TEST_OUTPUT.with(|s| {
+            let mut buf = s.borrow_mut();
+            buf.push_str(message);
+            buf.push('\n');
+        });
     }
 
     #[derive(Debug)]
@@ -554,7 +557,6 @@ mod tests {
 
     impl ConsoleWriter for TestConsoleWriter {
         fn write(&self, _level: LogLevel, message: String) {
-            println!("{}", message);
             append_test_output(&message);
         }
 
