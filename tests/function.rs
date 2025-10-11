@@ -1,3 +1,4 @@
+use rong_test::function::JSParameterType;
 use rong_test::*;
 use tokio::time::{Duration, sleep};
 
@@ -382,6 +383,121 @@ fn test_call_async_error_handling() {
         let result: Result<i32, _> = js_func.call_async(None, ()).await;
         assert!(result.is_err());
 
+        Ok(())
+    });
+}
+
+#[test]
+fn function_return_vec_is_js_array() {
+    run(|ctx| {
+        let func = JSFunc::new(ctx, || -> Vec<i32> { vec![1, 2, 3] })?;
+        ctx.global().set("make_vec", func)?;
+
+        let ok: bool = ctx.eval(Source::from_bytes(
+            br#"
+            (function () {
+                const arr = make_vec();
+                return Array.isArray(arr)
+                    && arr.length === 3
+                    && arr[0] === 1
+                    && arr[1] === 2
+                    && arr[2] === 3;
+            })()
+        "#,
+        ))?;
+        assert!(ok);
+        Ok(())
+    });
+}
+
+#[test]
+fn function_param_vec_js_array() {
+    run(|ctx| {
+        let func = JSFunc::new(ctx, |nums: Vec<i32>| -> i32 { nums.into_iter().sum() })?;
+        ctx.global().set("sum_vec", func)?;
+
+        let result: i32 = ctx.eval(Source::from_bytes(b"sum_vec([1,2,3,4])")).unwrap();
+        assert_eq!(result, 10);
+        Ok(())
+    });
+}
+
+#[derive(Clone)]
+struct Job {
+    id: i32,
+}
+
+impl IntoJSValue<JSEngineValue> for Job {
+    fn into_js_value(self, ctx: &JSContext) -> JSEngineValue {
+        let obj = JSObject::new(ctx);
+        obj.set("id", self.id).unwrap();
+        obj.into_value()
+    }
+}
+
+impl FromJSValue<JSEngineValue> for Job {
+    fn from_js_value(ctx: &JSContext, value: JSEngineValue) -> JSResult<Self> {
+        let obj = JSObject::from_js_value(ctx, value)?;
+        let id: i32 = obj.get("id")?;
+        Ok(Job { id })
+    }
+}
+
+impl JSParameterType for Job {}
+
+// General free function: context + Optional<Vec<custom>>
+fn sum_optional_jobs(_ctx: JSContext, items: Optional<Vec<Job>>) -> i32 {
+    match items.0 {
+        Some(v) => v.into_iter().map(|j| j.id).sum(),
+        None => 0,
+    }
+}
+
+#[test]
+fn function_param_context_optional_vec() {
+    run(|ctx| {
+        let f = JSFunc::new(ctx, sum_optional_jobs)?;
+        ctx.global().set("sum_optional_jobs", f)?;
+
+        let r0: i32 = ctx.eval(Source::from_bytes(b"sum_optional_jobs()"))?;
+        assert_eq!(r0, 0);
+
+        let r1: i32 = ctx.eval(Source::from_bytes(b"sum_optional_jobs([{id:3},{id:4}])"))?;
+        assert_eq!(r1, 7);
+        Ok(())
+    });
+}
+
+#[test]
+fn function_param_custom_struct() {
+    run(|ctx| {
+        // Rust function takes custom class and optional primitive
+        let f = JSFunc::new(ctx, |j: Job, opt: Optional<i32>| -> i32 {
+            j.id + match *opt {
+                Some(v) => v,
+                None => 0,
+            }
+        })?;
+        ctx.global().set("use_job", f)?;
+
+        let r0: i32 = ctx.eval(Source::from_bytes(b"use_job({id:7})"))?;
+        assert_eq!(r0, 7);
+        let r1: i32 = ctx.eval(Source::from_bytes(b"use_job({id:7}, 5)"))?;
+        assert_eq!(r1, 12);
+        Ok(())
+    });
+}
+
+#[test]
+fn function_param_vec_of_custom_struct() {
+    run(|ctx| {
+        let sum = JSFunc::new(ctx, |items: Vec<Job>| -> i32 {
+            items.into_iter().map(|j| j.id).sum()
+        })?;
+        ctx.global().set("sum_jobs", sum)?;
+
+        let res: i32 = ctx.eval(Source::from_bytes(b"sum_jobs([{id:1}, {id:2}, {id:3}])"))?;
+        assert_eq!(res, 6);
         Ok(())
     });
 }
