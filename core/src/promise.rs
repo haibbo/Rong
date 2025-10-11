@@ -179,22 +179,42 @@ where
     }
 }
 
+// Specialized support for resolving Vec<T> without requiring JSParameterType on Vec
+impl<V, T> PromiseResolver<V> for Vec<T>
+where
+    V: JSObjectOps + JSTypeOf + crate::JSArrayOps + 'static,
+    T: IntoJSValue<V>,
+{
+    fn resolve_promise(self, resolve: JSFunc<V>, _reject: JSFunc<V>) {
+        let ctx = resolve.get_ctx();
+        let arg = <Vec<T> as IntoJSValue<V>>::into_js_value(self, &ctx);
+        let this = V::create_undefined(ctx.as_ref());
+        let _ = ctx.as_ref().call(resolve.as_value(), this, vec![arg]);
+    }
+}
+
 // Implement for JSResult types
 impl<V, T> PromiseResolver<V> for JSResult<T>
 where
-    T: IntoJSValue<V> + JSParameterType,
+    T: IntoJSValue<V>,
     V: JSObjectOps,
     V::Context: JSExceptionHandler,
 {
     fn resolve_promise(self, resolve: JSFunc<V>, reject: JSFunc<V>) {
         match self {
             Ok(value) => {
-                let _ = resolve.call::<_, ()>(None, (value,));
+                let ctx = resolve.get_ctx();
+                let arg = value.into_js_value(&ctx);
+                let this = V::create_undefined(ctx.as_ref());
+                let _ = ctx.as_ref().call(resolve.as_value(), this, vec![arg]);
             }
             Err(err) => {
                 let ctx = reject.get_ctx();
-                let js_error = err.into_js_error(&ctx);
-                let _ = reject.call::<_, ()>(None, (js_error,));
+                let js_error_value = err.into_js_error(&ctx).into_value();
+                let this = V::create_undefined(ctx.as_ref());
+                let _ = ctx
+                    .as_ref()
+                    .call(reject.as_value(), this, vec![js_error_value]);
             }
         }
     }

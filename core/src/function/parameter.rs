@@ -1,5 +1,6 @@
 use crate::{
-    FromJSValue, JSClass, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult, JSValueImpl,
+    FromJSValue, JSArrayOps, JSClass, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
+    JSTypeOf, JSValueImpl,
 };
 use std::cell::RefMut;
 use std::marker::PhantomData;
@@ -325,6 +326,21 @@ where
             }
         }
         Ok(Rest(values))
+    }
+}
+
+// Allow Vec<T> as a direct parameter, interpreting a single JS Array argument.
+// This avoids requiring `impl<T> JSParameterType for Vec<T>`.
+impl<T, V> GetParam<V> for Vec<T>
+where
+    V: JSValueImpl + JSTypeOf + JSObjectOps + JSArrayOps,
+    T: FromJSValue<V>,
+{
+    type Kind = Regular<Vec<T>>;
+
+    fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
+        let value = accessor.next_arg().unwrap(); // safe: call site ensures arg exists
+        <Vec<T> as FromJSValue<V>>::from_js_value(accessor.ctx, value)
     }
 }
 
