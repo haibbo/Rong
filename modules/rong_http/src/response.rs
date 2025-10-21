@@ -1,7 +1,7 @@
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use http::{HeaderMap, Method, Uri, header};
 use http_body_util::BodyExt;
-use hyper::body::Incoming;
+
 use rong::{function::Optional, *};
 
 use crate::body::{BodyKind, HttpBody};
@@ -126,7 +126,10 @@ impl Response {
         if self.consumed {
             return true;
         }
-        matches!(&self.body, Some(BodyKind::Hyper(body)) if body.is_none())
+        match &self.body {
+            Some(BodyKind::Hyper(inner)) => inner.lock().map(|g| g.is_none()).unwrap_or(true),
+            _ => false,
+        }
     }
 
     #[js_method(getter)]
@@ -154,33 +157,94 @@ impl Response {
     async fn body_to_bytes(&mut self) -> JSResult<Bytes> {
         match &mut self.body {
             Some(BodyKind::JS(body)) => body.bytes().await,
-            Some(BodyKind::Hyper(body)) => {
-                if let Some(body) = body.take() {
-                    // Check for abort signal before starting to read
+            Some(BodyKind::Buffered(b)) => {
+                let header_map = self.headers.as_header_map();
+                crate::body::decompress_bytes(Bytes::from(b.clone()), header_map)
+            }
+            Some(BodyKind::Channel(inner)) => {
+                let mut collected = Vec::new();
+                let maybe_rx = inner
+                    .lock()
+                    .map(|mut g| g.take())
+                    .map_err(|_| RongJSError::Error("Failed to lock channel body".to_string()))?;
+                if let Some(mut rx) = maybe_rx {
                     if let Some(receiver) = &mut self.abort_receiver {
-                        tokio::select! {
-                            result = body.collect() => {
-                                let collected = result.map_err(|e| {
-                                    RongJSError::Error(format!("Failed to collect body: {}", e))
-                                })?;
-                                let bytes = collected.to_bytes();
-                                // Get a reference to the headers for decompression
-                                let header_map = self.headers.as_header_map();
-                                crate::body::decompress_bytes(bytes, header_map)
-                            }
-                            abort_reason = receiver.recv() => {
-                                Err(RongJSError::from_jsvalue(abort_reason))
+                        loop {
+                            tokio::select! {
+                                chunk = rx.recv() => {
+                                    match chunk {
+                                        Some(Ok(bytes)) => collected.extend_from_slice(&bytes),
+                                        Some(Err(e)) => { return Err(RongJSError::Error(e)); }
+                                        None => break,
+                                    }
+                                }
+                                abort_reason = receiver.recv() => {
+                                    return Err(RongJSError::from_jsvalue(abort_reason));
+                                }
                             }
                         }
                     } else {
-                        let collected = body.collect().await.map_err(|e| {
-                            RongJSError::Error(format!("Failed to collect body: {}", e))
-                        })?;
-                        let bytes = collected.to_bytes();
-                        // Get a reference to the headers for decompression
-                        let header_map = self.headers.as_header_map();
-                        crate::body::decompress_bytes(bytes, header_map)
+                        while let Some(item) = rx.recv().await {
+                            match item {
+                                Ok(bytes) => collected.extend_from_slice(&bytes),
+                                Err(e) => { return Err(RongJSError::Error(e)); }
+                            }
+                        }
                     }
+                    let header_map = self.headers.as_header_map();
+                    crate::body::decompress_bytes(Bytes::from(collected), header_map)
+                } else {
+                    Ok(Bytes::new())
+                }
+            }
+            Some(BodyKind::Hyper(inner)) => {
+                // Take the body from the shared slot, then drop the lock before await
+                let maybe_body = inner
+                    .lock()
+                    .map(|mut g| g.take())
+                    .map_err(|_| RongJSError::Error("Failed to lock response body".to_string()))?;
+                if let Some(mut body) = maybe_body {
+                    // Give the runtime a chance to drive the connection before reading
+                    tokio::task::yield_now().await;
+                    let mut buf = BytesMut::new();
+                    // Get a reference to the headers for decompression after full read
+                    let header_map = self.headers.as_header_map();
+
+                    if let Some(receiver) = &mut self.abort_receiver {
+                        loop {
+                            tokio::select! {
+                                maybe = body.frame() => {
+                                    match maybe {
+                                        Some(Ok(frame)) => {
+                                            if let Some(data) = frame.data_ref() {
+                                                buf.extend_from_slice(data);
+                                            }
+                                            // ignore trailers for now
+                                        }
+                                        Some(Err(e)) => {
+                                            return Err(RongJSError::Error(format!("Failed to read body frame: {}", e)));
+                                        }
+                                        None => { break; }
+                                    }
+                                }
+                                abort_reason = receiver.recv() => {
+                                    return Err(RongJSError::from_jsvalue(abort_reason));
+                                }
+                            }
+                        }
+                    } else {
+                        while let Some(frame) = body.frame().await {
+                            let frame = frame.map_err(|e| {
+                                RongJSError::Error(format!("Failed to read body frame: {}", e))
+                            })?;
+                            if let Some(data) = frame.data_ref() {
+                                buf.extend_from_slice(data);
+                            }
+                        }
+                    }
+
+                    let out = crate::body::decompress_bytes(buf.freeze(), header_map)?;
+                    Ok(out)
                 } else {
                     Ok(Bytes::new())
                 }
@@ -199,7 +263,8 @@ impl Response {
         self.consumed = true;
         match &mut self.body {
             Some(BodyKind::JS(body)) => body.text().await,
-            Some(BodyKind::Hyper(_)) => {
+            Some(BodyKind::Buffered(b)) => Ok(String::from_utf8_lossy(b).into_owned()),
+            Some(BodyKind::Hyper(_)) | Some(BodyKind::Channel(_)) => {
                 let bytes = self.body_to_bytes().await?;
                 Ok(String::from_utf8_lossy(&bytes).into_owned())
             }
@@ -286,7 +351,7 @@ impl Response {
 }
 
 impl Response {
-    // Parse Content-Type header to extract mime type, charset, etc.
+    // Parse Content-Type header to extract mime type, charset, etc. (kept for future use)
     fn parse_content_type(headers: &HeaderMap) -> (Option<String>, Option<String>) {
         if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
             if let Ok(content_type) = content_type.to_str() {
@@ -302,36 +367,35 @@ impl Response {
         (None, None)
     }
 
-    pub(crate) fn from_hyper(
-        response: hyper::Response<Incoming>,
+    pub(crate) fn from_meta(
+        status: http::StatusCode,
+        headers_in: http::HeaderMap,
+        body_kind: BodyKind,
         abort_receiver: Option<AbortReceiver>,
+        method: Method,
+        url: Uri,
     ) -> Self {
-        let (parts, body) = response.into_parts();
-
         // Convert hyper headers to Headers
         let mut headers = Headers::default();
-        for (name, value) in parts.headers.iter() {
+        for (name, value) in headers_in.iter() {
             if let Ok(value_str) = value.to_str() {
                 let _ = headers.set(name.to_string(), value_str.to_string());
             }
         }
 
-        // Parse content type and charset
-        let (content_type, _) = Self::parse_content_type(&parts.headers);
-
-        // Get content encoding
-        let content_encoding = parts
-            .headers
+        let (content_type, _) = Self::parse_content_type(&headers_in);
+        let content_encoding = headers_in
             .get(header::CONTENT_ENCODING)
             .and_then(|v| v.to_str().ok())
             .map(String::from);
 
         Self {
-            url: Uri::default(), // URI comes from request, not response
-            status: parts.status.as_u16(),
-            status_text: parts.status.canonical_reason().unwrap_or("").to_string(),
+            url,
+            method,
+            status: status.as_u16(),
+            status_text: status.canonical_reason().unwrap_or("").to_string(),
             headers,
-            body: Some(BodyKind::Hyper(Some(body))),
+            body: Some(body_kind),
             consumed: false,
             content_type,
             content_encoding,

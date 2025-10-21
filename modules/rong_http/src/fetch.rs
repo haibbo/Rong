@@ -2,45 +2,15 @@ use http::Request as HttpRequest;
 use http::header;
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::body::Bytes;
-use hyper_rustls::HttpsConnectorBuilder;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
 use rong::{function::Optional, *};
 use std::io::Error;
-use std::sync::OnceLock;
-use tokio::select;
+use tokio::sync::oneshot;
 
 use crate::formdata::FormData;
 use crate::request::{Request, RequestInit};
 use crate::response::Response;
 use crate::security::grant_network_access;
-
-// Global client instance
-static CLIENT: OnceLock<
-    Client<
-        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-        BoxBody<Bytes, Error>,
-    >,
-> = OnceLock::new();
-
-// Create a new HTTPS-enabled client
-fn get_client() -> &'static Client<
-    hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-    BoxBody<Bytes, Error>,
-> {
-    CLIENT.get_or_init(|| {
-        // Initialize rustls CryptoProvider
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-        let https = HttpsConnectorBuilder::new()
-            .with_webpki_roots()
-            .https_or_http()
-            .enable_http1()
-            .build();
-
-        Client::builder(TokioExecutor::new()).build(https)
-    })
-}
+use rong::net;
 
 // Convert Request to hyper::Request
 async fn to_hyper_request(request: Request) -> JSResult<HttpRequest<BoxBody<Bytes, Error>>> {
@@ -96,30 +66,57 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     grant_network_access(&domain)?;
 
     // Get abort signal if present
-    let mut abort_receiver = request.abort_signal().map(|signal| signal.subscribe());
+    let abort_receiver = request.abort_signal().map(|signal| signal.subscribe());
 
     // Convert Request to hyper::Request
     let hyper_request = to_hyper_request(request).await?;
+    let orig_method = hyper_request.method().clone();
+    let orig_uri = hyper_request.uri().clone();
 
-    // Send request and get response
-    let response = if let Some(ref mut receiver) = abort_receiver {
-        select! {
-            result = get_client().request(hyper_request) => {
-                result.map_err(|e| RongJSError::TypeError(format!("fetch failed: {}", e)))?
-            }
-            abort_reason = receiver.recv() => {
-                return Err(RongJSError::from_jsvalue(abort_reason));
+    // Send via dedicated net service
+    let abort_bridge = if let Some(mut r) = abort_receiver.clone() {
+        let (tx, rx) = oneshot::channel::<()>();
+        tokio::task::spawn_local(async move {
+            let _ = r.recv().await;
+            let _ = tx.send(());
+        });
+        Some(rx)
+    } else {
+        None
+    };
+
+    let small_threshold = 4096usize;
+    // Race the network request with an early abort. If the abort wins, reject with its reason.
+    let net_fut = net::send_request(hyper_request, small_threshold, abort_bridge);
+    let net_resp = if let Some(mut early_abort) = abort_receiver.clone() {
+        tokio::select! {
+            res = net_fut => res.map_err(|e| RongJSError::TypeError(format!("fetch failed: {}", e)))?,
+            reason = early_abort.recv() => {
+                return Err(RongJSError::from_jsvalue(reason));
             }
         }
     } else {
-        get_client()
-            .request(hyper_request)
+        net_fut
             .await
             .map_err(|e| RongJSError::TypeError(format!("fetch failed: {}", e)))?
     };
 
-    // Convert hyper::Response to our Response, passing the abort receiver
-    Ok(Response::from_hyper(response, abort_receiver))
+    let body_kind = if let Some(buf) = net_resp.small_buffer {
+        crate::body::BodyKind::Buffered(buf)
+    } else if let Some(rx) = net_resp.body_rx {
+        crate::body::BodyKind::Channel(std::sync::Arc::new(std::sync::Mutex::new(Some(rx))))
+    } else {
+        crate::body::BodyKind::Buffered(Vec::new())
+    };
+
+    Ok(Response::from_meta(
+        net_resp.status,
+        net_resp.headers,
+        body_kind,
+        abort_receiver,
+        orig_method,
+        orig_uri,
+    ))
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {

@@ -7,9 +7,16 @@ use rong::*;
 use rong_buffer::{Blob, File};
 use rong_url::URLSearchParams;
 use std::io::Read;
+use std::sync::{Arc, Mutex};
 
 pub(crate) enum BodyKind {
-    Hyper(Option<Incoming>),
+    // Share the underlying Incoming across clones to avoid losing the body
+    // when Response values are cloned by the JS engine or host environment.
+    Hyper(Arc<Mutex<Option<Incoming>>>),
+    // Buffered, in-memory body (Vec to ensure full ownership and avoid aliasing)
+    Buffered(Vec<u8>),
+    // Stream body via channel from net service (chunk or error)
+    Channel(Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Result<Bytes, String>>>>>),
     JS(HttpBody),
 }
 
@@ -17,7 +24,9 @@ pub(crate) enum BodyKind {
 impl Clone for BodyKind {
     fn clone(&self) -> Self {
         match self {
-            Self::Hyper(_) => Self::Hyper(None),
+            Self::Hyper(inner) => Self::Hyper(inner.clone()),
+            Self::Buffered(b) => Self::Buffered(b.clone()),
+            Self::Channel(rx) => Self::Channel(rx.clone()),
             Self::JS(arg0) => Self::JS(arg0.clone()),
         }
     }
