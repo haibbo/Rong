@@ -9,6 +9,9 @@ pub use rong_core::{
     RongJSError, Source, SourceKind, Worker, WorkerMessage, spawn,
 };
 
+// Re-export net runtime APIs
+pub use rong_core::net;
+
 pub use rong_core::function;
 
 #[cfg(feature = "quickjs")]

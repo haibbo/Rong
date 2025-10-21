@@ -375,6 +375,8 @@ pub struct RongBuilder<E: JSEngine + 'static> {
     /// Size of each worker's general message queue (for post_message)
     /// Controls how many messages can be buffered before being dropped
     message_queue_size: usize,
+    /// Number of net runtime worker threads (>=1)
+    net_worker_threads: usize,
     /// Marker for the generic type E
     _marker: PhantomData<E>,
 }
@@ -386,6 +388,7 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
             worker_count: 4,         // Default to 4 workers instead of num_cpus
             task_queue_size: 100,    // Default task queue size
             message_queue_size: 100, // Default message queue size
+            net_worker_threads: 1,   // Default to 1 net worker thread
             _marker: PhantomData,    // Initialize marker
         }
     }
@@ -419,6 +422,18 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
         self
     }
 
+    /// Configure the global net runtime worker thread count.
+    /// If set, the net runtime will be started during build() with this thread count.
+    /// If not set, the net runtime will be lazily started (defaulting to 2 threads)
+    /// on first use by callers (e.g., HTTP).
+    pub fn with_net_threads(mut self, threads: usize) -> Self {
+        if threads < 1 {
+            panic!("At least one net worker thread is required");
+        }
+        self.net_worker_threads = threads;
+        self
+    }
+
     /// Build and start a Rong instance
     ///
     /// Finalizes the configuration and creates a Rong instance with the specified settings.
@@ -435,6 +450,9 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
     ///     .build();
     /// ```
     pub fn build(self) -> Arc<Rong<E>> {
+        // Initialize the net runtime with configured threads (idempotent)
+        crate::net::start_net_runtime(self.net_worker_threads);
+
         let rong = Arc::new(Rong {
             workers: Arc::new(TokioMutex::new(Vec::with_capacity(self.worker_count))),
             worker_count: self.worker_count,
@@ -885,6 +903,8 @@ impl<E: JSEngine + 'static> Drop for Rong<E> {
     fn drop(&mut self) {
         // Ensure workers are terminated when Rong is dropped by calling the shutdown logic
         let _ = self.shutdown();
+        // Stop global net runtime if running
+        crate::net::stop_net_runtime();
     }
 }
 

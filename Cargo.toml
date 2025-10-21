@@ -41,7 +41,7 @@ rong_path = { path = "modules/rong_path" }
 rong_storage = { path = "modules/rong_storage" }
 
 # External dependencies
-tokio = { version = "1.0", features = ["rt", "time", "macros", "sync", "fs", "io-util"] }
+tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "time", "macros", "sync", "fs", "io-util"] }
 futures = "0.3.31"
 thiserror = "2.0.9"
 serde = { version = "1.0", features = ["derive"] }
@@ -49,15 +49,18 @@ serde_json = "1.0"
 
 # Additional common dependencies
 http = { package = "http", version = "1.2" }
-hyper = { version = "1.6.0", features = ["client", "http1"] }
-hyper-util = { version = "0.1.10", features = ["client", "http1", "tokio"] }
-hyper-rustls = { version = "0.27.5", features = ["webpki-roots", "http1", "aws-lc-rs"] }
+http-body-util = "0.1.2"
+hyper = { version = "1.7.0", features = ["client", "http1"] }
+hyper-util = { version = "0.1.17", features = ["client", "http1", "tokio"] }
+hyper-rustls = { version = "0.27.7", features = ["webpki-roots", "http1", "aws-lc-rs"] }
 rustls = { version = "0.23", default-features = false }
 flate2 = { version = "1.1.0" }
-uuid = { version = "1.16.0", features = ["v4"] }
-axum = { version = "0.8.1", features = ["http1"] }
+uuid = { version = "1.18.1", features = ["v4"] }
+axum = { version = "0.8.6", features = ["http1"] }
 nix = { version = "0.30", features = ["user", "fs"] }
 syn = { version = "2.0", features = ["full"] }
+bytes = "1.10.1"
+
 
 [package]
 name = "rong"
@@ -85,4 +88,3 @@ rong_test = { workspace = true }
 
 [profile.test]
 debug = true
-

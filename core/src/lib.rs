@@ -8,6 +8,7 @@ mod rong;
 mod runtime;
 mod source;
 mod value;
+pub mod net;
 
 pub use class::*;
 pub use context::*;
