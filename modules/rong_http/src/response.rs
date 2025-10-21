@@ -18,6 +18,7 @@ pub struct Response {
     status: u16,
     status_text: String,
     body: Option<BodyKind>,
+    consumed: bool,
     redirected: bool,
     content_type: Option<String>,
     content_encoding: Option<String>,
@@ -58,6 +59,7 @@ impl Response {
         let mut response = Self {
             status: 200,
             status_text: "".to_string(),
+            consumed: false,
             ..Default::default()
         };
 
@@ -121,10 +123,10 @@ impl Response {
 
     #[js_method(getter, rename = "bodyUsed")]
     pub fn body_used(&self) -> bool {
-        match &self.body {
-            Some(BodyKind::Hyper(body)) => body.is_none(),
-            _ => false,
+        if self.consumed {
+            return true;
         }
+        matches!(&self.body, Some(BodyKind::Hyper(body)) if body.is_none())
     }
 
     #[js_method(getter)]
@@ -141,6 +143,7 @@ impl Response {
             status: self.status,
             status_text: self.status_text.clone(),
             body: self.body.clone(),
+            consumed: self.consumed,
             redirected: self.redirected,
             content_type: self.content_type.clone(),
             content_encoding: self.content_encoding.clone(),
@@ -188,6 +191,12 @@ impl Response {
 
     #[js_method]
     async fn text(&mut self) -> JSResult<String> {
+        if self.body_used() {
+            return Err(RongJSError::TypeError(
+                "body used already for: text".to_string(),
+            ));
+        }
+        self.consumed = true;
         match &mut self.body {
             Some(BodyKind::JS(body)) => body.text().await,
             Some(BodyKind::Hyper(_)) => {
@@ -200,12 +209,25 @@ impl Response {
 
     #[js_method]
     async fn json(&mut self, ctx: JSContext) -> JSResult<JSValue> {
-        let text = self.text().await?;
+        if self.body_used() {
+            return Err(RongJSError::TypeError(
+                "body used already for: json".to_string(),
+            ));
+        }
+        self.consumed = true;
+        let bytes = self.body_to_bytes().await?;
+        let text = String::from_utf8_lossy(&bytes).into_owned();
         text.as_str().json_to_jsvalue(&ctx)
     }
 
     #[js_method]
     async fn blob(&mut self) -> JSResult<Blob> {
+        if self.body_used() {
+            return Err(RongJSError::TypeError(
+                "body used already for: blob".to_string(),
+            ));
+        }
+        self.consumed = true;
         let bytes = self.body_to_bytes().await?;
         let mime = self
             .headers
@@ -216,6 +238,12 @@ impl Response {
 
     #[js_method(rename = "arrayBuffer")]
     async fn array_buffer(&mut self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
+        if self.body_used() {
+            return Err(RongJSError::TypeError(
+                "body used already for: arrayBuffer".to_string(),
+            ));
+        }
+        self.consumed = true;
         let bytes = self.body_to_bytes().await?;
         JSArrayBuffer::from_bytes(&ctx, &bytes)
     }
@@ -304,6 +332,7 @@ impl Response {
             status_text: parts.status.canonical_reason().unwrap_or("").to_string(),
             headers,
             body: Some(BodyKind::Hyper(Some(body))),
+            consumed: false,
             content_type,
             content_encoding,
             abort_receiver,

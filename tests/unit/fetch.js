@@ -60,6 +60,26 @@ describe("fetch", () => {
       expect(error instanceof TypeError).toBe(true);
     }
   });
+
+  it("should not allow multiple body reads", async () => {
+    const url = new URL("/ip", TEST_SERVER_URL);
+    const response = await fetch(url);
+    const a = await response.json();
+    expect(typeof a.origin).toBe("string");
+
+    // Second read must fail per spec
+    let threw = false;
+    try {
+      await response.text();
+    } catch (err) {
+      threw = true;
+      expect(err instanceof TypeError).toBe(true);
+      expect(/body used already/.test(String(err))).toBe(true);
+    }
+    if (!threw) {
+      throw new Error("Expected second body read to fail");
+    }
+  });
 });
 
 describe("Abort to fetch", () => {
