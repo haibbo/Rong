@@ -1,0 +1,27 @@
+[package]
+name = "rong_stream"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "rong_stream"
+path = "src/lib.rs"
+
+[dependencies]
+rong = { workspace = true }
+tokio = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+rong_test = { workspace = true }
+rong_console = { path = "../rong_console" }
+rong_assert = { path = "../rong_assert" }
+rong_encoding = { path = "../rong_encoding" }
+
+[features]
+# Forward JS engine features to the main rong crate
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+v8 = ["rong/v8"]
+arkjs = ["rong/arkjs"]
