@@ -162,6 +162,8 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::Bytes as AxumBytes;
+    use axum::routing::put;
     use axum::{
         Router,
         body::Body,
@@ -170,7 +172,7 @@ mod tests {
         routing::get,
     };
     use flate2::{Compression, write::GzEncoder};
-    use futures::{StreamExt, stream};
+    use futures::{StreamExt as FuturesStreamExt, stream};
     use rong_test::*;
     use std::convert::Infallible;
     use std::io::Write;
@@ -211,7 +213,7 @@ mod tests {
     }
 
     async fn test_large() -> impl IntoResponse {
-        let stream = stream::iter(0..100).then(|i| async move {
+        let stream = FuturesStreamExt::then(stream::iter(0..100), |i| async move {
             // Add a significant delay between chunks
             sleep(Duration::from_millis(200)).await;
             Ok::<_, Infallible>(format!("chunk_{:04}\n", i).repeat(1024))
@@ -249,7 +251,18 @@ mod tests {
             .route("/gzip", get(test_gzip))
             .route("/delay", get(test_delay))
             .route("/large", get(test_large))
-            .route("/headers", get(test_headers));
+            .route("/headers", get(test_headers))
+            .route(
+                "/upload",
+                put(|bytes: AxumBytes| async move {
+                    let total = bytes.len();
+                    let json = serde_json::json!({"received": total});
+                    axum::response::Response::builder()
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(json.to_string()))
+                        .unwrap()
+                }),
+            );
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -271,6 +284,10 @@ mod tests {
             rong_timer::init(&ctx)?;
             rong_abort::init(&ctx)?;
             rong_exception::init(&ctx)?;
+            // Needed for new ReadableStream(...) in tests
+            rong_stream::init(&ctx)?;
+            // FS needed for download-to-file streaming test
+            rong_fs::init(&ctx)?;
 
             crate::header::init(&ctx)?;
             crate::request::init(&ctx)?;
@@ -283,6 +300,16 @@ mod tests {
 
             // Set base URL for tests
             ctx.global().set("TEST_SERVER_URL", base_url)?;
+
+            // Set WORKSPACE_ROOT for saving files in tests
+            let workspace_root = std::env::current_dir()
+                .map_err(|e| RongJSError::TypeError(format!("Failed to get current dir: {}", e)))?
+                .parent()
+                .and_then(|p| p.parent())
+                .ok_or_else(|| RongJSError::TypeError("Failed to get workspace root".into()))?
+                .to_string_lossy()
+                .into_owned();
+            ctx.global().set("WORKSPACE_ROOT", workspace_root)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "fetch.js")
                 .await?

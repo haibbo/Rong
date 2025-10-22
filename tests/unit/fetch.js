@@ -80,6 +80,97 @@ describe("fetch", () => {
       throw new Error("Expected second body read to fail");
     }
   });
+
+  it("should stream upload with ReadableStream body", async () => {
+    const url = new URL("/upload", TEST_SERVER_URL);
+    const total = 100 * 1024 + 5;
+    const chunk = new Uint8Array(4096).fill(0x61); // 'a'
+    let sent = 0;
+
+    const rs = new ReadableStream({
+      start(controller) {
+        (async () => {
+          while (sent < total) {
+            const n = Math.min(chunk.length, total - sent);
+            controller.enqueue(chunk.subarray(0, n));
+            sent += n;
+            // small yield
+            await new Promise((r) => setTimeout(r, 1));
+          }
+          controller.close();
+        })();
+      },
+    });
+
+    const response = await fetch(url, { method: "PUT", body: rs });
+    expect(response.ok).toBe(true);
+    const data = await response.json();
+    expect(data.received).toBe(total);
+  });
+
+  it("should read streaming response via Response.body", async () => {
+    const url = new URL("/large", TEST_SERVER_URL);
+    const response = await fetch(url);
+    expect(response instanceof Response).toBe(true);
+
+    // Ensure body is a ReadableStream
+    const body = response.body;
+    expect(body instanceof ReadableStream).toBe(true);
+
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let seenStart = false;
+    let seenEnd = false;
+    let total = 0;
+    let text = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      text += decoder.decode(value);
+      if (text.includes("chunk_0000")) seenStart = true;
+      if (text.includes("chunk_0099")) seenEnd = true;
+    }
+    expect(total > 0).toBe(true);
+    expect(seenStart).toBe(true);
+    expect(seenEnd).toBe(true);
+  });
+
+  it("should download to file via WritableStream", async () => {
+    // Prepare temp dir and file path
+    const tmpDir = `${WORKSPACE_ROOT}/target/test-tmp`;
+    try { await Rong.mkdir(tmpDir, { recursive: true }); } catch {}
+    const outPath = `${tmpDir}/fetch_download_stream.txt`;
+
+    // Open file and get writable stream
+    const file = await Rong.open(outPath, { write: true, create: true, truncate: true });
+    const ws = file.writable;
+    const writer = ws.getWriter();
+
+    // Fetch large streaming response
+    const url = new URL("/large", TEST_SERVER_URL);
+    const response = await fetch(url);
+    const body = response.body;
+    const reader = body.getReader();
+
+    // Pump
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      await writer.write(value);
+    }
+    await writer.close();
+    await file.close();
+
+    // Verify file content contains streamed markers
+    const data = new Uint8Array(await Rong.readFile(outPath));
+    const text = new TextDecoder().decode(data);
+    assert(text.includes("chunk_0000"));
+    assert(text.includes("chunk_0099"));
+
+    // Cleanup created file
+    await Rong.remove(outPath);
+  });
 });
 
 describe("Abort to fetch", () => {
