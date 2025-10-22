@@ -1,10 +1,13 @@
 use crate::grant_file_access;
 use crate::stat::FileInfo;
+use bytes::Bytes;
 use rong::{function::Optional, *};
+use rong_stream::{ReadableStream, WritableStream};
 use std::sync::Arc;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom};
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 
 #[derive(FromJSObj)]
 struct FileOpenOption {
@@ -127,6 +130,54 @@ impl FsFile {
     async fn close(&mut self) -> JSResult<()> {
         // Sync before closing
         self.sync().await
+    }
+
+    #[js_method(getter)]
+    fn readable(&self) -> JSResult<ReadableStream> {
+        // Create a channel-backed ReadableStream that reads from this file
+        let file = self.file.clone();
+        let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(16);
+        let chunk_size = 64 * 1024; // 64 KiB default chunk size (similar to Deno defaults)
+        tokio::task::spawn(async move {
+            let mut buf = vec![0u8; chunk_size];
+            let mut f = file.lock().await;
+            loop {
+                match f.read(&mut buf).await {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if tx
+                            .send(Ok(Bytes::copy_from_slice(&buf[..n])))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(e.to_string())).await;
+                        break;
+                    }
+                }
+            }
+        });
+        Ok(rong_stream::readable_stream_from_receiver(rx))
+    }
+
+    #[js_method(getter)]
+    fn writable(&self) -> JSResult<WritableStream> {
+        // Create a channel-backed WritableStream that writes to this file
+        let file = self.file.clone();
+        let (tx, mut rx) = mpsc::channel::<Bytes>(16);
+        tokio::task::spawn(async move {
+            let mut f = file.lock().await;
+            while let Some(chunk) = rx.recv().await {
+                if let Err(_e) = f.write_all(&chunk).await {
+                    break;
+                }
+            }
+            let _ = f.flush().await;
+        });
+        Ok(rong_stream::writable_stream_to_sender(tx))
     }
 }
 

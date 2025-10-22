@@ -9,6 +9,8 @@ futures = { workspace = true }
 tokio = { workspace = true }
 rong_abort = { workspace = true }
 rong_exception = { workspace = true }
+rong_stream = { path = "../rong_stream" }
+bytes = { workspace = true }
 filetime = "0.2"
 nix = { workspace = true }
 

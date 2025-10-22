@@ -50,6 +50,8 @@ fn grant_file_access(path: &str) -> JSResult<()> {
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
+    // Ensure stream classes are registered for fs.readable support
+    rong_stream::init(ctx)?;
     read::init(ctx)?;
     write::init(ctx)?;
     dir::init(ctx)?;
@@ -88,13 +90,15 @@ mod tests {
             // Inject workspace root into JavaScript environment
             ctx.global().set("WORKSPACE_ROOT", workspace_root)?;
 
-            let passed = UnitJSRunner::load_script(&ctx, "filesystem.js")
+            let passed_fs = UnitJSRunner::load_script(&ctx, "filesystem.js")
                 .await?
                 .run()
                 .await?;
-            assert!(passed);
+            assert!(passed_fs);
 
             Ok(())
         });
     }
+
+    // Note: FsFile.readable tests live in tests/unit/filesystem.js
 }
