@@ -62,6 +62,7 @@ axum = { version = "0.8.6", features = ["http1"] }
 nix = { version = "0.30", features = ["user", "fs"] }
 syn = { version = "2.0", features = ["full"] }
 bytes = "1.10.1"
+tokio-stream = "0.1"
 
 
 [package]

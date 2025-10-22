@@ -8,6 +8,7 @@ use crate::body::{BodyKind, HttpBody};
 use crate::header::Headers;
 use rong_abort::AbortReceiver;
 use rong_buffer::Blob;
+use rong_stream::ReadableStream;
 
 #[derive(Default)]
 #[js_export]
@@ -128,6 +129,7 @@ impl Response {
         }
         match &self.body {
             Some(BodyKind::Hyper(inner)) => inner.lock().map(|g| g.is_none()).unwrap_or(true),
+            Some(BodyKind::Channel(inner)) => inner.lock().map(|g| g.is_none()).unwrap_or(true),
             _ => false,
         }
     }
@@ -151,6 +153,18 @@ impl Response {
             content_type: self.content_type.clone(),
             content_encoding: self.content_encoding.clone(),
             abort_receiver: self.abort_receiver.clone(),
+        }
+    }
+
+    #[js_method(getter)]
+    fn body(&self) -> Option<ReadableStream> {
+        match &self.body {
+            Some(BodyKind::Channel(inner)) => {
+                // Take the receiver and wrap as ReadableStream
+                let maybe_rx = inner.lock().ok().and_then(|mut g| g.take());
+                maybe_rx.map(|rx| rong_stream::readable_stream_from_receiver(rx))
+            }
+            _ => None,
         }
     }
 
@@ -187,7 +201,9 @@ impl Response {
                         while let Some(item) = rx.recv().await {
                             match item {
                                 Ok(bytes) => collected.extend_from_slice(&bytes),
-                                Err(e) => { return Err(RongJSError::Error(e)); }
+                                Err(e) => {
+                                    return Err(RongJSError::Error(e));
+                                }
                             }
                         }
                     }

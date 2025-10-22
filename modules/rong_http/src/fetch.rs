@@ -1,19 +1,22 @@
 use http::Request as HttpRequest;
 use http::header;
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
+use http_body::Frame;
+use http_body_util::{BodyExt, Full, StreamBody, combinators::BoxBody};
 use hyper::body::Bytes;
 use rong::{function::Optional, *};
 use std::io::Error;
 use tokio::sync::oneshot;
+use tokio_stream::{StreamExt as _, wrappers::ReceiverStream};
 
 use crate::formdata::FormData;
 use crate::request::{Request, RequestInit};
 use crate::response::Response;
 use crate::security::grant_network_access;
 use rong::net;
+use rong_stream::ReadableStream;
 
 // Convert Request to hyper::Request
-async fn to_hyper_request(request: Request) -> JSResult<HttpRequest<BoxBody<Bytes, Error>>> {
+async fn to_hyper_request(mut request: Request) -> JSResult<HttpRequest<BoxBody<Bytes, Error>>> {
     let mut builder = HttpRequest::builder()
         .method(request.method)
         .uri(request.url)
@@ -26,29 +29,60 @@ async fn to_hyper_request(request: Request) -> JSResult<HttpRequest<BoxBody<Byte
         headers.extend(request.headers.into_header_map());
     }
 
-    // Create body - if conversion fails, use empty body
-    let (bytes, boundary) = if let Some(body) = request.body {
-        body.to_bytes().await.ok()
-    } else {
-        None
-    }
-    .unwrap_or_default();
-
-    // If we have a boundary, set the Content-Type header with it
-    if let Some(boundary) = boundary {
-        if let Some(headers) = builder.headers_mut() {
-            headers.insert(
-                header::CONTENT_TYPE,
-                FormData::content_type(&boundary).parse().map_err(|e| {
-                    RongJSError::TypeError(format!("Invalid content-type header: {}", e))
-                })?,
-            );
+    // Create body
+    let body: BoxBody<Bytes, Error> = if let Some(body) = request.body.take() {
+        // Detect ReadableStream for streaming upload
+        if let Some(obj) = body.0.clone().into_object() {
+            if obj.borrow::<ReadableStream>().is_ok() {
+                if let Ok(rs) = obj.borrow::<ReadableStream>() {
+                    if let Some(rx) = rong_stream::readable_stream_take_receiver(&rs) {
+                        let stream = ReceiverStream::new(rx).map(|item| match item {
+                            Ok(bytes) => Ok(Frame::data(bytes)),
+                            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+                        });
+                        let sb = StreamBody::new(stream);
+                        sb.boxed()
+                    } else {
+                        Full::new(Bytes::new()).map_err(|e| match e {}).boxed()
+                    }
+                } else {
+                    Full::new(Bytes::new()).map_err(|e| match e {}).boxed()
+                }
+            } else {
+                // Fallback to non-streaming conversion
+                let (bytes, boundary) = body.to_bytes().await.unwrap_or_default();
+                if let Some(boundary) = boundary {
+                    if let Some(headers) = builder.headers_mut() {
+                        headers.insert(
+                            header::CONTENT_TYPE,
+                            FormData::content_type(&boundary).parse().map_err(|e| {
+                                RongJSError::TypeError(format!(
+                                    "Invalid content-type header: {}",
+                                    e
+                                ))
+                            })?,
+                        );
+                    }
+                }
+                Full::new(bytes).map_err(|e| match e {}).boxed()
+            }
+        } else {
+            let (bytes, boundary) = body.to_bytes().await.unwrap_or_default();
+            if let Some(boundary) = boundary {
+                if let Some(headers) = builder.headers_mut() {
+                    headers.insert(
+                        header::CONTENT_TYPE,
+                        FormData::content_type(&boundary).parse().map_err(|e| {
+                            RongJSError::TypeError(format!("Invalid content-type header: {}", e))
+                        })?,
+                    );
+                }
+            }
+            Full::new(bytes).map_err(|e| match e {}).boxed()
         }
-    }
-
-    let body = Full::new(bytes)
-        .map_err(|e| match e {}) // Infallible can never happen
-        .boxed();
+    } else {
+        Full::new(Bytes::new()).map_err(|e| match e {}).boxed()
+    };
 
     // builder.body() only fails if the headers are invalid, which we know they aren't
     // because we just created them from valid headers

@@ -4,22 +4,24 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rustls = { workspace = true }
 rong = { workspace = true }
 tokio = { workspace = true }
-bytes = "1.10.1"
+bytes = { workspace = true }
 rong_abort = { workspace = true }
 rong_exception = { workspace = true }
 rong_buffer = { workspace = true }
 flate2 = { workspace = true }
 http = { workspace = true }
-http-body-util = "0.1.2"
+http-body-util = { workspace = true }
+http-body = "1.0"
 hyper = { workspace = true }
 hyper-rustls = { workspace = true }
 hyper-util = { workspace = true }
 rong_navigator = { workspace = true }
 rong_url = { workspace = true }
 uuid = { workspace = true }
+rong_stream = { workspace = true }
+tokio-stream = { workspace = true }
 
 [features]
 # Forward JS engine features to the main rong crate
@@ -30,11 +32,12 @@ arkjs = ["rong/arkjs"]
 
 [dev-dependencies]
 rong_test = { workspace = true }
-rong_encoding = { path="../rong_encoding" }
-rong_console = { path="../rong_console" }
-rong_assert = { path="../rong_assert" }
-rong_timer = { path="../rong_timer" }
-futures = "0.3"
-tokio-stream = "0.1"
-axum = { version = "0.8.1", features = ["http1"] }
-serde_json = "1.0"
+rong_encoding = { workspace = true }
+rong_console = { workspace = true }
+rong_assert = { workspace = true }
+rong_timer = { workspace = true }
+futures = { workspace = true }
+tokio-stream = { workspace = true }
+axum = { workspace = true }
+serde_json = { workspace = true }
+rong_fs = { workspace = true }
