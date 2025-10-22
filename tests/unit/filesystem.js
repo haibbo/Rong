@@ -675,4 +675,73 @@ describe("Filesystem", () => {
 
     await cleanupTempDir();
   });
+
+  // FsFile streams (readable + writable)
+  it("FsFile.streams: readable", async () => {
+    await ensureTempDir();
+    const path = getTempPath("fs_readable_stream_test.bin");
+
+    // Prepare source data (>64KiB to cross chunk boundaries)
+    const total = 128 * 1024 + 123;
+    const src = new Uint8Array(total);
+    for (let i = 0; i < total; i++) src[i] = i % 251;
+    await Rong.writeFile(path, src);
+
+    const file = await Rong.open(path, { read: true });
+    const rs = file.readable;
+    assert(rs instanceof ReadableStream);
+
+    const reader = rs.getReader();
+    const chunks = [];
+    let size = 0;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const part = new Uint8Array(value);
+      chunks.push(part);
+      size += part.byteLength;
+    }
+    await reader.releaseLock();
+    await file.close();
+
+    // Concatenate chunks
+    const out = new Uint8Array(size);
+    let offset = 0;
+    for (const c of chunks) {
+      out.set(c, offset);
+      offset += c.byteLength;
+    }
+
+    assert.equal(size, total, "total bytes read should match");
+    for (let i = 0; i < total; i++) {
+      assert.equal(out[i], src[i], `byte ${i} should match`);
+    }
+  });
+
+  it("FsFile.streams: writable", async () => {
+    await ensureTempDir();
+    const path = getTempPath("fs_writable_stream_test.txt");
+
+    // Open file with write/create/truncate
+    const file = await Rong.open(path, {
+      write: true,
+      create: true,
+      truncate: true,
+    });
+    const ws = file.writable;
+    assert(ws instanceof WritableStream);
+
+    // Write via writer
+    const writer = ws.getWriter();
+    const enc = new TextEncoder();
+    await writer.write(enc.encode("hello"));
+    await writer.write(enc.encode("_stream_"));
+    await writer.write(enc.encode("world"));
+    await writer.close();
+
+    // Verify content
+    const data = new Uint8Array(await Rong.readFile(path));
+    const text = new TextDecoder().decode(data);
+    assert.equal(text, "hello_stream_world");
+  });
 });
