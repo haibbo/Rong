@@ -268,6 +268,15 @@ where
     ReadableStream::from_async_reader(reader, chunk_size)
 }
 
+/// Take the underlying receiver from a ReadableStream. This consumes the stream's
+/// readable side and returns the channel for Rust consumers.
+pub fn readable_stream_take_receiver(
+    rs: &ReadableStream,
+) -> Option<mpsc::Receiver<Result<Bytes, String>>> {
+    let mut guard = rs.rx_slot.lock().ok()?;
+    guard.take()
+}
+
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<ReadableStream>()?;
     ctx.register_class::<ReadableStreamDefaultReader>()?;
