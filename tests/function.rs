@@ -501,3 +501,45 @@ fn function_param_vec_of_custom_struct() {
         Ok(())
     });
 }
+
+#[test]
+fn host_function_inherits_function_prototype() {
+    run(|ctx| {
+        let add = JSFunc::new(ctx, |a: i32, b: i32| a + b)?;
+        ctx.global().set("add_host", add)?;
+
+        let t_call: String = ctx.eval(Source::from_bytes(b"typeof add_host.call"))?;
+        let t_apply: String = ctx.eval(Source::from_bytes(b"typeof add_host.apply"))?;
+        let t_bind: String = ctx.eval(Source::from_bytes(b"typeof add_host.bind"))?;
+        assert_eq!(t_call, "function");
+        assert_eq!(t_apply, "function");
+        assert_eq!(t_bind, "function");
+
+        let r1: i32 = ctx.eval(Source::from_bytes(b"add_host.call(null, 1, 2)"))?;
+        assert_eq!(r1, 3);
+        let r2: i32 = ctx.eval(Source::from_bytes(b"add_host.apply(null, [10, 5])"))?;
+        assert_eq!(r2, 15);
+        let r3: i32 = ctx.eval(Source::from_bytes(b"add_host.bind(null, 7)(8)"))?;
+        assert_eq!(r3, 15);
+        Ok(())
+    });
+}
+
+#[test]
+fn host_async_function_call_apply() {
+    async_run!(|ctx: JSContext| async move {
+        let fa = JSFunc::new(&ctx, |a: i32| async move { a * 2 })?;
+        ctx.global().set("fa_host", fa)?;
+
+        let out1: i32 = ctx
+            .eval_async(Source::from_bytes(b"fa_host.call(null, 6)"))
+            .await?;
+        assert_eq!(out1, 12);
+
+        let out2: i32 = ctx
+            .eval_async(Source::from_bytes(b"fa_host.apply(null, [9])"))
+            .await?;
+        assert_eq!(out2, 18);
+        Ok(())
+    });
+}

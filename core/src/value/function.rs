@@ -180,7 +180,12 @@ where
         let length = self.parameter_required_count();
         let class = Class::get::<RustFunc<V>>(ctx)?;
         let obj = class.instance::<RustFunc<V>>(self);
-        obj.set("length", length)?;
+        let len_value = crate::JSValue::from(ctx, length as i32);
+        crate::PropertyDescriptor::builder()
+            .value(len_value)
+            .enumerable(false)
+            .configurable(false)
+            .apply_to(&obj, "length");
         Ok(JSFunc(obj))
     }
 }

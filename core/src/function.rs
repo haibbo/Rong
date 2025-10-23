@@ -139,7 +139,7 @@ impl<V: JSValueImpl> Constructor<V> {
 
 impl<V> JSClass<V> for RustFunc<V>
 where
-    V: JSValueImpl + 'static,
+    V: JSValueImpl + crate::JSObjectOps + 'static,
 {
     const NAME: &'static str = "RustFunc";
 
@@ -148,7 +148,15 @@ where
         panic!("Never 'new RustFunc()' in JS");
     }
 
-    fn class_setup(_class: &crate::ClassSetup<V>) -> JSResult<()> {
+    fn class_setup(class: &crate::ClassSetup<V>) -> JSResult<()> {
+        // Ensure host functions behave like real JS Function:
+        // RustFunc.prototype -> Function.prototype so .call/.apply/bind exist
+        let fn_proto = class
+            .context()
+            .global()
+            .get::<_, crate::JSObject<V>>("Function")?
+            .get::<_, crate::JSObject<V>>("prototype")?;
+        class.prototype_object().prototype(fn_proto);
         Ok(())
     }
 }

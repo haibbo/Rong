@@ -302,6 +302,16 @@ where
         }
     }
 
+    /// Access the underlying JS context
+    pub fn context(&self) -> &JSContext<V::Context> {
+        self.context
+    }
+
+    /// Access the prototype object of this class
+    pub fn prototype_object(&self) -> JSObject<V> {
+        self.prototype.clone()
+    }
+
     pub fn method<F, P, K: 'static>(&self, name: &str, f: F) -> JSResult<()>
     where
         F: IntoJSCallable<V, P, K> + 'static,
