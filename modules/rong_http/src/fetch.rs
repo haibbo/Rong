@@ -17,10 +17,11 @@ use rong_stream::ReadableStream;
 
 // Convert Request to hyper::Request
 async fn to_hyper_request(mut request: Request) -> JSResult<HttpRequest<BoxBody<Bytes, Error>>> {
+    let user_agent = rong::get_user_agent();
     let mut builder = HttpRequest::builder()
         .method(request.method)
         .uri(request.url)
-        .header(header::USER_AGENT, rong_navigator::get_user_agent())
+        .header(header::USER_AGENT, user_agent.as_str())
         .header(header::ACCEPT, "*/*")
         .header(header::ACCEPT_ENCODING, "gzip"); // TODO: "gzip, zstd"
 
