@@ -4,19 +4,19 @@ This directory contains JavaScript examples demonstrating how to use the Rong Ja
 
 ## Available Examples
 
-- `downloader.js` - A simple utility to download content from the web
-- `uploader.js` - A tool to upload files to a web server
+- `downloader.js` - Streaming downloader that saves response body directly to file (low memory)
+- `uploader.js` - Streaming uploader that sends file as request body (PUT)
 
 ## Running Examples
 
 Use the `rong_cli` tool with the `run` command to execute these examples:
 
 ```bash
-# Download a file
+# Download a file (streaming)
 cargo run -p rong_cli -- run examples/javascript/downloader.js https://example.com/file.txt downloaded.txt
 
-# Upload a file
-cargo run -p rong_cli -- run examples/javascript/uploader.js path/to/local/file.txt http://example.com/upload
+# Upload a file (streaming PUT)
+cargo run -p rong_cli -- run examples/javascript/uploader.js path/to/local/file.txt https://httpbin.org/upload
 
 # Or if you have built the binary
 ./target/debug/rong run examples/javascript/downloader.js https://example.com/file.txt downloaded.txt
@@ -27,7 +27,7 @@ cargo run -p rong_cli -- run examples/javascript/uploader.js path/to/local/file.
 The examples expect command-line arguments after the script name:
 
 - For `downloader.js`: `<url> <output-filename>`
-- For `uploader.js`: `<file-path> <server-url>`
+- For `uploader.js`: `<file-path> <server-url>` (server should accept raw body via PUT; script sets Content-Length + application/octet-stream)
 
 These arguments are accessible in the scripts via the `Rong.args` array.
 
@@ -45,5 +45,5 @@ cargo run -p rong_cli -- run downloader.rong https://example.com/file.txt downlo
 
 ## Notes
 
-- All examples should be run from the project root directory to ensure correct module resolution
-- If you encounter "module not found" errors, check your working directory
+- Examples assume you run from the project root directory
+- The streaming examples use ReadableStream/WritableStream and won't buffer the whole file in memory
