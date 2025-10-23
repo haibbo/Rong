@@ -19,6 +19,7 @@ rong_url = { workspace = true, optional = true }
 rong_buffer = { workspace = true, optional = true }
 rong_fs = { workspace = true, optional = true }
 rong_storage = { workspace = true, optional = true }
+rong_stream = { workspace = true, optional = true }
 
 [features]
 default = [
@@ -34,7 +35,8 @@ default = [
     "console",
     "url",
     "buffer",
-    "fs"
+    "fs",
+    "stream"
 ]
 timer = ["rong_timer"]
 navigator = ["rong_navigator"]
@@ -50,3 +52,4 @@ url = ["rong_url"]
 buffer = ["rong_buffer"]
 fs = ["rong_fs"]
 storage = ["rong_storage"]
+stream = ["rong_stream"]

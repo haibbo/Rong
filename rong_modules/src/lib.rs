@@ -24,6 +24,8 @@ pub use rong_navigator as navigator;
 pub use rong_path as path;
 #[cfg(feature = "storage")]
 pub use rong_storage as storage;
+#[cfg(feature = "stream")]
+pub use rong_stream as stream;
 #[cfg(feature = "timer")]
 pub use rong_timer as timer;
 #[cfg(feature = "url")]
@@ -39,6 +41,9 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 
     #[cfg(feature = "path")]
     rong_path::init(ctx)?;
+
+    #[cfg(feature = "stream")]
+    rong_stream::init(ctx)?;
 
     #[cfg(feature = "http")]
     rong_http::init(ctx)?;
