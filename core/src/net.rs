@@ -1,12 +1,15 @@
 use bytes::Bytes;
-use http::Request as HttpRequest;
 use http::header;
-use http_body_util::{BodyExt, combinators::BoxBody};
+use http::{HeaderValue, Request as HttpRequest};
+use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use std::io::Error;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
+use tokio::fs;
+use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::runtime::Builder;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
@@ -27,6 +30,12 @@ pub struct HttpJob {
 
 enum NetCommand {
     Http(HttpJob),
+    DownloadToFile {
+        url: String,
+        dest: PathBuf,
+        abort_rx: Option<oneshot::Receiver<()>>,
+        callback: Box<dyn FnOnce(Result<(), String>) + Send + 'static>,
+    },
     Shutdown(oneshot::Sender<()>),
 }
 
@@ -36,6 +45,25 @@ struct NetRuntime {
 }
 
 static RUNTIME_SLOT: OnceLock<Mutex<Option<NetRuntime>>> = OnceLock::new();
+static USER_AGENT_SLOT: OnceLock<Mutex<String>> = OnceLock::new();
+const DEFAULT_USER_AGENT: &str = concat!("RongJS/", env!("CARGO_PKG_VERSION"));
+
+pub fn set_user_agent(ua: impl Into<String>) -> Result<(), String> {
+    let ua_string = ua.into();
+    HeaderValue::from_str(&ua_string).map_err(|e| format!("invalid user agent header: {}", e))?;
+    let slot = USER_AGENT_SLOT.get_or_init(|| Mutex::new(DEFAULT_USER_AGENT.to_string()));
+    let mut guard = slot.lock().unwrap();
+    *guard = ua_string;
+    Ok(())
+}
+
+pub fn get_user_agent() -> String {
+    USER_AGENT_SLOT
+        .get_or_init(|| Mutex::new(DEFAULT_USER_AGENT.to_string()))
+        .lock()
+        .unwrap()
+        .clone()
+}
 
 fn runtime_slot() -> &'static Mutex<Option<NetRuntime>> {
     RUNTIME_SLOT.get_or_init(|| Mutex::new(None))
@@ -74,6 +102,17 @@ pub fn start_net_runtime(worker_threads: usize) {
                             let client = client.clone();
                             tokio::task::spawn(async move {
                                 process_request(client, msg).await;
+                            });
+                        }
+                        NetCommand::DownloadToFile {
+                            url,
+                            dest,
+                            abort_rx,
+                            callback,
+                        } => {
+                            tokio::task::spawn(async move {
+                                let res = download_to_file(&url, Path::new(&dest), abort_rx).await;
+                                callback(res);
                             });
                         }
                         NetCommand::Shutdown(done_tx) => {
@@ -285,4 +324,107 @@ pub fn stop_net_runtime() {
             let _ = handle.join();
         }
     }
+}
+
+/// Request a download and return immediately, invoking `on_complete` on the
+/// net runtime when finished.
+pub fn request_download_to_file(
+    url: impl Into<String>,
+    dest: impl Into<PathBuf>,
+    abort_rx: Option<oneshot::Receiver<()>>,
+    on_complete: impl FnOnce(Result<(), String>) + Send + 'static,
+) -> Result<(), String> {
+    let tx = {
+        let guard = runtime_slot().lock().unwrap();
+        if let Some(rt) = guard.as_ref() {
+            rt.tx.clone()
+        } else {
+            on_complete(Err("net runtime not started".to_string()));
+            return Err("net runtime not started".to_string());
+        }
+    };
+    let cmd = NetCommand::DownloadToFile {
+        url: url.into(),
+        dest: dest.into(),
+        abort_rx,
+        callback: Box::new(on_complete),
+    };
+    futures::executor::block_on(tx.send(cmd)).map_err(|e| format!("net service down: {}", e))
+}
+
+/// Download a URL directly to a file path using the net runtime.
+///
+/// - Issues a GET request and streams the body to `dest`.
+/// - Uses a small buffer threshold to materialize tiny responses directly.
+/// - Returns error if the HTTP status is not successful or IO fails.
+async fn download_to_file(
+    url: &str,
+    dest: &Path,
+    abort_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+) -> Result<(), String> {
+    // Build minimal GET request
+    let mut builder = HttpRequest::builder()
+        .method("GET")
+        .uri(url)
+        .header(header::ACCEPT, "*/*");
+    if let Some(headers) = builder.headers_mut() {
+        let ua = get_user_agent();
+        let header_value =
+            HeaderValue::from_str(&ua).map_err(|e| format!("invalid user agent header: {}", e))?;
+        headers.insert(header::USER_AGENT, header_value);
+    }
+    let empty = Full::new(Bytes::new()).map_err(|e| match e {}).boxed();
+    let request = builder
+        .body(empty)
+        .map_err(|e| format!("build request: {}", e))?;
+
+    let small_threshold = 64 * 1024usize;
+    let resp = send_request(request, small_threshold, abort_rx).await?;
+    if !resp.status.is_success() {
+        return Err(format!("http status: {}", resp.status));
+    }
+
+    if let Some(buf) = resp.small_buffer {
+        if let Some(parent) = dest.parent() {
+            if let Err(e) = fs::create_dir_all(parent).await {
+                return Err(format!("create dir: {}", e));
+            }
+        }
+        fs::write(dest, &buf)
+            .await
+            .map_err(|e| format!("write: {}", e))?;
+        return Ok(());
+    }
+
+    if let Some(mut rx) = resp.body_rx {
+        if let Some(parent) = dest.parent() {
+            if let Err(e) = fs::create_dir_all(parent).await {
+                return Err(format!("create dir: {}", e));
+            }
+        }
+        let file = fs::File::create(dest)
+            .await
+            .map_err(|e| format!("open: {}", e))?;
+        let mut writer = BufWriter::new(file);
+        while let Some(chunk_res) = rx.recv().await {
+            let chunk = chunk_res.map_err(|e| e)?;
+            writer
+                .write_all(chunk.as_ref())
+                .await
+                .map_err(|e| format!("write chunk: {}", e))?;
+        }
+        writer.flush().await.map_err(|e| format!("flush: {}", e))?;
+        return Ok(());
+    }
+
+    // No body: create empty file
+    if let Some(parent) = dest.parent() {
+        if let Err(e) = fs::create_dir_all(parent).await {
+            return Err(format!("create dir: {}", e));
+        }
+    }
+    fs::File::create(dest)
+        .await
+        .map_err(|e| format!("create: {}", e))?;
+    Ok(())
 }

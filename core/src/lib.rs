@@ -2,13 +2,13 @@ mod class;
 mod context;
 pub mod function;
 mod iterator;
+pub mod net;
 mod promise;
 mod result;
 mod rong;
 mod runtime;
 mod source;
 mod value;
-pub mod net;
 
 pub use class::*;
 pub use context::*;

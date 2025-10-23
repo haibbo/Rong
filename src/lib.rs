@@ -10,7 +10,7 @@ pub use rong_core::{
 };
 
 // Re-export net runtime APIs
-pub use rong_core::net;
+pub use rong_core::net::{self, get_user_agent, set_user_agent};
 
 pub use rong_core::function;
 
