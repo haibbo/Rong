@@ -103,7 +103,7 @@ impl WritableStream {
     }
 
     #[js_method(rename = "getWriter")]
-    fn get_writer(&self) -> JSResult<WritableStreamDefaultWriter> {
+    pub(crate) fn get_writer(&self) -> JSResult<WritableStreamDefaultWriter> {
         let mut guard = self
             .tx_slot
             .lock()
@@ -172,7 +172,7 @@ impl WritableStreamDefaultWriter {
     }
 
     #[js_method]
-    async fn write(&mut self, chunk: JSValue) -> JSResult<()> {
+    pub(crate) async fn write(&mut self, chunk: JSValue) -> JSResult<()> {
         // Surface background error if any
         if let Ok(err_guard) = self.err_slot.lock() {
             if let Some(e) = err_guard.as_ref() {
@@ -225,7 +225,7 @@ impl WritableStreamDefaultWriter {
     }
 
     #[js_method]
-    async fn close(&mut self) -> JSResult<()> {
+    pub(crate) async fn close(&mut self) -> JSResult<()> {
         // If JS sink has close
         if let Some(sink_obj) = self.sink_obj.as_ref() {
             if let Ok(close_fn) = sink_obj.get::<_, JSFunc>("close") {
@@ -257,14 +257,14 @@ impl WritableStreamDefaultWriter {
     }
 
     #[js_method]
-    async fn abort(&mut self) -> JSResult<()> {
+    pub(crate) async fn abort(&mut self) -> JSResult<()> {
         let mut slot = self.tx.lock().await;
         *slot = None;
         Ok(())
     }
 
     #[js_method(rename = "releaseLock")]
-    async fn release_lock(&mut self) -> JSResult<()> {
+    pub(crate) async fn release_lock(&mut self) -> JSResult<()> {
         // Take back sender and return it to the stream's slot
         let tx_opt = {
             let mut slot = self.tx.lock().await;

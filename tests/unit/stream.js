@@ -69,4 +69,95 @@ describe("WritableStream (sink + writer)", () => {
     const text = new TextDecoder().decode(new Uint8Array(collected));
     expect(text).toBe("helloworld");
   });
+
+  it("supports async sink.write/close (promises)", async () => {
+    const collected = [];
+    const ws = new WritableStream({
+      async write(chunk) {
+        await new Promise((r) => setTimeout(r, 5));
+        const u8 = new Uint8Array(chunk);
+        collected.push(...u8);
+      },
+      async close() {
+        await new Promise((r) => setTimeout(r, 5));
+      },
+    });
+
+    const writer = ws.getWriter();
+    const enc = new TextEncoder();
+    await writer.write(enc.encode("foo"));
+    await writer.write(enc.encode("bar"));
+    await writer.close();
+
+    const text = new TextDecoder().decode(new Uint8Array(collected));
+    expect(text).toBe("foobar");
+  });
+});
+
+describe("ReadableStream pipeTo", () => {
+  it("pipes readable to writable (sink)", async () => {
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+
+    const rs = new ReadableStream({
+      start(controller) {
+        controller.enqueue(enc.encode("hello"));
+        controller.enqueue(enc.encode("world"));
+        controller.close();
+      },
+    });
+
+    const collected = [];
+    const ws = new WritableStream({
+      write(chunk) {
+        const u8 = new Uint8Array(chunk);
+        collected.push(...u8);
+      },
+      close() {},
+    });
+
+    await rs.pipeTo(ws);
+    const out = new TextDecoder().decode(new Uint8Array(collected));
+    expect(out).toBe("helloworld");
+  });
+
+  it("respects preventClose option", async () => {
+    const enc = new TextEncoder();
+    let closed = false;
+    const rs = new ReadableStream({
+      start(controller) {
+        controller.enqueue(enc.encode("x"));
+        controller.close();
+      },
+    });
+    const ws = new WritableStream({
+      write(_) {},
+      close() {
+        closed = true;
+      },
+    });
+    await rs.pipeTo(ws, { preventClose: true });
+    expect(closed).toBe(false);
+  });
+});
+
+describe("ReadableStream async iterator", () => {
+  it("iterates chunks with for await...of", async () => {
+    const enc = new TextEncoder();
+    const rs = new ReadableStream({
+      start(controller) {
+        controller.enqueue(enc.encode("A"));
+        controller.enqueue(enc.encode("B"));
+        controller.close();
+      },
+    });
+
+    const collected = [];
+    for await (const chunk of rs) {
+      const u8 = new Uint8Array(chunk);
+      collected.push(...u8);
+    }
+    const out = new TextDecoder().decode(new Uint8Array(collected));
+    expect(out).toBe("AB");
+  });
 });

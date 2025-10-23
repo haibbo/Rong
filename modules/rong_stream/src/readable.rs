@@ -1,5 +1,8 @@
+use crate::writable::WritableStream;
 use bytes::Bytes;
+use rong::function::This;
 use rong::*;
+use rong_abort::AbortSignal;
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::io::AsyncRead;
 use tokio::sync::{Mutex, mpsc};
@@ -60,27 +63,39 @@ impl ReadableStream {
     }
 }
 
+// Options for pipeTo
+#[derive(FromJSObj, Default)]
+struct PipeToOptions {
+    #[rename = "preventClose"]
+    prevent_close: Option<bool>,
+    #[rename = "preventAbort"]
+    prevent_abort: Option<bool>,
+    #[rename = "preventCancel"]
+    prevent_cancel: Option<bool>,
+    signal: Option<AbortSignal>,
+}
+
 #[js_class]
 impl ReadableStream {
     #[js_method(constructor)]
-    fn new(underlying: function::Optional<JSValue>) -> JSResult<Self> {
+    fn new(ctx: JSContext, underlying: function::Optional<JSValue>) -> JSResult<JSObject> {
         // Create a basic channel-backed stream
         let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(16);
         let stream = Self::from_receiver(rx);
+        let obj = JSReadableStream::new(&ctx, stream)?.into_object();
 
         // If an underlying source is provided, call start(controller) if present
         if let Some(v) = underlying.0 {
-            if let Some(obj) = v.into_object() {
-                // let _ctx = obj.get_ctx();
+            if let Some(src) = v.into_object() {
                 let controller = ReadableStreamDefaultController {
                     tx: Arc::new(Mutex::new(Some(tx))),
                 };
-                if let Ok(start) = obj.get::<_, JSFunc>("start") {
-                    let _ = start.call::<_, JSValue>(Some(obj.clone()), (controller,));
+                if let Ok(start) = src.get::<_, JSFunc>("start") {
+                    let _ = start.call::<_, JSValue>(Some(src.clone()), (controller,));
                 }
             }
         }
-        Ok(stream)
+        Ok(obj)
     }
 
     #[js_method(rename = "getReader")]
@@ -107,6 +122,96 @@ impl ReadableStream {
             .lock()
             .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
         *guard = None;
+        Ok(())
+    }
+
+    /// Minimal pipeTo implementation: pumps from this ReadableStream into a WritableStream.
+    /// Honors preventClose/preventAbort/preventCancel. Basic signal support (pre-check).
+    #[js_method(rename = "pipeTo")]
+    async fn pipe_to(
+        &self,
+        ctx: JSContext,
+        dest: WritableStream,
+        options: function::Optional<PipeToOptions>,
+    ) -> JSResult<()> {
+        let opts = options.0.unwrap_or_default();
+        let prevent_close = opts.prevent_close.unwrap_or(false);
+        let prevent_abort = opts.prevent_abort.unwrap_or(false);
+        let prevent_cancel = opts.prevent_cancel.unwrap_or(false);
+
+        if let Some(sig) = &opts.signal {
+            if sig.aborted() {
+                return Err(RongJSError::from_jsvalue(sig.get_reason()));
+            }
+        }
+
+        // Acquire reader and writer
+        let mut reader = self.get_reader()?;
+        let mut writer = dest.get_writer()?;
+
+        let mut pipe_err: Option<RongJSError> = None;
+        let mut abort_rx = opts.signal.as_ref().map(|s| s.subscribe());
+
+        loop {
+            // Race read vs abort (if provided)
+            let res_obj = if let Some(rx) = &mut abort_rx {
+                tokio::select! {
+                    r = reader.read(ctx.clone()) => {
+                        Some(r?)
+                    }
+                    reason = rx.recv() => {
+                        pipe_err = Some(RongJSError::from_jsvalue(reason));
+                        None
+                    }
+                }
+            } else {
+                Some(reader.read(ctx.clone()).await?)
+            };
+
+            if let Some(r) = res_obj {
+                let done = r.get::<_, bool>("done")?;
+                if done {
+                    break;
+                }
+                let chunk = r.get::<_, JSValue>("value")?;
+                // Also honor abort between read and write
+                if let Some(sig) = &opts.signal {
+                    if sig.aborted() {
+                        pipe_err = Some(RongJSError::from_jsvalue(sig.get_reason()));
+                        break;
+                    }
+                }
+                if let Err(e) = writer.write(chunk).await {
+                    // Writer error
+                    if !prevent_cancel {
+                        let _ = reader.cancel().await;
+                    }
+                    pipe_err = Some(e);
+                    break;
+                }
+                continue;
+            } else {
+                // Aborted
+                break;
+            }
+        }
+
+        // Close writer on normal completion
+        if pipe_err.is_none() && !prevent_close {
+            let _ = writer.close().await;
+        }
+
+        // Release locks (ignore errors)
+        let _ = reader.release_lock().await;
+        let _ = writer.release_lock().await;
+
+        // Abort writer on error if needed
+        if let Some(e) = pipe_err {
+            if !prevent_abort {
+                let _ = writer.abort().await;
+            }
+            return Err(e);
+        }
         Ok(())
     }
 }
@@ -256,18 +361,6 @@ impl ReadableStreamDefaultController {
     }
 }
 
-// Public Rust helpers for other modules
-pub fn readable_stream_from_receiver(rx: mpsc::Receiver<Result<Bytes, String>>) -> ReadableStream {
-    ReadableStream::from_receiver(rx)
-}
-
-pub fn readable_stream_from_async_read<R>(reader: R, chunk_size: usize) -> ReadableStream
-where
-    R: AsyncRead + Unpin + Send + 'static,
-{
-    ReadableStream::from_async_reader(reader, chunk_size)
-}
-
 /// Take the underlying receiver from a ReadableStream. This consumes the stream's
 /// readable side and returns the channel for Rust consumers.
 pub fn readable_stream_take_receiver(
@@ -275,6 +368,97 @@ pub fn readable_stream_take_receiver(
 ) -> Option<mpsc::Receiver<Result<Bytes, String>>> {
     let mut guard = rs.rx_slot.lock().ok()?;
     guard.take()
+}
+
+// Install instance-level async iterator: stream implements next() and [Symbol.asyncIterator]
+fn install_instance_async_iter(ctx: &JSContext, obj: &JSObject) -> JSResult<()> {
+    // next() method on the instance (use `this` to borrow the underlying Rust object)
+    let next_fn = JSFunc::new(
+        ctx,
+        move |ctx: JSContext, this: This<JSObject>| async move {
+            if let Ok(rs) = (*this).borrow::<ReadableStream>() {
+                if let Some(mut rx) = readable_stream_take_receiver(&*rs) {
+                    let item = rx.recv().await;
+                    match item {
+                        Some(Ok(bytes)) => {
+                            if let Ok(mut slot) = rs.rx_slot.lock() {
+                                if slot.is_none() {
+                                    *slot = Some(rx);
+                                }
+                            }
+                            let out = JSObject::new(&ctx);
+                            out.set("done", false).ok();
+                            if let Ok(ab) = JSArrayBuffer::<u8>::from_bytes(&ctx, &bytes) {
+                                out.set("value", ab).ok();
+                            }
+                            Ok(out)
+                        }
+                        Some(Err(e)) => Err(RongJSError::Error(e)),
+                        None => {
+                            let out = JSObject::new(&ctx);
+                            out.set("done", true).ok();
+                            out.set("value", JSValue::undefined(&ctx)).ok();
+                            Ok(out)
+                        }
+                    }
+                } else {
+                    let out = JSObject::new(&ctx);
+                    out.set("done", true).ok();
+                    out.set("value", JSValue::undefined(&ctx)).ok();
+                    Ok(out)
+                }
+            } else {
+                Err(RongJSError::TypeError("Not ReadableStream".to_string()))
+            }
+        },
+    )?;
+    obj.set("next", next_fn)?;
+
+    // [Symbol.asyncIterator] = function() { return this }
+    // Use a real JS function so Function.prototype.call/apply exist (for tests using .call)
+    let symbol = ctx
+        .global()
+        .get::<_, JSObject>("Symbol")?
+        .get::<_, JSSymbol>("asyncIterator")?;
+    let js_return_this: JSFunc = ctx.eval(Source::from_bytes(b"(function() { return this; })"))?;
+    obj.set(symbol, js_return_this)?;
+    Ok(())
+}
+
+// Wrapper helper for clearer semantics
+#[derive(Clone)]
+pub struct JSReadableStream(pub JSObject);
+
+impl JSReadableStream {
+    pub fn new(ctx: &JSContext, stream: ReadableStream) -> JSResult<Self> {
+        let obj = rong::Class::get::<ReadableStream>(ctx)?.instance(stream);
+        install_instance_async_iter(ctx, &obj)?;
+        Ok(Self(obj))
+    }
+
+    pub fn from_receiver(
+        ctx: &JSContext,
+        rx: mpsc::Receiver<Result<Bytes, String>>,
+    ) -> JSResult<Self> {
+        let stream = ReadableStream::from_receiver(rx);
+        Self::new(ctx, stream)
+    }
+
+    pub fn from_async_reader<R>(ctx: &JSContext, reader: R, chunk_size: usize) -> JSResult<Self>
+    where
+        R: AsyncRead + Unpin + Send + 'static,
+    {
+        let stream = ReadableStream::from_async_reader(reader, chunk_size);
+        Self::new(ctx, stream)
+    }
+
+    pub fn into_object(self) -> JSObject {
+        self.0
+    }
+
+    pub fn object(&self) -> JSObject {
+        self.0.clone()
+    }
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
@@ -295,6 +479,7 @@ mod tests {
             rong_assert::init(&ctx)?;
             rong_console::init(&ctx)?;
             rong_encoding::init(&ctx)?;
+            rong_timer::init(&ctx)?;
             crate::init(&ctx)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "stream.js")

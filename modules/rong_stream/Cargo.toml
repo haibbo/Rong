@@ -12,12 +12,15 @@ rong = { workspace = true }
 tokio = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true }
+rong_abort = { workspace = true }
+tokio-stream = { workspace = true }
 
 [dev-dependencies]
 rong_test = { workspace = true }
 rong_console = { path = "../rong_console" }
 rong_assert = { path = "../rong_assert" }
 rong_encoding = { path = "../rong_encoding" }
+rong_timer = { path = "../rong_timer" }
 
 [features]
 # Forward JS engine features to the main rong crate
