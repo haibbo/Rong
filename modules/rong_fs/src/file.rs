@@ -2,7 +2,7 @@ use crate::grant_file_access;
 use crate::stat::FileInfo;
 use bytes::Bytes;
 use rong::{function::Optional, *};
-use rong_stream::{ReadableStream, WritableStream};
+use rong_stream::{JSReadableStream, WritableStream};
 use std::sync::Arc;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom};
@@ -133,7 +133,7 @@ impl FsFile {
     }
 
     #[js_method(getter)]
-    fn readable(&self) -> JSResult<ReadableStream> {
+    fn readable(&self, ctx: JSContext) -> Option<JSObject> {
         // Create a channel-backed ReadableStream that reads from this file
         let file = self.file.clone();
         let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(16);
@@ -160,7 +160,10 @@ impl FsFile {
                 }
             }
         });
-        Ok(rong_stream::readable_stream_from_receiver(rx))
+        // from_receiver should not fail after rong_stream::init; fallback to empty object on error
+        JSReadableStream::from_receiver(&ctx, rx)
+            .map(|jsrs| jsrs.into_object())
+            .ok()
     }
 
     #[js_method(getter)]

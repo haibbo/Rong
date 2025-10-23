@@ -519,6 +519,115 @@ describe("Filesystem", () => {
     await cleanupTempDir();
   });
 
+  it("FsFile.readable returns ReadableStream (reader)", async () => {
+    await ensureTempDir();
+    const srcPath = getTempPath("stream_src.txt");
+
+    // Prepare large content to ensure multiple chunks
+    const chunk = "chunk_" + "A".repeat(1024);
+    let text = "";
+    for (let i = 0; i < 200; i++) text += chunk + "\n";
+    await Rong.writeTextFile(srcPath, text);
+
+    // Open and read via ReadableStream reader
+    const file = await Rong.open(srcPath, { read: true });
+    const rs = file.readable;
+    expect(rs instanceof ReadableStream).toBe(true);
+    const reader = rs.getReader();
+    let total = 0;
+    const bufs = [];
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      bufs.push(new Uint8Array(value));
+      total += value.byteLength;
+    }
+    await file.close();
+
+    const all = new Uint8Array(total);
+    let off = 0;
+    for (const b of bufs) {
+      all.set(b, off);
+      off += b.byteLength;
+    }
+    const decoded = new TextDecoder().decode(all);
+    assert(decoded.includes("chunk_"));
+    assert(decoded.length === text.length);
+
+    await Rong.remove(srcPath);
+  });
+
+  it("FsFile.readable.pipeTo WritableStream (copy)", async () => {
+    await ensureTempDir();
+    const srcPath = getTempPath("stream_src_copy.txt");
+    const dstPath = getTempPath("stream_dst_copy.txt");
+
+    // Create source
+    const payload = "COPY_".repeat(50_000); // ~250kB
+    await Rong.writeTextFile(srcPath, payload);
+
+    // Open src and dst
+    const src = await Rong.open(srcPath, { read: true });
+    const dst = await Rong.open(dstPath, {
+      write: true,
+      create: true,
+      truncate: true,
+    });
+
+    await src.readable.pipeTo(dst.writable);
+    await src.close();
+    await dst.close();
+
+    const copied = await Rong.readTextFile(dstPath);
+    assert.equal(copied.length, payload.length);
+    assert(copied.startsWith("COPY_"));
+    assert(copied.endsWith("COPY_"));
+
+    await Rong.remove(srcPath);
+    await Rong.remove(dstPath);
+  });
+
+  it("FsFile.readable supports async iteration (for-await)", async () => {
+    await ensureTempDir();
+    const srcPath = getTempPath("stream_for_await.txt");
+
+    // Create source content with recognizable markers
+    let text = "";
+    for (let i = 0; i < 100; i++) {
+      const line = `iter_${String(i).padStart(4, "0")}\n`;
+      text += line.repeat(512); // make it large enough for multiple chunks
+    }
+    await Rong.writeTextFile(srcPath, text);
+
+    const file = await Rong.open(srcPath, { read: true });
+    const rs = file.readable;
+    expect(rs instanceof ReadableStream).toBe(true);
+
+    // Verify async iterator exists on instance and returns itself
+    const ai = rs[Symbol.asyncIterator]?.call(rs);
+    expect(ai === rs).toBe(true);
+
+    const decoder = new TextDecoder();
+    let total = 0;
+    let acc = "";
+    let seenStart = false;
+    let seenEnd = false;
+    for await (const chunk of rs) {
+      total += chunk.byteLength;
+      acc += decoder.decode(chunk);
+      if (!seenStart && acc.includes("iter_0000")) seenStart = true;
+      if (!seenEnd && acc.includes("iter_0099")) seenEnd = true;
+    }
+    await file.close();
+
+    assert(total > 0);
+    assert(seenStart);
+    assert(seenEnd);
+    assert.equal(acc.length, text.length);
+
+    await Rong.remove(srcPath);
+  });
+
   it("FsFile - OpenOptions", async () => {
     await ensureTempDir();
 
