@@ -414,14 +414,13 @@ fn install_instance_async_iter(ctx: &JSContext, obj: &JSObject) -> JSResult<()> 
     )?;
     obj.set("next", next_fn)?;
 
-    // [Symbol.asyncIterator] = function() { return this }
-    // Use a real JS function so Function.prototype.call/apply exist (for tests using .call)
+    // [Symbol.asyncIterator] = () => this (as host function; inherits Function.prototype)
     let symbol = ctx
         .global()
         .get::<_, JSObject>("Symbol")?
         .get::<_, JSSymbol>("asyncIterator")?;
-    let js_return_this: JSFunc = ctx.eval(Source::from_bytes(b"(function() { return this; })"))?;
-    obj.set(symbol, js_return_this)?;
+    let return_this = JSFunc::new(ctx, move |this: This<JSObject>| (*this).clone())?;
+    obj.set(symbol, return_this)?;
     Ok(())
 }
 
