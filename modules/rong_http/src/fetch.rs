@@ -217,7 +217,7 @@ mod tests {
         // Add a tiny delay per chunk to ensure abort-on-read has a window to trigger,
         // while keeping the overall test quick.
         let stream = FuturesStreamExt::then(stream::iter(0..100), |i| async move {
-            sleep(Duration::from_millis(3)).await;
+            sleep(Duration::from_millis(6)).await;
             Ok::<_, Infallible>(format!("chunk_{:04}\n", i).repeat(1024))
         });
 
