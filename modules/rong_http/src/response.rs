@@ -8,7 +8,8 @@ use crate::body::{BodyKind, HttpBody};
 use crate::header::Headers;
 use rong_abort::AbortReceiver;
 use rong_buffer::Blob;
-use rong_stream::ReadableStream;
+use rong_stream::JSReadableStream;
+use tokio::sync::mpsc;
 
 #[derive(Default)]
 #[js_export]
@@ -157,12 +158,27 @@ impl Response {
     }
 
     #[js_method(getter)]
-    fn body(&self) -> Option<ReadableStream> {
+    fn body(&self, ctx: JSContext) -> Option<JSObject> {
         match &self.body {
             Some(BodyKind::Channel(inner)) => {
-                // Take the receiver and wrap as ReadableStream
                 let maybe_rx = inner.lock().ok().and_then(|mut g| g.take());
-                maybe_rx.map(|rx| rong_stream::readable_stream_from_receiver(rx))
+                if let Some(rx) = maybe_rx {
+                    JSReadableStream::from_receiver(&ctx, rx)
+                        .map(|jsrs| jsrs.into_object())
+                        .ok()
+                } else {
+                    None
+                }
+            }
+            Some(BodyKind::Buffered(b)) => {
+                let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(1);
+                let bytes = Bytes::from(b.clone());
+                tokio::spawn(async move {
+                    let _ = tx.send(Ok(bytes)).await;
+                });
+                JSReadableStream::from_receiver(&ctx, rx)
+                    .map(|jsrs| jsrs.into_object())
+                    .ok()
             }
             _ => None,
         }

@@ -113,21 +113,15 @@ describe("fetch", () => {
     const response = await fetch(url);
     expect(response instanceof Response).toBe(true);
 
-    // Ensure body is a ReadableStream
     const body = response.body;
-    expect(body instanceof ReadableStream).toBe(true);
-
-    const reader = body.getReader();
     const decoder = new TextDecoder();
     let seenStart = false;
     let seenEnd = false;
     let total = 0;
     let text = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      text += decoder.decode(value);
+    for await (const chunk of body) {
+      total += chunk.byteLength;
+      text += decoder.decode(chunk);
       if (text.includes("chunk_0000")) seenStart = true;
       if (text.includes("chunk_0099")) seenEnd = true;
     }
@@ -139,11 +133,17 @@ describe("fetch", () => {
   it("should download to file via WritableStream", async () => {
     // Prepare temp dir and file path
     const tmpDir = `${WORKSPACE_ROOT}/target/test-tmp`;
-    try { await Rong.mkdir(tmpDir, { recursive: true }); } catch {}
+    try {
+      await Rong.mkdir(tmpDir, { recursive: true });
+    } catch {}
     const outPath = `${tmpDir}/fetch_download_stream.txt`;
 
     // Open file and get writable stream
-    const file = await Rong.open(outPath, { write: true, create: true, truncate: true });
+    const file = await Rong.open(outPath, {
+      write: true,
+      create: true,
+      truncate: true,
+    });
     const ws = file.writable;
     const writer = ws.getWriter();
 
@@ -169,6 +169,34 @@ describe("fetch", () => {
     assert(text.includes("chunk_0099"));
 
     // Cleanup created file
+    await Rong.remove(outPath);
+  });
+
+  it("should pipeTo file.writable (download)", async () => {
+    const tmpDir = `${WORKSPACE_ROOT}/target/test-tmp`;
+    try {
+      await Rong.mkdir(tmpDir, { recursive: true });
+    } catch {}
+    const outPath = `${tmpDir}/fetch_download_pipeTo.txt`;
+
+    const file = await Rong.open(outPath, {
+      write: true,
+      create: true,
+      truncate: true,
+    });
+    const ws = file.writable;
+
+    const url = new URL("/large", TEST_SERVER_URL);
+    const response = await fetch(url);
+
+    // Use pipeTo
+    await response.body.pipeTo(ws);
+    await file.close();
+
+    const data = new Uint8Array(await Rong.readFile(outPath));
+    const text = new TextDecoder().decode(data);
+    assert(text.includes("chunk_0000"));
+    assert(text.includes("chunk_0099"));
     await Rong.remove(outPath);
   });
 });

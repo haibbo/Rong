@@ -205,7 +205,7 @@ mod tests {
     }
 
     async fn test_delay() -> impl IntoResponse {
-        sleep(Duration::from_millis(1000)).await;
+        sleep(Duration::from_millis(100)).await;
         AxumResponse::builder()
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(r#"{"delayed": true}"#))
@@ -213,9 +213,10 @@ mod tests {
     }
 
     async fn test_large() -> impl IntoResponse {
+        // Add a tiny delay per chunk to ensure abort-on-read has a window to trigger,
+        // while keeping the overall test quick.
         let stream = FuturesStreamExt::then(stream::iter(0..100), |i| async move {
-            // Add a significant delay between chunks
-            sleep(Duration::from_millis(200)).await;
+            sleep(Duration::from_millis(3)).await;
             Ok::<_, Infallible>(format!("chunk_{:04}\n", i).repeat(1024))
         });
 
