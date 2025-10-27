@@ -172,7 +172,7 @@ impl Response {
             }
             Some(BodyKind::Buffered(b)) => {
                 let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(1);
-                let bytes = Bytes::from(b.clone());
+                let bytes = b.clone();
                 tokio::spawn(async move {
                     let _ = tx.send(Ok(bytes)).await;
                 });
@@ -189,7 +189,7 @@ impl Response {
             Some(BodyKind::JS(body)) => body.bytes().await,
             Some(BodyKind::Buffered(b)) => {
                 let header_map = self.headers.as_header_map();
-                crate::body::decompress_bytes(Bytes::from(b.clone()), header_map)
+                crate::body::decompress_bytes(b.clone(), header_map)
             }
             Some(BodyKind::Channel(inner)) => {
                 let mut collected = Vec::new();
@@ -295,7 +295,7 @@ impl Response {
         self.consumed = true;
         match &mut self.body {
             Some(BodyKind::JS(body)) => body.text().await,
-            Some(BodyKind::Buffered(b)) => Ok(String::from_utf8_lossy(b).into_owned()),
+            Some(BodyKind::Buffered(b)) => Ok(String::from_utf8_lossy(b.as_ref()).into_owned()),
             Some(BodyKind::Hyper(_)) | Some(BodyKind::Channel(_)) => {
                 let bytes = self.body_to_bytes().await?;
                 Ok(String::from_utf8_lossy(&bytes).into_owned())
@@ -424,11 +424,12 @@ impl Response {
         Self {
             url,
             method,
+            headers,
             status: status.as_u16(),
             status_text: status.canonical_reason().unwrap_or("").to_string(),
-            headers,
             body: Some(body_kind),
             consumed: false,
+            redirected: false,
             content_type,
             content_encoding,
             abort_receiver,

@@ -137,11 +137,12 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     };
 
     let body_kind = if let Some(buf) = net_resp.small_buffer {
-        crate::body::BodyKind::Buffered(buf)
+        // Use Bytes (Arc-backed) to avoid aliasing and premature frees
+        crate::body::BodyKind::Buffered(Bytes::from(buf))
     } else if let Some(rx) = net_resp.body_rx {
         crate::body::BodyKind::Channel(std::sync::Arc::new(std::sync::Mutex::new(Some(rx))))
     } else {
-        crate::body::BodyKind::Buffered(Vec::new())
+        crate::body::BodyKind::Buffered(Bytes::new())
     };
 
     Ok(Response::from_meta(

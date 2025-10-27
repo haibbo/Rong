@@ -13,8 +13,8 @@ pub(crate) enum BodyKind {
     // Share the underlying Incoming across clones to avoid losing the body
     // when Response values are cloned by the JS engine or host environment.
     Hyper(Arc<Mutex<Option<Incoming>>>),
-    // Buffered, in-memory body (Vec to ensure full ownership and avoid aliasing)
-    Buffered(Vec<u8>),
+    // Buffered, in-memory body as Bytes (Arc-backed, cheap clone, no aliasing issues)
+    Buffered(Bytes),
     // Stream body via channel from net service (chunk or error)
     Channel(Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Result<Bytes, String>>>>>),
     JS(HttpBody),
