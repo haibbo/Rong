@@ -14,11 +14,16 @@ use tokio::runtime::Builder;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
 
+pub enum HttpBody {
+    Empty,
+    Small(Bytes),
+    Stream(mpsc::Receiver<Result<Bytes, String>>),
+}
+
 pub struct HttpResponse {
     pub status: http::StatusCode,
     pub headers: http::HeaderMap,
-    pub small_buffer: Option<Vec<u8>>,
-    pub body_rx: Option<mpsc::Receiver<Result<Bytes, String>>>,
+    pub body: HttpBody,
 }
 
 pub struct HttpJob {
@@ -254,8 +259,7 @@ async fn process_request(
         let _ = msg.resp_tx.send(Ok(HttpResponse {
             status: parts.status,
             headers: parts.headers,
-            small_buffer: Some(buf),
-            body_rx: None,
+            body: HttpBody::Small(Bytes::from(buf)),
         }));
         return;
     }
@@ -305,8 +309,7 @@ async fn process_request(
     let _ = msg.resp_tx.send(Ok(HttpResponse {
         status: parts.status,
         headers: parts.headers,
-        small_buffer: None,
-        body_rx: Some(rx),
+        body: HttpBody::Stream(rx),
     }));
 }
 
@@ -384,19 +387,19 @@ async fn download_to_file(
         return Err(format!("http status: {}", resp.status));
     }
 
-    if let Some(buf) = resp.small_buffer {
+    if let HttpBody::Small(buf) = &resp.body {
         if let Some(parent) = dest.parent() {
             if let Err(e) = fs::create_dir_all(parent).await {
                 return Err(format!("create dir: {}", e));
             }
         }
-        fs::write(dest, &buf)
+        fs::write(dest, buf)
             .await
             .map_err(|e| format!("write: {}", e))?;
         return Ok(());
     }
 
-    if let Some(mut rx) = resp.body_rx {
+    if let HttpBody::Stream(mut rx) = resp.body {
         if let Some(parent) = dest.parent() {
             if let Err(e) = fs::create_dir_all(parent).await {
                 return Err(format!("create dir: {}", e));
