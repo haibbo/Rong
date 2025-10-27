@@ -36,7 +36,7 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
         }
     }
 
-    fn get_this(&mut self) -> V {
+    pub fn get_this(&self) -> V {
         self.this.clone()
     }
 

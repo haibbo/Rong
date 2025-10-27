@@ -200,9 +200,11 @@ macro_rules! impl_js_callable_func {
                     let params = <($($t,)*)>::from_params(accessor)?;
                     #[allow(non_snake_case)]
                     let ($($t,)*) = params;
-                    let future = f($($t),*);
+                    // Keep `this` alive for the future's lifetime
+                    let this = accessor.get_this();
+                    let fut = f($($t),*);
                     let ctx = accessor.context();
-                    Ok(Promise::from_future(ctx, future)?.into_js_value(ctx))
+                    Ok(Promise::from_future(ctx, Some(this), fut)?.into_js_value(ctx))
                 };
                 JSCallable::FnMut(RefCell::new(Box::new(closure)))
             }
@@ -248,9 +250,11 @@ macro_rules! impl_js_oncecallable_func {
                     let params = <($($t,)*)>::from_params(accessor)?;
                     #[allow(non_snake_case)]
                     let ($($t,)*) = params;
-                    let future = f($($t),*);
+                    // Keep `this` alive for the future's lifetime
+                    let this = accessor.get_this();
+                    let fut = f($($t),*);
                     let ctx = accessor.context();
-                    Ok(Promise::from_future(ctx, future)?.into_js_value(ctx))
+                    Ok(Promise::from_future(ctx, Some(this), fut)?.into_js_value(ctx))
                 };
                 JSCallable::FnOnce(RefCell::new(Some(Box::new(closure))))
             }

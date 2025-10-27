@@ -78,7 +78,7 @@ fn test_rust_future_in_js() {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
                 format!("completed after {}ms", delay)
             };
-            Promise::from_future(&ctx2, future).unwrap()
+            Promise::from_future(&ctx2, None, future).unwrap()
         })?;
 
         // Register the function in JS context
@@ -120,7 +120,7 @@ fn test_rust_future_error_in_js() {
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 RongJSError::Error("async operation failed".to_string())
             };
-            Promise::from_future(&ctx2, future).unwrap()
+            Promise::from_future(&ctx2, None, future).unwrap()
         })?;
 
         // Register the function in JS context
@@ -302,7 +302,7 @@ fn test_rust_async_with_mut_state() {
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 format!("Counter: {}", count)
             };
-            Promise::from_future(&ctx2, future).unwrap()
+            Promise::from_future(&ctx2, None, future).unwrap()
         })?;
 
         ctx.global().set("asyncCounter", async_fn)?;

@@ -107,7 +107,11 @@ where
     ///
     /// # Errors
     /// Returns a `RongJSError` if the Promise creation fails.
-    pub fn from_future<F, R>(ctx: &JSContext<V::Context>, future: F) -> JSResult<Promise<V>>
+    pub fn from_future<F, R>(
+        ctx: &JSContext<V::Context>,
+        root: Option<V>,
+        future: F,
+    ) -> JSResult<Promise<V>>
     where
         F: Future<Output = R> + 'static,
         R: IntoJSValue<V> + 'static,
@@ -115,9 +119,11 @@ where
     {
         let (promise, resolve, reject) = ctx.promise()?;
 
-        // Spawn a new async task to handle the future
+        // Spawn a new async task to handle the future and keep `root` alive
         spawn(async move {
             let result = future.await;
+            // Keep the optional root alive until the future completes
+            let _keep_root_alive = root;
             result.resolve_promise(resolve, reject);
         });
 
