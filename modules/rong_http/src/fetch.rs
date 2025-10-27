@@ -5,6 +5,7 @@ use http_body_util::{BodyExt, Full, StreamBody, combinators::BoxBody};
 use hyper::body::Bytes;
 use rong::{function::Optional, *};
 use std::io::Error;
+use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use tokio_stream::{StreamExt as _, wrappers::ReceiverStream};
 
@@ -136,13 +137,10 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
             .map_err(|e| RongJSError::TypeError(format!("fetch failed: {}", e)))?
     };
 
-    let body_kind = if let Some(buf) = net_resp.small_buffer {
-        // Use Bytes (Arc-backed) to avoid aliasing and premature frees
-        crate::body::BodyKind::Buffered(Bytes::from(buf))
-    } else if let Some(rx) = net_resp.body_rx {
-        crate::body::BodyKind::Channel(std::sync::Arc::new(std::sync::Mutex::new(Some(rx))))
-    } else {
-        crate::body::BodyKind::Buffered(Bytes::new())
+    let body_kind = match net_resp.body {
+        net::HttpBody::Small(bytes) => crate::body::BodyKind::Buffered(bytes),
+        net::HttpBody::Stream(rx) => crate::body::BodyKind::Channel(Arc::new(Mutex::new(Some(rx)))),
+        net::HttpBody::Empty => crate::body::BodyKind::Buffered(Bytes::new()),
     };
 
     Ok(Response::from_meta(

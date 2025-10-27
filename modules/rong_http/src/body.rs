@@ -2,7 +2,6 @@ use crate::formdata::FormData;
 use bytes::Bytes;
 use flate2::read::GzDecoder;
 use http::HeaderMap;
-use hyper::body::Incoming;
 use rong::*;
 use rong_buffer::{Blob, File};
 use rong_url::URLSearchParams;
@@ -10,9 +9,6 @@ use std::io::Read;
 use std::sync::{Arc, Mutex};
 
 pub(crate) enum BodyKind {
-    // Share the underlying Incoming across clones to avoid losing the body
-    // when Response values are cloned by the JS engine or host environment.
-    Hyper(Arc<Mutex<Option<Incoming>>>),
     // Buffered, in-memory body as Bytes (Arc-backed, cheap clone, no aliasing issues)
     Buffered(Bytes),
     // Stream body via channel from net service (chunk or error)
@@ -24,7 +20,6 @@ pub(crate) enum BodyKind {
 impl Clone for BodyKind {
     fn clone(&self) -> Self {
         match self {
-            Self::Hyper(inner) => Self::Hyper(inner.clone()),
             Self::Buffered(b) => Self::Buffered(b.clone()),
             Self::Channel(rx) => Self::Channel(rx.clone()),
             Self::JS(arg0) => Self::JS(arg0.clone()),

@@ -1,6 +1,5 @@
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use http::{HeaderMap, Method, Uri, header};
-use http_body_util::BodyExt;
 
 use rong::{function::Optional, *};
 
@@ -129,7 +128,6 @@ impl Response {
             return true;
         }
         match &self.body {
-            Some(BodyKind::Hyper(inner)) => inner.lock().map(|g| g.is_none()).unwrap_or(true),
             Some(BodyKind::Channel(inner)) => inner.lock().map(|g| g.is_none()).unwrap_or(true),
             _ => false,
         }
@@ -229,58 +227,7 @@ impl Response {
                     Ok(Bytes::new())
                 }
             }
-            Some(BodyKind::Hyper(inner)) => {
-                // Take the body from the shared slot, then drop the lock before await
-                let maybe_body = inner
-                    .lock()
-                    .map(|mut g| g.take())
-                    .map_err(|_| RongJSError::Error("Failed to lock response body".to_string()))?;
-                if let Some(mut body) = maybe_body {
-                    // Give the runtime a chance to drive the connection before reading
-                    tokio::task::yield_now().await;
-                    let mut buf = BytesMut::new();
-                    // Get a reference to the headers for decompression after full read
-                    let header_map = self.headers.as_header_map();
 
-                    if let Some(receiver) = &mut self.abort_receiver {
-                        loop {
-                            tokio::select! {
-                                maybe = body.frame() => {
-                                    match maybe {
-                                        Some(Ok(frame)) => {
-                                            if let Some(data) = frame.data_ref() {
-                                                buf.extend_from_slice(data);
-                                            }
-                                            // ignore trailers for now
-                                        }
-                                        Some(Err(e)) => {
-                                            return Err(RongJSError::Error(format!("Failed to read body frame: {}", e)));
-                                        }
-                                        None => { break; }
-                                    }
-                                }
-                                abort_reason = receiver.recv() => {
-                                    return Err(RongJSError::from_jsvalue(abort_reason));
-                                }
-                            }
-                        }
-                    } else {
-                        while let Some(frame) = body.frame().await {
-                            let frame = frame.map_err(|e| {
-                                RongJSError::Error(format!("Failed to read body frame: {}", e))
-                            })?;
-                            if let Some(data) = frame.data_ref() {
-                                buf.extend_from_slice(data);
-                            }
-                        }
-                    }
-
-                    let out = crate::body::decompress_bytes(buf.freeze(), header_map)?;
-                    Ok(out)
-                } else {
-                    Ok(Bytes::new())
-                }
-            }
             None => Ok(Bytes::new()),
         }
     }
@@ -296,7 +243,7 @@ impl Response {
         match &mut self.body {
             Some(BodyKind::JS(body)) => body.text().await,
             Some(BodyKind::Buffered(b)) => Ok(String::from_utf8_lossy(b.as_ref()).into_owned()),
-            Some(BodyKind::Hyper(_)) | Some(BodyKind::Channel(_)) => {
+            Some(BodyKind::Channel(_)) => {
                 let bytes = self.body_to_bytes().await?;
                 Ok(String::from_utf8_lossy(&bytes).into_owned())
             }
