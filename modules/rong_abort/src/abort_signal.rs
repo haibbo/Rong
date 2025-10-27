@@ -86,6 +86,18 @@ impl AbortReceiver {
             let _ = self.inner.changed().await;
         }
     }
+
+    /// Mark the current abort reason (if any) for the GC
+    pub fn gc_mark_with<F>(&self, mut mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        let borrow = self.inner.borrow();
+        if !borrow.is_undefined() {
+            // Do not clone during GC marking; pass the borrowed JSValue reference
+            mark_fn(&*borrow);
+        }
+    }
 }
 
 #[js_class]

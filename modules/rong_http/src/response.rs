@@ -380,6 +380,26 @@ impl Response {
             ..Default::default()
         })
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        // Mark any JS values reachable from Response so the GC keeps them alive
+        // - BodyKind::JS holds an HttpBody which wraps a JSValue
+        // - abort_receiver may hold a JSValue reason inside the watch channel
+        let mut mark_fn = mark_fn;
+        if let Some(body) = &self.body {
+            if let BodyKind::JS(js_body) = body {
+                mark_fn(&js_body.0);
+            }
+        }
+
+        if let Some(receiver) = &self.abort_receiver {
+            receiver.gc_mark_with(|v| mark_fn(v));
+        }
+    }
 }
 
 impl Response {
