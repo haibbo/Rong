@@ -1,7 +1,7 @@
 use crate::function::{FromParams, IntoJSCallable, IntoOnceJSCallable, JSParameterType, RustFunc};
 use crate::{
     Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
-    JSTypeOf, JSValueImpl, JSValueMapper, Promise, RongJSError,
+    JSTypeOf, JSValue, JSValueImpl, JSValueMapper, Promise, PropertyDescriptor, RongJSError,
 };
 use std::ops::Deref;
 
@@ -163,7 +163,15 @@ impl<V: JSObjectOps> JSFunc<V> {
 
     /// set name of JS Function
     pub fn name(self, name: &str) -> JSResult<Self> {
-        self.0.set("name", name)?;
+        let ctx = &self.0.get_ctx();
+        let name_value = JSValue::from(ctx, name);
+        // Per JS spec, Function#name is non-writable, non-enumerable, configurable
+        PropertyDescriptor::builder()
+            .value(name_value)
+            .writable(false)
+            .enumerable(false)
+            .configurable(true)
+            .apply_to(&self.0, "name");
         Ok(self)
     }
 
