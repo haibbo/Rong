@@ -5,14 +5,22 @@ use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use std::io::Error;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
-use tokio::fs;
-use tokio::io::{AsyncWriteExt, BufWriter};
+use tokio::io::AsyncWriteExt;
 use tokio::runtime::Builder;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
+
+/// Additional consumer for the HTTP body
+pub trait BodySink: Send {
+    /// Consume a body chunk. Returning `Err` stops further writes to the sink.
+    fn write(&mut self, chunk: &[u8]) -> Result<(), String>;
+
+    /// Called when the download completes (success or failure).
+    fn close(&mut self, result: &Result<(), String>);
+}
 
 pub enum HttpBody {
     Empty,
@@ -35,11 +43,12 @@ pub struct HttpJob {
 
 enum NetCommand {
     Http(HttpJob),
-    DownloadToFile {
+    Download {
         url: String,
         dest: PathBuf,
         abort_rx: Option<oneshot::Receiver<()>>,
-        callback: Box<dyn FnOnce(Result<(), String>) + Send + 'static>,
+        sink: Option<Box<dyn BodySink>>,
+        completion: oneshot::Sender<Result<(), String>>,
     },
     Shutdown(oneshot::Sender<()>),
 }
@@ -109,15 +118,16 @@ pub fn start_net_runtime(worker_threads: usize) {
                                 process_request(client, msg).await;
                             });
                         }
-                        NetCommand::DownloadToFile {
+                        NetCommand::Download {
                             url,
                             dest,
                             abort_rx,
-                            callback,
+                            sink,
+                            completion,
                         } => {
                             tokio::task::spawn(async move {
-                                let res = download_to_file(&url, Path::new(&dest), abort_rx).await;
-                                callback(res);
+                                let res = download_resource(&url, &dest, abort_rx, sink).await;
+                                let _ = completion.send(res);
                             });
                         }
                         NetCommand::Shutdown(done_tx) => {
@@ -329,105 +339,151 @@ pub fn stop_net_runtime() {
     }
 }
 
-/// Request a download and return immediately, invoking `on_complete` on the
-/// net runtime when finished.
-pub fn request_download_to_file(
-    url: impl Into<String>,
-    dest: impl Into<PathBuf>,
-    abort_rx: Option<oneshot::Receiver<()>>,
-    on_complete: impl FnOnce(Result<(), String>) + Send + 'static,
-) -> Result<(), String> {
-    let tx = {
-        let guard = runtime_slot().lock().unwrap();
-        if let Some(rt) = guard.as_ref() {
-            rt.tx.clone()
-        } else {
-            on_complete(Err("net runtime not started".to_string()));
-            return Err("net runtime not started".to_string());
-        }
-    };
-    let cmd = NetCommand::DownloadToFile {
-        url: url.into(),
-        dest: dest.into(),
-        abort_rx,
-        callback: Box::new(on_complete),
-    };
-    futures::executor::block_on(tx.send(cmd)).map_err(|e| format!("net service down: {}", e))
-}
-
-/// Download a URL directly to a file path using the net runtime.
-///
-/// - Issues a GET request and streams the body to `dest`.
-/// - Uses a small buffer threshold to materialize tiny responses directly.
-/// - Returns error if the HTTP status is not successful or IO fails.
-async fn download_to_file(
+/// Start a download to a file on disk while optionally streaming chunks to an extra sink.
+async fn download_resource(
     url: &str,
-    dest: &Path,
-    abort_rx: Option<tokio::sync::oneshot::Receiver<()>>,
+    dest: &PathBuf,
+    abort_rx: Option<oneshot::Receiver<()>>,
+    sink: Option<Box<dyn BodySink>>,
 ) -> Result<(), String> {
-    // Build minimal GET request
+    let mut sink_opt = sink;
+
+    if let Some(parent) = dest.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            return finalize_sink(sink_opt, Err(format!("create dir: {}", e)));
+        }
+    }
+
+    let temp_path = dest.with_extension("part");
+    let mut file = match tokio::fs::File::create(&temp_path).await {
+        Ok(f) => f,
+        Err(e) => return finalize_sink(sink_opt, Err(format!("open: {}", e))),
+    };
+
     let mut builder = HttpRequest::builder()
         .method("GET")
         .uri(url)
         .header(header::ACCEPT, "*/*");
     if let Some(headers) = builder.headers_mut() {
         let ua = get_user_agent();
-        let header_value =
-            HeaderValue::from_str(&ua).map_err(|e| format!("invalid user agent header: {}", e))?;
+        let header_value = match HeaderValue::from_str(&ua) {
+            Ok(v) => v,
+            Err(e) => {
+                return finalize_sink(sink_opt, Err(format!("invalid user agent header: {}", e)));
+            }
+        };
         headers.insert(header::USER_AGENT, header_value);
     }
     let empty = Full::new(Bytes::new()).map_err(|e| match e {}).boxed();
-    let request = builder
-        .body(empty)
-        .map_err(|e| format!("build request: {}", e))?;
+    let request = match builder.body(empty) {
+        Ok(req) => req,
+        Err(e) => return finalize_sink(sink_opt, Err(format!("build request: {}", e))),
+    };
 
     let small_threshold = 64 * 1024usize;
-    let resp = send_request(request, small_threshold, abort_rx).await?;
+    let mut abort_rx_opt = abort_rx;
+    let resp = match send_request(request, small_threshold, abort_rx_opt.take()).await {
+        Ok(r) => r,
+        Err(e) => return finalize_sink(sink_opt, Err(e)),
+    };
     if !resp.status.is_success() {
-        return Err(format!("http status: {}", resp.status));
+        return finalize_sink(sink_opt, Err(format!("http status: {}", resp.status)));
     }
 
-    if let HttpBody::Small(buf) = &resp.body {
-        if let Some(parent) = dest.parent() {
-            if let Err(e) = fs::create_dir_all(parent).await {
-                return Err(format!("create dir: {}", e));
+    let mut sink_active = true;
+    let forward_to_sink =
+        |data: &[u8], sink_opt: &mut Option<Box<dyn BodySink>>, active: &mut bool| {
+            if *active {
+                if let Some(ref mut sink) = sink_opt.as_mut() {
+                    if let Err(err) = sink.write(data) {
+                        let sink_err = Err(err.clone());
+                        sink.close(&sink_err);
+                        *sink_opt = None;
+                        *active = false;
+                    }
+                }
+            }
+        };
+
+    match resp.body {
+        HttpBody::Empty => {}
+        HttpBody::Small(buf) => {
+            forward_to_sink(buf.as_ref(), &mut sink_opt, &mut sink_active);
+            if let Err(e) = file.write_all(buf.as_ref()).await {
+                return finalize_sink(sink_opt, Err(format!("write chunk: {}", e)));
             }
         }
-        fs::write(dest, buf)
-            .await
-            .map_err(|e| format!("write: {}", e))?;
-        return Ok(());
-    }
+        HttpBody::Stream(mut rx_body) => {
+            while let Some(chunk_res) = rx_body.recv().await {
+                let bytes = match chunk_res {
+                    Ok(b) => b,
+                    Err(e) => return finalize_sink(sink_opt, Err(e)),
+                };
 
-    if let HttpBody::Stream(mut rx) = resp.body {
-        if let Some(parent) = dest.parent() {
-            if let Err(e) = fs::create_dir_all(parent).await {
-                return Err(format!("create dir: {}", e));
+                forward_to_sink(bytes.as_ref(), &mut sink_opt, &mut sink_active);
+
+                if let Err(e) = file.write_all(bytes.as_ref()).await {
+                    return finalize_sink(sink_opt, Err(format!("write chunk: {}", e)));
+                }
             }
         }
-        let file = fs::File::create(dest)
-            .await
-            .map_err(|e| format!("open: {}", e))?;
-        let mut writer = BufWriter::new(file);
-        while let Some(chunk_res) = rx.recv().await {
-            let chunk = chunk_res.map_err(|e| e)?;
-            writer
-                .write_all(chunk.as_ref())
-                .await
-                .map_err(|e| format!("write chunk: {}", e))?;
-        }
-        writer.flush().await.map_err(|e| format!("flush: {}", e))?;
-        return Ok(());
     }
 
-    // No body: create empty file
-    if let Some(parent) = dest.parent() {
-        if let Err(e) = fs::create_dir_all(parent).await {
-            return Err(format!("create dir: {}", e));
-        }
+    if let Err(e) = file.flush().await {
+        return finalize_sink(sink_opt, Err(format!("flush: {}", e)));
     }
-    fs::File::create(dest)
-        .await
-        .map_err(|e| format!("create: {}", e))?;
-    Ok(())
+    drop(file);
+
+    if let Err(e) = tokio::fs::rename(&temp_path, dest).await {
+        return finalize_sink(sink_opt, Err(format!("rename: {}", e)));
+    }
+
+    finalize_sink(sink_opt, Ok(()))
+}
+
+fn finalize_sink(
+    sink_opt: Option<Box<dyn BodySink>>,
+    res: Result<(), String>,
+) -> Result<(), String> {
+    if let Some(mut sink) = sink_opt {
+        sink.close(&res);
+    }
+    res
+}
+
+pub fn request_download(
+    url: impl Into<String>,
+    dest: impl Into<PathBuf>,
+    abort_rx: Option<oneshot::Receiver<()>>,
+    sink: Option<Box<dyn BodySink>>,
+) -> Result<oneshot::Receiver<Result<(), String>>, String> {
+    let (completion_tx, completion_rx) = oneshot::channel();
+
+    let tx = {
+        let guard = runtime_slot().lock().unwrap();
+        if let Some(rt) = guard.as_ref() {
+            rt.tx.clone()
+        } else {
+            let _ = completion_tx.send(Err("net runtime not started".to_string()));
+            return Err("net runtime not started".to_string());
+        }
+    };
+
+    let cmd = NetCommand::Download {
+        url: url.into(),
+        dest: dest.into(),
+        abort_rx,
+        sink,
+        completion: completion_tx,
+    };
+
+    if let Err(e) = tx.blocking_send(cmd) {
+        let err = format!("net service down: {}", e);
+        if let NetCommand::Download { completion, .. } = e.0 {
+            let _ = completion.send(Err(err.clone()));
+        }
+        return Err(err);
+    }
+
+    Ok(completion_rx)
 }
