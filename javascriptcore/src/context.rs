@@ -141,9 +141,9 @@ impl JSContextImpl for JSCContext {
             }
 
             (
-                JSCValue::from_owned_obj(self.raw, promise),
-                JSCValue::from_owned_obj(self.raw, resolve_fn),
-                JSCValue::from_owned_obj(self.raw, reject_fn),
+                JSCValue::from_borrowed_obj(self.raw, promise),
+                JSCValue::from_borrowed_obj(self.raw, resolve_fn),
+                JSCValue::from_borrowed_obj(self.raw, reject_fn),
             )
         }
     }
