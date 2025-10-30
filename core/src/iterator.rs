@@ -1,6 +1,7 @@
+use crate::rong::spawn;
 use crate::{
     IntoJSValue, JSContext, JSExceptionHandler, JSFunc, JSObject, JSObjectOps, JSResult, JSSymbol,
-    JSValue, spawn,
+    JSValue,
 };
 use futures::{Stream, StreamExt};
 use std::cell::RefCell;

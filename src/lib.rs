@@ -5,9 +5,11 @@ pub use rong_core::{
     JSException as CoreJSException, JSFunc as CoreJSFunc, JSIterator, JSObject as CoreJSObject,
     JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
     JSTypedArray as CoreJSTypedArray, JSTypedArrayKind, JSValue as CoreJSValue, JSValueType,
-    JsonToJsValue, Promise as CorePromise, PropertyDescriptor as CorePropertyDescriptor, Rong,
-    RongJSError, Source, SourceKind, Worker, WorkerMessage, spawn,
+    JsonToJsValue, Promise as CorePromise, PropertyDescriptor as CorePropertyDescriptor,
+    RongJSError, Source, SourceKind,
 };
+// Re-export selected runtime API from rong_core::rong so downstream crates use `rong::...`
+pub use rong_core::rong::{Rong, Worker, WorkerMessage, spawn};
 
 // Re-export net runtime APIs
 pub use rong_core::net::{self, get_user_agent, set_user_agent};
