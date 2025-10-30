@@ -38,7 +38,7 @@ impl ReadableStream {
         R: AsyncRead + Unpin + Send + 'static,
     {
         let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(16);
-        tokio::task::spawn(async move {
+        rong::spawn(async move {
             let mut buf = vec![0u8; chunk_size.max(1)];
             loop {
                 match tokio::io::AsyncReadExt::read(&mut reader, &mut buf).await {
@@ -213,6 +213,70 @@ impl ReadableStream {
             return Err(e);
         }
         Ok(())
+    }
+
+    /// Split this ReadableStream into two identical branches.
+    /// The original stream becomes locked/disturbed; consumers must use the returned branches.
+    #[js_method]
+    fn tee(&self, ctx: JSContext) -> JSResult<JSArray> {
+        // Take ownership of the underlying receiver. If none, the stream is locked.
+        let rx = match readable_stream_take_receiver(self) {
+            Some(rx) => rx,
+            None => {
+                return Err(RongJSError::TypeError(
+                    "ReadableStream is locked".to_string(),
+                ));
+            }
+        };
+
+        // Create two branches and a task to fan out chunks
+        let (tx1, rx1) = mpsc::channel::<Result<Bytes, String>>(16);
+        let (tx2, rx2) = mpsc::channel::<Result<Bytes, String>>(16);
+
+        rong::spawn(async move {
+            let mut src = rx;
+            let mut tx1 = Some(tx1);
+            let mut tx2 = Some(tx2);
+            while let Some(item) = src.recv().await {
+                match item {
+                    Ok(bytes) => {
+                        // Clone bytes for each branch (Bytes is cheap to clone)
+                        if let Some(t1) = tx1.as_mut() {
+                            if t1.send(Ok(bytes.clone())).await.is_err() {
+                                tx1 = None;
+                            }
+                        }
+                        if let Some(t2) = tx2.as_mut() {
+                            if t2.send(Ok(bytes)).await.is_err() {
+                                tx2 = None;
+                            }
+                        }
+                        if tx1.is_none() && tx2.is_none() {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        if let Some(t1) = tx1.as_mut() {
+                            let _ = t1.send(Err(e.clone())).await;
+                        }
+                        if let Some(t2) = tx2.as_mut() {
+                            let _ = t2.send(Err(e)).await;
+                        }
+                        break;
+                    }
+                }
+            }
+            // Dropping tx1/tx2 closes the branches
+        });
+
+        // Wrap the two receivers as ReadableStream instances
+        let b1 = JSReadableStream::from_receiver(&ctx, rx1)?.into_object();
+        let b2 = JSReadableStream::from_receiver(&ctx, rx2)?.into_object();
+
+        let arr = JSArray::new(&ctx)?;
+        arr.set(0, b1)?;
+        arr.set(1, b2)?;
+        Ok(arr)
     }
 }
 

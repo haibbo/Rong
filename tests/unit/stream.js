@@ -161,3 +161,63 @@ describe("ReadableStream async iterator", () => {
     expect(out).toBe("AB");
   });
 });
+
+describe("ReadableStream tee", () => {
+  it("duplicates chunks to both branches", async () => {
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+
+    const rs = new ReadableStream({
+      start(controller) {
+        controller.enqueue(enc.encode("hi"));
+        controller.enqueue(enc.encode("!"));
+        controller.close();
+      },
+    });
+
+    const [b1, b2] = rs.tee();
+    expect(b1 instanceof ReadableStream).toBe(true);
+    expect(b2 instanceof ReadableStream).toBe(true);
+
+    const r1 = b1.getReader();
+    const r2 = b2.getReader();
+
+    let s1 = "";
+    while (true) {
+      const { done, value } = await r1.read();
+      if (done) break;
+      s1 += dec.decode(value);
+    }
+
+    let s2 = "";
+    while (true) {
+      const { done, value } = await r2.read();
+      if (done) break;
+      s2 += dec.decode(value);
+    }
+
+    expect(s1).toBe("hi!");
+    expect(s2).toBe("hi!");
+  });
+
+  it("locks the original stream after tee", async () => {
+    const enc = new TextEncoder();
+    const rs = new ReadableStream({
+      start(controller) {
+        controller.enqueue(enc.encode("x"));
+        controller.close();
+      },
+    });
+
+    rs.tee();
+
+    let threw = false;
+    try {
+      rs.getReader();
+    } catch (e) {
+      threw = true;
+      expect(e instanceof TypeError).toBe(true);
+    }
+    if (!threw) throw new Error("expected getReader to throw after tee() (locked)");
+  });
+});
