@@ -434,6 +434,11 @@ pub fn readable_stream_take_receiver(
     guard.take()
 }
 
+/// Check if a ReadableStream is locked (a reader has been acquired)
+pub fn readable_stream_is_locked(rs: &ReadableStream) -> bool {
+    rs.rx_slot.lock().map(|g| g.is_none()).unwrap_or(true)
+}
+
 // Install instance-level async iterator: stream implements next() and [Symbol.asyncIterator]
 fn install_instance_async_iter(ctx: &JSContext, obj: &JSObject) -> JSResult<()> {
     // next() method on the instance (use `this` to borrow the underlying Rust object)
@@ -504,6 +509,17 @@ impl JSReadableStream {
         rx: mpsc::Receiver<Result<Bytes, String>>,
     ) -> JSResult<Self> {
         let stream = ReadableStream::from_receiver(rx);
+        Self::new(ctx, stream)
+    }
+
+    /// Construct a ReadableStream from a shared receiver slot.
+    /// The slot is an Arc<Mutex<Option<Receiver>>> managed by another owner.
+    /// This does not consume the channel until the stream is locked via getReader/iteration.
+    pub fn from_shared_receiver(
+        ctx: &JSContext,
+        slot: Arc<StdMutex<Option<mpsc::Receiver<Result<Bytes, String>>>>>,
+    ) -> JSResult<Self> {
+        let stream = ReadableStream { rx_slot: slot };
         Self::new(ctx, stream)
     }
 

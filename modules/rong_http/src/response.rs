@@ -7,7 +7,8 @@ use crate::body::{BodyKind, HttpBody};
 use crate::header::Headers;
 use rong_abort::AbortReceiver;
 use rong_buffer::Blob;
-use rong_stream::JSReadableStream;
+use rong_stream::{JSReadableStream, readable_stream_is_locked};
+use std::cell::RefCell;
 use tokio::sync::mpsc;
 
 #[derive(Default)]
@@ -24,6 +25,9 @@ pub struct Response {
     content_type: Option<String>,
     content_encoding: Option<String>,
     abort_receiver: Option<AbortReceiver>,
+    // Cache a JS ReadableStream instance so repeated Response.body access
+    // returns the same object and doesn't have side effects.
+    body_stream: RefCell<Option<JSObject>>,
 }
 
 #[derive(FromJSValue)]
@@ -127,6 +131,13 @@ impl Response {
         if self.consumed {
             return true;
         }
+        // If we have materialized a ReadableStream, check whether it is locked
+        if let Some(obj) = self.body_stream.borrow().as_ref() {
+            if let Ok(rs) = obj.borrow::<rong_stream::ReadableStream>() {
+                return readable_stream_is_locked(&rs);
+            }
+        }
+        // Fallback: before materialization, channel not taken means not used
         match &self.body {
             Some(BodyKind::Channel(inner)) => inner.lock().map(|g| g.is_none()).unwrap_or(true),
             _ => false,
@@ -152,18 +163,25 @@ impl Response {
             content_type: self.content_type.clone(),
             content_encoding: self.content_encoding.clone(),
             abort_receiver: self.abort_receiver.clone(),
+            body_stream: RefCell::new(self.body_stream.borrow().clone()),
         }
     }
 
     #[js_method(getter)]
     fn body(&self, ctx: JSContext) -> Option<JSObject> {
-        match &self.body {
+        // Return cached stream if we already created one
+        if let Some(obj) = self.body_stream.borrow().as_ref() {
+            return Some(obj.clone());
+        }
+
+        // Create and cache a stream based on the current body kind
+        let created = match &self.body {
             Some(BodyKind::Channel(inner)) => {
-                let maybe_rx = inner.lock().ok().and_then(|mut g| g.take());
-                if let Some(rx) = maybe_rx {
-                    JSReadableStream::from_receiver(&ctx, rx)
-                        .map(|jsrs| jsrs.into_object())
-                        .ok()
+                // Do not consume the receiver on property access; build a stream from the shared slot
+                if let Ok(jsrs) = JSReadableStream::from_shared_receiver(&ctx, inner.clone()) {
+                    let obj = jsrs.into_object();
+                    self.body_stream.replace(Some(obj.clone()));
+                    Some(obj)
                 } else {
                     None
                 }
@@ -174,12 +192,39 @@ impl Response {
                 tokio::spawn(async move {
                     let _ = tx.send(Ok(bytes)).await;
                 });
-                JSReadableStream::from_receiver(&ctx, rx)
-                    .map(|jsrs| jsrs.into_object())
-                    .ok()
+                if let Ok(jsrs) = JSReadableStream::from_receiver(&ctx, rx) {
+                    let obj = jsrs.into_object();
+                    self.body_stream.replace(Some(obj.clone()));
+                    Some(obj)
+                } else {
+                    None
+                }
             }
-            _ => None,
-        }
+            Some(BodyKind::JS(body)) => {
+                // Materialize JS body into a one-shot stream
+                let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(1);
+                let body_clone = body.clone();
+                tokio::task::spawn_local(async move {
+                    match body_clone.bytes().await {
+                        Ok(bytes) => {
+                            let _ = tx.send(Ok(bytes)).await;
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Err(format!("{}", e))).await;
+                        }
+                    }
+                });
+                if let Ok(jsrs) = JSReadableStream::from_receiver(&ctx, rx) {
+                    let obj = jsrs.into_object();
+                    self.body_stream.replace(Some(obj.clone()));
+                    Some(obj)
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+        created
     }
 
     async fn body_to_bytes(&mut self) -> JSResult<Bytes> {
@@ -191,11 +236,25 @@ impl Response {
             }
             Some(BodyKind::Channel(inner)) => {
                 let mut collected = Vec::new();
-                let maybe_rx = inner
-                    .lock()
-                    .map(|mut g| g.take())
-                    .map_err(|_| RongJSError::Error("Failed to lock channel body".to_string()))?;
-                if let Some(mut rx) = maybe_rx {
+                // Try to take receiver from cached ReadableStream first (if one exists)
+                let mut rx_opt = if let Some(obj) = self.body_stream.borrow().as_ref() {
+                    if let Ok(rs) = obj.borrow::<rong_stream::ReadableStream>() {
+                        rong_stream::readable_stream_take_receiver(&rs)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                // Fallback to internal channel if stream is not materialized
+                if rx_opt.is_none() {
+                    rx_opt = inner.lock().map(|mut g| g.take()).map_err(|_| {
+                        RongJSError::Error("Failed to lock channel body".to_string())
+                    })?;
+                }
+
+                if let Some(mut rx) = rx_opt {
                     if let Some(receiver) = &mut self.abort_receiver {
                         loop {
                             tokio::select! {
@@ -336,6 +395,7 @@ impl Response {
         // Mark any JS values reachable from Response so the GC keeps them alive
         // - BodyKind::JS holds an HttpBody which wraps a JSValue
         // - abort_receiver may hold a JSValue reason inside the watch channel
+        // - Cached body_stream JSObject if created
         let mut mark_fn = mark_fn;
         if let Some(body) = &self.body {
             if let BodyKind::JS(js_body) = body {
@@ -345,6 +405,10 @@ impl Response {
 
         if let Some(receiver) = &self.abort_receiver {
             receiver.gc_mark_with(|v| mark_fn(v));
+        }
+
+        if let Some(obj) = self.body_stream.borrow().as_ref() {
+            mark_fn(&*obj);
         }
     }
 }

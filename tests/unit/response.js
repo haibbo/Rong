@@ -95,6 +95,21 @@ describe("Response", () => {
         await testCase.check(response);
       }
     });
+
+    it("should return the same body stream object across getter calls (buffered)", () => {
+      const response = new Response("hello world");
+      const b1 = response.body;
+      const b2 = response.body;
+      expect(b1 === b2).toBe(true);
+    });
+
+    it("should return the same body stream object across getter calls (JS body)", () => {
+      const buf = new Uint8Array([1, 2, 3]);
+      const response = new Response(buf);
+      const b1 = response.body;
+      const b2 = response.body;
+      expect(b1 === b2).toBe(true);
+    });
   });
 
   describe("clone", () => {
