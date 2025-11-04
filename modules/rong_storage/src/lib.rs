@@ -26,7 +26,7 @@
 //! - Maximum value size: 5MB
 //! - Maximum total storage: 10MB
 
-use redb::{Database, ReadableTable, TableDefinition};
+use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use rong::{IntoJSIteratorExt, function::Optional, *};
 use serde_json;
 use std::cell::RefCell;
