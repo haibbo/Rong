@@ -1,7 +1,7 @@
 use super::*;
 
 /// Set a key-value pair in storage
-pub fn storage_set(key: String, value: JSValue) -> JSResult<()> {
+pub async fn storage_set(key: String, value: JSValue) -> JSResult<()> {
     let db = get_storage_db().ok_or_else(|| {
         RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
     })?;
@@ -185,7 +185,7 @@ pub fn storage_set(key: String, value: JSValue) -> JSResult<()> {
 }
 
 /// Get a value from storage
-pub fn storage_get(ctx: JSContext, key: String) -> JSResult<JSValue> {
+pub async fn storage_get(ctx: JSContext, key: String) -> JSResult<JSValue> {
     let db = get_storage_db().ok_or_else(|| {
         RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
     })?;
@@ -264,7 +264,7 @@ pub fn storage_get(ctx: JSContext, key: String) -> JSResult<JSValue> {
 }
 
 /// Delete a key from storage
-pub fn storage_delete(key: String) -> JSResult<()> {
+pub async fn storage_delete(key: String) -> JSResult<()> {
     let db = get_storage_db().ok_or_else(|| {
         RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
     })?;
@@ -291,7 +291,7 @@ pub fn storage_delete(key: String) -> JSResult<()> {
 }
 
 /// Clear all data from storage
-pub fn storage_clear() -> JSResult<()> {
+pub async fn storage_clear() -> JSResult<()> {
     let db = get_storage_db().ok_or_else(|| {
         RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
     })?;

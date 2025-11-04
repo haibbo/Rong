@@ -1,9 +1,9 @@
 //! # Rong Storage Module
 //!
-//! A synchronous key-value storage implementation based on redb.
+//! Asynchronous key-value storage implementation based on redb.
 //!
 //! ## Features
-//! - Synchronous API (no async overhead)
+//! - Promise-based async API
 //! - Type-preserving JSON serialization
 //! - Size limits and error handling
 //! - Iterator support for key listing
@@ -114,7 +114,7 @@ pub struct StorageInfo {
 }
 
 /// Storage list function that returns an iterator
-fn storage_list(ctx: JSContext, prefix: Optional<String>) -> JSResult<JSValue> {
+async fn storage_list(ctx: JSContext, prefix: Optional<String>) -> JSResult<JSValue> {
     let db = get_storage_db().ok_or_else(|| {
         RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
     })?;
@@ -153,7 +153,7 @@ fn storage_list(ctx: JSContext, prefix: Optional<String>) -> JSResult<JSValue> {
 }
 
 /// Storage info function
-fn storage_info() -> JSResult<StorageInfo> {
+async fn storage_info() -> JSResult<StorageInfo> {
     let db = get_storage_db().ok_or_else(|| {
         RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
     })?;
