@@ -13,7 +13,7 @@ use crate::formdata::FormData;
 use crate::request::{Request, RequestInit};
 use crate::response::Response;
 use crate::security::grant_network_access;
-use rong::net;
+use rong::service_executor;
 use rong_stream::ReadableStream;
 
 // Convert Request to hyper::Request
@@ -123,7 +123,7 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
 
     let small_threshold = 4096usize;
     // Race the network request with an early abort. If the abort wins, reject with its reason.
-    let net_fut = net::send_request(hyper_request, small_threshold, abort_bridge);
+    let net_fut = service_executor::send_request(hyper_request, small_threshold, abort_bridge);
     let net_resp = if let Some(mut early_abort) = abort_receiver.clone() {
         tokio::select! {
             res = net_fut => res.map_err(|e| RongJSError::TypeError(format!("fetch failed: {}", e)))?,
@@ -138,9 +138,11 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     };
 
     let body_kind = match net_resp.body {
-        net::HttpBody::Small(bytes) => crate::body::BodyKind::Buffered(bytes),
-        net::HttpBody::Stream(rx) => crate::body::BodyKind::Channel(Arc::new(Mutex::new(Some(rx)))),
-        net::HttpBody::Empty => crate::body::BodyKind::Buffered(Bytes::new()),
+        service_executor::HttpBody::Small(bytes) => crate::body::BodyKind::Buffered(bytes),
+        service_executor::HttpBody::Stream(rx) => {
+            crate::body::BodyKind::Channel(Arc::new(Mutex::new(Some(rx))))
+        }
+        service_executor::HttpBody::Empty => crate::body::BodyKind::Buffered(Bytes::new()),
     };
 
     Ok(Response::from_meta(

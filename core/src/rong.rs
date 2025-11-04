@@ -422,13 +422,13 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
         self
     }
 
-    /// Configure the global net runtime worker thread count.
-    /// If set, the net runtime will be started during build() with this thread count.
-    /// If not set, the net runtime will be lazily started (defaulting to 2 threads)
-    /// on first use by callers (e.g., HTTP).
+    /// Configure the global service runtime worker thread count.
+    /// If set, the service runtime will be started during build() with this thread count.
+    /// If not set, the service runtime will be lazily started (defaulting to 2 threads)
+    /// on first use by callers (e.g., HTTP, background tasks).
     pub fn with_net_threads(mut self, threads: usize) -> Self {
         if threads < 1 {
-            panic!("At least one net worker thread is required");
+            panic!("At least one service runtime worker thread is required");
         }
         self.net_worker_threads = threads;
         self
@@ -450,8 +450,8 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
     ///     .build();
     /// ```
     pub fn build(self) -> Arc<Rong<E>> {
-        // Initialize the net runtime with configured threads (idempotent)
-        crate::net::start_net_runtime(self.net_worker_threads);
+        // Initialize the shared service runtime with configured threads (idempotent)
+        crate::service_executor::start_service_runtime(self.net_worker_threads);
 
         let rong = Arc::new(Rong {
             workers: Arc::new(TokioMutex::new(Vec::with_capacity(self.worker_count))),
@@ -904,7 +904,7 @@ impl<E: JSEngine + 'static> Drop for Rong<E> {
         // Ensure workers are terminated when Rong is dropped by calling the shutdown logic
         let _ = self.shutdown();
         // Stop global net runtime if running
-        crate::net::stop_net_runtime();
+        crate::service_executor::stop_service_runtime();
     }
 }
 

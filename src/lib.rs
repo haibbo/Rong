@@ -11,8 +11,8 @@ pub use rong_core::{
 // Re-export selected runtime API from rong_core::rong so downstream crates use `rong::...`
 pub use rong_core::rong::{Rong, Worker, WorkerMessage, spawn};
 
-// Re-export net runtime APIs
-pub use rong_core::net::{self, get_user_agent, set_user_agent};
+// Re-export service executor APIs
+pub use rong_core::service_executor::{self, get_user_agent, set_user_agent};
 
 pub use rong_core::function;
 

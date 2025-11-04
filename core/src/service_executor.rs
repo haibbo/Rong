@@ -4,13 +4,15 @@ use http::{HeaderValue, Request as HttpRequest};
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
+use std::future::Future;
 use std::io::Error;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use tokio::io::AsyncWriteExt;
-use tokio::runtime::Builder;
+use tokio::runtime::{Builder, Handle};
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 use tokio::time::{Duration, timeout};
 
 /// Additional consumer for the HTTP body
@@ -41,7 +43,7 @@ pub struct HttpJob {
     pub abort_rx: Option<oneshot::Receiver<()>>,
 }
 
-enum NetCommand {
+enum ServiceCommand {
     Http(HttpJob),
     Download {
         url: String,
@@ -53,12 +55,13 @@ enum NetCommand {
     Shutdown(oneshot::Sender<()>),
 }
 
-struct NetRuntime {
-    tx: mpsc::Sender<NetCommand>,
+struct ServiceRuntime {
+    tx: mpsc::Sender<ServiceCommand>,
     join: Option<std::thread::JoinHandle<()>>,
+    handle: Handle,
 }
 
-static RUNTIME_SLOT: OnceLock<Mutex<Option<NetRuntime>>> = OnceLock::new();
+static RUNTIME_SLOT: OnceLock<Mutex<Option<ServiceRuntime>>> = OnceLock::new();
 static USER_AGENT_SLOT: OnceLock<Mutex<String>> = OnceLock::new();
 const DEFAULT_USER_AGENT: &str = concat!("RongJS/", env!("CARGO_PKG_VERSION"));
 
@@ -79,26 +82,37 @@ pub fn get_user_agent() -> String {
         .clone()
 }
 
-fn runtime_slot() -> &'static Mutex<Option<NetRuntime>> {
+fn runtime_slot() -> &'static Mutex<Option<ServiceRuntime>> {
     RUNTIME_SLOT.get_or_init(|| Mutex::new(None))
 }
 
-pub fn start_net_runtime(worker_threads: usize) {
+fn runtime_handle() -> Result<Handle, String> {
+    let guard = runtime_slot().lock().unwrap();
+    if let Some(rt) = guard.as_ref() {
+        Ok(rt.handle.clone())
+    } else {
+        Err("service runtime not started".to_string())
+    }
+}
+
+pub fn start_service_runtime(worker_threads: usize) {
     let slot = runtime_slot();
     let mut guard = slot.lock().unwrap();
     if guard.is_some() {
         return;
     }
 
-    let (tx, mut rx) = mpsc::channel::<NetCommand>(256);
+    let (tx, mut rx) = mpsc::channel::<ServiceCommand>(256);
     let rt = Builder::new_multi_thread()
         .worker_threads(worker_threads.max(1))
         .enable_all()
         .build()
-        .expect("failed to build net runtime");
+        .expect("failed to build service runtime");
+
+    let handle = rt.handle().clone();
 
     let join = thread::Builder::new()
-        .name("rong-net".to_string())
+        .name("rong-services".to_string())
         .spawn(move || {
             rt.block_on(async move {
                 let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -112,13 +126,13 @@ pub fn start_net_runtime(worker_threads: usize) {
 
                 while let Some(cmd) = rx.recv().await {
                     match cmd {
-                        NetCommand::Http(msg) => {
+                        ServiceCommand::Http(msg) => {
                             let client = client.clone();
                             tokio::task::spawn(async move {
                                 process_request(client, msg).await;
                             });
                         }
-                        NetCommand::Download {
+                        ServiceCommand::Download {
                             url,
                             dest,
                             abort_rx,
@@ -130,7 +144,7 @@ pub fn start_net_runtime(worker_threads: usize) {
                                 let _ = completion.send(res);
                             });
                         }
-                        NetCommand::Shutdown(done_tx) => {
+                        ServiceCommand::Shutdown(done_tx) => {
                             let _ = done_tx.send(());
                             break;
                         }
@@ -138,12 +152,37 @@ pub fn start_net_runtime(worker_threads: usize) {
                 }
             });
         })
-        .expect("failed to spawn net runtime thread");
+        .expect("failed to spawn service runtime thread");
 
-    *guard = Some(NetRuntime {
+    *guard = Some(ServiceRuntime {
         tx,
         join: Some(join),
+        handle,
     });
+}
+
+/// Spawn an async task onto the shared service runtime.
+///
+/// Returns a Tokio `JoinHandle` that can be awaited for the task result.
+pub fn spawn_async<F, T>(future: F) -> Result<JoinHandle<T>, String>
+where
+    F: Future<Output = T> + Send + 'static,
+    T: Send + 'static,
+{
+    let handle = runtime_handle()?;
+    Ok(handle.spawn(future))
+}
+
+/// Spawn a blocking compute task onto the shared service runtime.
+///
+/// Useful for CPU or blocking operations that should not run on the async scheduler.
+pub fn spawn_blocking<F, T>(func: F) -> Result<JoinHandle<T>, String>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    let handle = runtime_handle()?;
+    Ok(handle.spawn_blocking(func))
 }
 
 pub async fn send_request(
@@ -156,7 +195,7 @@ pub async fn send_request(
         if let Some(rt) = guard.as_ref() {
             rt.tx.clone()
         } else {
-            return Err("net runtime not started".to_string());
+            return Err("service runtime not started".to_string());
         }
     };
     let (resp_tx, resp_rx) = oneshot::channel();
@@ -166,12 +205,12 @@ pub async fn send_request(
         resp_tx,
         abort_rx,
     };
-    tx.send(NetCommand::Http(msg))
+    tx.send(ServiceCommand::Http(msg))
         .await
-        .map_err(|e| format!("net service down: {}", e))?;
+        .map_err(|e| format!("service runtime down: {}", e))?;
     resp_rx
         .await
-        .map_err(|e| format!("net resp dropped: {}", e))?
+        .map_err(|e| format!("service response dropped: {}", e))?
 }
 
 async fn process_request(
@@ -323,7 +362,7 @@ async fn process_request(
     }));
 }
 
-pub fn stop_net_runtime() {
+pub fn stop_service_runtime() {
     let slot = runtime_slot();
     let runtime = {
         let mut guard = slot.lock().unwrap();
@@ -331,7 +370,7 @@ pub fn stop_net_runtime() {
     };
     if let Some(mut rt) = runtime {
         let (done_tx, done_rx) = oneshot::channel();
-        let _ = futures::executor::block_on(rt.tx.send(NetCommand::Shutdown(done_tx)));
+        let _ = futures::executor::block_on(rt.tx.send(ServiceCommand::Shutdown(done_tx)));
         let _ = futures::executor::block_on(done_rx);
         if let Some(handle) = rt.join.take() {
             let _ = handle.join();
@@ -464,12 +503,12 @@ pub fn request_download(
         if let Some(rt) = guard.as_ref() {
             rt.tx.clone()
         } else {
-            let _ = completion_tx.send(Err("net runtime not started".to_string()));
-            return Err("net runtime not started".to_string());
+            let _ = completion_tx.send(Err("service runtime not started".to_string()));
+            return Err("service runtime not started".to_string());
         }
     };
 
-    let cmd = NetCommand::Download {
+    let cmd = ServiceCommand::Download {
         url: url.into(),
         dest: dest.into(),
         abort_rx,
@@ -478,8 +517,8 @@ pub fn request_download(
     };
 
     if let Err(e) = tx.blocking_send(cmd) {
-        let err = format!("net service down: {}", e);
-        if let NetCommand::Download { completion, .. } = e.0 {
+        let err = format!("service runtime down: {}", e);
+        if let ServiceCommand::Download { completion, .. } = e.0 {
             let _ = completion.send(Err(err.clone()));
         }
         return Err(err);
