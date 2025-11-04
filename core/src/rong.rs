@@ -375,8 +375,8 @@ pub struct RongBuilder<E: JSEngine + 'static> {
     /// Size of each worker's general message queue (for post_message)
     /// Controls how many messages can be buffered before being dropped
     message_queue_size: usize,
-    /// Number of net runtime worker threads (>=1)
-    net_worker_threads: usize,
+    /// Number of service runtime worker threads (>=1)
+    service_worker_threads: usize,
     /// Marker for the generic type E
     _marker: PhantomData<E>,
 }
@@ -388,7 +388,7 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
             worker_count: 4,         // Default to 4 workers instead of num_cpus
             task_queue_size: 100,    // Default task queue size
             message_queue_size: 100, // Default message queue size
-            net_worker_threads: 1,   // Default to 1 net worker thread
+            service_worker_threads: 1, // Default to 1 service runtime worker thread
             _marker: PhantomData,    // Initialize marker
         }
     }
@@ -426,11 +426,11 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
     /// If set, the service runtime will be started during build() with this thread count.
     /// If not set, the service runtime will be lazily started (defaulting to 2 threads)
     /// on first use by callers (e.g., HTTP, background tasks).
-    pub fn with_net_threads(mut self, threads: usize) -> Self {
+    pub fn with_service_threads(mut self, threads: usize) -> Self {
         if threads < 1 {
             panic!("At least one service runtime worker thread is required");
         }
-        self.net_worker_threads = threads;
+        self.service_worker_threads = threads;
         self
     }
 
@@ -451,7 +451,7 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
     /// ```
     pub fn build(self) -> Arc<Rong<E>> {
         // Initialize the shared service runtime with configured threads (idempotent)
-        crate::service_executor::start_service_runtime(self.net_worker_threads);
+        crate::service_executor::start_service_runtime(self.service_worker_threads);
 
         let rong = Arc::new(Rong {
             workers: Arc::new(TokioMutex::new(Vec::with_capacity(self.worker_count))),
