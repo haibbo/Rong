@@ -31,7 +31,7 @@ use rong::{IntoJSIteratorExt, function::Optional, *};
 use serde_json;
 use std::cell::RefCell;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 mod storage;
@@ -48,13 +48,36 @@ const DEFAULT_MAX_KEY_SIZE: usize = 1024; // 1KB
 const DEFAULT_MAX_VALUE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
 // Thread-local storage database (single database per thread)
+// Stores both the database path and the lazily-initialized database
 thread_local! {
+    static STORAGE_PATH: RefCell<Option<PathBuf>> = RefCell::new(None);
     static STORAGE_DB: RefCell<Option<Rc<Database>>> = RefCell::new(None);
 }
 
-/// Set the storage database path and create the database
+/// Set the storage database path (does NOT create the database immediately)
+/// The database will be created lazily on first use
 pub fn set_storage_path<P: AsRef<Path>>(path: P) -> Result<(), String> {
-    let db_path = path.as_ref();
+    let db_path = path.as_ref().to_path_buf();
+
+    STORAGE_PATH.with(|storage_path| {
+        *storage_path.borrow_mut() = Some(db_path);
+    });
+
+    Ok(())
+}
+
+/// Initialize the database if not already initialized
+/// This is called automatically on first use
+fn ensure_db_initialized() -> Result<(), String> {
+    // Check if database is already initialized
+    let db_exists = STORAGE_DB.with(|storage| storage.borrow().is_some());
+    if db_exists {
+        return Ok(());
+    }
+
+    let db_path = STORAGE_PATH
+        .with(|storage_path| storage_path.borrow().clone())
+        .ok_or_else(|| "Storage path not set. Call set_storage_path first.".to_string())?;
 
     // Create parent directory if it doesn't exist
     if let Some(parent) = db_path.parent() {
@@ -62,7 +85,7 @@ pub fn set_storage_path<P: AsRef<Path>>(path: P) -> Result<(), String> {
     }
 
     // Create the database
-    let db = Database::create(db_path)
+    let db = Database::create(&db_path)
         .map_err(|e| format!("Failed to open database at {:?}: {}", db_path, e))?;
 
     // Create the storage table if it doesn't exist
@@ -89,9 +112,13 @@ pub fn set_storage_path<P: AsRef<Path>>(path: P) -> Result<(), String> {
     Ok(())
 }
 
-/// Get the thread-local database
-fn get_storage_db() -> Option<Rc<Database>> {
-    STORAGE_DB.with(|storage| storage.borrow().clone())
+/// Get the thread-local database, initializing it if necessary
+fn get_storage_db() -> Result<Rc<Database>, String> {
+    ensure_db_initialized()?;
+
+    STORAGE_DB
+        .with(|storage| storage.borrow().clone())
+        .ok_or_else(|| "Failed to get storage database after initialization".to_string())
 }
 
 /// Close all open storages in the current thread
@@ -115,9 +142,7 @@ pub struct StorageInfo {
 
 /// Storage list function that returns an iterator
 async fn storage_list(ctx: JSContext, prefix: Optional<String>) -> JSResult<JSValue> {
-    let db = get_storage_db().ok_or_else(|| {
-        RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
-    })?;
+    let db = get_storage_db().map_err(|e| RongJSError::TypeError(e))?;
 
     let read_txn = db
         .begin_read()
@@ -154,9 +179,7 @@ async fn storage_list(ctx: JSContext, prefix: Optional<String>) -> JSResult<JSVa
 
 /// Storage info function
 async fn storage_info() -> JSResult<StorageInfo> {
-    let db = get_storage_db().ok_or_else(|| {
-        RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
-    })?;
+    let db = get_storage_db().map_err(|e| RongJSError::TypeError(e))?;
 
     let read_txn = db
         .begin_read()

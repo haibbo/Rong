@@ -2,9 +2,7 @@ use super::*;
 
 /// Set a key-value pair in storage
 pub async fn storage_set(key: String, value: JSValue) -> JSResult<()> {
-    let db = get_storage_db().ok_or_else(|| {
-        RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
-    })?;
+    let db = get_storage_db().map_err(|e| RongJSError::TypeError(e))?;
 
     // Validate key size
     if key.len() > DEFAULT_MAX_KEY_SIZE {
@@ -186,9 +184,7 @@ pub async fn storage_set(key: String, value: JSValue) -> JSResult<()> {
 
 /// Get a value from storage
 pub async fn storage_get(ctx: JSContext, key: String) -> JSResult<JSValue> {
-    let db = get_storage_db().ok_or_else(|| {
-        RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
-    })?;
+    let db = get_storage_db().map_err(|e| RongJSError::TypeError(e))?;
 
     let read_txn = db
         .begin_read()
@@ -265,9 +261,7 @@ pub async fn storage_get(ctx: JSContext, key: String) -> JSResult<JSValue> {
 
 /// Delete a key from storage
 pub async fn storage_delete(key: String) -> JSResult<()> {
-    let db = get_storage_db().ok_or_else(|| {
-        RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
-    })?;
+    let db = get_storage_db().map_err(|e| RongJSError::TypeError(e))?;
 
     let write_txn = db
         .begin_write()
@@ -292,9 +286,7 @@ pub async fn storage_delete(key: String) -> JSResult<()> {
 
 /// Clear all data from storage
 pub async fn storage_clear() -> JSResult<()> {
-    let db = get_storage_db().ok_or_else(|| {
-        RongJSError::TypeError("Storage not initialized. Call set_storage_path first.".to_string())
-    })?;
+    let db = get_storage_db().map_err(|e| RongJSError::TypeError(e))?;
 
     let write_txn = db
         .begin_write()
