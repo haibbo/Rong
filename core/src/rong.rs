@@ -385,11 +385,11 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
     /// Create a new builder with default settings
     fn new() -> Self {
         Self {
-            worker_count: 4,         // Default to 4 workers instead of num_cpus
-            task_queue_size: 100,    // Default task queue size
-            message_queue_size: 100, // Default message queue size
+            worker_count: 4,           // Default to 4 workers instead of num_cpus
+            task_queue_size: 100,      // Default task queue size
+            message_queue_size: 100,   // Default message queue size
             service_worker_threads: 1, // Default to 1 service runtime worker thread
-            _marker: PhantomData,    // Initialize marker
+            _marker: PhantomData,      // Initialize marker
         }
     }
 
