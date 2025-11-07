@@ -1,232 +1,82 @@
 //! # Rong Storage Module
 //!
-//! Asynchronous key-value storage implementation based on redb.
+//! Asynchronous key-value storage backed by `redb`, can manage their own database
+//! files explicitly.
 //!
 //! ## Features
 //! - Promise-based async API
 //! - Type-preserving JSON serialization
-//! - Size limits and error handling
+//! - Configurable storage location per instance via constructor path argument
 //! - Iterator support for key listing
-//! - Thread-local global storage
+//! - Automatic database creation when the file does not exist
+//! - Optional per-instance limits (key/value/data size caps)
 //!
 //! ## Supported Data Types
-//! - **Strings**: Stored as JSON strings
-//! - **Numbers**: i32, u32, f64 (JavaScript `number` type)
-//! - **BigInts**: i64, u64 (JavaScript `bigint` type)
-//! - **Booleans**: true/false
-//! - **null**: JavaScript null
-//! - **Objects**: Serialized via JSON.stringify
-//! - **Arrays**: Serialized via JSON.stringify
+//! - **Strings**, **Numbers**, **BigInts**, **Booleans**, **null**
+//! - **Objects** and **Arrays** serialized via `JSON.stringify`
+//! - **Date** objects preserved via a lightweight metadata envelope
 //!
 //! ## Limitations
 //! - `undefined` values are rejected
-//! - Extremely large unsigned values like `u64::MAX` may not round-trip perfectly
-//!   due to JavaScript BigInt to native type conversion limitations in QuickJS
+//! - Extremely large unsigned values like `u64::MAX` may not round-trip perfectly due to
+//!   JavaScript BigInt to native type conversion
 //! - Maximum key size: 1KB
 //! - Maximum value size: 5MB
-//! - Maximum total storage: 10MB
+//! - Maximum total storage (including redb overhead): ~21.5MB
 
-use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
-use rong::{IntoJSIteratorExt, function::Optional, *};
-use serde_json;
-use std::cell::RefCell;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use redb::TableDefinition;
+use rong::{function::Optional, *};
+use std::path::PathBuf;
 
 mod storage;
-use storage::*;
+pub use storage::*;
 
-// Table definitions
-const STORAGE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("storage");
+// Table definition shared by all storage instances
+pub(crate) const STORAGE_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("storage");
 
 // Default size limits
-const REDB_INIT_OVERHEAD: usize = (1.5 * 1024.0 * 1024.0) as usize; // ~1.5MB redb database initialization overhead
-const DEFAULT_MAX_TOTAL_SIZE: usize = 20 * 1024 * 1024; // 20MB total storage limit
-const DEFAULT_MAX_USER_DATA_SIZE: usize = DEFAULT_MAX_TOTAL_SIZE + REDB_INIT_OVERHEAD;
-const DEFAULT_MAX_KEY_SIZE: usize = 1024; // 1KB
-const DEFAULT_MAX_VALUE_SIZE: usize = 5 * 1024 * 1024; // 5MB
-
-// Thread-local storage database (single database per thread)
-// Stores both the database path and the lazily-initialized database
-thread_local! {
-    static STORAGE_PATH: RefCell<Option<PathBuf>> = RefCell::new(None);
-    static STORAGE_DB: RefCell<Option<Rc<Database>>> = RefCell::new(None);
-}
-
-/// Set the storage database path (does NOT create the database immediately)
-/// The database will be created lazily on first use
-pub fn set_storage_path<P: AsRef<Path>>(path: P) -> Result<(), String> {
-    let db_path = path.as_ref().to_path_buf();
-
-    STORAGE_PATH.with(|storage_path| {
-        *storage_path.borrow_mut() = Some(db_path);
-    });
-
-    Ok(())
-}
-
-/// Initialize the database if not already initialized
-/// This is called automatically on first use
-fn ensure_db_initialized() -> Result<(), String> {
-    // Check if database is already initialized
-    let db_exists = STORAGE_DB.with(|storage| storage.borrow().is_some());
-    if db_exists {
-        return Ok(());
-    }
-
-    let db_path = STORAGE_PATH
-        .with(|storage_path| storage_path.borrow().clone())
-        .ok_or_else(|| "Storage path not set. Call set_storage_path first.".to_string())?;
-
-    // Create parent directory if it doesn't exist
-    if let Some(parent) = db_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
-    }
-
-    // Create the database
-    let db = Database::create(&db_path)
-        .map_err(|e| format!("Failed to open database at {:?}: {}", db_path, e))?;
-
-    // Create the storage table if it doesn't exist
-    let write_txn = db
-        .begin_write()
-        .map_err(|e| format!("Failed to begin write transaction: {}", e))?;
-
-    {
-        // This will create the table if it doesn't exist, or do nothing if it does
-        let _table = write_txn
-            .open_table(STORAGE_TABLE)
-            .map_err(|e| format!("Failed to create/open storage table: {}", e))?;
-    } // table is dropped here
-
-    write_txn
-        .commit()
-        .map_err(|e| format!("Failed to commit table creation: {}", e))?;
-
-    // Store in thread-local storage
-    STORAGE_DB.with(|storage| {
-        *storage.borrow_mut() = Some(Rc::new(db));
-    });
-
-    Ok(())
-}
-
-/// Get the thread-local database, initializing it if necessary
-fn get_storage_db() -> Result<Rc<Database>, String> {
-    ensure_db_initialized()?;
-
-    STORAGE_DB
-        .with(|storage| storage.borrow().clone())
-        .ok_or_else(|| "Failed to get storage database after initialization".to_string())
-}
-
-/// Close all open storages in the current thread
-/// This is useful for cleanup in tests or when shutting down
-pub fn close_all_storages() {
-    STORAGE_DB.with(|storage| {
-        storage.borrow_mut().take();
-    });
-}
+const REDB_INIT_OVERHEAD: usize = (1.5 * 1024.0 * 1024.0) as usize; // ~1.5MB redb initialization overhead
+pub(crate) const DEFAULT_MAX_TOTAL_SIZE: usize = 20 * 1024 * 1024; // 20MB user data limit
+pub(crate) const DEFAULT_MAX_USER_DATA_SIZE: usize = DEFAULT_MAX_TOTAL_SIZE + REDB_INIT_OVERHEAD;
+pub(crate) const DEFAULT_MAX_KEY_SIZE: usize = 1024; // 1KB
+pub(crate) const DEFAULT_MAX_VALUE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
 // size is in bytes
 #[derive(IntoJSObj)]
 pub struct StorageInfo {
     #[rename = "currentSize"]
-    current_size: u32,
+    pub(crate) current_size: u32,
     #[rename = "limitSize"]
-    limit_size: u32,
+    pub(crate) limit_size: u32,
     #[rename = "keyCount"]
-    key_count: u32,
+    pub(crate) key_count: u32,
 }
 
-/// Storage list function that returns an iterator
-async fn storage_list(ctx: JSContext, prefix: Optional<String>) -> JSResult<JSValue> {
-    let db = get_storage_db().map_err(|e| RongJSError::TypeError(e))?;
-
-    let read_txn = db
-        .begin_read()
-        .map_err(|e| RongJSError::TypeError(format!("Failed to begin read transaction: {}", e)))?;
-
-    let table = read_txn
-        .open_table(STORAGE_TABLE)
-        .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
-
-    let iter = table
-        .iter()
-        .map_err(|e| RongJSError::TypeError(format!("Failed to create iterator: {}", e)))?;
-
-    let mut keys = Vec::new();
-    for item in iter {
-        let (key, _) =
-            item.map_err(|e| RongJSError::TypeError(format!("Failed to read item: {}", e)))?;
-        let key_str = key.value().to_string();
-
-        // Apply prefix filter if provided
-        if let Some(ref prefix_str) = prefix.0 {
-            if key_str.starts_with(prefix_str) {
-                keys.push(key_str);
-            }
-        } else {
-            keys.push(key_str);
-        }
-    }
-
-    // Convert to JS iterator and then to JSValue
-    let iter = keys.to_js_iter(&ctx)?;
-    Ok(JSValue::from(&ctx, iter))
-}
-
-/// Storage info function
-async fn storage_info() -> JSResult<StorageInfo> {
-    let db = get_storage_db().map_err(|e| RongJSError::TypeError(e))?;
-
-    let read_txn = db
-        .begin_read()
-        .map_err(|e| RongJSError::TypeError(format!("Failed to begin read transaction: {}", e)))?;
-
-    let table = read_txn
-        .open_table(STORAGE_TABLE)
-        .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
-
-    let mut current_size = 0;
-    let mut key_count = 0;
-    let iter = table
-        .iter()
-        .map_err(|e| RongJSError::TypeError(format!("Failed to create iterator: {}", e)))?;
-
-    for item in iter {
-        let (key, value) =
-            item.map_err(|e| RongJSError::TypeError(format!("Failed to read item: {}", e)))?;
-
-        current_size += key.value().len() + value.value().len();
-        key_count += 1;
-    }
-
-    Ok(StorageInfo {
-        current_size: current_size as u32,
-        limit_size: DEFAULT_MAX_USER_DATA_SIZE as u32,
-        key_count: key_count as u32,
-    })
+/// Open a new storage instance at the provided path.
+async fn storage_open(
+    ctx: JSContext,
+    path: String,
+    options: Optional<StorageOptionsInput>,
+) -> JSResult<JSObject> {
+    let opts = options.0.map(StorageOptions::from).unwrap_or_default();
+    let storage = Storage::open_with_options(PathBuf::from(path), opts)?;
+    Ok(Class::get::<Storage>(&ctx)?.instance(storage))
 }
 
 /// Initialize the Storage module
 pub fn init(ctx: &JSContext) -> JSResult<()> {
+    ctx.register_class::<Storage>()?;
+
+    let constructor = Class::get::<Storage>(ctx)?;
     let rong = ctx.rong();
 
-    // Create storage object with methods
-    let storage = JSObject::new(ctx);
+    // Expose the class as Rong.Storage
+    rong.set("Storage", constructor.clone())?;
 
-    storage
-        .set("set", JSFunc::new(ctx, storage_set)?.name("set")?)?
-        .set("get", JSFunc::new(ctx, storage_get)?.name("get")?)?
-        .set("delete", JSFunc::new(ctx, storage_delete)?.name("delete")?)?
-        .set("clear", JSFunc::new(ctx, storage_clear)?.name("clear")?)?
-        .set("list", JSFunc::new(ctx, storage_list)?.name("list")?)?
-        .set("info", JSFunc::new(ctx, storage_info)?.name("info")?)?;
-
-    // Set as Rong.storage
-    rong.set("storage", storage)?;
+    // Provide Rong.storage.open(path) helper for ergonomic access
+    let storage_ns = JSObject::new(ctx);
+    storage_ns.set("open", JSFunc::new(ctx, storage_open)?.name("open")?)?;
+    rong.set("storage", storage_ns)?;
 
     Ok(())
 }
@@ -249,9 +99,9 @@ mod tests {
                 .to_string_lossy()
                 .into_owned();
 
-            // Set storage path using workspace root
+            // Provide test storage path to JS
             let storage_path = format!("{}/target/test-tmp/test_storage.db", workspace_root);
-            set_storage_path(&storage_path).unwrap();
+            ctx.global().set("TEST_STORAGE_DB_PATH", storage_path)?;
 
             rong_assert::init(&ctx)?;
             rong_console::init(&ctx)?;
@@ -265,5 +115,23 @@ mod tests {
 
             Ok(())
         });
+    }
+
+    #[test]
+    fn rust_open_api_provides_handles() {
+        let workspace_root = env::current_dir()
+            .expect("cwd")
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("workspace root")
+            .to_path_buf();
+
+        let default_path = workspace_root.join("target/test-tmp/rust_storage_default.db");
+        Storage::open(default_path).expect("default open should succeed");
+
+        let custom_path = workspace_root.join("target/test-tmp/rust_storage_custom.db");
+        let mut options = StorageOptions::default();
+        options.max_key_size = Some(16);
+        Storage::open_with_options(custom_path, options).expect("custom open should succeed");
     }
 }

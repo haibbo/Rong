@@ -1,13 +1,50 @@
+const STORAGE_DB_PATH =
+  globalThis.TEST_STORAGE_DB_PATH ??
+  `${
+    typeof WORKSPACE_ROOT !== "undefined" ? WORKSPACE_ROOT : "."
+  }/target/test-tmp/test_storage.db`;
+
 describe("Storage API", () => {
+  let storage;
+
   beforeEach(async () => {
-    // Clear storage before each test
-    await Rong.storage.clear();
+    if (!storage) {
+      storage = await Rong.storage.open(STORAGE_DB_PATH);
+    }
+    await storage.clear();
+  });
+
+  it("should allow direct class construction with path", async () => {
+    const direct = new Rong.Storage(`${STORAGE_DB_PATH}.direct`);
+    await direct.clear();
+    await direct.set("direct_key", "direct_value");
+    assert.equal(await direct.get("direct_key"), "direct_value");
+  });
+
+  it("should honor custom limit options", async () => {
+    const strict = await Rong.storage.open(`${STORAGE_DB_PATH}.strict`, {
+      maxKeySize: 4,
+    });
+    await strict.clear();
+    await strict.set("tiny", "ok");
+
+    let errorThrown = false;
+    try {
+      await strict.set("too_long_key", "nope");
+    } catch (err) {
+      errorThrown = true;
+      assert(
+        err.message.includes("Key size exceeds"),
+        "Error should mention key size limit",
+      );
+    }
+    assert(errorThrown, "Setting oversized key should throw");
   });
 
   it("should allow immediate info() call without table creation error", async () => {
     let errorThrown = false;
     try {
-      const info = await Rong.storage.info();
+      const info = await storage.info();
       assert(typeof info.currentSize === "number");
       assert(typeof info.limitSize === "number");
       assert(typeof info.keyCount === "number");
@@ -22,54 +59,54 @@ describe("Storage API", () => {
   });
 
   it("should set and get string values", async () => {
-    await Rong.storage.set("test_string", "hello world");
-    const value = await Rong.storage.get("test_string");
+    await storage.set("test_string", "hello world");
+    const value = await storage.get("test_string");
     assert.equal(value, "hello world");
   });
 
   it("should handle comprehensive number types", async () => {
     // Test i32 range
-    await Rong.storage.set("i32_min", -2147483648); // i32::MIN
-    await Rong.storage.set("i32_max", 2147483647); // i32::MAX
-    await Rong.storage.set("i32_regular", 42);
+    await storage.set("i32_min", -2147483648); // i32::MIN
+    await storage.set("i32_max", 2147483647); // i32::MAX
+    await storage.set("i32_regular", 42);
 
     // Test u32 range
-    await Rong.storage.set("u32_max", 4294967295); // u32::MAX
-    await Rong.storage.set("u32_regular", 100);
+    await storage.set("u32_max", 4294967295); // u32::MAX
+    await storage.set("u32_regular", 100);
 
     // Test floating point
-    await Rong.storage.set("float_pi", 3.14159);
-    await Rong.storage.set("float_negative", -2.718);
+    await storage.set("float_pi", 3.14159);
+    await storage.set("float_negative", -2.718);
 
     // Test large integers (should become BigInt)
-    await Rong.storage.set("i64_large", 9007199254740992n); // 2^53, beyond JS safe integer
-    await Rong.storage.set("u64_moderate", 9007199254740993n); // Just beyond JS safe integer for u64
-    await Rong.storage.set("i64_min", -9223372036854775808n); // i64::MIN
+    await storage.set("i64_large", 9007199254740992n); // 2^53, beyond JS safe integer
+    await storage.set("u64_moderate", 9007199254740993n); // Just beyond JS safe integer for u64
+    await storage.set("i64_min", -9223372036854775808n); // i64::MIN
 
     // Verify all values
-    assert.equal(await Rong.storage.get("i32_min"), -2147483648);
-    assert.equal(await Rong.storage.get("i32_max"), 2147483647);
-    assert.equal(await Rong.storage.get("i32_regular"), 42);
-    assert.equal(await Rong.storage.get("u32_max"), 4294967295);
-    assert.equal(await Rong.storage.get("u32_regular"), 100);
-    assert.equal(await Rong.storage.get("float_pi"), 3.14159);
-    assert.equal(await Rong.storage.get("float_negative"), -2.718);
-    assert.equal(await Rong.storage.get("i64_large"), 9007199254740992n);
-    assert.equal(await Rong.storage.get("u64_moderate"), 9007199254740993n);
-    assert.equal(await Rong.storage.get("i64_min"), -9223372036854775808n);
+    assert.equal(await storage.get("i32_min"), -2147483648);
+    assert.equal(await storage.get("i32_max"), 2147483647);
+    assert.equal(await storage.get("i32_regular"), 42);
+    assert.equal(await storage.get("u32_max"), 4294967295);
+    assert.equal(await storage.get("u32_regular"), 100);
+    assert.equal(await storage.get("float_pi"), 3.14159);
+    assert.equal(await storage.get("float_negative"), -2.718);
+    assert.equal(await storage.get("i64_large"), 9007199254740992n);
+    assert.equal(await storage.get("u64_moderate"), 9007199254740993n);
+    assert.equal(await storage.get("i64_min"), -9223372036854775808n);
   });
 
   it("should set and get boolean values", async () => {
-    await Rong.storage.set("test_true", true);
-    await Rong.storage.set("test_false", false);
+    await storage.set("test_true", true);
+    await storage.set("test_false", false);
 
-    assert.equal(await Rong.storage.get("test_true"), true);
-    assert.equal(await Rong.storage.get("test_false"), false);
+    assert.equal(await storage.get("test_true"), true);
+    assert.equal(await storage.get("test_false"), false);
   });
 
   it("should handle null values", async () => {
-    await Rong.storage.set("test_null", null);
-    const value = await Rong.storage.get("test_null");
+    await storage.set("test_null", null);
+    const value = await storage.get("test_null");
     assert.equal(value, null);
   });
 
@@ -85,8 +122,8 @@ describe("Storage API", () => {
       nullValue: null,
     };
 
-    await Rong.storage.set("test_object", testObj);
-    const retrieved = await Rong.storage.get("test_object");
+    await storage.set("test_object", testObj);
+    const retrieved = await storage.get("test_object");
 
     // Verify object structure
     assert.equal(retrieved.name, "test");
@@ -111,8 +148,8 @@ describe("Storage API", () => {
       3.14159,
     ];
 
-    await Rong.storage.set("test_array", testArray);
-    const retrieved = await Rong.storage.get("test_array");
+    await storage.set("test_array", testArray);
+    const retrieved = await storage.get("test_array");
 
     assert.equal(retrieved.length, 7);
     assert.equal(retrieved[0], 1);
@@ -126,24 +163,24 @@ describe("Storage API", () => {
   });
 
   it("should return undefined for non-existent keys", async () => {
-    const value = await Rong.storage.get("non_existent_key");
+    const value = await storage.get("non_existent_key");
     assert.equal(value, undefined);
   });
 
   it("should delete values", async () => {
-    await Rong.storage.set("test_delete", "to be deleted");
-    assert.equal(await Rong.storage.get("test_delete"), "to be deleted");
+    await storage.set("test_delete", "to be deleted");
+    assert.equal(await storage.get("test_delete"), "to be deleted");
 
-    await Rong.storage.delete("test_delete");
-    assert.equal(await Rong.storage.get("test_delete"), undefined);
+    await storage.delete("test_delete");
+    assert.equal(await storage.get("test_delete"), undefined);
   });
 
   it("should list all keys with for...of", async () => {
-    await Rong.storage.set("key1", "value1");
-    await Rong.storage.set("key2", "value2");
-    await Rong.storage.set("key3", "value3");
+    await storage.set("key1", "value1");
+    await storage.set("key2", "value2");
+    await storage.set("key3", "value3");
 
-    const iterator = await Rong.storage.list();
+    const iterator = await storage.list();
     const keys = [];
     for (const key of iterator) {
       keys.push(key);
@@ -156,11 +193,11 @@ describe("Storage API", () => {
   });
 
   it("should list keys with prefix", async () => {
-    await Rong.storage.set("user:1", "alice");
-    await Rong.storage.set("user:2", "bob");
-    await Rong.storage.set("config:theme", "dark");
+    await storage.set("user:1", "alice");
+    await storage.set("user:2", "bob");
+    await storage.set("config:theme", "dark");
 
-    const iterator = await Rong.storage.list("user:");
+    const iterator = await storage.list("user:");
     const userKeys = Array.from(iterator);
     assert.equal(userKeys.length, 2);
     assert(userKeys.includes("user:1"));
@@ -169,28 +206,28 @@ describe("Storage API", () => {
   });
 
   it("should clear all data", async () => {
-    await Rong.storage.set("key1", "value1");
-    await Rong.storage.set("key2", { test: true });
+    await storage.set("key1", "value1");
+    await storage.set("key2", { test: true });
 
-    const keysBefore = Array.from(await Rong.storage.list());
+    const keysBefore = Array.from(await storage.list());
     assert.equal(keysBefore.length, 2);
 
-    await Rong.storage.clear();
+    await storage.clear();
 
-    const keysAfter = Array.from(await Rong.storage.list());
+    const keysAfter = Array.from(await storage.list());
     assert.equal(keysAfter.length, 0);
   });
 
   it("should provide storage info", async () => {
     // Clear storage first to get accurate counts
-    await Rong.storage.clear();
+    await storage.clear();
 
     // Add some test data
-    await Rong.storage.set("test1", { some: "data", with: ["nested", "content"] });
-    await Rong.storage.set("test2", "simple string");
-    await Rong.storage.set("test3", 42);
+    await storage.set("test1", { some: "data", with: ["nested", "content"] });
+    await storage.set("test2", "simple string");
+    await storage.set("test3", 42);
 
-    const info = await Rong.storage.info();
+    const info = await storage.info();
     assert(typeof info.currentSize === "number");
     assert(typeof info.limitSize === "number");
     assert(typeof info.keyCount === "number");
@@ -202,7 +239,7 @@ describe("Storage API", () => {
   it("should reject undefined values", async () => {
     let errorThrown = false;
     try {
-      await Rong.storage.set("test_undefined", undefined);
+      await storage.set("test_undefined", undefined);
     } catch (e) {
       errorThrown = true;
       assert(e.message.includes("Cannot store undefined values"));
@@ -213,9 +250,9 @@ describe("Storage API", () => {
   it("should handle Date values", async () => {
     // Test storing and retrieving Date objects
     const testDate = new Date("2023-12-25T10:30:00.000Z");
-    await Rong.storage.set("test_date", testDate);
+    await storage.set("test_date", testDate);
 
-    const retrieved = await Rong.storage.get("test_date");
+    const retrieved = await storage.get("test_date");
     assert(retrieved instanceof Date, "Retrieved value should be a Date");
     assert.equal(
       retrieved.getTime(),
@@ -230,8 +267,8 @@ describe("Storage API", () => {
 
     // Test with current date
     const now = new Date();
-    await Rong.storage.set("test_date_now", now);
-    const retrievedNow = await Rong.storage.get("test_date_now");
+    await storage.set("test_date_now", now);
+    const retrievedNow = await storage.get("test_date_now");
     assert(
       retrievedNow instanceof Date,
       "Retrieved current date should be a Date",
@@ -244,8 +281,8 @@ describe("Storage API", () => {
 
     // Test with epoch timestamp
     const epochDate = new Date(1640995200000); // 2022-01-01 00:00:00 UTC
-    await Rong.storage.set("test_epoch_date", epochDate);
-    const retrievedEpoch = await Rong.storage.get("test_epoch_date");
+    await storage.set("test_epoch_date", epochDate);
+    const retrievedEpoch = await storage.get("test_epoch_date");
     assert(
       retrievedEpoch instanceof Date,
       "Retrieved epoch date should be a Date",
