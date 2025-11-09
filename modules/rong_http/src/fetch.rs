@@ -35,23 +35,19 @@ async fn to_hyper_request(mut request: Request) -> JSResult<HttpRequest<BoxBody<
     let body: BoxBody<Bytes, Error> = if let Some(body) = request.body.take() {
         // Detect ReadableStream for streaming upload
         if let Some(obj) = body.0.clone().into_object() {
-            if obj.borrow::<ReadableStream>().is_ok() {
-                if let Ok(rs) = obj.borrow::<ReadableStream>() {
-                    if let Some(rx) = rong_stream::readable_stream_take_receiver(&rs) {
-                        let stream = ReceiverStream::new(rx).map(|item| match item {
-                            Ok(bytes) => Ok(Frame::data(bytes)),
-                            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
-                        });
-                        let sb = StreamBody::new(stream);
-                        sb.boxed()
-                    } else {
-                        Full::new(Bytes::new()).map_err(|e| match e {}).boxed()
-                    }
+            if let Ok(rs) = obj.borrow::<ReadableStream>() {
+                if let Some(rx) = rong_stream::readable_stream_take_receiver(&rs) {
+                    let stream = ReceiverStream::new(rx).map(|item| match item {
+                        Ok(bytes) => Ok(Frame::data(bytes)),
+                        Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+                    });
+                    let sb = StreamBody::new(stream);
+                    sb.boxed()
                 } else {
                     Full::new(Bytes::new()).map_err(|e| match e {}).boxed()
                 }
             } else {
-                // Fallback to non-streaming conversion
+                // Fallback to non-streaming conversion - convert once and reuse
                 let (bytes, boundary) = body.to_bytes().await.unwrap_or_default();
                 if let Some(boundary) = boundary {
                     if let Some(headers) = builder.headers_mut() {
@@ -69,6 +65,7 @@ async fn to_hyper_request(mut request: Request) -> JSResult<HttpRequest<BoxBody<
                 Full::new(bytes).map_err(|e| match e {}).boxed()
             }
         } else {
+            // Non-object body (e.g., string) - convert once
             let (bytes, boundary) = body.to_bytes().await.unwrap_or_default();
             if let Some(boundary) = boundary {
                 if let Some(headers) = builder.headers_mut() {
@@ -102,7 +99,7 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     grant_network_access(&domain)?;
 
     // Get abort signal if present
-    let abort_receiver = request.abort_signal().map(|signal| signal.subscribe());
+    let mut abort_receiver = request.abort_signal().map(|signal| signal.subscribe());
 
     // Convert Request to hyper::Request
     let hyper_request = to_hyper_request(request).await?;
@@ -110,10 +107,11 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     let orig_uri = hyper_request.uri().clone();
 
     // Send via dedicated net service
-    let abort_bridge = if let Some(mut r) = abort_receiver.clone() {
+    let abort_bridge = if let Some(r) = &mut abort_receiver {
         let (tx, rx) = oneshot::channel::<()>();
+        let mut abort_rx = r.clone();
         tokio::task::spawn_local(async move {
-            let _ = r.recv().await;
+            let _ = abort_rx.recv().await;
             let _ = tx.send(());
         });
         Some(rx)
@@ -121,10 +119,14 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
         None
     };
 
-    let small_threshold = 4096usize;
+    // Buffer responses up to 256KB in memory before streaming.
+    // This significantly improves performance for typical API responses (JSON, HTML, etc.)
+    // while still streaming large files to avoid excessive memory usage.
+    let small_threshold = 256 * 1024; // 256KB
+
     // Race the network request with an early abort. If the abort wins, reject with its reason.
     let net_fut = service_executor::send_request(hyper_request, small_threshold, abort_bridge);
-    let net_resp = if let Some(mut early_abort) = abort_receiver.clone() {
+    let net_resp = if let Some(early_abort) = &mut abort_receiver {
         tokio::select! {
             res = net_fut => res.map_err(|e| RongJSError::TypeError(format!("fetch failed: {}", e)))?,
             reason = early_abort.recv() => {

@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use http::{HeaderMap, Method, Uri, header};
+use http::{Method, Uri, header};
 
 use rong::{function::Optional, *};
 
@@ -22,8 +22,6 @@ pub struct Response {
     body: Option<BodyKind>,
     consumed: bool,
     redirected: bool,
-    content_type: Option<String>,
-    content_encoding: Option<String>,
     abort_receiver: Option<AbortReceiver>,
     // Cache a JS ReadableStream instance so repeated Response.body access
     // returns the same object and doesn't have side effects.
@@ -160,8 +158,6 @@ impl Response {
             body: self.body.clone(),
             consumed: self.consumed,
             redirected: self.redirected,
-            content_type: self.content_type.clone(),
-            content_encoding: self.content_encoding.clone(),
             abort_receiver: self.abort_receiver.clone(),
             body_stream: RefCell::new(self.body_stream.borrow().clone()),
         }
@@ -189,7 +185,7 @@ impl Response {
             Some(BodyKind::Buffered(b)) => {
                 let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(1);
                 let bytes = b.clone();
-                tokio::spawn(async move {
+                rong::spawn(async move {
                     let _ = tx.send(Ok(bytes)).await;
                 });
                 if let Ok(jsrs) = JSReadableStream::from_receiver(&ctx, rx) {
@@ -204,7 +200,7 @@ impl Response {
                 // Materialize JS body into a one-shot stream
                 let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(1);
                 let body_clone = body.clone();
-                tokio::task::spawn_local(async move {
+                rong::spawn(async move {
                     match body_clone.bytes().await {
                         Ok(bytes) => {
                             let _ = tx.send(Ok(bytes)).await;
@@ -236,6 +232,16 @@ impl Response {
             }
             Some(BodyKind::Channel(inner)) => {
                 let mut collected = Vec::new();
+                // Pre-reserve capacity using Content-Length when available
+                if let Some(cl_val) = self
+                    .headers
+                    .as_header_map()
+                    .get(header::CONTENT_LENGTH)
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse::<usize>().ok())
+                {
+                    collected.reserve(cl_val);
+                }
                 // Try to take receiver from cached ReadableStream first (if one exists)
                 let mut rx_opt = if let Some(obj) = self.body_stream.borrow().as_ref() {
                     if let Ok(rs) = obj.borrow::<rong_stream::ReadableStream>() {
@@ -299,15 +305,8 @@ impl Response {
             ));
         }
         self.consumed = true;
-        match &mut self.body {
-            Some(BodyKind::JS(body)) => body.text().await,
-            Some(BodyKind::Buffered(b)) => Ok(String::from_utf8_lossy(b.as_ref()).into_owned()),
-            Some(BodyKind::Channel(_)) => {
-                let bytes = self.body_to_bytes().await?;
-                Ok(String::from_utf8_lossy(&bytes).into_owned())
-            }
-            None => Ok(String::new()),
-        }
+        let bytes = self.body_to_bytes().await?;
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
     #[js_method]
@@ -414,22 +413,6 @@ impl Response {
 }
 
 impl Response {
-    // Parse Content-Type header to extract mime type, charset, etc. (kept for future use)
-    fn parse_content_type(headers: &HeaderMap) -> (Option<String>, Option<String>) {
-        if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
-            if let Ok(content_type) = content_type.to_str() {
-                let parts: Vec<&str> = content_type.split(';').map(|s| s.trim()).collect();
-                let mime_type = parts[0].to_string();
-                let charset = parts
-                    .iter()
-                    .find(|p| p.starts_with("charset="))
-                    .map(|p| p[8..].to_string());
-                return (Some(mime_type), charset);
-            }
-        }
-        (None, None)
-    }
-
     pub(crate) fn from_meta(
         status: http::StatusCode,
         headers_in: http::HeaderMap,
@@ -446,12 +429,6 @@ impl Response {
             }
         }
 
-        let (content_type, _) = Self::parse_content_type(&headers_in);
-        let content_encoding = headers_in
-            .get(header::CONTENT_ENCODING)
-            .and_then(|v| v.to_str().ok())
-            .map(String::from);
-
         Self {
             url,
             method,
@@ -461,8 +438,6 @@ impl Response {
             body: Some(body_kind),
             consumed: false,
             redirected: false,
-            content_type,
-            content_encoding,
             abort_receiver,
             ..Default::default()
         }
