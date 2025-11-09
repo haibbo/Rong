@@ -170,7 +170,9 @@ impl FsFile {
     fn writable(&self) -> JSResult<WritableStream> {
         // Create a channel-backed WritableStream that writes to this file
         let file = self.file.clone();
-        let (tx, mut rx) = mpsc::channel::<Bytes>(16);
+        // Larger channel buffers smooth out bursts from network streams
+        // and reduce backpressure on JS when writing large files.
+        let (tx, mut rx) = mpsc::channel::<Bytes>(128);
         tokio::task::spawn(async move {
             let mut f = file.lock().await;
             while let Some(chunk) = rx.recv().await {
