@@ -181,32 +181,64 @@ pub(crate) async fn process_request(
         return;
     }
 
-    let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(8);
+    // Use a larger channel to reduce backpressure for high-throughput streams.
+    // Larger capacity reduces task wakeups and helps amortize syscalls when the
+    // consumer keeps up but occasionally pauses (e.g., JS write syscall bursts).
+    const STREAM_CHAN_CAP: usize = 256;
+    let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(STREAM_CHAN_CAP);
     let mut abort = msg.abort_rx.take();
     tokio::task::spawn(async move {
         let mut body = body;
+        // Aggregate small frames into larger chunks before sending across the
+        // channel/JS boundary to significantly reduce overhead. Hyper can yield
+        // frames as small as a few KB; coalescing to ~128 KiB cuts message count.
+        const COALESCE_TARGET: usize = 512 * 1024; // 512 KiB
+        let mut buf: bytes::BytesMut = bytes::BytesMut::with_capacity(COALESCE_TARGET);
         let has_abort = abort.is_some();
+        let mut aborted = false;
         loop {
             if has_abort {
                 tokio::select! {
                     maybe = timeout(READ_FRAME_TIMEOUT, body.frame()) => {
                         match maybe {
                             Ok(Some(Ok(frame))) => {
-                                if let Ok(data) = frame.into_data() { if tx.send(Ok(data)).await.is_err() { break; } }
+                                if let Ok(data) = frame.into_data() {
+                                    // If we have a large frame and no pending buffer, forward directly
+                                    if buf.is_empty() && data.len() >= COALESCE_TARGET {
+                                        if tx.send(Ok(data)).await.is_err() { break; }
+                                    } else {
+                                        // Append and flush in COALESCE_TARGET sized chunks
+                                        buf.extend_from_slice(&data);
+                                        if buf.len() >= COALESCE_TARGET {
+                                            let out = buf.split().freeze();
+                                            if tx.send(Ok(out)).await.is_err() { break; }
+                                        }
+                                    }
+                                }
                             }
                             Ok(Some(Err(e))) => { let _ = tx.send(Err(format!("read frame: {}", e))).await; break; }
                             Ok(None) => break,
                             Err(_) => { let _ = tx.send(Err("read timeout".to_string())).await; break; }
                         }
                     }
-                    _ = async { if let Some(rx) = &mut abort { let _ = rx.await; } } => { let _ = tx.send(Err("aborted".to_string())).await; drop(tx); break; }
+                    _ = async { if let Some(rx) = &mut abort { let _ = rx.await; } } => { let _ = tx.send(Err("aborted".to_string())).await; aborted = true; break; }
                 }
             } else {
                 match timeout(READ_FRAME_TIMEOUT, body.frame()).await {
                     Ok(Some(Ok(frame))) => {
                         if let Ok(data) = frame.into_data() {
-                            if tx.send(Ok(data)).await.is_err() {
-                                break;
+                            if buf.is_empty() && data.len() >= COALESCE_TARGET {
+                                if tx.send(Ok(data)).await.is_err() {
+                                    break;
+                                }
+                            } else {
+                                buf.extend_from_slice(&data);
+                                if buf.len() >= COALESCE_TARGET {
+                                    let out = buf.split().freeze();
+                                    if tx.send(Ok(out)).await.is_err() {
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
@@ -221,6 +253,11 @@ pub(crate) async fn process_request(
                     }
                 }
             }
+        }
+        // Flush any remaining coalesced bytes at EOF (but not on abort)
+        if !aborted && !buf.is_empty() {
+            let out = buf.split().freeze();
+            let _ = tx.send(Ok(out)).await;
         }
     });
     let _ = msg.resp_tx.send(Ok(HttpResponse {
