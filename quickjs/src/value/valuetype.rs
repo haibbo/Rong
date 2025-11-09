@@ -15,7 +15,7 @@ impl JSTypeOf for QJSValue {
         if self._is_err() {
             true
         } else {
-            unsafe { qjs::JS_IsError(self.ctx, self.value) }
+            unsafe { qjs::JS_IsError(self.value) }
         }
     }
 

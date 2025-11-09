@@ -26,7 +26,7 @@ OUT_DIR ?= out
 INCLUDE_DIRS = -I$(SRC_DIR_QJS) -I$(SRC_DIR_PATCH)
 
 # Necessary source files of quickjs (except quickjs.c)
-QJS_FILENAMES = libregexp.c libunicode.c cutils.c libbf.c
+QJS_FILENAMES = libregexp.c libunicode.c cutils.c dtoa.c
 
 # Patch source files
 PATCH_FILENAMES = qjs.c inline.c
