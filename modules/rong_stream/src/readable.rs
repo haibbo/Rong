@@ -149,25 +149,86 @@ impl ReadableStream {
         let mut reader = self.get_reader()?;
         let mut writer = dest.get_writer()?;
 
+        // Fast path: if this ReadableStream is channel-backed and the writer is channel-backed,
+        // forward bytes directly between channels without constructing JS ArrayBuffers.
+        if let Some(mut rx) = readable_stream_take_receiver(self) {
+            if let Some((tx, done_rx)) =
+                crate::writable::WritableStreamDefaultWriter::take_channel(&mut writer)
+            {
+                let mut abort_rx = opts.signal.as_ref().map(|s| s.subscribe());
+                let mut pipe_err: Option<RongJSError> = None;
+
+                // Pump in Rust
+                loop {
+                    if let Some(arx) = &mut abort_rx {
+                        tokio::select! {
+                            item = rx.recv() => {
+                                match item {
+                                    Some(Ok(bytes)) => {
+                                        if tx.send(bytes).await.is_err() { break; }
+                                    }
+                                    Some(Err(e)) => { pipe_err = Some(RongJSError::Error(e)); break; }
+                                    None => break,
+                                }
+                            }
+                            reason = arx.recv() => {
+                                pipe_err = Some(RongJSError::from_jsvalue(reason));
+                                break;
+                            }
+                        }
+                    } else {
+                        match rx.recv().await {
+                            Some(Ok(bytes)) => {
+                                if tx.send(bytes).await.is_err() {
+                                    break;
+                                }
+                            }
+                            Some(Err(e)) => {
+                                pipe_err = Some(RongJSError::Error(e));
+                                break;
+                            }
+                            None => break,
+                        }
+                    }
+                }
+
+                // Close writer on normal completion
+                if pipe_err.is_none() && !prevent_close {
+                    // Drop sender and wait for writer flush if available
+                    drop(tx);
+                    if let Some(rx) = done_rx {
+                        let _ = rx.await;
+                    }
+                }
+
+                // Release locks (ignore errors)
+                let _ = reader.release_lock().await;
+                let _ = writer.release_lock().await;
+
+                // Abort writer on error if needed
+                if let Some(e) = pipe_err {
+                    if !prevent_abort {
+                        let _ = writer.abort().await;
+                    }
+                    return Err(e);
+                }
+                return Ok(());
+            }
+        }
+
+        // Fallback: JS-level pump
         let mut pipe_err: Option<RongJSError> = None;
         let mut abort_rx = opts.signal.as_ref().map(|s| s.subscribe());
-
         loop {
             // Race read vs abort (if provided)
             let res_obj = if let Some(rx) = &mut abort_rx {
                 tokio::select! {
-                    r = reader.read(ctx.clone()) => {
-                        Some(r?)
-                    }
-                    reason = rx.recv() => {
-                        pipe_err = Some(RongJSError::from_jsvalue(reason));
-                        None
-                    }
+                    r = reader.read(ctx.clone()) => { Some(r?) }
+                    reason = rx.recv() => { pipe_err = Some(RongJSError::from_jsvalue(reason)); None }
                 }
             } else {
                 Some(reader.read(ctx.clone()).await?)
             };
-
             if let Some(r) = res_obj {
                 let done = r.get::<_, bool>("done")?;
                 if done {
@@ -182,7 +243,6 @@ impl ReadableStream {
                     }
                 }
                 if let Err(e) = writer.write(chunk).await {
-                    // Writer error
                     if !prevent_cancel {
                         let _ = reader.cancel().await;
                     }
@@ -191,21 +251,14 @@ impl ReadableStream {
                 }
                 continue;
             } else {
-                // Aborted
                 break;
             }
         }
-
-        // Close writer on normal completion
         if pipe_err.is_none() && !prevent_close {
             let _ = writer.close().await;
         }
-
-        // Release locks (ignore errors)
         let _ = reader.release_lock().await;
         let _ = writer.release_lock().await;
-
-        // Abort writer on error if needed
         if let Some(e) = pipe_err {
             if !prevent_abort {
                 let _ = writer.abort().await;

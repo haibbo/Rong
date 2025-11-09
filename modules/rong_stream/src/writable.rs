@@ -310,6 +310,31 @@ impl WritableStreamDefaultWriter {
     }
 }
 
+// Internal helpers for native fast paths
+impl WritableStreamDefaultWriter {
+    // Expose the underlying channel sender and done signal for intra-crate optimizations
+    pub(crate) fn take_channel(
+        &mut self,
+    ) -> Option<(
+        mpsc::Sender<Bytes>,
+        Option<oneshot::Receiver<Result<(), String>>>,
+    )> {
+        // Only available when the writer is channel-backed (not JS sink)
+        if self.sink_obj.is_some() {
+            return None;
+        }
+        // Take ownership of the sender
+        let tx_opt = futures::executor::block_on(async { self.tx.lock().await.take() });
+        if let Some(tx) = tx_opt {
+            // Also take the done receiver if any
+            let done_opt = self.done_rx.lock().ok().and_then(|mut g| g.take());
+            Some((tx, done_opt))
+        } else {
+            None
+        }
+    }
+}
+
 // Public Rust helpers for other modules
 pub fn writable_stream_to_sender(tx: mpsc::Sender<Bytes>) -> WritableStream {
     WritableStream::to_sender(tx)
