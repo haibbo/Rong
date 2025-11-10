@@ -1,4 +1,5 @@
 use crate::{JSValue, JSValueImpl};
+use std::fmt;
 
 #[derive(Clone, Debug)]
 pub enum JSValueType {
@@ -19,6 +20,31 @@ pub enum JSValueType {
     Symbol,
     Date,
     Unknown,
+}
+
+impl fmt::Display for JSValueType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            JSValueType::Undefined => "undefined",
+            JSValueType::Null => "null",
+            JSValueType::Error => "error",
+            JSValueType::Exception => "exception",
+            JSValueType::Boolean => "boolean",
+            JSValueType::Number => "number",
+            JSValueType::BigInt => "bigint",
+            JSValueType::String => "string",
+            JSValueType::Object => "object",
+            JSValueType::Array => "array",
+            JSValueType::ArrayBuffer => "arrayBuffer",
+            JSValueType::Function => "function",
+            JSValueType::Constructor => "constructor",
+            JSValueType::Promise => "promise",
+            JSValueType::Symbol => "symbol",
+            JSValueType::Date => "Date",
+            JSValueType::Unknown => "unknown",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 pub trait JSTypeOf: JSValueImpl {
