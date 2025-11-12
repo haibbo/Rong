@@ -13,6 +13,8 @@ pub use rong_core::rong::{Rong, Worker, WorkerMessage, spawn};
 
 // Re-export service executor APIs
 pub use rong_core::service_executor::{self, get_user_agent, set_user_agent};
+// Re-export selected scheduler APIs (module remains internal to core)
+pub use rong_core::{JsInvokePriority, enqueue_js_invoke};
 
 pub use rong_core::function;
 

@@ -6,9 +6,11 @@ mod promise;
 mod result;
 pub mod rong;
 mod runtime;
+mod scheduler;
 pub mod service_executor;
 mod source;
 mod value;
+pub use scheduler::{JsInvokePriority, enqueue_js_invoke};
 
 pub use class::*;
 pub use context::*;

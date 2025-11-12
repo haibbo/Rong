@@ -1,4 +1,6 @@
-use rong::{JSResult, Rong, RongJS, WorkerMessage};
+use rong::{
+    JSFunc, JSResult, JsInvokePriority, Rong, RongJS, Source, WorkerMessage, enqueue_js_invoke,
+};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -190,4 +192,57 @@ async fn test_worker_termination() -> JSResult<()> {
             );
         }
     }
+}
+
+#[tokio::test]
+async fn test_enqueue_js_invoke_queue() -> JSResult<()> {
+    let rong = Rong::<RongJS>::builder().build();
+    rong.block_on(|runtime, _receiver| async move {
+        let ctx = runtime.context();
+        let script = r#"(() => {
+            globalThis.__invoke_counter = 0;
+            return function () {
+                globalThis.__invoke_counter += 1;
+                return globalThis.__invoke_counter;
+            };
+        })()"#;
+        let js_fn: JSFunc = ctx.eval(Source::from_bytes(script))?;
+
+        enqueue_js_invoke(
+            &ctx,
+            js_fn.clone(),
+            None,
+            None,
+            JsInvokePriority::Normal,
+            None,
+            true,
+        )
+        .await?;
+        enqueue_js_invoke(
+            &ctx,
+            js_fn.clone(),
+            None,
+            None,
+            JsInvokePriority::High,
+            None,
+            true,
+        )
+        .await?;
+        enqueue_js_invoke(
+            &ctx,
+            js_fn,
+            None,
+            None,
+            JsInvokePriority::Normal,
+            None,
+            true,
+        )
+        .await?;
+
+        let final_value: i32 = ctx.global().get("__invoke_counter")?;
+        assert_eq!(final_value, 3);
+
+        Ok(())
+    })?;
+    Ok(())
 }
