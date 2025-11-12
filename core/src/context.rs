@@ -431,7 +431,8 @@ impl<C: JSContextImpl> JSContext<C> {
     /// }
     /// ```
     pub fn get_user_data<T: Any + 'static>(&self) -> Option<std::cell::Ref<'_, T>> {
-        let user_data = self.rc.user_data.borrow();
+        // Use try_borrow to avoid panicking when there is an outstanding mutable borrow
+        let user_data = self.rc.user_data.try_borrow().ok()?;
         if user_data.contains_key(&TypeId::of::<T>()) {
             Some(std::cell::Ref::map(user_data, |map| {
                 map.get(&TypeId::of::<T>())
@@ -460,7 +461,8 @@ impl<C: JSContextImpl> JSContext<C> {
     /// }
     /// ```
     pub fn get_user_data_mut<T: Any + 'static>(&self) -> Option<std::cell::RefMut<'_, T>> {
-        let user_data = self.rc.user_data.borrow_mut();
+        // Use try_borrow_mut to avoid panicking when there is an outstanding borrow
+        let user_data = self.rc.user_data.try_borrow_mut().ok()?;
         if user_data.contains_key(&TypeId::of::<T>()) {
             Some(std::cell::RefMut::map(user_data, |map| {
                 map.get_mut(&TypeId::of::<T>())
