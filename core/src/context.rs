@@ -4,7 +4,7 @@ use crate::{
     source::{Source, SourceKind},
 };
 use crate::{JSRuntime, JSValueMapper};
-use std::any::{Any, TypeId};
+use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
@@ -124,7 +124,6 @@ struct JSContextInner<C: JSContextImpl> {
     inner: C,
     runtime: JSRuntime<C::Runtime>,
     rong: C::Value,
-    user_data: RefCell<HashMap<TypeId, Box<dyn Any>>>,
     services: ContextServiceContainer,
 }
 
@@ -214,7 +213,6 @@ impl<C: JSContextImpl> JSContext<C> {
             inner: raw_ctx,
             runtime: runtime.clone(),
             rong,
-            user_data: RefCell::new(HashMap::new()),
             services: ContextServiceContainer::new(),
         };
 
@@ -454,93 +452,6 @@ impl<C: JSContextImpl> JSContext<C> {
             std::ptr::null_mut()
         }
     }
-
-    /// Set user context data of a specific type
-    ///
-    /// This allows storing arbitrary user data associated with the context.
-    /// The data is stored by type, so only one instance of each type can be stored.
-    ///
-    /// # Arguments
-    /// * `data` - The user data to store
-    ///
-    /// # Example
-    /// ```rust
-    /// #[derive(Debug)]
-    /// struct UserController {
-    ///     user_id: String,
-    /// }
-    ///
-    /// let controller = UserController {
-    ///     user_id: "user123".to_string(),
-    /// };
-    /// ctx.set_user_data(controller);
-    /// ```
-    pub fn set_user_data<T: Any + 'static>(&self, data: T) {
-        self.rc
-            .user_data
-            .borrow_mut()
-            .insert(TypeId::of::<T>(), Box::new(data));
-    }
-
-    /// Get user context data of a specific type
-    ///
-    /// Retrieves previously stored user data by type. Returns None if no data
-    /// of the specified type has been stored.
-    ///
-    /// # Returns
-    /// * `Some(Ref<T>)` - Reference to the stored data if found
-    /// * `None` - If no data of type T has been stored
-    ///
-    /// # Example
-    /// ```rust
-    /// if let Some(controller) = ctx.get_user_data::<UserController>() {
-    ///     println!("User ID: {}", controller.user_id);
-    /// }
-    /// ```
-    pub fn get_user_data<T: Any + 'static>(&self) -> Option<std::cell::Ref<'_, T>> {
-        // Use try_borrow to avoid panicking when there is an outstanding mutable borrow
-        let user_data = self.rc.user_data.try_borrow().ok()?;
-        if user_data.contains_key(&TypeId::of::<T>()) {
-            Some(std::cell::Ref::map(user_data, |map| {
-                map.get(&TypeId::of::<T>())
-                    .unwrap()
-                    .downcast_ref::<T>()
-                    .unwrap()
-            }))
-        } else {
-            None
-        }
-    }
-
-    /// Get mutable user context data of a specific type
-    ///
-    /// Retrieves previously stored user data by type with mutable access.
-    /// Returns None if no data of the specified type has been stored.
-    ///
-    /// # Returns
-    /// * `Some(RefMut<T>)` - Mutable reference to the stored data if found
-    /// * `None` - If no data of type T has been stored
-    ///
-    /// # Example
-    /// ```rust
-    /// if let Some(mut controller) = ctx.get_user_data_mut::<UserController>() {
-    ///     controller.user_id = "new_user456".to_string();
-    /// }
-    /// ```
-    pub fn get_user_data_mut<T: Any + 'static>(&self) -> Option<std::cell::RefMut<'_, T>> {
-        // Use try_borrow_mut to avoid panicking when there is an outstanding borrow
-        let user_data = self.rc.user_data.try_borrow_mut().ok()?;
-        if user_data.contains_key(&TypeId::of::<T>()) {
-            Some(std::cell::RefMut::map(user_data, |map| {
-                map.get_mut(&TypeId::of::<T>())
-                    .unwrap()
-                    .downcast_mut::<T>()
-                    .unwrap()
-            }))
-        } else {
-            None
-        }
-    }
 }
 
 /// Container to hold the context-specific data for a JSContext.
@@ -587,9 +498,6 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
                     let _ = Box::from_raw(data);
                 }
             }
-
-            // cleanup user data
-            self.rc.user_data.borrow_mut().clear();
         }
     }
 }
