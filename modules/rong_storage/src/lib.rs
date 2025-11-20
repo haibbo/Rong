@@ -134,4 +134,25 @@ mod tests {
         options.max_key_size = Some(16);
         Storage::open_with_options(custom_path, options).expect("custom open should succeed");
     }
+
+    #[test]
+    fn close_allows_reopen_same_path() {
+        let workspace_root = env::current_dir()
+            .expect("cwd")
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("workspace root")
+            .to_path_buf();
+
+        let path = workspace_root.join("target/test-tmp/rust_storage_reopen.db");
+
+        // First open and immediately close the database.
+        let storage = Storage::open(&path).expect("initial open should succeed");
+        storage.close();
+
+        // After close, reopening the same path in the same process should succeed
+        // without hitting redb's "Database already open. Cannot acquire lock" error.
+        let _storage2 =
+            Storage::open(&path).expect("reopen after close should succeed without lock error");
+    }
 }

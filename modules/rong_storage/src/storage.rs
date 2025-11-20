@@ -5,6 +5,7 @@ use rong::{
     RongJSError, function::Optional, js_class, js_export, js_method,
 };
 use serde_json;
+use std::cell::RefCell;
 use std::fs;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -91,7 +92,7 @@ impl Default for StorageConfig {
 
 #[js_export]
 pub struct Storage {
-    db: Rc<Database>,
+    db: Rc<RefCell<Option<Database>>>,
     #[allow(dead_code)]
     db_path: PathBuf,
     config: StorageConfig,
@@ -123,10 +124,33 @@ impl Storage {
         let config = StorageConfig::from_options(options)?;
 
         Ok(Self {
-            db: Rc::new(db),
+            db: Rc::new(RefCell::new(Some(db))),
             db_path: path,
             config,
         })
+    }
+
+    /// Close the underlying database for this Storage instance.
+    ///
+    /// This will drop the shared Database handle for all clones that share
+    /// the same internal Rc. After calling close, any subsequent operation
+    /// on this Storage (or its clones) will fail with a TypeError.
+    pub fn close(&self) {
+        let mut db_opt = self.db.borrow_mut();
+        if db_opt.is_some() {
+            *db_opt = None;
+        }
+    }
+
+    fn with_db<F, T>(&self, f: F) -> JSResult<T>
+    where
+        F: FnOnce(&Database) -> JSResult<T>,
+    {
+        let db_opt = self.db.borrow();
+        let db = db_opt
+            .as_ref()
+            .ok_or_else(|| RongJSError::TypeError("Storage database is closed".to_string()))?;
+        f(db)
     }
 
     fn ensure_storage_table(db: &Database) -> JSResult<()> {
@@ -160,7 +184,6 @@ impl Storage {
     /// Set a key-value pair in storage
     #[js_method]
     pub async fn set(&self, key: String, value: JSValue) -> JSResult<()> {
-        let db = self.db.as_ref();
         let cfg = &self.config;
 
         // Validate key size
@@ -272,285 +295,292 @@ impl Storage {
             )));
         }
 
-        // Check total storage size before adding new data
-        let read_txn = db.begin_read().map_err(|e| {
-            RongJSError::TypeError(format!("Failed to begin read transaction: {}", e))
-        })?;
+        self.with_db(|db| {
+            // Check total storage size before adding new data
+            let read_txn = db.begin_read().map_err(|e| {
+                RongJSError::TypeError(format!("Failed to begin read transaction: {}", e))
+            })?;
 
-        let table = read_txn
-            .open_table(STORAGE_TABLE)
-            .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
-
-        let mut current_size = 0;
-        let mut existing_key_size = 0;
-
-        // Calculate current storage size and check if key already exists
-        let iter = table
-            .iter()
-            .map_err(|e| RongJSError::TypeError(format!("Failed to create iterator: {}", e)))?;
-
-        for item in iter {
-            let (existing_key, existing_value) =
-                item.map_err(|e| RongJSError::TypeError(format!("Failed to read item: {}", e)))?;
-
-            let key_size = existing_key.value().len();
-            let value_size = existing_value.value().len();
-
-            if existing_key.value().as_bytes() == key.as_bytes() {
-                existing_key_size = key_size + value_size;
-            }
-            current_size += key_size + value_size;
-        }
-
-        drop(table);
-        drop(read_txn);
-
-        // Calculate new size after this operation
-        let new_entry_size = key.len() + value_str.len();
-        let new_total_size = current_size - existing_key_size + new_entry_size;
-
-        if new_total_size > cfg.max_user_data_size {
-            return Err(RongJSError::TypeError(format!(
-                "Storage size would exceed maximum limit of {} bytes (current: {}, new entry: {})",
-                cfg.max_user_data_size,
-                current_size - existing_key_size,
-                new_entry_size
-            )));
-        }
-
-        // Store in database
-        let write_txn = db.begin_write().map_err(|e| {
-            RongJSError::TypeError(format!("Failed to begin write transaction: {}", e))
-        })?;
-
-        {
-            let mut table = write_txn
+            let table = read_txn
                 .open_table(STORAGE_TABLE)
                 .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
 
-            table
-                .insert(key.as_str(), value_str.as_bytes())
-                .map_err(|e| RongJSError::TypeError(format!("Failed to insert value: {}", e)))?;
-        }
+            let mut current_size = 0;
+            let mut existing_key_size = 0;
 
-        write_txn
-            .commit()
-            .map_err(|e| RongJSError::TypeError(format!("Failed to commit transaction: {}", e)))?;
+            // Calculate current storage size and check if key already exists
+            let iter = table
+                .iter()
+                .map_err(|e| RongJSError::TypeError(format!("Failed to create iterator: {}", e)))?;
 
-        Ok(())
+            for item in iter {
+                let (existing_key, existing_value) = item.map_err(|e| {
+                    RongJSError::TypeError(format!("Failed to read item: {}", e))
+                })?;
+
+                let key_size = existing_key.value().len();
+                let value_size = existing_value.value().len();
+
+                if existing_key.value().as_bytes() == key.as_bytes() {
+                    existing_key_size = key_size + value_size;
+                }
+                current_size += key_size + value_size;
+            }
+
+            drop(table);
+            drop(read_txn);
+
+            // Calculate new size after this operation
+            let new_entry_size = key.len() + value_str.len();
+            let new_total_size = current_size - existing_key_size + new_entry_size;
+
+            if new_total_size > cfg.max_user_data_size {
+                return Err(RongJSError::TypeError(format!(
+                    "Storage size would exceed maximum limit of {} bytes (current: {}, new entry: {})",
+                    cfg.max_user_data_size,
+                    current_size - existing_key_size,
+                    new_entry_size
+                )));
+            }
+
+            // Store in database
+            let write_txn = db.begin_write().map_err(|e| {
+                RongJSError::TypeError(format!("Failed to begin write transaction: {}", e))
+            })?;
+
+            {
+                let mut table = write_txn
+                    .open_table(STORAGE_TABLE)
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+
+                table
+                    .insert(key.as_str(), value_str.as_bytes())
+                    .map_err(|e| {
+                        RongJSError::TypeError(format!("Failed to insert value: {}", e))
+                    })?;
+            }
+
+            write_txn.commit().map_err(|e| {
+                RongJSError::TypeError(format!("Failed to commit transaction: {}", e))
+            })?;
+
+            Ok(())
+        })
     }
 
     /// Get a value from storage
     #[js_method]
     pub async fn get(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
-        let db = self.db.as_ref();
+        self.with_db(|db| {
+            let read_txn = db.begin_read().map_err(|e| {
+                RongJSError::TypeError(format!("Failed to begin read transaction: {}", e))
+            })?;
 
-        let read_txn = db.begin_read().map_err(|e| {
-            RongJSError::TypeError(format!("Failed to begin read transaction: {}", e))
-        })?;
+            let table = read_txn
+                .open_table(STORAGE_TABLE)
+                .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
 
-        let table = read_txn
-            .open_table(STORAGE_TABLE)
-            .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+            match table.get(key.as_str()) {
+                Ok(Some(value)) => {
+                    let value_str = String::from_utf8(value.value().to_vec()).map_err(|e| {
+                        RongJSError::TypeError(format!("Failed to decode value as UTF-8: {}", e))
+                    })?;
 
-        match table.get(key.as_str()) {
-            Ok(Some(value)) => {
-                let value_str = String::from_utf8(value.value().to_vec()).map_err(|e| {
-                    RongJSError::TypeError(format!("Failed to decode value as UTF-8: {}", e))
-                })?;
-
-                // Parse JSON back to appropriate JavaScript type
-                match serde_json::from_str::<serde_json::Value>(&value_str) {
-                    Ok(json_value) => {
-                        match json_value {
-                            serde_json::Value::String(s) => Ok(JSValue::from(&ctx, s)),
-                            serde_json::Value::Number(n) => {
-                                // Let JSValue::from handle the intelligent number conversion
-                                if let Some(i) = n.as_i64() {
-                                    Ok(JSValue::from(&ctx, i))
-                                } else if let Some(u) = n.as_u64() {
-                                    Ok(JSValue::from(&ctx, u))
-                                } else if let Some(f) = n.as_f64() {
-                                    Ok(JSValue::from(&ctx, f))
-                                } else {
-                                    Ok(JSValue::from(&ctx, value_str))
-                                }
-                            }
-                            serde_json::Value::Bool(b) => Ok(JSValue::from(&ctx, b)),
-                            serde_json::Value::Null => Ok(JSValue::null(&ctx)),
-                            serde_json::Value::Object(ref obj) => {
-                                // Check if this is a Date object
-                                if obj.get("__type")
-                                    == Some(&serde_json::Value::String("Date".to_string()))
-                                {
-                                    if let Some(timestamp) =
-                                        obj.get("timestamp").and_then(|v| v.as_f64())
-                                    {
-                                        let date = JSDate::new(&ctx, timestamp);
-                                        Ok(date.into_value())
+                    // Parse JSON back to appropriate JavaScript type
+                    match serde_json::from_str::<serde_json::Value>(&value_str) {
+                        Ok(json_value) => {
+                            match json_value {
+                                serde_json::Value::String(s) => Ok(JSValue::from(&ctx, s)),
+                                serde_json::Value::Number(n) => {
+                                    // Let JSValue::from handle the intelligent number conversion
+                                    if let Some(i) = n.as_i64() {
+                                        Ok(JSValue::from(&ctx, i))
+                                    } else if let Some(u) = n.as_u64() {
+                                        Ok(JSValue::from(&ctx, u))
+                                    } else if let Some(f) = n.as_f64() {
+                                        Ok(JSValue::from(&ctx, f))
                                     } else {
-                                        Err(RongJSError::TypeError(
-                                            "Invalid Date object: missing timestamp".to_string(),
-                                        ))
+                                        Ok(JSValue::from(&ctx, value_str))
                                     }
-                                } else {
-                                    // Regular object, parse using JavaScript's JSON.parse
+                                }
+                                serde_json::Value::Bool(b) => Ok(JSValue::from(&ctx, b)),
+                                serde_json::Value::Null => Ok(JSValue::null(&ctx)),
+                                serde_json::Value::Object(ref obj) => {
+                                    // Check if this is a Date object
+                                    if obj.get("__type")
+                                        == Some(&serde_json::Value::String("Date".to_string()))
+                                    {
+                                        if let Some(timestamp) =
+                                            obj.get("timestamp").and_then(|v| v.as_f64())
+                                        {
+                                            let date = JSDate::new(&ctx, timestamp);
+                                            Ok(date.into_value())
+                                        } else {
+                                            Err(RongJSError::TypeError(
+                                                "Invalid Date object: missing timestamp"
+                                                    .to_string(),
+                                            ))
+                                        }
+                                    } else {
+                                        // Regular object, parse using JavaScript's JSON.parse
+                                        value_str.as_str().json_to_jsvalue(&ctx)
+                                    }
+                                }
+                                serde_json::Value::Array(_) => {
+                                    // For arrays, parse them back using JavaScript's JSON.parse
                                     value_str.as_str().json_to_jsvalue(&ctx)
                                 }
                             }
-                            serde_json::Value::Array(_) => {
-                                // For arrays, parse them back using JavaScript's JSON.parse
-                                value_str.as_str().json_to_jsvalue(&ctx)
-                            }
+                        }
+                        Err(_) => {
+                            // If not valid JSON, return as string
+                            Ok(JSValue::from(&ctx, value_str))
                         }
                     }
-                    Err(_) => {
-                        // If not valid JSON, return as string
-                        Ok(JSValue::from(&ctx, value_str))
-                    }
                 }
+                Ok(None) => Ok(JSValue::undefined(&ctx)),
+                Err(e) => Err(RongJSError::TypeError(format!(
+                    "Failed to get value: {}",
+                    e
+                ))),
             }
-            Ok(None) => Ok(JSValue::undefined(&ctx)),
-            Err(e) => Err(RongJSError::TypeError(format!(
-                "Failed to get value: {}",
-                e
-            ))),
-        }
+        })
     }
 
     /// Delete a key from storage
     #[js_method]
     pub async fn delete(&self, key: String) -> JSResult<()> {
-        let db = self.db.as_ref();
+        self.with_db(|db| {
+            let write_txn = db.begin_write().map_err(|e| {
+                RongJSError::TypeError(format!("Failed to begin write transaction: {}", e))
+            })?;
 
-        let write_txn = db.begin_write().map_err(|e| {
-            RongJSError::TypeError(format!("Failed to begin write transaction: {}", e))
-        })?;
+            {
+                let mut table = write_txn
+                    .open_table(STORAGE_TABLE)
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
 
-        {
-            let mut table = write_txn
-                .open_table(STORAGE_TABLE)
-                .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+                table
+                    .remove(key.as_str())
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to remove key: {}", e)))?;
+            }
 
-            table
-                .remove(key.as_str())
-                .map_err(|e| RongJSError::TypeError(format!("Failed to remove key: {}", e)))?;
-        }
+            write_txn.commit().map_err(|e| {
+                RongJSError::TypeError(format!("Failed to commit transaction: {}", e))
+            })?;
 
-        write_txn
-            .commit()
-            .map_err(|e| RongJSError::TypeError(format!("Failed to commit transaction: {}", e)))?;
-
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Clear all data from storage
     #[js_method]
     pub async fn clear(&self) -> JSResult<()> {
-        let db = self.db.as_ref();
+        self.with_db(|db| {
+            let write_txn = db.begin_write().map_err(|e| {
+                RongJSError::TypeError(format!("Failed to begin write transaction: {}", e))
+            })?;
 
-        let write_txn = db.begin_write().map_err(|e| {
-            RongJSError::TypeError(format!("Failed to begin write transaction: {}", e))
-        })?;
+            {
+                let mut table = write_txn
+                    .open_table(STORAGE_TABLE)
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
 
-        {
-            let mut table = write_txn
-                .open_table(STORAGE_TABLE)
-                .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+                // Remove all entries
+                let keys: Vec<String> = table
+                    .iter()
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to iterate table: {}", e)))?
+                    .map(|item| {
+                        item.map(|(key, _)| key.value().to_string()).map_err(|e| {
+                            RongJSError::TypeError(format!("Failed to read key: {}", e))
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
 
-            // Remove all entries
-            let keys: Vec<String> = table
-                .iter()
-                .map_err(|e| RongJSError::TypeError(format!("Failed to iterate table: {}", e)))?
-                .map(|item| {
-                    item.map(|(key, _)| key.value().to_string())
-                        .map_err(|e| RongJSError::TypeError(format!("Failed to read key: {}", e)))
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            for key in keys {
-                table
-                    .remove(key.as_str())
-                    .map_err(|e| RongJSError::TypeError(format!("Failed to remove key: {}", e)))?;
+                for key in keys {
+                    table.remove(key.as_str()).map_err(|e| {
+                        RongJSError::TypeError(format!("Failed to remove key: {}", e))
+                    })?;
+                }
             }
-        }
 
-        write_txn
-            .commit()
-            .map_err(|e| RongJSError::TypeError(format!("Failed to commit transaction: {}", e)))?;
+            write_txn.commit().map_err(|e| {
+                RongJSError::TypeError(format!("Failed to commit transaction: {}", e))
+            })?;
 
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Storage list function that returns an iterator
     #[js_method]
     pub async fn list(&self, ctx: JSContext, prefix: Optional<String>) -> JSResult<JSValue> {
-        let db = self.db.as_ref();
+        self.with_db(|db| {
+            let read_txn = db.begin_read().map_err(|e| {
+                RongJSError::TypeError(format!("Failed to begin read transaction: {}", e))
+            })?;
 
-        let read_txn = db.begin_read().map_err(|e| {
-            RongJSError::TypeError(format!("Failed to begin read transaction: {}", e))
-        })?;
+            let table = read_txn
+                .open_table(STORAGE_TABLE)
+                .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
 
-        let table = read_txn
-            .open_table(STORAGE_TABLE)
-            .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+            let iter = table
+                .iter()
+                .map_err(|e| RongJSError::TypeError(format!("Failed to create iterator: {}", e)))?;
 
-        let iter = table
-            .iter()
-            .map_err(|e| RongJSError::TypeError(format!("Failed to create iterator: {}", e)))?;
+            let mut keys = Vec::new();
+            for item in iter {
+                let (key, _) = item
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to read item: {}", e)))?;
+                let key_str = key.value().to_string();
 
-        let mut keys = Vec::new();
-        for item in iter {
-            let (key, _) =
-                item.map_err(|e| RongJSError::TypeError(format!("Failed to read item: {}", e)))?;
-            let key_str = key.value().to_string();
-
-            // Apply prefix filter if provided
-            if let Some(ref prefix_str) = prefix.0 {
-                if key_str.starts_with(prefix_str) {
+                // Apply prefix filter if provided
+                if let Some(ref prefix_str) = prefix.0 {
+                    if key_str.starts_with(prefix_str) {
+                        keys.push(key_str);
+                    }
+                } else {
                     keys.push(key_str);
                 }
-            } else {
-                keys.push(key_str);
             }
-        }
 
-        // Convert to JS iterator and then to JSValue
-        let iter = keys.to_js_iter(&ctx)?;
-        Ok(JSValue::from(&ctx, iter))
+            // Convert to JS iterator and then to JSValue
+            let iter = keys.to_js_iter(&ctx)?;
+            Ok(JSValue::from(&ctx, iter))
+        })
     }
 
     /// Storage info function
     #[js_method]
     pub async fn info(&self) -> JSResult<StorageInfo> {
-        let db = self.db.as_ref();
+        self.with_db(|db| {
+            let read_txn = db.begin_read().map_err(|e| {
+                RongJSError::TypeError(format!("Failed to begin read transaction: {}", e))
+            })?;
 
-        let read_txn = db.begin_read().map_err(|e| {
-            RongJSError::TypeError(format!("Failed to begin read transaction: {}", e))
-        })?;
+            let table = read_txn
+                .open_table(STORAGE_TABLE)
+                .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
 
-        let table = read_txn
-            .open_table(STORAGE_TABLE)
-            .map_err(|e| RongJSError::TypeError(format!("Failed to open table: {}", e)))?;
+            let mut current_size = 0;
+            let mut key_count = 0;
+            let iter = table
+                .iter()
+                .map_err(|e| RongJSError::TypeError(format!("Failed to create iterator: {}", e)))?;
 
-        let mut current_size = 0;
-        let mut key_count = 0;
-        let iter = table
-            .iter()
-            .map_err(|e| RongJSError::TypeError(format!("Failed to create iterator: {}", e)))?;
+            for item in iter {
+                let (key, value) = item
+                    .map_err(|e| RongJSError::TypeError(format!("Failed to read item: {}", e)))?;
 
-        for item in iter {
-            let (key, value) =
-                item.map_err(|e| RongJSError::TypeError(format!("Failed to read item: {}", e)))?;
+                current_size += key.value().len() + value.value().len();
+                key_count += 1;
+            }
 
-            current_size += key.value().len() + value.value().len();
-            key_count += 1;
-        }
-
-        Ok(StorageInfo {
-            current_size: current_size as u32,
-            limit_size: self.config.limit_size_u32(),
-            key_count: key_count as u32,
+            Ok(StorageInfo {
+                current_size: current_size as u32,
+                limit_size: self.config.limit_size_u32(),
+                key_count: key_count as u32,
+            })
         })
     }
 }
