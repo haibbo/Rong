@@ -1,12 +1,12 @@
 pub use rong_core::{
     Class as CoreClass, ClassSetup, FromJSValue, IntoJSAsyncIteratorExt, IntoJSIteratorExt,
     IntoJSResult, IntoJSValue, JSArray as CoreJSArray, JSArrayBuffer as CoreJSArrayBuffer,
-    JSAsyncIterator, JSClass, JSContext as CoreJSContext, JSDate as CoreJSDate, JSEngine,
-    JSException as CoreJSException, JSFunc as CoreJSFunc, JSIterator, JSObject as CoreJSObject,
-    JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
-    JSTypedArray as CoreJSTypedArray, JSTypedArrayKind, JSValue as CoreJSValue, JSValueType,
-    JsonToJsValue, Promise as CorePromise, PropertyDescriptor as CorePropertyDescriptor,
-    RongJSError, Source, SourceKind,
+    JSAsyncIterator, JSClass, JSContext as CoreJSContext, JSContextService, JSDate as CoreJSDate,
+    JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc, JSIterator,
+    JSObject as CoreJSObject, JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService,
+    JSSymbol as CoreJSSymbol, JSTypedArray as CoreJSTypedArray, JSTypedArrayKind,
+    JSValue as CoreJSValue, JSValueType, JsonToJsValue, Promise as CorePromise,
+    PropertyDescriptor as CorePropertyDescriptor, RongJSError, Source, SourceKind,
 };
 // Re-export selected runtime API from rong_core::rong so downstream crates use `rong::...`
 pub use rong_core::rong::{Rong, Worker, WorkerMessage, spawn};

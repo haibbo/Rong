@@ -125,6 +125,57 @@ struct JSContextInner<C: JSContextImpl> {
     runtime: JSRuntime<C::Runtime>,
     rong: C::Value,
     user_data: RefCell<HashMap<TypeId, Box<dyn Any>>>,
+    services: ContextServiceContainer,
+}
+
+/// A trait for context-scoped services that can be attached to JSContext.
+///
+/// This is similar to JSRuntimeService but scoped to a single JSContext instance.
+/// Implementors can use on_shutdown to release resources that should be cleaned
+/// up when the owning JSContext is dropped.
+pub trait JSContextService: 'static {
+    /// Called when the JSContext that owns this service is being shutdown.
+    fn on_shutdown(&self) {}
+}
+
+/// A container for context services with proper lifecycle management.
+#[derive(Clone)]
+struct ContextServiceContainer {
+    services: Rc<RefCell<HashMap<TypeId, Box<dyn JSContextService>>>>,
+}
+
+impl ContextServiceContainer {
+    fn new() -> Self {
+        Self {
+            services: Rc::new(RefCell::new(HashMap::new())),
+        }
+    }
+
+    fn register<T: JSContextService>(&self, service: T) {
+        let mut services = self.services.borrow_mut();
+        services.insert(TypeId::of::<T>(), Box::new(service));
+    }
+
+    fn get<T: JSContextService>(&self) -> Option<&T> {
+        // SAFETY: This is safe because:
+        // 1. We only insert services through register<T>
+        // 2. TypeId is unique for each type
+        // 3. The service is never removed until container is shut down
+        // 4. The RefCell ensures we don't have multiple mutable borrows
+        unsafe {
+            let services = self.services.borrow();
+            services
+                .get(&TypeId::of::<T>())
+                .map(|svc| &*(svc.as_ref() as *const dyn JSContextService as *const T))
+        }
+    }
+
+    fn shutdown(&self) {
+        let mut services = self.services.borrow_mut();
+        for (_, svc) in services.drain() {
+            svc.on_shutdown();
+        }
+    }
 }
 
 impl<C: JSContextImpl> AsRef<C> for JSContext<C> {
@@ -164,6 +215,7 @@ impl<C: JSContextImpl> JSContext<C> {
             runtime: runtime.clone(),
             rong,
             user_data: RefCell::new(HashMap::new()),
+            services: ContextServiceContainer::new(),
         };
 
         let ctx = JSContext { rc: Rc::new(inner) };
@@ -313,6 +365,21 @@ impl<C: JSContextImpl> JSContext<C> {
 
     pub fn runtime(&self) -> &JSRuntime<C::Runtime> {
         &self.rc.runtime
+    }
+
+    /// Register a context-scoped service of a specific type.
+    ///
+    /// The service is stored by its concrete type. Only one instance of each
+    /// service type can be registered for a given JSContext.
+    pub fn set_service<T: JSContextService>(&self, service: T) {
+        self.rc.services.register::<T>(service);
+    }
+
+    /// Get a previously registered context-scoped service by type.
+    ///
+    /// Returns None if no service of the requested type has been registered.
+    pub fn get_service<T: JSContextService>(&self) -> Option<&T> {
+        self.rc.services.get::<T>()
     }
 
     /// Compile JavaScript source code to bytecode
@@ -504,6 +571,9 @@ static CTX_OPAQUE: LazyLock<RwLock<HashMap<usize, usize>>> =
 impl<C: JSContextImpl> Drop for JSContext<C> {
     fn drop(&mut self) {
         if Rc::strong_count(&self.rc) == 1 {
+            // First, shutdown all context-scoped services.
+            self.rc.services.shutdown();
+
             let data = self.get_opaque();
             if !data.is_null() {
                 unsafe {
