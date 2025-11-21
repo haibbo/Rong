@@ -22,7 +22,6 @@ In Chinese culture, "融" represents natural harmony and coexistence - perfectly
 ### 🎯 Multi-Engine Support
 - **QuickJS** - Lightweight and fast
 - **JavaScriptCore** - WebKit's proven engine
-- **V8** - Google's high-performance engine 🚧 **Not started**
 - **ArkJS** - HarmonyOS JavaScript engine 🚧 **In Development**
 
 ### 🛠️ Developer Experience
@@ -43,10 +42,10 @@ In Chinese culture, "融" represents natural harmony and coexistence - perfectly
 ├─────────────────────────────────────────────────────────────┤
 │ Unified API │ Type System │ Memory Management │ Async/Await │
 ├─────────────────────────────────────────────────────────────┤
-│    QuickJS   │ JavaScriptCore │      V8       │    ArkJS    │
+│    QuickJS   │      JavaScriptCore     │      ArkJS         │
 ├─────────────────────────────────────────────────────────────┤
 │              Built-in Modules & Extensions                  │
-│   Timer │ HTTP │ FS │ Console │ Crypto │ Path │ URL │ ...   │
+│   Timer │ HTTP │ FS │ Console │  Path │ URL │ ...           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -232,7 +231,6 @@ match ctx.eval::<String>(Source::from_bytes(b"42")) {
 
 - `--features quickjs` - QuickJS engine
 - `--features jscore` - JavaScriptCore engine
-- `--features v8` - V8 engine
 - `--features arkjs` - ArkJS engine
 
 ### Running Tests
@@ -269,7 +267,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - QuickJS team for the lightweight JavaScript engine
 - WebKit team for JavaScriptCore
-- Google for V8 engine
 - HarmonyOS team for ArkJS
 - Rust community for excellent async ecosystem
 

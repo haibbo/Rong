@@ -1,9 +1,0 @@
-[package]
-name = "rong_v8_sys"
-version = "0.1.0"
-edition = "2024"
-description = "Low-level V8 bindings for Rust"
-license = "MIT"
-
-[build-dependencies]
-bindgen = "0.72"

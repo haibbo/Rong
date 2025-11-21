@@ -2,7 +2,7 @@
 members = [
     "core",
     "macro",
-    "quickjs", "javascriptcore", "v8", "arkjs",
+    "quickjs", "javascriptcore", "arkjs",
     "utils/rong_test",
     "examples",
     "modules/rong_timer", "modules/rong_navigator", "modules/rong_path",
@@ -19,7 +19,6 @@ rong = { path = ".", default-features = false}
 rong_core = { path = "core" }
 rong_quickjs = { path = "quickjs" }
 rong_jscore = { path = "javascriptcore" }
-rong_v8 = { path = "v8" }
 rong_arkjs = { path = "arkjs" }
 rong_macro = { path = "macro" }
 rong_test = { path = "utils/rong_test" }
@@ -74,7 +73,6 @@ edition = "2024"
 rong_core = { workspace = true }
 rong_quickjs = { workspace = true, optional = true }
 rong_jscore = { workspace = true, optional = true }
-rong_v8 = { workspace = true, optional = true }
 rong_arkjs = { workspace = true, optional = true }
 rong_macro = { workspace = true }
 tokio = { workspace = true }
@@ -83,7 +81,6 @@ futures = { workspace = true }
 [features]
 quickjs = ["rong_quickjs"]
 jscore = ["rong_jscore"]
-v8 = ["rong_v8"]
 arkjs = ["rong_arkjs"]
 
 [dev-dependencies]

@@ -1,8 +1,0 @@
-[package]
-name = "rong_v8"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-rong_v8_sys={path="./sys/"}
-rong_core = { workspace = true }

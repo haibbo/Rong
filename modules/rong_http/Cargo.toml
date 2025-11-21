@@ -27,7 +27,6 @@ tokio-stream = { workspace = true }
 # Forward JS engine features to the main rong crate
 quickjs = ["rong/quickjs"]
 jscore = ["rong/jscore"]
-v8 = ["rong/v8"]
 arkjs = ["rong/arkjs"]
 
 [dev-dependencies]
