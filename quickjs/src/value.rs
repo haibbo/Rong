@@ -33,11 +33,14 @@ impl PartialEq for QJSValue {
 
 impl Hash for QJSValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // the size of JSValueUnion is the size of u64
-        let raw_value = unsafe { std::mem::transmute::<qjs::JSValueUnion, u64>(self.value.u) };
-        raw_value.hash(state);
-
-        self.value.tag.hash(state);
+        // Hash the entire JSValue struct as bytes (platform-independent)
+        unsafe {
+            let value_bytes = std::slice::from_raw_parts(
+                &self.value as *const qjs::JSValue as *const u8,
+                std::mem::size_of::<qjs::JSValue>(),
+            );
+            value_bytes.hash(state);
+        }
         self.ctx.hash(state);
     }
 }
