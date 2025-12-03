@@ -43,13 +43,20 @@ fn android_setup() {
     } else {
         env::consts::OS
     };
-    let api = env::var("API").unwrap_or("22".to_string());
+    let api = env::var("API").unwrap_or("23".to_string());
+
+    let target = env::var("TARGET").unwrap_or_default();
+    let cc_target = if target.contains("armv7") {
+        "armv7a-linux-androideabi"
+    } else {
+        "aarch64-linux-android"
+    };
 
     unsafe {
         env::set_var(
             "CC",
             format!(
-                "{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/clang -target aarch64-linux-android{api}"
+                "{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/clang -target {cc_target}{api}"
             ),
         );
 
