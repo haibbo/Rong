@@ -293,7 +293,9 @@ impl JSObjectOps for JSCValue {
                     let is_own = jsc::JSValueToBoolean(self.ctx, result);
 
                     if is_own {
-                        properties.push(JSCValue::from_owned_raw(self.ctx, value));
+                        // Property names are borrowed from JSC; protect them because we store
+                        // and use them after this call (e.g. JSObject::entries).
+                        properties.push(JSCValue::from_borrowed_raw(self.ctx, value));
                     }
                 }
             }
