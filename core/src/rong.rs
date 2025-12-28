@@ -174,8 +174,9 @@ impl<E: JSEngine + 'static> Worker<E> {
             },
         );
 
-        // Setup message passing channels for this task
-        let (task_message_tx, task_message_rx) = mpsc::channel(100);
+        // Setup message passing channels for this task.
+        // Keep this buffer reasonably sized to absorb short bursts of control-plane messages.
+        let (task_message_tx, task_message_rx) = mpsc::channel(self.rong.message_queue_size);
         let message_receiver = MessageReceiver::new(task_message_rx);
 
         // Create task with Spawn mechanism
@@ -259,8 +260,8 @@ impl<E: JSEngine + 'static> Worker<E> {
             },
         );
 
-        // Setup message passing channels for this task
-        let (task_message_tx, task_message_rx) = mpsc::channel(100);
+        // Setup message passing channels for this task.
+        let (task_message_tx, task_message_rx) = mpsc::channel(self.rong.message_queue_size);
         let message_receiver = MessageReceiver::new(task_message_rx);
 
         // Create task
@@ -373,7 +374,7 @@ pub struct RongBuilder<E: JSEngine + 'static> {
     /// Controls how many pending tasks can be queued before backpressure occurs
     task_queue_size: usize,
     /// Size of each worker's general message queue (for post_message)
-    /// Controls how many messages can be buffered before being dropped
+    /// Controls how many messages can be buffered before backpressure occurs
     message_queue_size: usize,
     /// Number of service runtime worker threads (>=1)
     service_worker_threads: usize,
@@ -387,7 +388,7 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
         Self {
             worker_count: 4,           // Default to 4 workers instead of num_cpus
             task_queue_size: 100,      // Default task queue size
-            message_queue_size: 100,   // Default message queue size
+            message_queue_size: 512,   // Default message queue size
             service_worker_threads: 1, // Default to 1 service runtime worker thread
             _marker: PhantomData,      // Initialize marker
         }
@@ -724,14 +725,9 @@ impl<E: JSEngine + 'static> Rong<E> {
                              if let Some(message) = maybe_message {
                                 // Forward the message to the current task, ignoring errors (task might have ended)
                                 if let Some(tx) = &current_task_message_tx {
-                                    if let Err(e) = tx.try_send(message) {
-                                        // Log only if the channel wasn't closed (task ended normally)
-                                        if matches!(e, mpsc::error::TrySendError::Full(_)) {
-                                            eprintln!("Worker {} task message channel full, dropping message: {}", worker_id, e);
-                                        }
-                                        // Don't log Closed errors, as the task might have just finished
-                                    } else {
-                                        // If send succeeded, run pending jobs as message might queue JS work
+                                    // Never drop messages here: dropping view/native calls causes view-side timeouts.
+                                    // Apply backpressure if the receiver is temporarily slow instead.
+                                    if tx.send(message).await.is_ok() {
                                         if let Some(rt) = &current_js_runtime {
                                             rt.run_pending_jobs();
                                         }
