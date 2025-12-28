@@ -11,6 +11,9 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
 
 pub const DEFAULT_BLOCKING_BODY_LIMIT: usize = 512 * 1024;
+pub const DEFAULT_STREAM_COALESCE_TARGET: usize = 512 * 1024;
+const MIN_STREAM_COALESCE_TARGET: usize = 4 * 1024;
+const STREAM_CHAN_CAP: usize = 256;
 
 pub async fn post_json(
     url: &str,
@@ -60,6 +63,21 @@ pub async fn send_request(
     small_threshold: usize,
     abort_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<HttpResponse, String> {
+    send_request_with_coalesce(
+        request,
+        small_threshold,
+        abort_rx,
+        DEFAULT_STREAM_COALESCE_TARGET,
+    )
+    .await
+}
+
+pub async fn send_request_with_coalesce(
+    request: HttpRequest<BoxBody<Bytes, Error>>,
+    small_threshold: usize,
+    abort_rx: Option<oneshot::Receiver<()>>,
+    stream_coalesce_target: usize,
+) -> Result<HttpResponse, String> {
     let tx = {
         let guard = runtime::runtime_slot().lock().unwrap();
         if let Some(rt) = guard.as_ref() {
@@ -72,6 +90,7 @@ pub async fn send_request(
     let msg = HttpJob {
         request,
         small_threshold,
+        stream_coalesce_target,
         resp_tx,
         abort_rx,
     };
@@ -181,19 +200,16 @@ pub(crate) async fn process_request(
         return;
     }
 
-    // Use a larger channel to reduce backpressure for high-throughput streams.
-    // Larger capacity reduces task wakeups and helps amortize syscalls when the
-    // consumer keeps up but occasionally pauses (e.g., JS write syscall bursts).
-    const STREAM_CHAN_CAP: usize = 256;
     let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(STREAM_CHAN_CAP);
     let mut abort = msg.abort_rx.take();
+    let coalesce_target = msg
+        .stream_coalesce_target
+        .max(MIN_STREAM_COALESCE_TARGET);
     tokio::task::spawn(async move {
         let mut body = body;
         // Aggregate small frames into larger chunks before sending across the
-        // channel/JS boundary to significantly reduce overhead. Hyper can yield
-        // frames as small as a few KB; coalescing to ~128 KiB cuts message count.
-        const COALESCE_TARGET: usize = 512 * 1024; // 512 KiB
-        let mut buf: bytes::BytesMut = bytes::BytesMut::with_capacity(COALESCE_TARGET);
+        // channel/JS boundary to reduce overhead; the target is configurable.
+        let mut buf: bytes::BytesMut = bytes::BytesMut::with_capacity(coalesce_target);
         let has_abort = abort.is_some();
         let mut aborted = false;
         loop {
@@ -203,15 +219,17 @@ pub(crate) async fn process_request(
                         match maybe {
                             Ok(Some(Ok(frame))) => {
                                 if let Ok(data) = frame.into_data() {
-                                    // If we have a large frame and no pending buffer, forward directly
-                                    if buf.is_empty() && data.len() >= COALESCE_TARGET {
-                                        if tx.send(Ok(data)).await.is_err() { break; }
+                                    if buf.is_empty() && data.len() >= coalesce_target {
+                                        if tx.send(Ok(data)).await.is_err() {
+                                            break;
+                                        }
                                     } else {
-                                        // Append and flush in COALESCE_TARGET sized chunks
                                         buf.extend_from_slice(&data);
-                                        if buf.len() >= COALESCE_TARGET {
+                                        if buf.len() >= coalesce_target {
                                             let out = buf.split().freeze();
-                                            if tx.send(Ok(out)).await.is_err() { break; }
+                                            if tx.send(Ok(out)).await.is_err() {
+                                                break;
+                                            }
                                         }
                                     }
                                 }
@@ -227,13 +245,13 @@ pub(crate) async fn process_request(
                 match timeout(READ_FRAME_TIMEOUT, body.frame()).await {
                     Ok(Some(Ok(frame))) => {
                         if let Ok(data) = frame.into_data() {
-                            if buf.is_empty() && data.len() >= COALESCE_TARGET {
+                            if buf.is_empty() && data.len() >= coalesce_target {
                                 if tx.send(Ok(data)).await.is_err() {
                                     break;
                                 }
                             } else {
                                 buf.extend_from_slice(&data);
-                                if buf.len() >= COALESCE_TARGET {
+                                if buf.len() >= coalesce_target {
                                     let out = buf.split().freeze();
                                     if tx.send(Ok(out)).await.is_err() {
                                         break;
