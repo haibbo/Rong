@@ -156,43 +156,84 @@ fn format_values_internal(result: &mut String, args: Rest<JSValue>) {
                         match chars.next() {
                             Some('s') => {
                                 if let Some((_, next_arg)) = iter.next() {
-                                    if let Ok(str) = next_arg.try_into::<String>() {
+                                    if let Ok(str) = next_arg.clone().try_into::<String>() {
                                         result.push_str(&str);
-                                        continue;
+                                    } else {
+                                        format_raw_inner(
+                                            result,
+                                            next_arg,
+                                            &mut HashSet::default(),
+                                            0,
+                                        );
                                     }
-                                    continue;
+                                } else {
+                                    result.push_str("%s");
                                 }
+                                continue;
                             }
                             Some('d') | Some('i') => {
                                 if let Some((_, next_arg)) = iter.next() {
-                                    if let Ok(num) = next_arg.try_into::<f64>() {
+                                    if let Ok(num) = next_arg.clone().try_into::<f64>() {
                                         result.push_str(&num.trunc().to_string());
-                                        continue;
+                                    } else {
+                                        format_raw_inner(
+                                            result,
+                                            next_arg,
+                                            &mut HashSet::default(),
+                                            0,
+                                        );
                                     }
+                                } else {
+                                    result.push_str("%d");
                                 }
+                                continue;
                             }
                             Some('f') => {
                                 if let Some((_, next_arg)) = iter.next() {
-                                    if let Ok(num) = next_arg.try_into::<f64>() {
+                                    if let Ok(num) = next_arg.clone().try_into::<f64>() {
                                         result.push_str(&num.to_string());
-                                        continue;
+                                    } else {
+                                        format_raw_inner(
+                                            result,
+                                            next_arg,
+                                            &mut HashSet::default(),
+                                            0,
+                                        );
                                     }
+                                } else {
+                                    result.push_str("%f");
                                 }
+                                continue;
                             }
                             Some('o') | Some('O') => {
                                 if let Some((_, next_arg)) = iter.next() {
                                     format_raw_inner(result, next_arg, &mut HashSet::default(), 0);
-                                    continue;
+                                } else {
+                                    result.push_str("%o");
                                 }
+                                continue;
                             }
                             Some('%') => {
                                 result.push('%');
                                 continue;
                             }
-                            _ => {}
+                            Some(other) => {
+                                result.push('%');
+                                result.push(other);
+                                continue;
+                            }
+                            None => {
+                                result.push('%');
+                                continue;
+                            }
                         }
                     }
                     result.push(c);
+                }
+
+                while let Some((_, extra)) = iter.next() {
+                    result.push(' ');
+                    format_raw_inner(result, extra, &mut HashSet::default(), 0);
                 }
                 continue;
             }
@@ -214,7 +255,11 @@ fn format_raw_inner(
     visited: &mut HashSet<usize>,
     depth: usize,
 ) {
-    if depth > 8 {
+    const MAX_DEPTH: usize = 8;
+    const MAX_ARRAY_ITEMS: usize = 100;
+    const MAX_OBJECT_KEYS: usize = 100;
+
+    if depth > MAX_DEPTH {
         result.push_str("[Maximum recursion depth exceeded]");
         return;
     }
@@ -236,8 +281,8 @@ fn format_raw_inner(
         }
 
         JSValueType::BigInt => {
-            if let Ok(s) = value.try_into::<i64>() {
-                result.push_str(&s.to_string());
+            if let Ok(s) = value.try_into::<String>() {
+                result.push_str(&s);
             }
         }
 
@@ -269,9 +314,9 @@ fn format_raw_inner(
             visited.insert(hash);
 
             if let Some(array) = JSArray::from_object(obj.clone()) {
-                format_array(result, array, visited, depth);
+                format_array(result, array, visited, depth, MAX_ARRAY_ITEMS);
             } else {
-                format_object(result, obj, visited, depth);
+                format_object(result, obj, visited, depth, MAX_OBJECT_KEYS);
             }
             visited.remove(&hash);
         }
@@ -300,13 +345,19 @@ fn format_raw_inner(
         }
 
         JSValueType::Symbol => {
-            let symbol = JSSymbol::from_object(value.into()).unwrap();
-            if let Ok(description) = symbol.descripiton() {
-                if !description.is_empty() {
-                    result.push_str(&format!("Symbol({})", description));
+            let obj: JSObject = value.into();
+            if let Some(symbol) = JSSymbol::from_object(obj) {
+                if let Ok(description) = symbol.descripiton() {
+                    if !description.is_empty() {
+                        result.push_str(&format!("Symbol({})", description));
+                    } else {
+                        result.push_str("Symbol()");
+                    }
                 } else {
                     result.push_str("Symbol()");
                 }
+            } else {
+                result.push_str("Symbol()");
             }
         }
 
@@ -356,7 +407,8 @@ fn format_raw_inner(
             if depth == 0 {
                 if let Ok(stack) = obj.get::<_, String>("stack") {
                     if !stack.is_empty() {
-                        error_parts.push(stack);
+                        result.push('\n');
+                        result.push_str(&stack);
                     }
                 }
             }
@@ -373,23 +425,50 @@ fn format_raw_inner(
     }
 }
 
-fn format_array(result: &mut String, array: JSArray, visited: &mut HashSet<usize>, depth: usize) {
+fn format_array(
+    result: &mut String,
+    array: JSArray,
+    visited: &mut HashSet<usize>,
+    depth: usize,
+    max_items: usize,
+) {
+    let total = array.len() as usize;
+    let mut written = 0usize;
     result.push_str("[ ");
-    for (index, item) in array.iter::<JSValue>().flatten().enumerate() {
-        if index > 0 {
+    for item in array.iter::<JSValue>().flatten() {
+        if written >= max_items {
+            break;
+        }
+        if written > 0 {
             result.push_str(", ");
         }
         format_raw_inner(result, item, visited, depth + 1);
+        written += 1;
+    }
+    if total > written {
+        result.push_str(", ... ");
+        result.push_str(&(total - written).to_string());
+        result.push_str(" more");
     }
     result.push_str(" ]");
 }
 
-fn format_object(result: &mut String, obj: JSObject, visited: &mut HashSet<usize>, depth: usize) {
+fn format_object(
+    result: &mut String,
+    obj: JSObject,
+    visited: &mut HashSet<usize>,
+    depth: usize,
+    max_keys: usize,
+) {
     result.push('{');
     let mut first = true;
 
     if let Ok(entries) = obj.entries() {
-        for entry in entries {
+        let total = entries.len();
+        for (idx, entry) in entries.into_iter().enumerate() {
+            if idx >= max_keys {
+                break;
+            }
             if !first {
                 result.push_str(", ");
             }
@@ -407,6 +486,14 @@ fn format_object(result: &mut String, obj: JSObject, visited: &mut HashSet<usize
 
                 format_raw_inner(result, entry.value().clone(), visited, depth + 1);
             }
+        }
+        if total > max_keys {
+            if !first {
+                result.push_str(", ");
+            }
+            result.push_str("... ");
+            result.push_str(&(total - max_keys).to_string());
+            result.push_str(" more");
         }
     }
 
@@ -584,6 +671,46 @@ mod tests {
                 output, "Name: Alice, Age: 30",
                 "Output should match formatted string"
             );
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_console_log_unknown_formatter_keeps_literal_and_appends_args() {
+        run(|ctx| {
+            clear_test_output();
+            CONSOLE_WRITER.with(|w| {
+                *w.borrow_mut() = None;
+            });
+            init(ctx)?;
+            set_writer(Box::new(TestConsoleWriter));
+
+            let js_code = r#"console.log("Hello %x", 42);"#;
+            ctx.eval::<()>(Source::from_bytes(js_code))?;
+
+            let output = get_test_output().trim().to_string();
+            assert_eq!(output, "Hello %x 42");
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_console_log_formatter_fallback_on_type_mismatch() {
+        run(|ctx| {
+            clear_test_output();
+            CONSOLE_WRITER.with(|w| {
+                *w.borrow_mut() = None;
+            });
+            init(ctx)?;
+            set_writer(Box::new(TestConsoleWriter));
+
+            // If number formatting fails, fall back to raw formatting for that arg.
+            let js_code = r#"console.log("Value=%d", { a: 1 });"#;
+            ctx.eval::<()>(Source::from_bytes(js_code))?;
+
+            let output = get_test_output().trim().to_string();
+            assert!(output.starts_with("Value="));
+            assert!(output.contains("{"));
             Ok(())
         });
     }
