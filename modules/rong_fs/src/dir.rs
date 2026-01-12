@@ -53,20 +53,20 @@ struct MkdirOptions {
 }
 
 async fn mkdir(path: String, option: Optional<MkdirOptions>) -> JSResult<()> {
-    grant_file_access(&path)?;
+    let resolved = grant_file_access(&path)?;
     let options = option.0.unwrap_or_default();
 
     // Check if directory exists first
-    if let Ok(metadata) = fs::metadata(&path).await {
+    if let Ok(metadata) = fs::metadata(&resolved).await {
         if metadata.is_dir() {
             return Ok(()); // Directory already exists, return success
         }
     }
 
     let result = if options.recursive.unwrap_or(false) {
-        fs::create_dir_all(&path).await
+        fs::create_dir_all(&resolved).await
     } else {
-        fs::create_dir(&path).await
+        fs::create_dir(&resolved).await
     };
 
     result.map_err(|e| RongJSError::TypeError(format!("Failed to create directory: {}", e)))?;
@@ -76,7 +76,7 @@ async fn mkdir(path: String, option: Optional<MkdirOptions>) -> JSResult<()> {
     if let Some(mode) = options.mode {
         use std::os::unix::fs::PermissionsExt;
         let permissions = std::fs::Permissions::from_mode(mode);
-        tokio::fs::set_permissions(&path, permissions)
+        tokio::fs::set_permissions(&resolved, permissions)
             .await
             .map_err(|e| {
                 RongJSError::TypeError(format!("Failed to set directory permissions: {}", e))
@@ -163,8 +163,8 @@ impl Stream for DirEntryStream {
 }
 
 async fn readdir(ctx: JSContext, path: String) -> JSResult<JSObject> {
-    grant_file_access(&path)?;
-    let entries = fs::read_dir(&path)
+    let resolved = grant_file_access(&path)?;
+    let entries = fs::read_dir(&resolved)
         .await
         .map_err(|e| RongJSError::TypeError(format!("Failed to read directory: {}", e)))?;
 
@@ -179,26 +179,26 @@ struct RemoveOptions {
 }
 
 async fn remove(path: String, option: Optional<RemoveOptions>) -> JSResult<()> {
-    grant_file_access(&path)?;
+    let resolved = grant_file_access(&path)?;
     let options = option.0.unwrap_or_default();
 
     // Check if path exists and get its type
-    match fs::metadata(&path).await {
+    match fs::metadata(&resolved).await {
         Ok(metadata) => {
             if metadata.is_file() || metadata.is_symlink() {
-                fs::remove_file(&path)
+                fs::remove_file(&resolved)
                     .await
                     .map_err(|e| RongJSError::TypeError(format!("Failed to remove file: {}", e)))
             } else if metadata.is_dir() {
                 if options.recursive {
-                    fs::remove_dir_all(&path).await.map_err(|e| {
+                    fs::remove_dir_all(&resolved).await.map_err(|e| {
                         RongJSError::TypeError(format!(
                             "Failed to remove directory recursively: {}",
                             e
                         ))
                     })
                 } else {
-                    fs::remove_dir(&path).await.map_err(|e| {
+                    fs::remove_dir(&resolved).await.map_err(|e| {
                         RongJSError::TypeError(format!("Failed to remove directory: {}", e))
                     })
                 }
@@ -214,8 +214,8 @@ async fn remove(path: String, option: Optional<RemoveOptions>) -> JSResult<()> {
 }
 
 async fn chdir(directory: String) -> JSResult<()> {
-    grant_file_access(&directory)?;
-    std::env::set_current_dir(&directory)
+    let resolved = grant_file_access(&directory)?;
+    std::env::set_current_dir(&resolved)
         .map_err(|e| RongJSError::TypeError(format!("Failed to change directory: {}", e)))
 }
 

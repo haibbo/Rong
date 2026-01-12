@@ -28,11 +28,11 @@ async fn write_text_file(
     text: String,
     option: Optional<WriteFileOptions>,
 ) -> JSResult<()> {
-    grant_file_access(&file)?;
+    let resolved = grant_file_access(&file)?;
     let options = option.0.unwrap_or_default();
 
     // Handle createNew option
-    if options.create_new.unwrap_or(false) && fs::metadata(&file).await.is_ok() {
+    if options.create_new.unwrap_or(false) && fs::metadata(&resolved).await.is_ok() {
         return Err(RongJSError::TypeError("File already exists".into()));
     }
 
@@ -55,7 +55,7 @@ async fn write_text_file(
 
         select! {
             result = async {
-                let mut file = open_options.open(&file).await
+                let mut file = open_options.open(&resolved).await
                     .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
                 file.write_all(text.as_bytes()).await
                     .map_err(|e| RongJSError::TypeError(format!("Write failed: {}", e)))
@@ -70,7 +70,7 @@ async fn write_text_file(
         }
     } else {
         let mut file = open_options
-            .open(&file)
+            .open(&resolved)
             .await
             .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
         file.write_all(text.as_bytes())
@@ -84,7 +84,7 @@ async fn write_file(
     data: JSTypedArray,
     option: Optional<WriteFileOptions>,
 ) -> JSResult<()> {
-    grant_file_access(&file)?;
+    let resolved = grant_file_access(&file)?;
     let options = option.0.unwrap_or_default();
 
     // Get bytes from TypedArray
@@ -93,7 +93,7 @@ async fn write_file(
         .ok_or_else(|| RongJSError::TypeError("Invalid TypedArray data".into()))?;
 
     // Handle createNew option
-    if options.create_new.unwrap_or(false) && fs::metadata(&file).await.is_ok() {
+    if options.create_new.unwrap_or(false) && fs::metadata(&resolved).await.is_ok() {
         return Err(RongJSError::TypeError("File already exists".into()));
     }
 
@@ -117,7 +117,7 @@ async fn write_file(
 
         select! {
             result = async {
-                let mut file = open_options.open(&file).await
+                let mut file = open_options.open(&resolved).await
                     .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
                 file.write_all(bytes).await
                     .map_err(|e| RongJSError::TypeError(format!("Write failed: {}", e)))
@@ -133,7 +133,7 @@ async fn write_file(
         }
     } else {
         let mut file = open_options
-            .open(&file)
+            .open(&resolved)
             .await
             .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
         file.write_all(bytes)
@@ -143,20 +143,20 @@ async fn write_file(
 }
 
 async fn copy_file(from: String, to: String) -> JSResult<()> {
-    grant_file_access(&from)?;
-    grant_file_access(&to)?;
-    fs::copy(&from, &to)
+    let resolved_from = grant_file_access(&from)?;
+    let resolved_to = grant_file_access(&to)?;
+    fs::copy(&resolved_from, &resolved_to)
         .await
         .map(|_| ())
         .map_err(|e| RongJSError::TypeError(format!("Failed to copy file: {}", e)))
 }
 
 async fn truncate(path: String, len: Optional<f64>) -> JSResult<()> {
-    grant_file_access(&path)?;
+    let resolved = grant_file_access(&path)?;
     let len = len.unwrap_or(0.0);
     fs::OpenOptions::new()
         .write(true)
-        .open(&path)
+        .open(&resolved)
         .await
         .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?
         .set_len(len as u64)

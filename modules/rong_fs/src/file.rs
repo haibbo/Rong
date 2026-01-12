@@ -187,7 +187,7 @@ impl FsFile {
 }
 
 async fn open_file(file: String, option: Optional<FileOpenOption>) -> JSResult<FsFile> {
-    grant_file_access(&file)?;
+    let resolved = grant_file_access(&file)?;
 
     let opts = option.0.unwrap_or(FileOpenOption {
         read: None,
@@ -219,7 +219,7 @@ async fn open_file(file: String, option: Optional<FileOpenOption>) -> JSResult<F
 
     // Open the file
     let file_handle = open_options
-        .open(&file)
+        .open(&resolved)
         .await
         .map_err(|e| RongJSError::TypeError(format!("Failed to open file '{}': {}", file, e)))?;
 

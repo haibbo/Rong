@@ -10,14 +10,14 @@ struct ReadFileOptions {
 }
 
 async fn read_text_file(file: String, option: Optional<ReadFileOptions>) -> JSResult<String> {
-    grant_file_access(&file)?;
+    let resolved = grant_file_access(&file)?;
     let options = option.0.unwrap_or(ReadFileOptions { signal: None });
 
     if let Some(signal) = options.signal {
         let mut abort = signal.subscribe();
 
         select! {
-            result = fs::read_to_string(&file) => {
+            result = fs::read_to_string(&resolved) => {
                 result.into_result()
             }
 
@@ -27,7 +27,7 @@ async fn read_text_file(file: String, option: Optional<ReadFileOptions>) -> JSRe
             }
         }
     } else {
-        fs::read_to_string(file).await.into_result()
+        fs::read_to_string(resolved).await.into_result()
     }
 }
 
@@ -36,7 +36,7 @@ async fn read_file(
     file: String,
     option: Optional<ReadFileOptions>,
 ) -> JSResult<JSArrayBuffer<u8>> {
-    grant_file_access(&file)?;
+    let resolved = grant_file_access(&file)?;
     let options = option.0.unwrap_or(ReadFileOptions { signal: None });
 
     if let Some(signal) = options.signal {
@@ -44,7 +44,7 @@ async fn read_file(
         println!("read_file: Subscribed to abort signal");
 
         select! {
-            result = fs::read(&file) => {
+            result = fs::read(&resolved) => {
                 println!("read_file: File read completed");
                 match result {
                     Ok(bytes) => JSArrayBuffer::<u8>::from_bytes_owned(&ctx, bytes),
@@ -58,7 +58,7 @@ async fn read_file(
             }
         }
     } else {
-        let bytes = fs::read(file)
+        let bytes = fs::read(resolved)
             .await
             .map_err(|e| RongJSError::TypeError(format!("Failed to read file: {}", e)))?;
 

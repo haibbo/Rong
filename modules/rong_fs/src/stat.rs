@@ -1,3 +1,4 @@
+use crate::grant_file_access;
 use rong::*;
 use std::{fs, time::SystemTime};
 use tokio::fs as tokio_fs;
@@ -108,14 +109,16 @@ impl FileInfo {
 }
 
 async fn stat(path: String) -> JSResult<FileInfo> {
-    tokio_fs::metadata(&path)
+    let resolved = grant_file_access(&path)?;
+    tokio_fs::metadata(&resolved)
         .await
         .map(FileInfo::from_metadata)
         .map_err(|e| RongJSError::TypeError(format!("Failed to get file info: {}", e)))
 }
 
 async fn lstat(path: String) -> JSResult<FileInfo> {
-    tokio_fs::symlink_metadata(&path)
+    let resolved = grant_file_access(&path)?;
+    tokio_fs::symlink_metadata(&resolved)
         .await
         .map(FileInfo::from_metadata)
         .map_err(|e| RongJSError::TypeError(format!("Failed to get file info: {}", e)))

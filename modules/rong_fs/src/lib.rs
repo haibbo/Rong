@@ -1,5 +1,6 @@
 use rong::*;
 use std::cell::RefCell;
+use std::path::PathBuf;
 
 mod dir;
 mod file;
@@ -10,17 +11,18 @@ mod write;
 
 /// File access guard trait for controlling file access permissions
 pub trait FileAccessGuard: Send + Sync {
-    /// Check if access to the given file path is allowed
-    /// Returns Ok(()) if access is granted, Err with error message if denied
-    fn check_access(&self, path: &str) -> JSResult<()>;
+    /// Check if access to the given file path is allowed and resolve it to a safe absolute path
+    /// Returns Ok(PathBuf) with the resolved absolute path if access is granted
+    /// Returns Err with error message if denied
+    fn resolve_access(&self, path: &str) -> JSResult<PathBuf>;
 }
 
 /// Default implementation that allows all file access
 struct DefaultFileAccessGuard;
 
 impl FileAccessGuard for DefaultFileAccessGuard {
-    fn check_access(&self, _path: &str) -> JSResult<()> {
-        Ok(()) // Allow all access by default
+    fn resolve_access(&self, path: &str) -> JSResult<PathBuf> {
+        Ok(PathBuf::from(path)) // Allow all access by default, no resolution logic
     }
 }
 
@@ -36,8 +38,8 @@ pub fn set_file_access_guard(guard: Box<dyn FileAccessGuard>) {
     });
 }
 
-/// Internal function to grant file access if allowed
-fn grant_file_access(path: &str) -> JSResult<()> {
+/// Internal function to grant file access if allowed and resolve the path
+fn grant_file_access(path: &str) -> JSResult<PathBuf> {
     FILE_ACCESS_GUARD.with(|g| {
         let guard_ref = g.borrow();
         let guard = guard_ref
@@ -45,7 +47,7 @@ fn grant_file_access(path: &str) -> JSResult<()> {
             .map(|g| g.as_ref())
             .unwrap_or(&DefaultFileAccessGuard as &dyn FileAccessGuard);
 
-        guard.check_access(path)
+        guard.resolve_access(path)
     })
 }
 
