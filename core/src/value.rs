@@ -238,10 +238,10 @@ where
     where
         F: FnOnce(Self) -> T,
     {
-        if self.is_exception() || self.is_error() {
-            let ctx = JSContext::from_borrowed_raw_ptr(self.as_raw_context());
-            let err = JSException::from_js_value(&ctx, self)?;
-            Err(RongJSError::Exception(err.into_error()))
+        if self.is_exception() {
+            let ctx: JSContext<V::Context> =
+                JSContext::from_borrowed_raw_ptr(self.as_raw_context());
+            Err(RongJSError::from_jsvalue(JSValue::from_raw(&ctx, self)))
         } else {
             Ok(f(self))
         }

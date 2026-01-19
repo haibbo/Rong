@@ -1,11 +1,18 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSError, JSException, JSExceptionHandler, JSObject,
-    JSObjectOps, JSValue, JSValueImpl,
+    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSObjectOps, JSValue,
+    JSValueImpl,
 };
 use thiserror::Error;
 use tokio::sync::oneshot;
 
 pub type JSResult<T> = Result<T, RongJSError>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ThrownValueHandle {
+    pub(crate) context_id: usize,
+    pub(crate) id: u32,
+    pub(crate) generation: u32,
+}
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum RongJSError {
@@ -60,17 +67,9 @@ pub enum RongJSError {
     #[error("{0}")]
     TypeError(String),
 
-    #[error("{0}")]
-    Exception(#[from] JSError),
-
-    /// Represents a raw JSValue pointer stored as usize
-    ///
-    /// # Safety
-    /// - Should not be constructed directly
-    /// - Must use RongJSError::from_jsvalue() to properly construct
-    /// - The usize value must be a valid pointer to a Box<JSValue>
-    #[error("{0}")]
-    JSValue(usize),
+    /// Thrown/rejected JS payload (can be any JS value, including primitives).
+    #[error("JavaScript threw a value")]
+    Thrown(ThrownValueHandle),
 }
 
 impl RongJSError {
@@ -99,16 +98,17 @@ impl RongJSError {
 
             RongJSError::TypedArrayRangeError => ctx.as_ref().throw_range_error(self.to_string()),
 
-            RongJSError::Exception(_)
-            | RongJSError::Error(_)
+            RongJSError::Error(_)
             | RongJSError::Borrow(_)
             | RongJSError::CompileToByteErr
             | RongJSError::OnceFnCalled
             | RongJSError::NotSupportByteCode => ctx.as_ref().throw_error(self.to_string()),
 
-            RongJSError::JSValue(value) => {
-                let value = unsafe { Box::from_raw(value as *mut JSValue<V>) };
-                ctx.throw(*value).into_value()
+            RongJSError::Thrown(handle) => {
+                let Some(value) = ctx.take_thrown(handle) else {
+                    return ctx.as_ref().throw_error("Invalid thrown value handle");
+                };
+                ctx.throw(value).into_value()
             }
         }
     }
@@ -123,8 +123,19 @@ impl RongJSError {
     }
 
     pub fn from_jsvalue<V: JSValueImpl>(value: JSValue<V>) -> Self {
-        let addr = Box::new(value);
-        RongJSError::JSValue(Box::into_raw(addr) as usize)
+        let ctx: JSContext<V::Context> =
+            JSContext::from_borrowed_raw_ptr(value.as_value().as_raw_context());
+        RongJSError::Thrown(ctx.capture_thrown(value))
+    }
+
+    pub fn thrown_value<C>(&self, ctx: &JSContext<C>) -> Option<JSValue<C::Value>>
+    where
+        C: JSContextImpl,
+    {
+        match *self {
+            RongJSError::Thrown(handle) => ctx.resolve_thrown(handle),
+            _ => None,
+        }
     }
 }
 
@@ -133,12 +144,7 @@ where
     V: JSObjectOps,
 {
     fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        let obj = JSObject::from_js_value(ctx, value)?;
-        Ok(RongJSError::Exception(
-            JSException::from_object(obj)
-                .ok_or(RongJSError::NotObject)?
-                .into_error(),
-        ))
+        Ok(RongJSError::from_jsvalue(JSValue::from_raw(ctx, value)))
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::{
     ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSResult, JSRuntimeImpl, JSTypeOf,
     JSValue, JSValueImpl, Promise, RongJSError,
+    result::ThrownValueHandle,
     source::{Source, SourceKind},
 };
 use crate::{JSRuntime, JSValueMapper};
@@ -361,6 +362,49 @@ impl<C: JSContextImpl> JSContext<C> {
         }
     }
 
+    pub(crate) fn capture_thrown(&self, value: JSValue<C::Value>) -> ThrownValueHandle {
+        let data = self.get_opaque();
+        if data.is_null() {
+            panic!("[JSContext] opaque is empty");
+        }
+
+        let context_id = C::context_id(self.as_ref().as_raw());
+
+        #[cfg(debug_assertions)]
+        eprintln!("[JSContext] Capturing thrown value for ctx: {}", context_id);
+
+        let mut store = unsafe { (*data).thrown.try_borrow_mut() }
+            .expect("[JSContext] Fatal: ThrownValueStore already borrowed. Recursive error handling detected.");
+
+        store.insert(context_id, value.into_value())
+    }
+
+    pub(crate) fn resolve_thrown(&self, handle: ThrownValueHandle) -> Option<JSValue<C::Value>> {
+        let data = self.get_opaque();
+        if data.is_null() {
+            return None;
+        }
+
+        let context_id = C::context_id(self.as_ref().as_raw());
+        let store = unsafe { (*data).thrown.try_borrow().ok()? };
+        store
+            .get(context_id, handle)
+            .map(|v| JSValue::from_raw(self, v))
+    }
+
+    pub(crate) fn take_thrown(&self, handle: ThrownValueHandle) -> Option<JSValue<C::Value>> {
+        let data = self.get_opaque();
+        if data.is_null() {
+            return None;
+        }
+
+        let context_id = C::context_id(self.as_ref().as_raw());
+        let mut store = unsafe { (*data).thrown.try_borrow_mut().ok()? };
+        store
+            .take(context_id, handle)
+            .map(|v| JSValue::from_raw(self, v))
+    }
+
     pub fn runtime(&self) -> &JSRuntime<C::Runtime> {
         &self.rc.runtime
     }
@@ -462,6 +506,7 @@ impl<C: JSContextImpl> JSContext<C> {
 struct ContextOpaque<V: JSValueImpl> {
     registry: RefCell<HashMap<TypeId, V>>,
     ctx_inner: Weak<JSContextInner<V::Context>>,
+    thrown: RefCell<ThrownValueStore<V>>,
 }
 
 impl<V: JSValueImpl> ContextOpaque<V> {
@@ -469,7 +514,84 @@ impl<V: JSValueImpl> ContextOpaque<V> {
         Box::new(Self {
             registry: RefCell::new(HashMap::new()),
             ctx_inner,
+            thrown: RefCell::new(ThrownValueStore::new()),
         })
+    }
+}
+
+#[derive(Debug)]
+struct ThrownValueStore<V: JSValueImpl> {
+    slots: Vec<ThrownSlot<V>>,
+    free: Vec<usize>,
+}
+
+#[derive(Debug)]
+struct ThrownSlot<V: JSValueImpl> {
+    generation: u32,
+    value: Option<V>,
+}
+
+impl<V: JSValueImpl> ThrownValueStore<V> {
+    fn new() -> Self {
+        Self {
+            slots: Vec::new(),
+            free: Vec::new(),
+        }
+    }
+
+    fn insert(&mut self, context_id: usize, value: V) -> ThrownValueHandle {
+        if let Some(id) = self.free.pop() {
+            let slot = &mut self.slots[id];
+            slot.generation = slot.generation.wrapping_add(1).max(1);
+            slot.value = Some(value);
+            return ThrownValueHandle {
+                context_id,
+                id: id as u32,
+                generation: slot.generation,
+            };
+        }
+
+        let id = self.slots.len();
+        self.slots.push(ThrownSlot {
+            generation: 1,
+            value: Some(value),
+        });
+        ThrownValueHandle {
+            context_id,
+            id: id as u32,
+            generation: 1,
+        }
+    }
+
+    fn get(&self, context_id: usize, handle: ThrownValueHandle) -> Option<V> {
+        if handle.context_id != context_id {
+            return None;
+        }
+
+        let id = handle.id as usize;
+        let slot = self.slots.get(id)?;
+        if slot.generation != handle.generation {
+            return None;
+        }
+        slot.value.clone()
+    }
+
+    fn take(&mut self, context_id: usize, handle: ThrownValueHandle) -> Option<V> {
+        if handle.context_id != context_id {
+            return None;
+        }
+
+        let id = handle.id as usize;
+        let slot = self.slots.get_mut(id)?;
+        if slot.generation != handle.generation {
+            return None;
+        }
+
+        let value = slot.value.take();
+        if value.is_some() {
+            self.free.push(id);
+        }
+        value
     }
 }
 

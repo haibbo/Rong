@@ -1,4 +1,3 @@
-use crate::JSException;
 use crate::rong::spawn;
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject,
@@ -286,37 +285,34 @@ where
                 //println!("resolve callback called");
                 let mut state = resolve_state.borrow_mut();
 
-                if value.is_error() || value.is_exception() {
-                    let err = JSException::from_js_value(&ctx, value.into_value()).unwrap();
-                    if let PromiseState::Pending(waker) = std::mem::replace(
-                        &mut *state,
-                        PromiseState::Resolved(Err(RongJSError::Exception(err.into_error()))),
-                    ) {
-                        waker.wake_by_ref();
-                    }
-                } else {
-                    let success = T::from_js_value(&ctx, value.into_value()).unwrap();
-                    if let PromiseState::Pending(waker) =
-                        std::mem::replace(&mut *state, PromiseState::Resolved(Ok(success)))
-                    {
-                        waker.wake_by_ref();
-                    }
+                let resolved = match T::from_js_value(&ctx, value.into_value()) {
+                    Ok(v) => Ok(v),
+                    Err(e) => Err(e),
+                };
+
+                if let PromiseState::Pending(waker) =
+                    std::mem::replace(&mut *state, PromiseState::Resolved(resolved))
+                {
+                    waker.wake_by_ref();
                 }
             })
             .unwrap();
 
             // rejected callback used to wake up future and save rejected value
             let reject_state = state.clone();
-            let reject = JSFunc::new(ctx, move |err: JSException<V>| {
-                //println!("reject callback called");
-                let mut state = reject_state.borrow_mut();
-                if let PromiseState::Pending(waker) = std::mem::replace(
-                    &mut *state,
-                    PromiseState::Resolved(Err(RongJSError::Exception(err.into_error()))),
-                ) {
-                    waker.wake_by_ref();
-                }
-            })
+            let reject = JSFunc::new(
+                ctx,
+                move |_ctx: JSContext<V::Context>, reason: JSValue<V>| {
+                    //println!("reject callback called");
+                    let mut state = reject_state.borrow_mut();
+                    if let PromiseState::Pending(waker) = std::mem::replace(
+                        &mut *state,
+                        PromiseState::Resolved(Err(RongJSError::from_jsvalue(reason))),
+                    ) {
+                        waker.wake_by_ref();
+                    }
+                },
+            )
             .unwrap();
 
             // Register resolve handlers
