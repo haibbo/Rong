@@ -2,6 +2,33 @@ pub use rong::*;
 // Re-export commonly used types for tests
 pub use rong::function::{Constructor, Optional, Rest, This, ThisMut};
 
+pub fn thrown_js_value(ctx: &JSContext, err: &RongJSError) -> JSResult<JSValue> {
+    err.thrown_value(ctx)
+        .ok_or_else(|| RongJSError::Error("Expected thrown JS value".to_string()))
+}
+
+pub fn thrown_object(ctx: &JSContext, err: &RongJSError) -> JSResult<JSObject> {
+    let thrown = thrown_js_value(ctx, err)?;
+    thrown
+        .into_object()
+        .ok_or_else(|| RongJSError::Error("Expected thrown value to be an object".to_string()))
+}
+
+pub fn thrown_object_prop<T>(ctx: &JSContext, err: &RongJSError, key: &str) -> JSResult<T>
+where
+    T: FromJSValue<JSEngineValue>,
+{
+    thrown_object(ctx, err)?.get(key)
+}
+
+pub fn thrown_error_message(ctx: &JSContext, err: &RongJSError) -> JSResult<String> {
+    thrown_object_prop(ctx, err, "message")
+}
+
+pub fn thrown_error_stack(ctx: &JSContext, err: &RongJSError) -> JSResult<String> {
+    thrown_object_prop(ctx, err, "stack")
+}
+
 // Helper function to run tests with JS context
 #[allow(dead_code)]
 pub fn run<F: FnOnce(&JSContext) -> JSResult<()>>(f: F) {
