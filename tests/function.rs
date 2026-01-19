@@ -212,18 +212,15 @@ fn test_async_rust_fn_reject() {
             .eval::<Promise>(Source::from_bytes(
                 br#"add(2,6)
                 .then((resolve) => {return resolve;})
-                .catch(err =>{ return new Error(err+"!");})
+                .catch(err =>{ throw new Error(err+"!");})
                 "#,
             ))?
             .into_future::<i32>()
             .await;
 
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Failed to perform add!")
-        );
+        let err = result.unwrap_err();
+        let message = thrown_error_message(&ctx, &err)?;
+        assert!(message.contains("Failed to perform add!"));
         Ok(())
     });
 }
@@ -238,12 +235,9 @@ fn test_new_once() {
         // catch trigger rust resolver callback
         let result = ctx.eval::<i32>(Source::from_bytes("once(2); once(3)"));
 
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("OnceFn had been called")
-        );
+        let err = result.unwrap_err();
+        let message = thrown_error_message(ctx, &err)?;
+        assert!(message.contains("OnceFn had been called"));
 
         Ok(())
     });
@@ -276,12 +270,9 @@ fn test_new_once_async() {
             .unwrap();
 
         let result: JSResult<i32> = promise.into_future().await;
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("OnceFn had been called")
-        );
+        let err = result.unwrap_err();
+        let message = thrown_error_message(&ctx, &err)?;
+        assert!(message.contains("OnceFn had been called"));
 
         tokio::time::sleep(Duration::from_millis(110)).await;
         Ok(())

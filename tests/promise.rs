@@ -215,8 +215,9 @@ fn test_promise_into_future_reject_error() {
 
         let promise = ctx.eval::<Promise>(Source::from_bytes(js_code.as_bytes()))?;
 
-        let error = promise.into_future::<i32>().await.unwrap_err();
-        assert!(error.to_string().contains("reject error"));
+        let err = promise.into_future::<i32>().await.unwrap_err();
+        let message = thrown_error_message(&ctx, &err)?;
+        assert_eq!(message, "reject error");
         Ok(())
     })
 }
@@ -245,8 +246,26 @@ fn test_promise_into_future_reject_exception() {
 
         let promise = ctx.eval::<Promise>(Source::from_bytes(js_code.as_bytes()))?;
 
-        let error = promise.into_future::<i32>().await.unwrap_err();
-        assert!(error.to_string().contains("timeout failure"));
+        let err = promise.into_future::<i32>().await.unwrap_err();
+        let message = thrown_error_message(&ctx, &err)?;
+        assert_eq!(message, "timeout failure");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_promise_into_future_reject_primitive() {
+    async_run!(|ctx: JSContext| async move {
+        let js_code = r#"
+            Promise.reject("reason")
+        "#;
+
+        let promise = ctx.eval::<Promise>(Source::from_bytes(js_code.as_bytes()))?;
+        let err = promise.into_future::<i32>().await.unwrap_err();
+
+        let thrown = thrown_js_value(&ctx, &err)?;
+        let s: String = String::from_js_value(&ctx, thrown.into_value())?;
+        assert_eq!(s, "reason");
         Ok(())
     })
 }

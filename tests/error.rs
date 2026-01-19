@@ -15,12 +15,24 @@ fn test_throw_error() {
         let error = ctx
             .eval::<()>(Source::from_bytes(b"throw new Error('throw-error')"))
             .unwrap_err();
-        let error = error.to_string();
+        let thrown = thrown_js_value(ctx, &error)?;
+        let error = String::from_js_value(ctx, thrown.clone().into_value())?;
         assert!(
             error.contains("throw-error"),
             "Expected error message to contain 'throw-error', but got: {}",
             error
         );
+        Ok(())
+    });
+}
+
+#[test]
+fn test_throw_primitive_value() {
+    run(|ctx| {
+        let err = ctx.eval::<()>(Source::from_bytes(b"throw 1")).unwrap_err();
+        let thrown = thrown_js_value(ctx, &err)?;
+        let s = String::from_js_value(ctx, thrown.into_value())?;
+        assert_eq!(s, "1");
         Ok(())
     });
 }
@@ -100,10 +112,9 @@ fn test_error_stack() {
     run(|ctx| {
         // test syntax error
         let result = ctx.eval::<()>(Source::from_bytes(b"function test() { a b c }"));
-        let RongJSError::Exception(error) = result.unwrap_err() else {
-            panic!("Expected JSError");
-        };
-        assert!(error.message.is_some(), "Should have error message");
+        let err = result.unwrap_err();
+        let message = thrown_error_message(ctx, &err)?;
+        assert!(!message.is_empty(), "Should have error message");
         // Javascriptcore only have value on message
         // assert!(error.stack.is_some(), "Should have stack trace");
 
@@ -116,15 +127,15 @@ fn test_error_stack() {
             foo();
         ",
         ));
-        let RongJSError::Exception(error) = result.unwrap_err() else {
-            panic!("Expected JSError");
-        };
+        let err = result.unwrap_err();
+        let message = thrown_error_message(ctx, &err)?;
         assert!(
-            error.message.unwrap().contains("bar"),
+            message.contains("bar"),
             "Error message should mention undefined variable"
         );
+        let stack = thrown_error_stack(ctx, &err)?;
         assert!(
-            error.stack.unwrap().contains("foo"),
+            stack.contains("foo"),
             "Stack trace should contain function name"
         );
 
@@ -135,11 +146,10 @@ fn test_error_stack() {
             obj.property;  // TypeError: Cannot read property of null
         ",
         ));
-        let RongJSError::Exception(error) = result.unwrap_err() else {
-            panic!("Expected JSError");
-        };
+        let err = result.unwrap_err();
+        let message = thrown_error_message(ctx, &err)?;
         assert!(
-            error.message.unwrap().contains("null"),
+            message.contains("null"),
             "Error message should mention null"
         );
         Ok(())
@@ -164,11 +174,10 @@ fn test_custom_error() {
         ",
         ));
 
-        let RongJSError::Exception(error) = result.unwrap_err() else {
-            panic!("Expected JSError");
-        };
-        assert_eq!(error.message.unwrap(), "Custom error message");
-        let stack = error.stack.unwrap();
+        let err = result.unwrap_err();
+        let message = thrown_error_message(ctx, &err)?;
+        assert_eq!(message, "Custom error message");
+        let stack = thrown_error_stack(ctx, &err)?;
         assert!(
             stack.contains("throwCustomError"),
             "Stack should contain throwCustomError"
@@ -190,12 +199,9 @@ fn test_error_conversion() {
         ];
 
         for (code, expected_msg) in cases {
-            let RongJSError::Exception(error) =
-                ctx.eval::<()>(Source::from_bytes(code)).unwrap_err()
-            else {
-                panic!("Expected JSError");
-            };
-            assert_eq!(error.message.unwrap(), expected_msg);
+            let err = ctx.eval::<()>(Source::from_bytes(code)).unwrap_err();
+            let message = thrown_error_message(ctx, &err)?;
+            assert_eq!(message, expected_msg);
         }
         Ok(())
     });
@@ -214,14 +220,15 @@ fn test_error_display() {
         ",
         ));
 
-        let error = result.unwrap_err();
-        let error_str = error.to_string();
+        let err = result.unwrap_err();
+        let message = thrown_error_message(ctx, &err)?;
+        let stack = thrown_error_stack(ctx, &err)?;
         assert!(
-            error_str.contains("test error"),
+            message.contains("test error"),
             "Error string should contain message"
         );
         assert!(
-            error_str.contains("foo"),
+            stack.contains("foo"),
             "Error string should contain stack trace"
         );
         Ok(())
