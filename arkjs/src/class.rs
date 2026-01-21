@@ -112,7 +112,7 @@ where
             let mut name_value: arkjs::JSVM_Value = ptr::null_mut();
             arkjs::OH_JSVM_CreateStringUtf8(
                 ctx.to_raw(),
-                class_name_cstr.as_ptr() as *const u8,
+                class_name_cstr.as_ptr(),
                 class_name.len(),
                 &mut name_value,
             );

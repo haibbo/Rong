@@ -54,6 +54,18 @@ impl JSTypeOf for ArkJSValue {
         }
     }
 
+    fn is_date(&self) -> bool {
+        if !self.is_object() {
+            return false;
+        }
+
+        unsafe {
+            let mut result = false;
+            let status = arkjs::OH_JSVM_IsDate(self.env, self.value, &mut result);
+            status == arkjs::JSVM_Status_JSVM_OK && result
+        }
+    }
+
     fn is_undefined(&self) -> bool {
         unsafe {
             let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_UNDEFINED;

@@ -1,6 +1,7 @@
 use crate::{ArkJSRuntime, ArkJSValue, arkjs};
 use rong_core::{
-    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, RongJSError,
+    JSClass, JSContextImpl, JSErrorFactory, JSExceptionThrower, JSRuntimeImpl, JSValueImpl,
+    RongJSError,
 };
 use std::ffi::CString;
 use std::ptr;
@@ -65,6 +66,11 @@ impl JSContextImpl for ArkJSContext {
             );
 
             if status != arkjs::JSVM_Status_JSVM_OK {
+                let mut exception: arkjs::JSVM_Value = ptr::null_mut();
+                arkjs::OH_JSVM_GetAndClearLastException(self.raw, &mut exception);
+                if !exception.is_null() {
+                    return ArkJSValue::from_owned_raw(self.raw, exception).with_exception();
+                }
                 return Self::Value::create_undefined(self);
             }
 
@@ -89,6 +95,11 @@ impl JSContextImpl for ArkJSContext {
             let status = arkjs::OH_JSVM_RunScript(self.raw, script, &mut result);
 
             if status != arkjs::JSVM_Status_JSVM_OK {
+                let mut exception: arkjs::JSVM_Value = ptr::null_mut();
+                arkjs::OH_JSVM_GetAndClearLastException(self.raw, &mut exception);
+                if !exception.is_null() {
+                    return ArkJSValue::from_owned_raw(self.raw, exception).with_exception();
+                }
                 return Self::Value::create_undefined(self);
             }
 
@@ -176,7 +187,7 @@ impl JSContextImpl for ArkJSContext {
     fn compile_to_bytecode(&self, _source: rong_core::Source) -> Result<Vec<u8>, RongJSError> {
         // ArkJS bytecode compilation APIs are not available in current bindings
         // Return error to indicate bytecode compilation is not supported
-        Err(RongJSError::NotSupportByteCode)
+        Err(RongJSError::NotSupportByteCode())
     }
 
     fn run_bytecode(&self, _bytes: &[u8]) -> Self::Value {
@@ -213,61 +224,14 @@ impl Clone for ArkJSContext {
     }
 }
 
-impl JSExceptionHandler for ArkJSContext {
-    fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_with_name("SyntaxError", message)
-    }
-
-    fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_with_name("TypeError", message)
-    }
-
-    fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_with_name("ReferenceError", message)
-    }
-
-    fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_with_name("RangeError", message)
-    }
-
-    fn throw_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_with_name("Error", message)
-    }
-
-    fn new_error(&self) -> Self::Value {
-        unsafe {
-            let mut error: arkjs::JSVM_Value = ptr::null_mut();
-            let mut message: arkjs::JSVM_Value = ptr::null_mut();
-            arkjs::OH_JSVM_CreateStringUtf8(self.raw, b"Error\0".as_ptr(), 5, &mut message);
-
-            let status = arkjs::OH_JSVM_CreateError(self.raw, ptr::null_mut(), message, &mut error);
-
-            if status == arkjs::JSVM_Status_JSVM_OK {
-                ArkJSValue::from_owned_raw(self.raw, error).with_error()
-            } else {
-                Self::Value::create_undefined(self)
-            }
-        }
-    }
-
-    fn throw(&self, value: Self::Value) -> Self::Value {
-        value.with_exception()
-    }
-}
-
-impl ArkJSContext {
-    pub(crate) fn throw_error_with_name(
-        &self,
-        error_name: &str,
-        message: impl AsRef<str>,
-    ) -> ArkJSValue {
+impl JSErrorFactory for ArkJSContext {
+    fn new_error(&self, name: &str, message: impl AsRef<str>, code: Option<&str>) -> Self::Value {
         unsafe {
             let mut error: arkjs::JSVM_Value = ptr::null_mut();
             let message_cstr = CString::new(message.as_ref()).unwrap();
-            let _error_name_cstr = CString::new(error_name).unwrap();
 
             let mut message_value: arkjs::JSVM_Value = ptr::null_mut();
-            arkjs::OH_JSVM_CreateStringUtf8(
+            let _ = arkjs::OH_JSVM_CreateStringUtf8(
                 self.raw,
                 message_cstr.as_ptr(),
                 message.as_ref().len(),
@@ -276,16 +240,50 @@ impl ArkJSContext {
 
             let status =
                 arkjs::OH_JSVM_CreateError(self.raw, ptr::null_mut(), message_value, &mut error);
-
-            if status == arkjs::JSVM_Status_JSVM_OK {
-                // Try to set the error name if the API supports it
-                // This might need adjustment based on actual Ark JS API
-                ArkJSValue::from_owned_raw(self.raw, error).with_exception()
-            } else {
-                // Fallback to a generic error
-                ArkJSValue::create_undefined(self).with_exception()
+            if status != arkjs::JSVM_Status_JSVM_OK {
+                return Self::Value::create_undefined(self);
             }
+
+            let name_cstr = CString::new(name).unwrap();
+            let mut name_value: arkjs::JSVM_Value = ptr::null_mut();
+            let _ = arkjs::OH_JSVM_CreateStringUtf8(
+                self.raw,
+                name_cstr.as_ptr(),
+                name.len(),
+                &mut name_value,
+            );
+            let _ = arkjs::OH_JSVM_SetNamedProperty(
+                self.raw,
+                error,
+                b"name\0".as_ptr() as _,
+                name_value,
+            );
+
+            if let Some(code) = code {
+                let code_cstr = CString::new(code).unwrap();
+                let mut code_value: arkjs::JSVM_Value = ptr::null_mut();
+                let _ = arkjs::OH_JSVM_CreateStringUtf8(
+                    self.raw,
+                    code_cstr.as_ptr(),
+                    code.len(),
+                    &mut code_value,
+                );
+                let _ = arkjs::OH_JSVM_SetNamedProperty(
+                    self.raw,
+                    error,
+                    b"code\0".as_ptr() as _,
+                    code_value,
+                );
+            }
+
+            ArkJSValue::from_owned_raw(self.raw, error).with_error()
         }
+    }
+}
+
+impl JSExceptionThrower for ArkJSContext {
+    fn throw(&self, value: Self::Value) -> Self::Value {
+        value.with_exception()
     }
 }
 

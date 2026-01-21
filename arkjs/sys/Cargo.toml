@@ -3,5 +3,9 @@ name = "rong_arkjs_sys"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+test = false
+doctest = false
+
 [build-dependencies]
 bindgen = "0.72"

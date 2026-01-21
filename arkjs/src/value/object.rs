@@ -113,7 +113,7 @@ impl JSObjectOps for ArkJSValue {
             let mut proto_key: arkjs::JSVM_Value = std::ptr::null_mut();
             let status = arkjs::OH_JSVM_CreateStringUtf8(
                 self.env,
-                b"__proto__\0".as_ptr() as *const u8,
+                b"__proto__\0".as_ptr() as *const std::ffi::c_char,
                 9,
                 &mut proto_key,
             );

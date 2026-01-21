@@ -166,12 +166,8 @@ impl JSValueImpl for ArkJSValue {
         let c_str = CString::new(str).unwrap();
         unsafe {
             let mut json_string: arkjs::JSVM_Value = ptr::null_mut();
-            let status = arkjs::OH_JSVM_CreateStringUtf8(
-                env,
-                c_str.as_ptr() as *const u8,
-                str.len(),
-                &mut json_string,
-            );
+            let status =
+                arkjs::OH_JSVM_CreateStringUtf8(env, c_str.as_ptr(), str.len(), &mut json_string);
 
             if status == arkjs::JSVM_Status_JSVM_OK {
                 let mut result: arkjs::JSVM_Value = ptr::null_mut();
@@ -196,7 +192,7 @@ impl JSValueImpl for ArkJSValue {
             let mut desc_string: arkjs::JSVM_Value = ptr::null_mut();
             let status = arkjs::OH_JSVM_CreateStringUtf8(
                 env,
-                c_str.as_ptr() as *const u8,
+                c_str.as_ptr(),
                 description.len(),
                 &mut desc_string,
             );
@@ -210,6 +206,19 @@ impl JSValueImpl for ArkJSValue {
                 } else {
                     Self::create_undefined(ctx)
                 }
+            } else {
+                Self::create_undefined(ctx)
+            }
+        }
+    }
+
+    fn create_date(ctx: &Self::Context, epoch_ms: f64) -> Self {
+        let env = ctx.to_raw();
+        unsafe {
+            let mut date_value: arkjs::JSVM_Value = ptr::null_mut();
+            let status = arkjs::OH_JSVM_CreateDate(env, epoch_ms, &mut date_value);
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                Self::from_owned_raw(env, date_value).with_object()
             } else {
                 Self::create_undefined(ctx)
             }
@@ -303,8 +312,12 @@ impl_js_converter!(
     String,
     |ctx, value: &str| unsafe {
         let mut string_value: arkjs::JSVM_Value = ptr::null_mut();
-        let status =
-            arkjs::OH_JSVM_CreateStringUtf8(ctx, value.as_ptr(), value.len(), &mut string_value);
+        let status = arkjs::OH_JSVM_CreateStringUtf8(
+            ctx,
+            value.as_ptr() as *const std::ffi::c_char,
+            value.len(),
+            &mut string_value,
+        );
         if status == arkjs::JSVM_Status_JSVM_OK {
             string_value
         } else {
@@ -322,7 +335,7 @@ impl_js_converter!(
             let status = arkjs::OH_JSVM_GetValueStringUtf8(
                 env,
                 value,
-                buffer.as_mut_ptr(),
+                buffer.as_mut_ptr() as *mut std::ffi::c_char,
                 buffer.len(),
                 &mut written,
             );
