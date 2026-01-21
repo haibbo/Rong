@@ -73,14 +73,12 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
     // Parse the rename attribute from the macro arguments
     if !attr.is_empty() {
         let meta = syn::parse2::<Meta>(attr)?;
-        if let Meta::NameValue(nv) = meta {
-            if nv.path.is_ident("rename") {
-                if let Expr::Lit(expr_lit) = nv.value {
-                    if let Lit::Str(s) = expr_lit.lit {
-                        js_export_name = s.value();
-                    }
-                }
-            }
+        if let Meta::NameValue(nv) = meta
+            && nv.path.is_ident("rename")
+            && let Expr::Lit(expr_lit) = nv.value
+            && let Lit::Str(s) = expr_lit.lit
+        {
+            js_export_name = s.value();
         }
     }
 
@@ -120,34 +118,33 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
         // Parse method attributes
         let mut opts = MethodOpts::default();
         for attr in &method.attrs {
-            if attr.path().is_ident("js_method") {
-                if let Meta::List(list) = &attr.meta {
-                    for nested in list.parse_args_with(
-                        syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated,
-                    )? {
-                        match nested {
-                            Meta::Path(path) => {
-                                if path.is_ident("getter") {
-                                    opts.getter = true;
-                                } else if path.is_ident("setter") {
-                                    opts.setter = true;
-                                } else if path.is_ident("enumerable") {
-                                    opts.enumerable = true;
-                                } else if path.is_ident("gc_mark") {
-                                    opts.gc_mark = true;
-                                }
+            if attr.path().is_ident("js_method")
+                && let Meta::List(list) = &attr.meta
+            {
+                for nested in list.parse_args_with(
+                    syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated,
+                )? {
+                    match nested {
+                        Meta::Path(path) => {
+                            if path.is_ident("getter") {
+                                opts.getter = true;
+                            } else if path.is_ident("setter") {
+                                opts.setter = true;
+                            } else if path.is_ident("enumerable") {
+                                opts.enumerable = true;
+                            } else if path.is_ident("gc_mark") {
+                                opts.gc_mark = true;
                             }
-                            Meta::NameValue(nv) => {
-                                if nv.path.is_ident("rename") {
-                                    if let Expr::Lit(expr_lit) = &nv.value {
-                                        if let Lit::Str(s) = &expr_lit.lit {
-                                            opts.rename = Some(s.value());
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {}
                         }
+                        Meta::NameValue(nv) => {
+                            if nv.path.is_ident("rename")
+                                && let Expr::Lit(expr_lit) = &nv.value
+                                && let Lit::Str(s) = &expr_lit.lit
+                            {
+                                opts.rename = Some(s.value());
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -161,20 +158,20 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
         // Check if this is a gc_mark method (special handling)
         if opts.gc_mark {
             // Make sure it's a method with &self receiver (not static)
-            if let Some(receiver) = method.sig.receiver() {
-                if receiver.mutability.is_none() {
-                    // Generate direct JSClass::gc_mark_with implementation
-                    gc_mark_impl = Some(quote! {
-                        // Implement gc_mark_with by calling the user's method
-                        fn gc_mark_with<F>(&self, mark_fn: F)
-                        where
-                            F: FnMut(&rong::JSValue)
-                        {
-                            Self::#method_name(self, mark_fn);
-                        }
-                    });
-                    continue;
-                }
+            if let Some(receiver) = method.sig.receiver()
+                && receiver.mutability.is_none()
+            {
+                // Generate direct JSClass::gc_mark_with implementation
+                gc_mark_impl = Some(quote! {
+                    // Implement gc_mark_with by calling the user's method
+                    fn gc_mark_with<F>(&self, mark_fn: F)
+                    where
+                        F: FnMut(&rong::JSValue)
+                    {
+                        Self::#method_name(self, mark_fn);
+                    }
+                });
+                continue;
             }
         }
 

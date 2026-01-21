@@ -8,16 +8,14 @@ use syn::{
 /// Parse rename attribute to get JS field name
 pub(crate) fn get_js_field_name(attrs: &[Attribute], rust_name: &str) -> String {
     for attr in attrs {
-        if attr.path().is_ident("rename") {
-            if let Meta::NameValue(MetaNameValue {
+        if attr.path().is_ident("rename")
+            && let Meta::NameValue(MetaNameValue {
                 value: Expr::Lit(expr_lit),
                 ..
             }) = &attr.meta
-            {
-                if let Lit::Str(lit_str) = &expr_lit.lit {
-                    return lit_str.value();
-                }
-            }
+            && let Lit::Str(lit_str) = &expr_lit.lit
+        {
+            return lit_str.value();
         }
     }
     rust_name.to_string()
@@ -52,16 +50,13 @@ fn get_js_default_value(attrs: &[Attribute]) -> Option<TokenStream2> {
 
 /// Check if a type is Option<T> and return the inner type T
 fn extract_option_inner_type(ty: &Type) -> Option<&Type> {
-    if let Type::Path(TypePath { path, .. }) = ty {
-        if let Some(segment) = path.segments.last() {
-            if segment.ident == "Option" {
-                if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(GenericArgument::Type(inner_ty)) = args.args.first() {
-                        return Some(inner_ty);
-                    }
-                }
-            }
-        }
+    if let Type::Path(TypePath { path, .. }) = ty
+        && let Some(segment) = path.segments.last()
+        && segment.ident == "Option"
+        && let PathArguments::AngleBracketed(args) = &segment.arguments
+        && let Some(GenericArgument::Type(inner_ty)) = args.args.first()
+    {
+        return Some(inner_ty);
     }
     None
 }
@@ -94,10 +89,11 @@ pub(crate) fn impl_deserialize(input: syn::DeriveInput) -> TokenStream2 {
             quote! {
                 #field_name: match obj.get(#js_name_lit) {
                     Ok(val) => Some(val),
-                    Err(rong::RongJSError::PropertyNotFound(_)) => None,
-                    Err(e) => return Err(rong::RongJSError::Error(
+                    Err(e) if e.is_property_not_found() => None,
+                    Err(e) => return Err(rong::HostError::new(
+                        rong::error::E_INVALID_ARG,
                         format!("Failed to convert field '{}': {}", #field_name_str, e)
-                    )),
+                    ).with_name("TypeError").into()),
                 }
             }
         } else if let Some(js_default_expr) = js_default_value {
@@ -105,21 +101,28 @@ pub(crate) fn impl_deserialize(input: syn::DeriveInput) -> TokenStream2 {
             quote! {
                 #field_name: match obj.get(#js_name_lit) {
                     Ok(val) => val,
-                    Err(rong::RongJSError::PropertyNotFound(_)) => #js_default_expr,
-                    Err(e) => return Err(rong::RongJSError::Error(
+                    Err(e) if e.is_property_not_found() => #js_default_expr,
+                    Err(e) => return Err(rong::HostError::new(
+                        rong::error::E_INVALID_ARG,
                         format!("Failed to convert field '{}': {}", #field_name_str, e)
-                    )),
+                    ).with_name("TypeError").into()),
                 }
             }
         } else {
             // Required field
             quote! {
-                #field_name: obj.get(#js_name_lit).map_err(|e| match e {
-                    rong::RongJSError::PropertyNotFound(_) =>
-                        rong::RongJSError::Error(format!("Required field '{}' is missing", #field_name_str)),
-                    other => rong::RongJSError::Error(
-                        format!("Failed to convert field '{}': {}", #field_name_str, other)
-                    ),
+                #field_name: obj.get(#js_name_lit).map_err(|e| {
+                    if e.is_property_not_found() {
+                        rong::HostError::new(
+                            rong::error::E_MISSING_PROPERTY,
+                            format!("Required field '{}' is missing", #field_name_str)
+                        ).with_name("TypeError")
+                    } else {
+                        rong::HostError::new(
+                            rong::error::E_INVALID_ARG,
+                            format!("Failed to convert field '{}': {}", #field_name_str, e)
+                        ).with_name("TypeError")
+                    }
                 })?
             }
         }

@@ -54,11 +54,14 @@ pub(crate) fn impl_enum_conversions(input: &DeriveInput) -> Result<TokenStream, 
                 impl rong::FromJSValue<rong::JSEngineValue> for #name {
                     fn from_js_value(ctx: &JSContext, value: rong::JSEngineValue) -> JSResult<Self> {
                         #(#from_js_variants)*
-                        Err(RongJSError::TypeError(format!(
-                            "Invalid value for enum {}. Expected one of: {}",
-                            stringify!(#name),
-                            [#(stringify!(#variant_names)),*].join(", ")
-                        )))
+                        Err(rong::HostError::new(
+                            rong::error::E_INVALID_ARG,
+                            format!(
+                                "Invalid value for enum {}. Expected one of: {}",
+                                stringify!(#name),
+                                [#(stringify!(#variant_names)),*].join(", ")
+                            )
+                        ).with_name("TypeError").into())
                     }
                 }
 
