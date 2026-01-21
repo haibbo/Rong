@@ -21,10 +21,10 @@ static CLASS: LazyLock<RwLock<HashMap<usize, usize>>> =
 /// The corresponding class reference if found, otherwise null pointer
 pub(crate) fn get_classref_by_constructor(constructor: JSCValue) -> jsc::JSClassRef {
     let constructor_ptr = constructor.as_value() as usize;
-    if let Ok(map) = CLASS.read() {
-        if let Some(&class_ref) = map.get(&constructor_ptr) {
-            return class_ref as jsc::JSClassRef;
-        }
+    if let Ok(map) = CLASS.read()
+        && let Some(&class_ref) = map.get(&constructor_ptr)
+    {
+        return class_ref as jsc::JSClassRef;
     }
     ptr::null_mut()
 }

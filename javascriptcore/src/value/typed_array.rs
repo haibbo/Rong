@@ -1,6 +1,8 @@
 use crate::JSCValue;
 use crate::jsc;
-use rong_core::{JSExceptionHandler, JSTypedArrayKind, JSTypedArrayOps, JSValueImpl};
+use rong_core::{
+    JSErrorFactory, JSExceptionThrower, JSTypedArrayKind, JSTypedArrayOps, JSValueImpl,
+};
 use std::ptr;
 
 impl JSTypedArrayOps for JSCValue {
@@ -35,15 +37,23 @@ impl JSTypedArrayOps for JSCValue {
             }
 
             // Validate byte_offset alignment
-            if byte_offset % element_size != 0 {
-                return ctx.throw_error("byte_offset must be aligned");
+            if !byte_offset.is_multiple_of(element_size) {
+                return ctx.throw(ctx.new_error(
+                    "RangeError",
+                    "byte_offset must be aligned",
+                    Some(rong_core::error::E_OUT_OF_RANGE),
+                ));
             }
 
             // Calculate available length
             let available_bytes = if buffer_size >= byte_offset {
                 buffer_size - byte_offset
             } else {
-                return ctx.throw_error("byte_offset out of range");
+                return ctx.throw(ctx.new_error(
+                    "RangeError",
+                    "byte_offset out of range",
+                    Some(rong_core::error::E_OUT_OF_RANGE),
+                ));
             };
 
             let max_length = available_bytes / element_size;

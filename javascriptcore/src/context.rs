@@ -1,6 +1,7 @@
 use crate::{JSCRuntime, JSCValue, jsc};
 use rong_core::{
-    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSValueImpl, RongJSError,
+    JSClass, JSContextImpl, JSErrorFactory, JSExceptionThrower, JSRuntimeImpl, JSValueImpl,
+    RongJSError,
 };
 use std::ffi::CString;
 use std::ptr;
@@ -149,7 +150,7 @@ impl JSContextImpl for JSCContext {
     }
 
     fn compile_to_bytecode(&self, _source: rong_core::Source) -> Result<Vec<u8>, RongJSError> {
-        Err(RongJSError::NotSupportByteCode)
+        Err(RongJSError::NotSupportByteCode())
     }
 
     fn run_bytecode(&self, _bytes: &[u8]) -> Self::Value {
@@ -186,120 +187,120 @@ impl Clone for JSCContext {
     }
 }
 
-impl JSExceptionHandler for JSCContext {
-    fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_with_name("SyntaxError", message)
+impl JSErrorFactory for JSCContext {
+    fn new_error(&self, name: &str, message: impl AsRef<str>, code: Option<&str>) -> Self::Value {
+        self.new_error_with_name_internal(name, message.as_ref(), code)
     }
+}
 
-    fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_with_name("TypeError", message)
-    }
-
-    fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_with_name("ReferenceError", message)
-    }
-
-    fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_with_name("RangeError", message)
-    }
-
-    fn throw_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_error_with_name("Error", message)
-    }
-
-    fn new_error(&self) -> Self::Value {
-        let args = [];
-        unsafe {
-            let error = jsc::JSObjectMakeError(self.raw, 0, args.as_ptr(), ptr::null_mut());
-            JSCValue::from_owned_obj(self.raw, error).with_error()
-        }
-    }
-
+impl JSExceptionThrower for JSCContext {
     fn throw(&self, value: Self::Value) -> Self::Value {
         value.with_exception()
     }
 }
 
 impl JSCContext {
-    /// Helper function to throw an error with a specific name
-    pub(crate) fn throw_error_with_name(
+    pub(crate) fn new_error_with_name_internal(
         &self,
         error_name: &str,
-        message: impl AsRef<str>,
+        message: &str,
+        code: Option<&str>,
     ) -> JSCValue {
-        let message_cstr = CString::new(message.as_ref()).unwrap();
+        let message_cstr = CString::new(message).unwrap();
         let error_name_cstr = CString::new(error_name).unwrap();
 
         unsafe {
             let message_str = jsc::JSStringCreateWithUTF8CString(message_cstr.as_ptr());
             let error_name_str = jsc::JSStringCreateWithUTF8CString(error_name_cstr.as_ptr());
-            let proto_key = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
-            let name_key = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
 
-            // Get constructor
+            let mut exception: jsc::JSValueRef = ptr::null_mut();
             let global = jsc::JSContextGetGlobalObject(self.raw);
-            let error_constructor =
-                jsc::JSObjectGetProperty(self.raw, global, error_name_str, ptr::null_mut());
+            let ctor_value =
+                jsc::JSObjectGetProperty(self.raw, global, error_name_str, &mut exception);
 
-            let error = if !error_constructor.is_null() {
+            let mut error: jsc::JSObjectRef = ptr::null_mut();
+            if exception.is_null()
+                && !ctor_value.is_null()
+                && jsc::JSValueIsObject(self.raw, ctor_value)
+            {
+                let ctor = jsc::JSValueToObject(self.raw, ctor_value, &mut exception);
+                if exception.is_null() && !ctor.is_null() {
+                    let message_value = jsc::JSValueMakeString(self.raw, message_str);
+                    let args = [message_value];
+                    let obj = jsc::JSObjectCallAsConstructor(
+                        self.raw,
+                        ctor,
+                        1,
+                        args.as_ptr(),
+                        &mut exception,
+                    );
+                    if exception.is_null() && !obj.is_null() {
+                        let proto_key = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
+                        let proto_value =
+                            jsc::JSObjectGetProperty(self.raw, ctor, proto_key, &mut exception);
+                        if exception.is_null() && !proto_value.is_null() {
+                            jsc::JSObjectSetPrototype(self.raw, obj, proto_value);
+                        }
+                        jsc::JSStringRelease(proto_key);
+
+                        let name_key = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
+                        let name_value = jsc::JSValueMakeString(self.raw, error_name_str);
+                        jsc::JSObjectSetProperty(
+                            self.raw,
+                            obj,
+                            name_key,
+                            name_value,
+                            jsc::kJSPropertyAttributeDontEnum,
+                            ptr::null_mut(),
+                        );
+                        jsc::JSStringRelease(name_key);
+
+                        error = obj;
+                    }
+                }
+            }
+
+            if error.is_null() {
                 let message_value = jsc::JSValueMakeString(self.raw, message_str);
                 let args = [message_value];
-                let error = jsc::JSObjectCallAsConstructor(
+                let obj = jsc::JSObjectMakeError(self.raw, 1, args.as_ptr(), ptr::null_mut());
+
+                let name_key = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
+                let name_value = jsc::JSValueMakeString(self.raw, error_name_str);
+                jsc::JSObjectSetProperty(
                     self.raw,
-                    error_constructor as jsc::JSObjectRef,
-                    1,
-                    args.as_ptr(),
+                    obj,
+                    name_key,
+                    name_value,
+                    jsc::kJSPropertyAttributeDontEnum,
                     ptr::null_mut(),
                 );
+                jsc::JSStringRelease(name_key);
 
-                if !error.is_null() {
-                    let error_proto = jsc::JSObjectGetProperty(
-                        self.raw,
-                        error_constructor as jsc::JSObjectRef,
-                        proto_key,
-                        ptr::null_mut(),
-                    );
-                    if !error_proto.is_null() {
-                        jsc::JSObjectSetPrototype(self.raw, error as jsc::JSObjectRef, error_proto);
-                    }
+                error = obj;
+            }
 
-                    let name_value = jsc::JSValueMakeString(self.raw, error_name_str);
-                    jsc::JSObjectSetProperty(
-                        self.raw,
-                        error as jsc::JSObjectRef,
-                        name_key,
-                        name_value,
-                        jsc::kJSPropertyAttributeDontEnum,
-                        ptr::null_mut(),
-                    );
-                }
-                error
-            } else {
-                ptr::null_mut()
-            };
+            if let Some(code) = code {
+                let code_cstr = CString::new(code).unwrap();
+                let code_key = jsc::JSStringCreateWithUTF8CString(c"code".as_ptr());
+                let code_value_str = jsc::JSStringCreateWithUTF8CString(code_cstr.as_ptr());
+                let code_value = jsc::JSValueMakeString(self.raw, code_value_str);
+                jsc::JSObjectSetProperty(
+                    self.raw,
+                    error,
+                    code_key,
+                    code_value,
+                    jsc::kJSPropertyAttributeDontEnum,
+                    ptr::null_mut(),
+                );
+                jsc::JSStringRelease(code_key);
+                jsc::JSStringRelease(code_value_str);
+            }
 
             jsc::JSStringRelease(message_str);
             jsc::JSStringRelease(error_name_str);
-            jsc::JSStringRelease(proto_key);
-            jsc::JSStringRelease(name_key);
 
-            if error.is_null() {
-                let generic_message = format!("{}: {}", error_name, message.as_ref());
-                let generic_cstr = CString::new(generic_message).unwrap();
-                let generic_str = jsc::JSStringCreateWithUTF8CString(generic_cstr.as_ptr());
-
-                let args = [jsc::JSValueMakeString(self.raw, generic_str)];
-                let error = jsc::JSObjectMakeError(
-                    self.raw,
-                    1,
-                    args.as_ptr(), // Pass pointer to array
-                    ptr::null_mut(),
-                );
-                jsc::JSStringRelease(generic_str);
-                JSCValue::from_owned_raw(self.raw, error).with_exception()
-            } else {
-                JSCValue::from_owned_raw(self.raw, error).with_exception()
-            }
+            JSCValue::from_owned_obj(self.raw, error).with_error()
         }
     }
 }
