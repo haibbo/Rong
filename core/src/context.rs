@@ -146,6 +146,10 @@ struct ContextServiceContainer {
     services: Rc<RefCell<HashMap<TypeId, Box<dyn JSContextService>>>>,
 }
 
+struct ContextState<T: 'static>(T);
+
+impl<T: 'static> JSContextService for ContextState<T> {}
+
 impl ContextServiceContainer {
     fn new() -> Self {
         Self {
@@ -169,6 +173,24 @@ impl ContextServiceContainer {
             services
                 .get(&TypeId::of::<T>())
                 .map(|svc| &*(svc.as_ref() as *const dyn JSContextService as *const T))
+        }
+    }
+
+    fn register_state<T: 'static>(&self, value: T) {
+        let mut services = self.services.borrow_mut();
+        services.insert(TypeId::of::<T>(), Box::new(ContextState(value)));
+    }
+
+    fn get_state<T: 'static>(&self) -> Option<&T> {
+        // SAFETY: We store `ContextState<T>` under `TypeId::of::<T>()` in `register_state`.
+        unsafe {
+            let services = self.services.borrow();
+            services
+                .get(&TypeId::of::<T>())
+                .map(|svc| {
+                    &*(svc.as_ref() as *const dyn JSContextService as *const ContextState<T>)
+                })
+                .map(|state| &state.0)
         }
     }
 
@@ -455,6 +477,20 @@ impl<C: JSContextImpl> JSContext<C> {
     /// Returns None if no service of the requested type has been registered.
     pub fn get_service<T: JSContextService>(&self) -> Option<&T> {
         self.rc.services.get::<T>()
+    }
+
+    /// Store context-scoped state without implementing `JSContextService`.
+    ///
+    /// This is intended for simple values that don't need cleanup when the context is dropped.
+    /// If you need cleanup, implement `JSContextService` and use `set_service` so `on_shutdown`
+    /// can run during context teardown.
+    pub fn set_state<T: 'static>(&self, value: T) {
+        self.rc.services.register_state(value);
+    }
+
+    /// Get context-scoped state previously stored via `set_state`.
+    pub fn get_state<T: 'static>(&self) -> Option<&T> {
+        self.rc.services.get_state::<T>()
     }
 
     /// Compile JavaScript source code to bytecode
