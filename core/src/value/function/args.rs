@@ -12,7 +12,7 @@ where
     T: JSParameterType,
 {
     fn push_js_arg(self, ctx: &JSContext<V::Context>, vec: &mut Vec<V>) {
-        vec.push(self.into_js_value(ctx));
+        vec.push(<T as IntoJSValue<V>>::into_js_value(self, ctx).into_value());
     }
 }
 
@@ -23,7 +23,10 @@ where
     T: IntoJSValue<V>,
 {
     fn push_js_arg(self, ctx: &JSContext<V::Context>, vec: &mut Vec<V>) {
-        vec.extend(self.into_iter().map(|item| item.into_js_value(ctx)));
+        vec.extend(
+            self.into_iter()
+                .map(|item| <T as IntoJSValue<V>>::into_js_value(item, ctx).into_value()),
+        );
     }
 }
 

@@ -53,7 +53,7 @@ pub(crate) fn impl_serialize(input: syn::DeriveInput) -> TokenStream2 {
 
     let expanded = quote! {
         impl rong::IntoJSValue<rong::JSEngineValue> for #name {
-            fn into_js_value(self, ctx: &rong::JSContext) -> rong::JSEngineValue {
+            fn into_js_value(self, ctx: &rong::JSContext) -> rong::JSValue {
                 let obj = rong::JSObject::new(ctx);
 
                 // Set each field on the object
@@ -64,8 +64,8 @@ pub(crate) fn impl_serialize(input: syn::DeriveInput) -> TokenStream2 {
 
                 // If setting properties failed, return undefined
                 match result {
-                    Ok(()) => obj.into_js_value(ctx),
-                    Err(_) => rong::JSValue::undefined(ctx).into_js_value(ctx),
+                    Ok(()) => obj.into_js_value(),
+                    Err(_) => rong::JSValue::undefined(ctx),
                 }
             }
         }

@@ -33,15 +33,15 @@ pub fn class_instance_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
         #type_def
 
         impl rong::IntoJSValue<rong::JSEngineValue> for #type_name {
-            fn into_js_value(self, context: &rong::JSContext) -> rong::JSEngineValue {
+            fn into_js_value(self, context: &rong::JSContext) -> rong::JSValue {
                 rong::Class::get::<Self>(context)
-                    .map(|class| class.instance(self).into_value())
-                    .unwrap_or_else(|_| context.throw_error("Failed to make Class Instance").into_value())
+                    .map(|class| class.instance(self).into_js_value())
+                    .unwrap_or_else(|_| context.throw_error("Failed to make Class Instance"))
             }
         }
 
         impl rong::FromJSValue<rong::JSEngineValue> for #type_name {
-            fn from_js_value(ctx: &rong::JSContext, value: rong::JSEngineValue) -> rong::JSResult<Self> {
+            fn from_js_value(ctx: &rong::JSContext, value: rong::JSValue) -> rong::JSResult<Self> {
                 let obj = rong::JSObject::from_js_value(ctx, value)?;
                 let instance = obj.borrow::<Self>()?;
                 Ok(instance.clone())

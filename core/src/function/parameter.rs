@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, JSArrayOps, JSClass, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
-    JSTypeOf, JSValueImpl,
+    JSTypeOf, JSValue, JSValueImpl,
 };
 use std::cell::RefMut;
 use std::marker::PhantomData;
@@ -250,7 +250,7 @@ where
 
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.next_arg().unwrap(); // it's safe, since RustFunc::call ensures
-        T::from_js_value(accessor.ctx, value)
+        T::from_js_value(accessor.ctx, JSValue::from_raw(accessor.ctx, value))
     }
 }
 
@@ -272,7 +272,7 @@ where
 
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.get_this();
-        let val = T::from_js_value(accessor.ctx, value)?;
+        let val = T::from_js_value(accessor.ctx, JSValue::from_raw(accessor.ctx, value))?;
         Ok(Self(val))
     }
 }
@@ -287,7 +287,8 @@ where
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.get_this();
 
-        let obj = JSObject::from_js_value(accessor.context(), value)?;
+        let obj =
+            JSObject::from_js_value(accessor.context(), JSValue::from_raw(accessor.ctx, value))?;
         let borrowed = obj.borrow_mut::<T>()?;
 
         // Safety: because JSObject ensures the object's lifecycle.
@@ -305,7 +306,8 @@ where
 
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         match accessor.next_arg() {
-            Some(v) => T::from_js_value(accessor.ctx, v).map(|t| Optional(Some(t))),
+            Some(v) => T::from_js_value(accessor.ctx, JSValue::from_raw(accessor.ctx, v))
+                .map(|t| Optional(Some(t))),
             None => Ok(Optional(None)),
         }
     }
@@ -322,7 +324,10 @@ where
         let mut values = Vec::new();
         if accessor.is_last_param {
             while let Some(value) = accessor.next_arg() {
-                values.push(T::from_js_value(accessor.ctx, value)?);
+                values.push(T::from_js_value(
+                    accessor.ctx,
+                    JSValue::from_raw(accessor.ctx, value),
+                )?);
             }
         }
         Ok(Rest(values))
@@ -340,7 +345,10 @@ where
 
     fn get_param(accessor: &mut ParamsAccessor<V>) -> JSResult<Self> {
         let value = accessor.next_arg().unwrap(); // safe: call site ensures arg exists
-        <Vec<T> as FromJSValue<V>>::from_js_value(accessor.ctx, value)
+        <Vec<T> as FromJSValue<V>>::from_js_value(
+            accessor.ctx,
+            JSValue::from_raw(accessor.ctx, value),
+        )
     }
 }
 

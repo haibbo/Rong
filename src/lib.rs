@@ -6,7 +6,7 @@ pub use rong_core::{
     JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc, JSIterator,
     JSObject as CoreJSObject, JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService,
     JSSymbol as CoreJSSymbol, JSTypedArray as CoreJSTypedArray, JSTypedArrayKind,
-    JSValue as CoreJSValue, JSValueType, JsonToJsValue, Promise as CorePromise,
+    JSValue as CoreJSValue, JSValueType, JsonToJSValue, Promise as CorePromise,
     PropertyDescriptor as CorePropertyDescriptor, RongJSError, Source, SourceKind, error,
 };
 // Re-export selected runtime API from rong_core::rong so downstream crates use `rong::...`

@@ -28,8 +28,8 @@ impl<V> IntoJSValue<V> for JSFunc<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        self.0.into_js_value(ctx)
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> JSValue<V> {
+        self.0.into_js_value()
     }
 }
 
@@ -37,9 +37,9 @@ impl<V> FromJSValue<V> for JSFunc<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         if value.is_function() {
-            JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
+            JSObject::from_js_value(ctx, value).map(Self)
         } else {
             Err(RongJSError::NotJSFunc())
         }
@@ -182,7 +182,7 @@ impl<V: JSObjectOps> JSFunc<V> {
         let result = ctx.as_ref().call(self.as_value(), this, argv);
 
         if result.is_promise() {
-            let promise = Promise::from_js_value(ctx, result)?;
+            let promise = Promise::from_js_value(ctx, JSValue::from_raw(ctx, result))?;
             promise.into_future::<R>().await
         } else {
             result.try_convert::<R>()

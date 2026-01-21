@@ -2,7 +2,7 @@ use super::*;
 use redb::{Database, ReadableDatabase, ReadableTable};
 use rong::{
     FromJSObj, HostError, IntoJSIteratorExt, JSContext, JSDate, JSObject, JSResult, JSValue,
-    JsonToJsValue, function::Optional, js_class, js_export, js_method,
+    JsonToJSValue, function::Optional, js_class, js_export, js_method,
 };
 use std::cell::RefCell;
 use std::fs;
@@ -519,7 +519,7 @@ impl Storage {
                                             obj.get("timestamp").and_then(|v| v.as_f64())
                                         {
                                             let date = JSDate::new(&ctx, timestamp);
-                                            Ok(date.into_value())
+                                            Ok(date.into_js_value())
                                         } else {
                                             Err(HostError::new(
                                                 rong::error::E_INVALID_DATA,
@@ -529,12 +529,12 @@ impl Storage {
                                         }
                                     } else {
                                         // Regular object, parse using JavaScript's JSON.parse
-                                        value_str.as_str().json_to_jsvalue(&ctx)
+                                        value_str.as_str().json_to_js_value(&ctx)
                                     }
                                 }
                                 serde_json::Value::Array(_) => {
                                     // For arrays, parse them back using JavaScript's JSON.parse
-                                    value_str.as_str().json_to_jsvalue(&ctx)
+                                    value_str.as_str().json_to_js_value(&ctx)
                                 }
                             }
                         }

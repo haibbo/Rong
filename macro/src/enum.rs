@@ -23,7 +23,7 @@ pub(crate) fn impl_enum_conversions(input: &DeriveInput) -> Result<TokenStream, 
                             });
 
                             into_js_variants.push(quote! {
-                                Self::#variant_name(val) => val.into_js_value(ctx)
+                                Self::#variant_name(val) => <#ty as rong::IntoJSValue<rong::JSEngineValue>>::into_js_value(val, ctx)
                             });
                         } else {
                             return Err(Error::new(
@@ -52,7 +52,7 @@ pub(crate) fn impl_enum_conversions(input: &DeriveInput) -> Result<TokenStream, 
 
             let expanded = quote! {
                 impl rong::FromJSValue<rong::JSEngineValue> for #name {
-                    fn from_js_value(ctx: &JSContext, value: rong::JSEngineValue) -> JSResult<Self> {
+                    fn from_js_value(ctx: &rong::JSContext, value: rong::JSValue) -> rong::JSResult<Self> {
                         #(#from_js_variants)*
                         Err(rong::HostError::new(
                             rong::error::E_INVALID_ARG,
@@ -66,7 +66,7 @@ pub(crate) fn impl_enum_conversions(input: &DeriveInput) -> Result<TokenStream, 
                 }
 
                 impl rong::IntoJSValue<rong::JSEngineValue> for #name {
-                    fn into_js_value(self, ctx: &JSContext) -> rong::JSEngineValue {
+                    fn into_js_value(self, ctx: &rong::JSContext) -> rong::JSValue {
                         match self {
                             #(#into_js_variants,)*
                         }

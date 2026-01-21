@@ -267,7 +267,7 @@ fn test_promise_into_future_reject_primitive() {
         let err = promise.into_future::<i32>().await.unwrap_err();
 
         let thrown = thrown_js_value(&ctx, &err)?;
-        let s: String = String::from_js_value(&ctx, thrown.into_value())?;
+        let s: String = String::from_js_value(&ctx, thrown)?;
         assert_eq!(s, "reason");
         Ok(())
     })

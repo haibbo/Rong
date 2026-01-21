@@ -300,7 +300,7 @@ fn get_reason_or_dom_exception(
 ) -> JSResult<JSValue> {
     let reason = match reason {
         Some(r) if !r.is_undefined() => r,
-        _ => DOMException::create(ctx, "", name)?.into_jsvalue(),
+        _ => DOMException::create(ctx, "", name)?.into_js_value(),
     };
     Ok(reason)
 }

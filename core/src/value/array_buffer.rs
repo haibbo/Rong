@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValueImpl,
-    JSValueMapper, RongJSError, TypedArrayElement,
+    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue,
+    JSValueImpl, JSValueMapper, RongJSError, TypedArrayElement,
 };
 
 use std::marker::PhantomData;
@@ -38,8 +38,8 @@ where
     V: JSValueImpl,
     T: TypedArrayElement,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        self.inner.into_js_value(ctx)
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> JSValue<V> {
+        self.inner.into_js_value()
     }
 }
 
@@ -48,7 +48,7 @@ where
     V: JSTypeOf,
     T: TypedArrayElement,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         if value.is_array_buffer() {
             Ok(Self {
                 inner: JSObject::from_js_value(ctx, value)?,
@@ -113,7 +113,7 @@ where
         }
 
         let value = V::from_bytes(ctx.as_ref(), bytes);
-        value.try_map(|value| Self::from_js_value(ctx, value))?
+        value.try_map(|value| Self::from_js_value(ctx, JSValue::from_raw(ctx, value)))?
     }
 
     /// Create a new ArrayBuffer from owned bytes
@@ -161,7 +161,7 @@ where
         }
 
         let value = V::from_vec(ctx.as_ref(), vec);
-        value.try_map(|value| Self::from_js_value(ctx, value))?
+        value.try_map(|value| Self::from_js_value(ctx, JSValue::from_raw(ctx, value)))?
     }
 
     /// Get the byte length of the ArrayBuffer

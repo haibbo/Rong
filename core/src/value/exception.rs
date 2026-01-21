@@ -21,8 +21,8 @@ impl<V> IntoJSValue<V> for JSException<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        self.0.into_js_value(ctx)
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> JSValue<V> {
+        self.0.into_js_value()
     }
 }
 
@@ -42,7 +42,7 @@ impl<V> FromJSValue<V> for JSException<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         if value.is_exception() {
             Ok(Self(JSObject::from_js_value(ctx, value)?))
         } else {
@@ -165,8 +165,8 @@ impl<V: JSObjectOps> fmt::Display for JSException<V> {
             }
         } else {
             let ctx = self.get_ctx();
-            let js_value = self.as_value().clone();
-            String::from_js_value(&ctx, js_value).unwrap().fmt(f)?;
+            let value = self.as_js_value().clone();
+            String::from_js_value(&ctx, value).unwrap().fmt(f)?;
         }
         Ok(())
     }

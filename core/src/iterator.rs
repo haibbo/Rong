@@ -51,9 +51,8 @@ where
         match iter.next() {
             Some(item) => {
                 result.set("done", false)?;
-                let js_value = item.into_js_value(ctx);
-                let js_value = JSValue::from_raw(ctx, js_value);
-                result.set("value", js_value)?;
+                let value = <T as IntoJSValue<V>>::into_js_value(item, ctx);
+                result.set("value", value)?;
             }
             None => {
                 result.set("done", true)?;
@@ -148,9 +147,8 @@ where
         match stream.next().await {
             Some(item) => {
                 result.set("done", false)?;
-                let js_value = item.into_js_value(ctx);
-                let js_value = JSValue::from_raw(ctx, js_value);
-                result.set("value", js_value)?;
+                let value = <T as IntoJSValue<V>>::into_js_value(item, ctx);
+                result.set("value", value)?;
             }
             None => {
                 result.set("done", true)?;

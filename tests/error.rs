@@ -16,7 +16,7 @@ fn test_throw_error() {
             .eval::<()>(Source::from_bytes(b"throw new Error('throw-error')"))
             .unwrap_err();
         let thrown = thrown_js_value(ctx, &error)?;
-        let error = String::from_js_value(ctx, thrown.clone().into_value())?;
+        let error = String::from_js_value(ctx, thrown.clone())?;
         assert!(
             error.contains("throw-error"),
             "Expected error message to contain 'throw-error', but got: {}",
@@ -31,7 +31,7 @@ fn test_throw_primitive_value() {
     run(|ctx| {
         let err = ctx.eval::<()>(Source::from_bytes(b"throw 1")).unwrap_err();
         let thrown = thrown_js_value(ctx, &err)?;
-        let s = String::from_js_value(ctx, thrown.into_value())?;
+        let s = String::from_js_value(ctx, thrown)?;
         assert_eq!(s, "1");
         Ok(())
     });

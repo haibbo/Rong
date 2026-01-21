@@ -132,7 +132,7 @@ where
     where
         T: IntoJSValue<V>,
     {
-        JSValue::from_raw(ctx, val.into_js_value(ctx))
+        <T as IntoJSValue<V>>::into_js_value(val, ctx)
     }
 
     /// Try to converts JSValue to Rust value
@@ -140,7 +140,8 @@ where
     where
         T: FromJSValue<V>,
     {
-        T::from_js_value(&self.get_ctx(), self.into_value())
+        let ctx = self.get_ctx();
+        T::from_js_value(&ctx, self)
     }
 
     /// create JS UNDEFINED Value
@@ -174,8 +175,8 @@ impl<V> FromJSValue<V> for JSValue<V>
 where
     V: JSValueImpl,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        Ok(JSValue::from_raw(ctx, value))
+    fn from_js_value(_ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
+        Ok(value)
     }
 }
 
@@ -183,25 +184,25 @@ impl<V> IntoJSValue<V> for JSValue<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> V {
-        self.into_value()
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> JSValue<V> {
+        self
     }
 }
 
 /// Converts a JSON string into a JSValue
-pub trait JsonToJsValue<V>
+pub trait JsonToJSValue<V>
 where
     V: JSValueImpl,
 {
     /// Converts the JSON string into a JSValue using the provided context
-    fn json_to_jsvalue(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>>;
+    fn json_to_js_value(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>>;
 }
 
-impl<V> JsonToJsValue<V> for &str
+impl<V> JsonToJSValue<V> for &str
 where
     V: JSObjectOps + JSTypeOf,
 {
-    fn json_to_jsvalue(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>> {
+    fn json_to_js_value(self, ctx: &JSContext<V::Context>) -> JSResult<JSValue<V>> {
         let result = V::from_json_str(ctx.as_ref(), self);
         result.try_map(|v| JSValue::from_raw(ctx, v))
     }
@@ -233,7 +234,7 @@ where
     {
         self.try_map(|value| {
             let ctx = JSContext::from_borrowed_raw_ptr(value.as_raw_context());
-            T::from_js_value(&ctx, value)
+            T::from_js_value(&ctx, JSValue::from_raw(&ctx, value))
         })?
     }
 

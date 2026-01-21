@@ -422,15 +422,15 @@ struct Job {
 }
 
 impl IntoJSValue<JSEngineValue> for Job {
-    fn into_js_value(self, ctx: &JSContext) -> JSEngineValue {
+    fn into_js_value(self, ctx: &JSContext) -> JSValue {
         let obj = JSObject::new(ctx);
         obj.set("id", self.id).unwrap();
-        obj.into_value()
+        obj.into_js_value()
     }
 }
 
 impl FromJSValue<JSEngineValue> for Job {
-    fn from_js_value(ctx: &JSContext, value: JSEngineValue) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext, value: JSValue) -> JSResult<Self> {
         let obj = JSObject::from_js_value(ctx, value)?;
         let id: i32 = obj.get("id")?;
         Ok(Job { id })

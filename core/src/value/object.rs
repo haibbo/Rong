@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, JSContext, JSFunc, JSResult, JSTypeOf, JSValue, JSValueConversion, JSValueImpl,
-    JsonToJsValue, RongJSError,
+    JsonToJSValue, RongJSError,
 };
 use std::fmt;
 use std::ops::Deref;
@@ -32,9 +32,9 @@ impl<V> FromJSValue<V> for JSObject<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+    fn from_js_value(_ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         if value.is_object() {
-            Ok(JSValue::from_raw(ctx, value).into())
+            Ok(value.into())
         } else {
             Err(RongJSError::NotObject())
         }
@@ -52,8 +52,8 @@ impl<V> IntoJSValue<V> for JSObject<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> V {
-        self.0.into_value()
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> JSValue<V> {
+        self.0
     }
 }
 
@@ -128,7 +128,7 @@ where
     /// new a general object
     pub fn new(ctx: &JSContext<V::Context>) -> Self {
         let value = V::new_object(ctx.as_ref());
-        JSObject::from_js_value(ctx, value).unwrap()
+        JSObject::from_js_value(ctx, JSValue::from_raw(ctx, value)).unwrap()
     }
 
     /// Creates a JSObject from a raw JSValue and context
@@ -155,7 +155,7 @@ where
     /// }
     /// ```
     pub fn from_json_string(ctx: &JSContext<V::Context>, json: &str) -> JSResult<Self> {
-        let v = json.json_to_jsvalue(ctx)?;
+        let v = json.json_to_js_value(ctx)?;
         Ok(JSObject(v))
     }
 
@@ -181,7 +181,8 @@ where
         let ctx = &self.get_ctx();
         let key = k.into().into_value(ctx);
         // TODO: handler other err
-        self.as_value().set_property(key, kv.into_js_value(ctx));
+        self.as_value()
+            .set_property(key, kv.into_js_value(ctx).into_value());
         Ok(self)
     }
 
@@ -212,7 +213,7 @@ where
         self.as_value()
             .get_property(kv)
             .ok_or(RongJSError::PropertyNotFound(key.to_string())) // check existence firstly
-            .and_then(|value| T::from_js_value(ctx, value))
+            .and_then(|value| T::from_js_value(ctx, JSValue::from_raw(ctx, value)))
     }
 }
 
@@ -223,11 +224,11 @@ impl<V: JSValueImpl> JSObject<V> {
     }
 
     /// Converts the JSObject into a JSValue
-    pub fn into_jsvalue(self) -> JSValue<V> {
+    pub fn into_js_value(self) -> JSValue<V> {
         self.0
     }
 
-    pub fn as_jsvalue(&self) -> &JSValue<V> {
+    pub fn as_js_value(&self) -> &JSValue<V> {
         &self.0
     }
 
@@ -262,8 +263,8 @@ impl<V: JSValueImpl> Entry<V> {
     {
         let ctx = self.key.get_ctx();
         Ok((
-            K::from_js_value(&ctx, self.key.into_value())?,
-            T::from_js_value(&ctx, self.value.into_value())?,
+            K::from_js_value(&ctx, self.key)?,
+            T::from_js_value(&ctx, self.value)?,
         ))
     }
 }
@@ -328,9 +329,7 @@ where
         T: FromJSValue<V>,
     {
         let ctx = &self.get_ctx();
-        self.values()?
-            .map(|v| T::from_js_value(ctx, v.into_value()))
-            .collect()
+        self.values()?.map(|v| T::from_js_value(ctx, v)).collect()
     }
 
     /// Returns an iterator over the object's own enumerable string-keyed property names.
@@ -344,9 +343,7 @@ where
         K: FromJSValue<V>,
     {
         let ctx = &self.get_ctx();
-        self.keys()?
-            .map(|k| K::from_js_value(ctx, k.into_value()))
-            .collect()
+        self.keys()?.map(|k| K::from_js_value(ctx, k)).collect()
     }
 }
 

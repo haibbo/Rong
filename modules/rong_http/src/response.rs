@@ -329,7 +329,7 @@ impl Response {
         self.consumed = true;
         let bytes = self.body_to_bytes().await?;
         let text = String::from_utf8_lossy(&bytes).into_owned();
-        text.as_str().json_to_jsvalue(&ctx)
+        text.as_str().json_to_js_value(&ctx)
     }
 
     #[js_method]

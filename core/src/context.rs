@@ -345,7 +345,7 @@ impl<C: JSContextImpl> JSContext<C> {
         C::Value: JSTypeOf,
     {
         let raw = self.rc.inner.global();
-        JSObject::from_js_value(self, raw).unwrap()
+        JSObject::from_js_value(self, JSValue::from_raw(self, raw)).unwrap()
     }
 
     /// Register a JavaScript class for a Rust type.
@@ -518,7 +518,7 @@ impl<C: JSContextImpl> JSContext<C> {
         };
 
         if result.is_promise() {
-            let promise = Promise::from_js_value(self, result)?;
+            let promise = Promise::from_js_value(self, JSValue::from_raw(self, result))?;
             promise.into_future::<T>().await
         } else {
             result.try_convert::<T>()

@@ -1,4 +1,4 @@
-use super::JSValueImpl;
+use super::{JSValue, JSValueImpl};
 use crate::{JSContext, JSResult, RongJSError};
 
 /// The conversion between Rust primitive types, which implement the `JSCompatible`
@@ -74,7 +74,7 @@ pub trait FromJSValue<V>: Sized
 where
     V: JSValueImpl,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self>;
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self>;
 }
 
 /// extract rust primitive type from JSValue
@@ -84,8 +84,8 @@ where
     V: TryInto<T, Error = RongJSError>,
     T: JSCompatible,
 {
-    fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        value.try_into()
+    fn from_js_value(_ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
+        value.into_value().try_into()
     }
 }
 
@@ -93,7 +93,7 @@ impl<V> FromJSValue<V> for ()
 where
     V: JSValueImpl,
 {
-    fn from_js_value(_ctx: &JSContext<V::Context>, _value: V) -> JSResult<Self> {
+    fn from_js_value(_ctx: &JSContext<V::Context>, _value: JSValue<V>) -> JSResult<Self> {
         Ok(())
     }
 }
@@ -103,8 +103,8 @@ where
     V: JSValueImpl,
     V: TryInto<String, Error = RongJSError>,
 {
-    fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        value.try_into()
+    fn from_js_value(_ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
+        value.into_value().try_into()
     }
 }
 
@@ -113,7 +113,7 @@ pub trait IntoJSValue<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V;
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V>;
 }
 
 impl<V> IntoJSValue<V> for &str
@@ -121,8 +121,9 @@ where
     V: JSValueImpl,
     V: for<'a> From<(&'a V::Context, &'a str)>,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        V::from((ctx.as_ref(), self))
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
+        let raw = V::from((ctx.as_ref(), self));
+        JSValue::from_raw(ctx, raw)
     }
 }
 
@@ -131,8 +132,9 @@ where
     V: JSValueImpl,
     V: for<'a> From<(&'a V::Context, &'a str)>,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        V::from((ctx.as_ref(), self.as_str()))
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
+        let raw = V::from((ctx.as_ref(), self.as_str()));
+        JSValue::from_raw(ctx, raw)
     }
 }
 
@@ -140,8 +142,8 @@ impl<V> IntoJSValue<V> for ()
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        V::create_undefined(ctx.as_ref())
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
+        JSValue::from_raw(ctx, V::create_undefined(ctx.as_ref()))
     }
 }
 
@@ -152,8 +154,8 @@ where
     V: for<'a> From<(&'a V::Context, T)>,
     T: JSCompatible,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        V::from((ctx.as_ref(), self))
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
+        JSValue::from_raw(ctx, V::from((ctx.as_ref(), self)))
     }
 }
 
@@ -162,10 +164,10 @@ where
     V: JSValueImpl,
     T: IntoJSValue<V>,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
         match self {
             Some(value) => value.into_js_value(ctx),
-            None => V::create_null(ctx.as_ref()), // Returns null in JS when None
+            None => JSValue::from_raw(ctx, V::create_null(ctx.as_ref())), // Returns null in JS when None
         }
     }
 }
@@ -179,8 +181,8 @@ macro_rules! impl_js_converter_for_int {
                 V: JSValueImpl,
                 V: TryInto<$intermediate, Error = RongJSError>,
             {
-                fn from_js_value(_ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-                    let intermediate = TryInto::<$intermediate>::try_into(value)?;
+                fn from_js_value(_ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
+                    let intermediate = TryInto::<$intermediate>::try_into(value.into_value())?;
                     Ok(intermediate as $type)
                 }
             }
@@ -190,8 +192,8 @@ macro_rules! impl_js_converter_for_int {
                 V: JSValueImpl,
                 V: for<'a> From<(&'a V::Context, $intermediate)>,
             {
-                fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-                    V::from((ctx.as_ref(), self as $intermediate))
+                fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
+                    JSValue::from_raw(ctx, V::from((ctx.as_ref(), self as $intermediate)))
                 }
             }
         )*

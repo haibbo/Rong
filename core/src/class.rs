@@ -76,20 +76,22 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
             Err(e) => return e.throw_js_exception(ctx),
         };
 
-        let instance = match JSObject::from_js_value(ctx, instance) {
+        let instance = match JSObject::from_js_value(ctx, JSValue::from_raw(ctx, instance)) {
             Ok(obj) => obj,
             Err(e) => return e.throw_js_exception(ctx),
         };
 
         // why not using constructor in class registry?
         // because for extended class, it's NEW Constructor
-        let proto = match JSObject::from_js_value(ctx, this).and_then(|constructor| {
-            // println!(
-            //     "Constructor Name is {}",
-            //     constructor.get::<_, String>("name").unwrap()
-            // );
-            constructor.get("prototype")
-        }) {
+        let proto = match JSObject::from_js_value(ctx, JSValue::from_raw(ctx, this)).and_then(
+            |constructor| {
+                // println!(
+                //     "Constructor Name is {}",
+                //     constructor.get::<_, String>("name").unwrap()
+                // );
+                constructor.get("prototype")
+            },
+        ) {
             Ok(proto) => proto,
             Err(e) => return e.throw_js_exception(ctx),
         };
@@ -115,7 +117,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
         let ctx = &JSContext::from_borrowed_raw_ptr(ctx.as_raw());
         let mut accessor = ParamsAccessor::new(ctx, this, args);
 
-        let obj = match JSObject::from_js_value(ctx, function) {
+        let obj = match JSObject::from_js_value(ctx, JSValue::from_raw(ctx, function)) {
             Ok(obj) => obj,
             Err(e) => return e.throw_js_exception(ctx),
         };

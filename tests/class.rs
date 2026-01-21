@@ -81,7 +81,7 @@ impl JSClass<JSEngineValue> for Point {
         F: FnMut(&JSValue),
     {
         if let Some(obj) = &self.jsobj {
-            mark_fn(obj.as_jsvalue());
+            mark_fn(obj.as_js_value());
         }
     }
 }

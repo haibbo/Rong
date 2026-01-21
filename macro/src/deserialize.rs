@@ -130,7 +130,7 @@ pub(crate) fn impl_deserialize(input: syn::DeriveInput) -> TokenStream2 {
 
     let expanded = quote! {
         impl rong::FromJSValue<rong::JSEngineValue> for #name {
-            fn from_js_value(ctx: &rong::JSContext, value: rong::JSEngineValue) -> rong::JSResult<Self> {
+            fn from_js_value(ctx: &rong::JSContext, value: rong::JSValue) -> rong::JSResult<Self> {
                 let obj = rong::JSObject::from_js_value(ctx, value)?;
                 Ok(Self {
                     #(#field_extractions,)*

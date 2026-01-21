@@ -40,8 +40,8 @@ impl<V> IntoJSValue<V> for Promise<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        self.obj.into_js_value(ctx)
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> JSValue<V> {
+        self.obj.into_js_value()
     }
 }
 
@@ -49,7 +49,7 @@ impl<V> FromJSValue<V> for Promise<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         let obj = JSObject::from_js_value(ctx, value)?;
         Ok(Self { obj })
     }
@@ -71,9 +71,9 @@ impl<C: JSContextImpl> JSContext<C> {
         C::Value: JSTypeOf,
     {
         let (promise, resolver, reject) = self.as_ref().promise();
-        let promise = JSObject::from_js_value(self, promise)?;
-        let resolver = JSFunc::from_js_value(self, resolver)?;
-        let reject = JSFunc::from_js_value(self, reject)?;
+        let promise = JSObject::from_js_value(self, JSValue::from_raw(self, promise))?;
+        let resolver = JSFunc::from_js_value(self, JSValue::from_raw(self, resolver))?;
+        let reject = JSFunc::from_js_value(self, JSValue::from_raw(self, reject))?;
         Ok((Promise { obj: promise }, resolver, reject))
     }
 }
@@ -192,7 +192,7 @@ where
 {
     fn resolve_promise(self, resolve: JSFunc<V>, _reject: JSFunc<V>) {
         let ctx = resolve.get_ctx();
-        let arg = <Vec<T> as IntoJSValue<V>>::into_js_value(self, &ctx);
+        let arg = <Vec<T> as IntoJSValue<V>>::into_js_value(self, &ctx).into_value();
         let this = V::create_undefined(ctx.as_ref());
         let _ = ctx.as_ref().call(resolve.as_value(), this, vec![arg]);
     }
@@ -209,7 +209,7 @@ where
         match self {
             Ok(value) => {
                 let ctx = resolve.get_ctx();
-                let arg = value.into_js_value(&ctx);
+                let arg = <T as IntoJSValue<V>>::into_js_value(value, &ctx).into_value();
                 let this = V::create_undefined(ctx.as_ref());
                 let _ = ctx.as_ref().call(resolve.as_value(), this, vec![arg]);
             }
@@ -296,7 +296,7 @@ where
                 //println!("resolve callback called");
                 let mut state = resolve_state.borrow_mut();
 
-                let resolved = T::from_js_value(&ctx, value.into_value());
+                let resolved = T::from_js_value(&ctx, value);
 
                 if let PromiseState::Pending(waker) =
                     std::mem::replace(&mut *state, PromiseState::Resolved(resolved))

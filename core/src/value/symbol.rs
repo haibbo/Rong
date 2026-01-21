@@ -51,9 +51,9 @@ impl<V> FromJSValue<V> for JSSymbol<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+    fn from_js_value(_ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         if value.is_symbol() {
-            Ok(Self(JSValue::from_raw(ctx, value).into()))
+            Ok(Self(value.into()))
         } else {
             Err(RongJSError::NotSymbol())
         }
@@ -64,7 +64,7 @@ impl<V> IntoJSValue<V> for JSSymbol<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        self.0.into_js_value(ctx)
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> JSValue<V> {
+        self.0.into_js_value()
     }
 }

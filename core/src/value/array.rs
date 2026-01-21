@@ -1,5 +1,5 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf,
+    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue,
     JSValueConversion, JSValueImpl, JSValueMapper, RongJSError,
 };
 use std::fmt;
@@ -25,8 +25,8 @@ impl<V> IntoJSValue<V> for JSArray<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        self.0.into_js_value(ctx)
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> JSValue<V> {
+        self.0.into_js_value()
     }
 }
 
@@ -34,9 +34,9 @@ impl<V> FromJSValue<V> for JSArray<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         if value.is_array() {
-            JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
+            JSObject::from_js_value(ctx, value).map(Self)
         } else {
             Err(RongJSError::NotJSArray())
         }
@@ -70,7 +70,7 @@ where
     /// Create a new empty JavaScript array
     pub fn new(ctx: &JSContext<V::Context>) -> JSResult<Self> {
         let value = V::new(ctx.as_ref());
-        value.try_map(|v| Self::from_js_value(ctx, v))?
+        value.try_map(|v| Self::from_js_value(ctx, JSValue::from_raw(ctx, v)))?
     }
 
     /// Get the length of the JavaScript array
@@ -98,7 +98,7 @@ where
         }
         let value = self.as_value().get(index);
         let ctx = &self.get_ctx();
-        value.try_map(|v| T::from_js_value(ctx, v).map(Some))?
+        value.try_map(|v| T::from_js_value(ctx, JSValue::from_raw(ctx, v)).map(Some))?
     }
 
     /// Set element at specified index
@@ -115,8 +115,8 @@ where
         T: IntoJSValue<V>,
     {
         let ctx = self.get_ctx();
-        let v = value.into_js_value(&ctx);
-        let result = self.as_value().set(index, v);
+        let value = <T as IntoJSValue<V>>::into_js_value(value, &ctx);
+        let result = self.as_value().set(index, value.into_value());
         result.try_map(|_| self)
     }
 
@@ -149,9 +149,9 @@ where
         T: IntoJSValue<V>,
     {
         let ctx = self.get_ctx();
-        let v = value.into_js_value(&ctx);
+        let value = <T as IntoJSValue<V>>::into_js_value(value, &ctx);
         let index = self.len();
-        self.as_value().set(index, v);
+        self.as_value().set(index, value.into_value());
         Ok(())
     }
 
@@ -176,7 +176,8 @@ where
         self.0.del(index);
         self.0.set("length", index)?;
 
-        T::from_js_value(&self.get_ctx(), value).map(Some)
+        let ctx = self.get_ctx();
+        T::from_js_value(&ctx, JSValue::from_raw(&ctx, value)).map(Some)
     }
 
     /// Construct a JSArray from a JSObject if it is an array
@@ -218,7 +219,8 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.count {
             let v = self.array.as_value().get(self.index);
-            let res = T::from_js_value(&self.array.get_ctx(), v);
+            let ctx = self.array.get_ctx();
+            let res = T::from_js_value(&ctx, JSValue::from_raw(&ctx, v));
             self.index += 1;
             Some(res)
         } else {
@@ -248,12 +250,12 @@ where
     V: JSObjectOps + JSArrayOps,
     T: IntoJSValue<V>,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
         let array = JSArray::new(ctx).unwrap();
         for item in self {
             array.push(item).expect("Failed to set value in array");
         }
-        array.into_js_value(ctx)
+        <JSArray<V> as IntoJSValue<V>>::into_js_value(array, ctx)
     }
 }
 
@@ -264,7 +266,7 @@ where
     V: JSObjectOps + JSArrayOps,
     T: FromJSValue<V>,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         if value.is_array() {
             let array = JSArray::from_js_value(ctx, value)?;
             let vec = array.iter::<T>().collect::<JSResult<Vec<_>>>()?;

@@ -178,7 +178,7 @@ macro_rules! impl_js_callable_func {
                     #[allow(non_snake_case)]
                     let ($($t,)*) = params;
                     let result = f($($t),*);
-                    Ok(result.into_js_value(accessor.context()))
+                    Ok(<R as IntoJSValue<V>>::into_js_value(result, accessor.context()).into_value())
                 };
                 JSCallable::FnMut(RefCell::new(Box::new(closure)))
             }
@@ -204,7 +204,8 @@ macro_rules! impl_js_callable_func {
                     let this = accessor.get_this();
                     let fut = f($($t),*);
                     let ctx = accessor.context();
-                    Ok(Promise::from_future(ctx, Some(this), fut)?.into_js_value(ctx))
+                    let promise = Promise::from_future(ctx, Some(this), fut)?;
+                    Ok(<Promise<V> as IntoJSValue<V>>::into_js_value(promise, ctx).into_value())
                 };
                 JSCallable::FnMut(RefCell::new(Box::new(closure)))
             }
@@ -229,7 +230,7 @@ macro_rules! impl_js_oncecallable_func {
                     #[allow(non_snake_case)]
                     let ($($t,)*) = params;
                     let result = f($($t),*);
-                    Ok(result.into_js_value(accessor.context()))
+                    Ok(<R as IntoJSValue<V>>::into_js_value(result, accessor.context()).into_value())
                 };
                 JSCallable::FnOnce(RefCell::new(Some(Box::new(closure))))
             }
@@ -254,7 +255,8 @@ macro_rules! impl_js_oncecallable_func {
                     let this = accessor.get_this();
                     let fut = f($($t),*);
                     let ctx = accessor.context();
-                    Ok(Promise::from_future(ctx, Some(this), fut)?.into_js_value(ctx))
+                    let promise = Promise::from_future(ctx, Some(this), fut)?;
+                    Ok(<Promise<V> as IntoJSValue<V>>::into_js_value(promise, ctx).into_value())
                 };
                 JSCallable::FnOnce(RefCell::new(Some(Box::new(closure))))
             }

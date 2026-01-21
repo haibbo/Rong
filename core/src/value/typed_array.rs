@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, IntoJSValue, JSArrayBuffer, JSArrayBufferOps, JSContext, JSObject, JSObjectOps,
-    JSResult, JSTypeOf, JSValueImpl, JSValueMapper, RongJSError,
+    JSResult, JSTypeOf, JSValue, JSValueImpl, JSValueMapper, RongJSError,
 };
 use std::ops::Deref;
 
@@ -111,10 +111,10 @@ impl<V> FromJSValue<V> for JSTypedArray<V>
 where
     V: JSTypeOf + JSTypedArrayOps,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         if value.is_object() {
-            if value.get_kind().is_some() {
-                JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
+            if value.as_value().get_kind().is_some() {
+                JSObject::from_js_value(ctx, value).map(Self)
             } else {
                 Err(RongJSError::NotJSTypedArray())
             }
@@ -128,8 +128,8 @@ impl<V> IntoJSValue<V> for JSTypedArray<V>
 where
     V: JSValueImpl,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        self.0.into_js_value(ctx)
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> JSValue<V> {
+        self.0.into_js_value()
     }
 }
 
@@ -207,7 +207,8 @@ where
         }
 
         // Create TypedArray with buffer and offset
-        let buffer_value = buffer.into_js_value(ctx);
+        let buffer_value =
+            <JSArrayBuffer<V, T> as IntoJSValue<V>>::into_js_value(buffer, ctx).into_value();
         let value = V::from_array_buffer(
             ctx.as_ref(),
             T::TYPE,
@@ -215,7 +216,7 @@ where
             byte_offset,
             Some(length),
         );
-        value.try_map(|value| Self::from_js_value(ctx, value))?
+        value.try_map(|value| Self::from_js_value(ctx, JSValue::from_raw(ctx, value)))?
     }
 
     /// Get the kind of typed array
@@ -229,7 +230,8 @@ where
             .as_value()
             .get_array_buffer()
             .ok_or_else(RongJSError::NotJSArrayBuffer)?;
-        JSArrayBuffer::from_js_value(&self.get_ctx(), buffer)
+        let ctx = self.get_ctx();
+        JSArrayBuffer::from_js_value(&ctx, JSValue::from_raw(&ctx, buffer))
     }
 
     /// Get the byte offset into the array buffer

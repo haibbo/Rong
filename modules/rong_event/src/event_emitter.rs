@@ -55,7 +55,7 @@ impl Hash for EventKey {
 }
 
 impl FromJSValue<JSEngineValue> for EventKey {
-    fn from_js_value(ctx: &JSContext, value: JSEngineValue) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext, value: JSValue) -> JSResult<Self> {
         if let Ok(key) = String::from_js_value(ctx, value.clone()) {
             return Ok(EventKey::String(key));
         }
@@ -72,10 +72,10 @@ impl FromJSValue<JSEngineValue> for EventKey {
 }
 
 impl IntoJSValue<JSEngineValue> for EventKey {
-    fn into_js_value(self, ctx: &JSContext) -> JSEngineValue {
+    fn into_js_value(self, ctx: &JSContext) -> JSValue {
         match self {
-            EventKey::String(k) => JSValue::from(ctx, k).into_value(),
-            EventKey::Symbol(k) => k.into_value(),
+            EventKey::String(k) => JSValue::from(ctx, k),
+            EventKey::Symbol(k) => k.into_js_value(ctx),
         }
     }
 }
@@ -635,11 +635,11 @@ impl EventEmitter {
         if let Ok(events) = self.inner.lock() {
             for (key, listeners) in &events.listeners {
                 if let EventKey::Symbol(symbol) = key {
-                    mark_fn(symbol.as_jsvalue());
+                    mark_fn(symbol.as_js_value());
                 }
 
                 for listener in listeners {
-                    mark_fn(listener.listener.as_jsvalue());
+                    mark_fn(listener.listener.as_js_value());
                 }
             }
         }

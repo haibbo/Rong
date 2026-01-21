@@ -445,7 +445,7 @@ impl RongJSError {
         let raw = ctx
             .as_ref()
             .new_error(host.name, &host.message, Some(host.code));
-        let obj = JSObject::from_js_value(ctx, raw).unwrap();
+        let obj = JSObject::from_js_value(ctx, JSValue::from_raw(ctx, raw)).unwrap();
 
         if host.code == E_JS_THROWN {
             let data_obj = host
@@ -484,7 +484,7 @@ impl RongJSError {
 
                 let mut data = BTreeMap::<String, ErrorData>::new();
                 if let Some(thrown) = &thrown {
-                    if let Ok(s) = String::from_js_value(ctx, thrown.clone().into_value()) {
+                    if let Ok(s) = String::from_js_value(ctx, thrown.clone()) {
                         data.insert("thrown".to_string(), ErrorData::from(s));
                     }
                     data.insert("is_error".to_string(), ErrorData::from(thrown.is_error()));
@@ -498,9 +498,7 @@ impl RongJSError {
                         v.into_object()
                             .and_then(|o| o.get::<_, String>("message").ok())
                     })
-                    .or_else(|| {
-                        thrown.and_then(|v| String::from_js_value(ctx, v.into_value()).ok())
-                    })
+                    .or_else(|| thrown.and_then(|v| String::from_js_value(ctx, v).ok()))
                     .unwrap_or_else(|| "JavaScript threw a value".to_string());
 
                 Self::Host(HostError {
@@ -573,7 +571,7 @@ impl RongJSError {
                 {
                     let _ = ctx.take_thrown(handle);
                 }
-                JSValue::from_raw(ctx, obj.into_js_value(ctx))
+                obj.into_js_value()
             }
         }
     }
@@ -622,10 +620,8 @@ impl<V: JSValueImpl> FromJSValue<V> for RongJSError
 where
     V: JSObjectOps,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        Ok(RongJSError::from_thrown_value(JSValue::from_raw(
-            ctx, value,
-        )))
+    fn from_js_value(_ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
+        Ok(RongJSError::from_thrown_value(value))
     }
 }
 
@@ -634,8 +630,8 @@ where
     V::Context: JSErrorFactory + JSExceptionThrower,
     V: JSObjectOps + JSArrayOps,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
-        self.throw_js_exception(ctx)
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
+        JSValue::from_raw(ctx, self.throw_js_exception(ctx))
     }
 }
 
@@ -651,9 +647,9 @@ where
     V::Context: JSErrorFactory + JSExceptionThrower,
     T: IntoJSValue<V>,
 {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
         match self {
-            Ok(value) => value.into_js_value(ctx),
+            Ok(value) => <T as IntoJSValue<V>>::into_js_value(value, ctx),
             Err(err) => err.into_js_value(ctx),
         }
     }

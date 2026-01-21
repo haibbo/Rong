@@ -329,9 +329,8 @@ pub fn derive_from_js_value(input: TokenStream) -> TokenStream {
         impl rong::FromJSValue<rong::JSEngineValue> for #name
         where Self: TryFromJSValue,
         {
-            fn from_js_value( ctx: &JSContext, value: rong::JSEngineValue) -> JSResult<Self> {
-                let js_value = rong::JSValue::from_raw(ctx, value);
-                Self::try_from_js(js_value)
+            fn from_js_value(_ctx: &rong::JSContext, value: rong::JSValue) -> rong::JSResult<Self> {
+                Self::try_from_js(value)
             }
         }
 

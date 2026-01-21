@@ -60,13 +60,23 @@ impl<V: JSValueImpl> JSDate<V> {
     }
 
     /// Get the underlying JSValue
-    pub fn as_value(&self) -> &JSValue<V> {
+    pub fn as_js_value(&self) -> &JSValue<V> {
         &self.inner
     }
 
     /// Convert into the underlying JSValue
-    pub fn into_value(self) -> JSValue<V> {
+    pub fn into_js_value(self) -> JSValue<V> {
         self.inner
+    }
+
+    /// Convert into the underlying engine value
+    pub fn into_value(self) -> V {
+        self.inner.into_value()
+    }
+
+    /// Borrow the underlying engine value
+    pub fn as_value(&self) -> &V {
+        self.inner.as_value()
     }
 }
 
@@ -80,20 +90,19 @@ impl<V: JSValueImpl> FromJSValue<V> for JSDate<V>
 where
     V: JSTypeOf,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        let js_value = JSValue::from_raw(ctx, value);
-        if !js_value.is_date() {
+    fn from_js_value(_ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
+        if !value.is_date() {
             return Err(HostError::new(crate::error::E_TYPE, "Value is not a Date")
                 .with_name("TypeError")
                 .into());
         }
-        Ok(JSDate { inner: js_value })
+        Ok(JSDate { inner: value })
     }
 }
 
 impl<V: JSValueImpl> IntoJSValue<V> for JSDate<V> {
-    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> V {
-        self.inner.into_value()
+    fn into_js_value(self, _ctx: &JSContext<V::Context>) -> JSValue<V> {
+        self.inner
     }
 }
 
@@ -102,18 +111,18 @@ impl<V: JSValueImpl> FromJSValue<V> for SystemTime
 where
     V: JSTypeOf + JSValueConversion + JSObjectOps,
 {
-    fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         let js_date = JSDate::from_js_value(ctx, value)?;
         js_date.to_system_time()
     }
 }
 
 impl<V: JSValueImpl> IntoJSValue<V> for SystemTime {
-    fn into_js_value(self, ctx: &JSContext<V::Context>) -> V {
+    fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
         let epoch_ms = self
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as f64;
-        V::create_date(ctx.as_ref(), epoch_ms)
+        JSValue::from_raw(ctx, V::create_date(ctx.as_ref(), epoch_ms))
     }
 }
