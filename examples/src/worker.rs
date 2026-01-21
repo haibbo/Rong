@@ -1,4 +1,4 @@
-use rong::{JSResult, Rong, RongJS, RongJSError, Source, WorkerMessage};
+use rong::{JSResult, Rong, RongJS, Source, WorkerMessage};
 use std::error::Error;
 use std::time::Duration;
 
@@ -51,8 +51,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             interval_worker_id, interval_worker_id, interval_worker_id
         );
 
-        ctx.eval::<()>(Source::from_bytes(js_code.as_bytes()))
-            .map_err(|e| RongJSError::Error(format!("JS Eval failed: {:?}", e)))?;
+        ctx.eval::<()>(Source::from_bytes(js_code.as_bytes()))?;
 
         println!(
             "[Worker {} Interval Task] JS interval evaluated, Rust task sleeping...",
@@ -95,7 +94,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             "[Worker {} Expr Task] Failed to evaluate expression '{}': {:?}",
                             worker_id, expr_str, e
                         );
-                        return Err(RongJSError::Error(format!("Eval failed: {:?}", e)));
+                        return Err(e);
                     }
                 }
             } else {

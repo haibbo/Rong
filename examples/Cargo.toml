@@ -8,6 +8,16 @@ rong = { workspace = true }
 rong_modules = { workspace = true }
 tokio = { workspace = true }
 
+[features]
+# Build examples out-of-the-box using QuickJS.
+# To build with JavaScriptCore/ArkJS instead, use:
+# - `cargo build -p examples --no-default-features --features jscore`
+# - `cargo build -p examples --no-default-features --features arkjs`
+default = ["quickjs"]
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+arkjs = ["rong/arkjs"]
+
 [[example]]
 name = "worker"
 path = "src/worker.rs"
