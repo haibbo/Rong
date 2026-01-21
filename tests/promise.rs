@@ -118,7 +118,10 @@ fn test_rust_future_error_in_js() {
         let async_fn = JSFunc::new(&ctx, move |_: i32| {
             let future = async {
                 tokio::time::sleep(Duration::from_millis(50)).await;
-                RongJSError::Error("async operation failed".to_string())
+                RongJSError::from(HostError::new(
+                    rong::error::E_ERROR,
+                    "async operation failed",
+                ))
             };
             Promise::from_future(&ctx2, None, future).unwrap()
         })?;
@@ -266,6 +269,24 @@ fn test_promise_into_future_reject_primitive() {
         let thrown = thrown_js_value(&ctx, &err)?;
         let s: String = String::from_js_value(&ctx, thrown.into_value())?;
         assert_eq!(s, "reason");
+        Ok(())
+    })
+}
+
+#[test]
+fn test_promise_resolve_error_object() {
+    async_run!(|ctx: JSContext| async move {
+        let promise =
+            ctx.eval::<Promise>(Source::from_bytes(br#"Promise.resolve(new Error("x"))"#))?;
+        let value: JSValue = promise.into_future::<JSValue>().await?;
+        assert!(value.is_error());
+        assert!(!value.is_exception());
+
+        let obj = value
+            .into_object()
+            .expect("Expected resolved Error to be an object");
+        let message: String = obj.get("message")?;
+        assert_eq!(message, "x");
         Ok(())
     })
 }

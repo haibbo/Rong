@@ -5,7 +5,7 @@ fn test_jsdate_creation() {
     run(|ctx| {
         // Test our JSDate creation
         let epoch_ms = 1640995200000.0; // 2022-01-01 00:00:00 UTC
-        let date: JSDate = JSDate::new(&ctx, epoch_ms);
+        let date: JSDate = JSDate::new(ctx, epoch_ms);
 
         println!("Our Date is_date: {}", date.as_value().is_date());
         println!("Our Date is_object: {}", date.as_value().is_object());
@@ -68,7 +68,7 @@ fn test_date_system_time_conversion() {
     run(|ctx| {
         // Test SystemTime conversion using JSDate
         let system_time = std::time::SystemTime::now();
-        let date_from_system: JSDate = JSDate::from_system_time(&ctx, system_time);
+        let date_from_system: JSDate = JSDate::from_system_time(ctx, system_time);
         assert!(date_from_system.as_value().is_date());
 
         // Convert back to SystemTime
@@ -101,18 +101,18 @@ fn test_date_comprehensive_types() {
         let epoch_ms = 1640995200000.0; // 2022-01-01 00:00:00 UTC
 
         // Create from epoch milliseconds
-        let date1: JSDate = JSDate::new(&ctx, epoch_ms);
+        let date1: JSDate = JSDate::new(ctx, epoch_ms);
         assert!(date1.as_value().is_date());
         assert_eq!(date1.get_time()?, epoch_ms);
 
         // Create current time
-        let date2: JSDate = JSDate::now(&ctx);
+        let date2: JSDate = JSDate::now(ctx);
         assert!(date2.as_value().is_date());
         assert!(date2.get_time()? > epoch_ms);
 
         // Test SystemTime creation
         let system_time = std::time::SystemTime::now();
-        let date3: JSDate = JSDate::from_system_time(&ctx, system_time);
+        let date3: JSDate = JSDate::from_system_time(ctx, system_time);
         assert!(date3.as_value().is_date());
 
         // Test conversion to/from JSValue

@@ -4,14 +4,18 @@ pub use rong::function::{Constructor, Optional, Rest, This, ThisMut};
 
 pub fn thrown_js_value(ctx: &JSContext, err: &RongJSError) -> JSResult<JSValue> {
     err.thrown_value(ctx)
-        .ok_or_else(|| RongJSError::Error("Expected thrown JS value".to_string()))
+        .ok_or_else(|| HostError::new(rong::error::E_INTERNAL, "Expected thrown JS value").into())
 }
 
 pub fn thrown_object(ctx: &JSContext, err: &RongJSError) -> JSResult<JSObject> {
     let thrown = thrown_js_value(ctx, err)?;
-    thrown
-        .into_object()
-        .ok_or_else(|| RongJSError::Error("Expected thrown value to be an object".to_string()))
+    thrown.into_object().ok_or_else(|| {
+        HostError::new(
+            rong::error::E_INTERNAL,
+            "Expected thrown value to be an object",
+        )
+        .into()
+    })
 }
 
 pub fn thrown_object_prop<T>(ctx: &JSContext, err: &RongJSError, key: &str) -> JSResult<T>
@@ -67,11 +71,15 @@ impl<'a> UnitJSRunner<'a> {
             Ok(path) => path,
             Err(e) => {
                 // Provide more context in case of error
-                return Err(RongJSError::Error(format!(
-                    "Failed to canonicalize test base path '{}': {}",
-                    base_path.display(),
-                    e
-                )));
+                return Err(HostError::new(
+                    rong::error::E_INTERNAL,
+                    format!(
+                        "Failed to canonicalize test base path '{}': {}",
+                        base_path.display(),
+                        e
+                    ),
+                )
+                .into());
             }
         };
 

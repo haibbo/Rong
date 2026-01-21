@@ -203,7 +203,10 @@ fn test_async_rust_fn_reject() {
     async_run!(|ctx: JSContext| async move {
         let async_func = JSFunc::new(&ctx, |_a: i32, _b: i32| async move {
             sleep(Duration::from_millis(100)).await;
-            RongJSError::Error("Failed to perform add".to_string())
+            RongJSError::from(HostError::new(
+                rong::error::E_ERROR,
+                "Failed to perform add",
+            ))
         })?; // PromiseResolver help call reject to propagate error to JS catch
         ctx.global().set("add", async_func)?;
 
@@ -464,10 +467,7 @@ fn function_param_custom_struct() {
     run(|ctx| {
         // Rust function takes custom class and optional primitive
         let f = JSFunc::new(ctx, |j: Job, opt: Optional<i32>| -> i32 {
-            j.id + match *opt {
-                Some(v) => v,
-                None => 0,
-            }
+            j.id + (*opt).unwrap_or_default()
         })?;
         ctx.global().set("use_job", f)?;
 

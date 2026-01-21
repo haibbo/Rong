@@ -31,7 +31,7 @@ fn test_array_buffer_empty() {
         assert_eq!(buffer.len(), 0);
         assert!(buffer.is_empty());
         assert_eq!(buffer.element_count(), 0);
-        assert_eq!(buffer.as_slice(), &[]);
+        assert_eq!(buffer.as_slice(), &[] as &[u8]);
         assert_eq!(buffer.to_vec(), Vec::<u8>::new());
         Ok(())
     });

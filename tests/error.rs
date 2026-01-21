@@ -38,13 +38,33 @@ fn test_throw_primitive_value() {
 }
 
 #[test]
+fn test_eval_returns_error_object_as_value() {
+    run(|ctx| {
+        let value: JSValue = ctx.eval(Source::from_bytes(br#"new Error("x")"#))?;
+        assert!(value.is_error());
+        assert!(!value.is_exception());
+
+        let obj = value
+            .into_object()
+            .expect("Expected returned Error to be an object");
+        let message: String = obj.get("message")?;
+        assert_eq!(message, "x");
+        Ok(())
+    });
+}
+
+#[test]
 fn test_error_constructor() {
     run(|ctx| {
         // Register multiple error constructors
         ctx.global().set(
             "type_error",
             JSFunc::new(ctx, || -> JSResult<()> {
-                Err(RongJSError::TypeError("this is typeError".to_string()))
+                Err(
+                    HostError::new(rong::error::E_INVALID_ARG, "this is typeError")
+                        .with_name("TypeError")
+                        .into(),
+                )
             })?,
         )?;
 
@@ -58,7 +78,7 @@ fn test_error_constructor() {
         ctx.global().set(
             "range_error",
             JSFunc::new(ctx, || -> JSResult<()> {
-                Err(RongJSError::TypedArrayRangeError)
+                Err(RongJSError::TypedArrayRangeError())
             })?,
         )?;
 

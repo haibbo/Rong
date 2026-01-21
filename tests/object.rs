@@ -70,7 +70,7 @@ fn from_javascript() {
         let result: Result<String, RongJSError> = obj.get("None");
         assert!(result.is_err());
         match result {
-            Err(RongJSError::PropertyNotFound(_)) => (),
+            Err(e) if e.is_property_not_found() => (),
             _ => panic!("Expected PropertyNotFound error"),
         }
         Ok(())
