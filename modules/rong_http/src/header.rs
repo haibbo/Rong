@@ -43,16 +43,27 @@ impl Headers {
                         let item = item?;
                         if let Some(pair) = item.into_object().and_then(JSArray::from_object) {
                             if pair.len() != 2 {
-                                return Err(RongJSError::TypeError(
-                                    "Each header must be an array of [name, value]".to_string(),
-                                ));
+                                return Err(HostError::new(
+                                    rong::error::E_INVALID_ARG,
+                                    "Each header must be an array of [name, value]",
+                                )
+                                .with_name("TypeError")
+                                .into());
                             }
 
                             let key: String = pair.get(0)?.ok_or_else(|| {
-                                RongJSError::TypeError("Header name is required".to_string())
+                                HostError::new(
+                                    rong::error::E_INVALID_ARG,
+                                    "Header name is required",
+                                )
+                                .with_name("TypeError")
                             })?;
                             let value: String = pair.get(1)?.ok_or_else(|| {
-                                RongJSError::TypeError("Header value is required".to_string())
+                                HostError::new(
+                                    rong::error::E_INVALID_ARG,
+                                    "Header value is required",
+                                )
+                                .with_name("TypeError")
                             })?;
 
                             match (
@@ -63,21 +74,29 @@ impl Headers {
                                     headers.append(name, value);
                                 }
                                 (Err(_), _) => {
-                                    return Err(RongJSError::TypeError(format!(
-                                        "Invalid header name: {}",
-                                        key
-                                    )));
+                                    return Err(HostError::new(
+                                        rong::error::E_INVALID_ARG,
+                                        format!("Invalid header name: {}", key),
+                                    )
+                                    .with_name("TypeError")
+                                    .into());
                                 }
                                 (_, Err(_)) => {
-                                    return Err(RongJSError::TypeError(
-                                        "Invalid header value".to_string(),
-                                    ));
+                                    return Err(HostError::new(
+                                        rong::error::E_INVALID_ARG,
+                                        "Invalid header value",
+                                    )
+                                    .with_name("TypeError")
+                                    .into());
                                 }
                             }
                         } else {
-                            return Err(RongJSError::TypeError(
-                                "Each header must be an array of [name, value]".to_string(),
-                            ));
+                            return Err(HostError::new(
+                                rong::error::E_INVALID_ARG,
+                                "Each header must be an array of [name, value]",
+                            )
+                            .with_name("TypeError")
+                            .into());
                         }
                     }
                 } else {
@@ -92,21 +111,30 @@ impl Headers {
                                 headers.append(name, value);
                             }
                             (Err(_), _) => {
-                                return Err(RongJSError::TypeError(format!(
-                                    "Invalid header name: {}",
-                                    key
-                                )));
+                                return Err(HostError::new(
+                                    rong::error::E_INVALID_ARG,
+                                    format!("Invalid header name: {}", key),
+                                )
+                                .with_name("TypeError")
+                                .into());
                             }
                             (_, Err(_)) => {
-                                return Err(RongJSError::TypeError(
-                                    "Invalid header value".to_string(),
-                                ));
+                                return Err(HostError::new(
+                                    rong::error::E_INVALID_ARG,
+                                    "Invalid header value",
+                                )
+                                .with_name("TypeError")
+                                .into());
                             }
                         }
                     }
                 }
             } else {
-                return Err(RongJSError::TypeError("Invalid Headers init".to_string()));
+                return Err(
+                    HostError::new(rong::error::E_INVALID_ARG, "Invalid Headers init")
+                        .with_name("TypeError")
+                        .into(),
+                );
             }
         }
 
@@ -158,10 +186,12 @@ impl Headers {
 
                 Ok(Some(values.join(", ")))
             }
-            Err(_) => Err(RongJSError::TypeError(format!(
-                "Invalid header name: {}",
-                name
-            ))),
+            Err(_) => Err(HostError::new(
+                rong::error::E_INVALID_ARG,
+                format!("Invalid header name: {}", name),
+            )
+            .with_name("TypeError")
+            .into()),
         }
     }
 
@@ -174,10 +204,12 @@ impl Headers {
     pub fn has(&self, name: String) -> JSResult<bool> {
         match HeaderName::try_from(name.as_str()) {
             Ok(name) => Ok(self.headers.contains_key(&name)),
-            Err(_) => Err(RongJSError::TypeError(format!(
-                "Invalid header name: {}",
-                name
-            ))),
+            Err(_) => Err(HostError::new(
+                rong::error::E_INVALID_ARG,
+                format!("Invalid header name: {}", name),
+            )
+            .with_name("TypeError")
+            .into()),
         }
     }
 
@@ -190,9 +222,12 @@ impl Headers {
     pub fn set(&mut self, name: String, value: String) -> JSResult<()> {
         // Check for null characters in value
         if value.contains('\0') {
-            return Err(RongJSError::TypeError(
-                "Header value must not contain null characters".to_string(),
-            ));
+            return Err(HostError::new(
+                rong::error::E_INVALID_ARG,
+                "Header value must not contain null characters",
+            )
+            .with_name("TypeError")
+            .into());
         }
 
         match (
@@ -203,11 +238,17 @@ impl Headers {
                 self.headers.insert(name, value);
                 Ok(())
             }
-            (Err(_), _) => Err(RongJSError::TypeError(format!(
-                "Invalid header name: {}",
-                name
-            ))),
-            (_, Err(_)) => Err(RongJSError::TypeError("Invalid header value".to_string())),
+            (Err(_), _) => Err(HostError::new(
+                rong::error::E_INVALID_ARG,
+                format!("Invalid header name: {}", name),
+            )
+            .with_name("TypeError")
+            .into()),
+            (_, Err(_)) => Err(
+                HostError::new(rong::error::E_INVALID_ARG, "Invalid header value")
+                    .with_name("TypeError")
+                    .into(),
+            ),
         }
     }
 

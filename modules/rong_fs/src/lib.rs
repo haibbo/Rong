@@ -82,10 +82,17 @@ mod tests {
 
             // Get workspace root path
             let workspace_root = env::current_dir()
-                .map_err(|e| RongJSError::TypeError(format!("Failed to get current dir: {}", e)))?
+                .map_err(|e| {
+                    HostError::new(
+                        rong::error::E_INTERNAL,
+                        format!("Failed to get current dir: {}", e),
+                    )
+                })?
                 .parent()
                 .and_then(|p| p.parent()) // Go up two levels
-                .ok_or_else(|| RongJSError::TypeError("Failed to get workspace root".into()))?
+                .ok_or_else(|| {
+                    HostError::new(rong::error::E_INTERNAL, "Failed to get workspace root")
+                })?
                 .to_string_lossy()
                 .into_owned();
 

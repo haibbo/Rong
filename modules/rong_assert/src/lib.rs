@@ -101,10 +101,9 @@ fn does_not_throw(ctx: JSContext, func: JSFunc, message: Optional<JSValue>) -> J
     if func
         .call::<_, ()>(None, (JSValue::undefined(&ctx),))
         .is_err()
+        && let Some(msg) = message.0
     {
-        if let Some(msg) = message.0 {
-            return msg;
-        }
+        return msg;
     }
     // If no error was thrown, return undefined
     JSValue::undefined(&ctx)

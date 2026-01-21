@@ -198,10 +198,10 @@ impl FormData {
                     body.extend_from_slice(
                         format!("Content-Type: {}\r\n\r\n", file.mime_type()).as_bytes(),
                     );
-                    if let Ok(bytes) = file.bytes(ctx.clone()).await {
-                        if let Some(bytes_vec) = bytes.as_bytes() {
-                            body.extend_from_slice(bytes_vec);
-                        }
+                    if let Ok(bytes) = file.bytes(ctx.clone()).await
+                        && let Some(bytes_vec) = bytes.as_bytes()
+                    {
+                        body.extend_from_slice(bytes_vec);
                     }
                 }
                 FormDataEntryValue::Blob(blob) => {
@@ -215,10 +215,10 @@ impl FormData {
                     body.extend_from_slice(
                         format!("Content-Type: {}\r\n\r\n", blob.mime_type()).as_bytes(),
                     );
-                    if let Ok(bytes) = blob.bytes(ctx.clone()).await {
-                        if let Some(bytes_vec) = bytes.as_bytes() {
-                            body.extend_from_slice(bytes_vec);
-                        }
+                    if let Ok(bytes) = blob.bytes(ctx.clone()).await
+                        && let Some(bytes_vec) = bytes.as_bytes()
+                    {
+                        body.extend_from_slice(bytes_vec);
                     }
                 }
                 FormDataEntryValue::String(value) => {

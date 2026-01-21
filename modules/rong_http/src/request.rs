@@ -23,10 +23,10 @@ impl Request {
 
     /// Extract domain from the request URL
     pub(crate) fn domain(&self) -> JSResult<String> {
-        self.url
-            .host()
-            .ok_or_else(|| RongJSError::TypeError("URL has no host".to_string()))
-            .map(|host| host.to_string())
+        let host = self.url.host().ok_or_else(|| {
+            HostError::new(rong::error::E_INVALID_ARG, "URL has no host").with_name("TypeError")
+        })?;
+        Ok(host.to_string())
     }
 }
 
@@ -71,16 +71,19 @@ impl TryFromJSValue for RequestInit {
     fn try_from_js(value: JSValue) -> JSResult<Self> {
         let mut request = Self::default();
 
-        let obj = value
-            .into_object()
-            .ok_or(RongJSError::TypeError("Invalid RequestInit".to_string()))?;
+        let obj = value.into_object().ok_or_else(|| {
+            HostError::new(rong::error::E_INVALID_ARG, "Invalid RequestInit").with_name("TypeError")
+        })?;
 
         // Method
         if let Ok(method_str) = obj.get::<_, String>("method") {
-            request.method =
-                Some(Method::from_bytes(method_str.as_bytes()).map_err(|_| {
-                    RongJSError::TypeError(format!("Invalid method: {}", method_str))
-                })?);
+            request.method = Some(Method::from_bytes(method_str.as_bytes()).map_err(|_| {
+                HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    format!("Invalid method: {}", method_str),
+                )
+                .with_name("TypeError")
+            })?);
         }
 
         // Headers
@@ -100,10 +103,12 @@ impl TryFromJSValue for RequestInit {
                 "error" => RequestRedirect::Error,
                 "manual" => RequestRedirect::Manual,
                 _ => {
-                    return Err(RongJSError::TypeError(format!(
-                        "Invalid redirect: {}",
-                        redirect_str
-                    )));
+                    return Err(HostError::new(
+                        rong::error::E_INVALID_ARG,
+                        format!("Invalid redirect: {}", redirect_str),
+                    )
+                    .with_name("TypeError")
+                    .into());
                 }
             };
             request.redirect = Some(redirect);
@@ -125,10 +130,20 @@ impl Request {
         let mut request = if let Ok(url_str) = input.clone().try_into::<String>() {
             // Validate URL format
             if !url_str.starts_with("http://") && !url_str.starts_with("https://") {
-                return Err(RongJSError::TypeError(format!("Invalid URL: {}", url_str)));
+                return Err(HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    format!("Invalid URL: {}", url_str),
+                )
+                .with_name("TypeError")
+                .into());
             }
-            let url = Uri::try_from(url_str.as_str())
-                .map_err(|_| RongJSError::TypeError(format!("Invalid URL: {}", url_str)))?;
+            let url = Uri::try_from(url_str.as_str()).map_err(|_| {
+                HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    format!("Invalid URL: {}", url_str),
+                )
+                .with_name("TypeError")
+            })?;
 
             Self {
                 url,
@@ -140,8 +155,13 @@ impl Request {
             } else if let Ok(url) = obj.borrow::<URL>() {
                 // Convert URL to string first, then parse as Uri
                 let url_str = url.to_string();
-                let uri = Uri::try_from(url_str.as_str())
-                    .map_err(|_| RongJSError::TypeError(format!("Invalid URL: {}", url_str)))?;
+                let uri = Uri::try_from(url_str.as_str()).map_err(|_| {
+                    HostError::new(
+                        rong::error::E_INVALID_ARG,
+                        format!("Invalid URL: {}", url_str),
+                    )
+                    .with_name("TypeError")
+                })?;
                 Self {
                     url: uri,
                     ..Default::default()
@@ -256,7 +276,7 @@ impl Request {
     #[js_method(rename = "formData")]
     async fn form_data(&self) -> JSResult<JSObject> {
         // TODO: Implement form data parsing
-        Err(RongJSError::TypeError("Not implemented".to_string()))
+        Err(HostError::new(rong::error::E_NOT_SUPPORTED, "Not implemented").into())
     }
 
     #[js_method(gc_mark)]

@@ -53,10 +53,12 @@ impl TextDecoder {
             match label.as_str() {
                 "utf-8" | "utf8" | "" => {}
                 _ => {
-                    return Err(RongJSError::TypeError(format!(
-                        "Unsupported encoding: {}",
-                        label
-                    )));
+                    return Err(HostError::new(
+                        rong::error::E_INVALID_ARG,
+                        format!("Unsupported encoding: {}", label),
+                    )
+                    .with_name("TypeError")
+                    .into());
                 }
             }
         }
@@ -114,10 +116,10 @@ impl TextDecoder {
     ) -> JSResult<String> {
         // Handle stream option
         let mut _stream = false;
-        if let Some(options) = options.0 {
-            if let Ok(stream) = options.get::<_, bool>("stream") {
-                _stream = stream;
-            }
+        if let Some(options) = options.0
+            && let Ok(stream) = options.get::<_, bool>("stream")
+        {
+            _stream = stream;
         }
 
         // Get the bytes from input
@@ -127,19 +129,30 @@ impl TextDecoder {
                 if let Some(bytes) = typed_array.as_bytes() {
                     bytes.to_vec()
                 } else {
-                    return Err(RongJSError::TypeError("Invalid TypedArray".to_string()));
+                    return Err(
+                        HostError::new(rong::error::E_INVALID_ARG, "Invalid TypedArray")
+                            .with_name("TypeError")
+                            .into(),
+                    );
                 }
             } else if let Some(buffer) = JSArrayBuffer::<u8>::from_object(input) {
                 // Get bytes from ArrayBuffer
                 if let Some(bytes) = buffer.as_bytes() {
                     bytes.to_vec()
                 } else {
-                    return Err(RongJSError::TypeError("Invalid ArrayBuffer".to_string()));
+                    return Err(
+                        HostError::new(rong::error::E_INVALID_ARG, "Invalid ArrayBuffer")
+                            .with_name("TypeError")
+                            .into(),
+                    );
                 }
             } else {
-                return Err(RongJSError::TypeError(
-                    "Input must be an ArrayBuffer or TypedArray".to_string(),
-                ));
+                return Err(HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    "Input must be an ArrayBuffer or TypedArray",
+                )
+                .with_name("TypeError")
+                .into());
             }
         } else {
             Vec::new() // Empty input returns empty byte vector
@@ -158,10 +171,12 @@ impl TextDecoder {
             Ok(text) => Ok(text),
             Err(e) => {
                 if self.fatal {
-                    Err(RongJSError::TypeError(format!(
-                        "Invalid UTF-8 sequence: {}",
-                        e
-                    )))
+                    Err(HostError::new(
+                        rong::error::E_INVALID_ARG,
+                        format!("Invalid UTF-8 sequence: {}", e),
+                    )
+                    .with_name("TypeError")
+                    .into())
                 } else {
                     // Replace invalid sequences with replacement character (U+FFFD)
                     Ok(String::from_utf8_lossy(&bytes[start..]).into_owned())

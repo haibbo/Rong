@@ -92,10 +92,17 @@ mod tests {
         async_run!(|ctx: JSContext| async move {
             // Get workspace root dynamically
             let workspace_root = env::current_dir()
-                .map_err(|e| RongJSError::TypeError(format!("Failed to get current dir: {}", e)))?
+                .map_err(|e| {
+                    HostError::new(
+                        rong::error::E_INTERNAL,
+                        format!("Failed to get current dir: {}", e),
+                    )
+                })?
                 .parent()
                 .and_then(|p| p.parent()) // Go up two levels
-                .ok_or_else(|| RongJSError::TypeError("Failed to get workspace root".into()))?
+                .ok_or_else(|| {
+                    HostError::new(rong::error::E_INTERNAL, "Failed to get workspace root")
+                })?
                 .to_string_lossy()
                 .into_owned();
 
@@ -130,8 +137,10 @@ mod tests {
         Storage::open(default_path).expect("default open should succeed");
 
         let custom_path = workspace_root.join("target/test-tmp/rust_storage_custom.db");
-        let mut options = StorageOptions::default();
-        options.max_key_size = Some(16);
+        let options = StorageOptions {
+            max_key_size: Some(16),
+            ..Default::default()
+        };
         Storage::open_with_options(custom_path, options).expect("custom open should succeed");
     }
 

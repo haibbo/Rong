@@ -33,7 +33,7 @@ async fn write_text_file(
 
     // Handle createNew option
     if options.create_new.unwrap_or(false) && fs::metadata(&resolved).await.is_ok() {
-        return Err(RongJSError::TypeError("File already exists".into()));
+        return Err(HostError::new(rong::error::E_ALREADY_EXISTS, "File already exists").into());
     }
 
     // Handle append option
@@ -56,26 +56,26 @@ async fn write_text_file(
         select! {
             result = async {
                 let mut file = open_options.open(&resolved).await
-                    .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
+                    .map_err(|e| HostError::new("FS_IO", format!("Failed to open file: {}", e)))?;
                 file.write_all(text.as_bytes()).await
-                    .map_err(|e| RongJSError::TypeError(format!("Write failed: {}", e)))
+                    .map_err(|e| HostError::new("FS_IO", format!("Write failed: {}", e)).into())
             } => {
                 result
             }
 
             abort_reason = abort.recv() => {
                 // println!("write_text_file: Received abort signal");
-                Err(RongJSError::from_jsvalue(abort_reason))
+                Err(RongJSError::from_thrown_value(abort_reason))
             }
         }
     } else {
         let mut file = open_options
             .open(&resolved)
             .await
-            .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to open file: {}", e)))?;
         file.write_all(text.as_bytes())
             .await
-            .map_err(|e| RongJSError::TypeError(format!("Write failed: {}", e)))
+            .map_err(|e| HostError::new("FS_IO", format!("Write failed: {}", e)).into())
     }
 }
 
@@ -88,13 +88,13 @@ async fn write_file(
     let options = option.0.unwrap_or_default();
 
     // Get bytes from TypedArray
-    let bytes = data
-        .as_bytes()
-        .ok_or_else(|| RongJSError::TypeError("Invalid TypedArray data".into()))?;
+    let bytes = data.as_bytes().ok_or_else(|| {
+        HostError::new(rong::error::E_INVALID_ARG, "Invalid TypedArray data").with_name("TypeError")
+    })?;
 
     // Handle createNew option
     if options.create_new.unwrap_or(false) && fs::metadata(&resolved).await.is_ok() {
-        return Err(RongJSError::TypeError("File already exists".into()));
+        return Err(HostError::new(rong::error::E_ALREADY_EXISTS, "File already exists").into());
     }
 
     // Handle append option
@@ -113,32 +113,29 @@ async fn write_file(
 
     if let Some(signal) = options.signal {
         let mut abort = signal.subscribe();
-        println!("write_file: Subscribed to abort signal");
 
         select! {
             result = async {
                 let mut file = open_options.open(&resolved).await
-                    .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
+                    .map_err(|e| HostError::new("FS_IO", format!("Failed to open file: {}", e)))?;
                 file.write_all(bytes).await
-                    .map_err(|e| RongJSError::TypeError(format!("Write failed: {}", e)))
+                    .map_err(|e| HostError::new("FS_IO", format!("Write failed: {}", e)).into())
             } => {
-                println!("write_file: Write completed");
                 result
             }
 
             abort_reason = abort.recv() => {
-                println!("write_file: Received abort signal");
-                Err(RongJSError::from_jsvalue(abort_reason))
+                Err(RongJSError::from_thrown_value(abort_reason))
             }
         }
     } else {
         let mut file = open_options
             .open(&resolved)
             .await
-            .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?;
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to open file: {}", e)))?;
         file.write_all(bytes)
             .await
-            .map_err(|e| RongJSError::TypeError(format!("Write failed: {}", e)))
+            .map_err(|e| HostError::new("FS_IO", format!("Write failed: {}", e)).into())
     }
 }
 
@@ -148,7 +145,7 @@ async fn copy_file(from: String, to: String) -> JSResult<()> {
     fs::copy(&resolved_from, &resolved_to)
         .await
         .map(|_| ())
-        .map_err(|e| RongJSError::TypeError(format!("Failed to copy file: {}", e)))
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to copy file: {}", e)).into())
 }
 
 async fn truncate(path: String, len: Optional<f64>) -> JSResult<()> {
@@ -158,10 +155,10 @@ async fn truncate(path: String, len: Optional<f64>) -> JSResult<()> {
         .write(true)
         .open(&resolved)
         .await
-        .map_err(|e| RongJSError::TypeError(format!("Failed to open file: {}", e)))?
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to open file: {}", e)))?
         .set_len(len as u64)
         .await
-        .map_err(|e| RongJSError::TypeError(format!("Failed to truncate file: {}", e)))?;
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to truncate file: {}", e)))?;
     Ok(())
 }
 

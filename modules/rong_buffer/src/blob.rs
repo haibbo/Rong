@@ -48,7 +48,11 @@ impl Blob {
         // Process parts if provided
         if let Some(parts) = parts.0 {
             blob_data = process_blob_part(&parts, &blob_options).map_err(|e| {
-                RongJSError::TypeError(format!("Failed to process blob parts: {}", e))
+                HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    format!("Failed to process blob parts: {}", e),
+                )
+                .with_name("TypeError")
             })?;
         }
 
@@ -81,8 +85,13 @@ impl Blob {
     /// Returns a promise that resolves with a text representation of the blob's data
     #[js_method]
     pub async fn text(&self) -> JSResult<String> {
-        String::from_utf8(self.data.clone())
-            .map_err(|e| RongJSError::Error(format!("Invalid UTF-8 sequence: {}", e)))
+        String::from_utf8(self.data.clone()).map_err(|e| {
+            HostError::new(
+                rong::error::E_INVALID_DATA,
+                format!("Invalid UTF-8 sequence: {}", e),
+            )
+            .into()
+        })
     }
 
     /// Returns a new Blob containing a subset of this blob's data
@@ -217,9 +226,11 @@ fn process_blob_part(array: &JSArray, options: &BlobOptions) -> JSResult<Vec<u8>
             continue;
         }
 
-        return Err(RongJSError::TypeError(
-            "Unsupported Blob part type".to_string(),
-        ));
+        return Err(
+            HostError::new(rong::error::E_INVALID_ARG, "Unsupported Blob part type")
+                .with_name("TypeError")
+                .into(),
+        );
     }
 
     Ok(data)

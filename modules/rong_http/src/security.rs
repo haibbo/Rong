@@ -35,7 +35,7 @@ impl NetworkAccessGuard for DefaultNetworkAccessGuard {
 ///         if domain == "api.example.com" || domain.ends_with(".example.com") {
 ///             Ok(())
 ///         } else {
-///             Err(rong::RongJSError::TypeError("Domain access denied".to_string()))
+///             Err(rong::HostError::new(rong::error::E_PERMISSION_DENIED, "Domain access denied").into())
 ///         }
 ///     }
 /// }

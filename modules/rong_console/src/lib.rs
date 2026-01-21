@@ -148,95 +148,81 @@ fn format_values_internal(result: &mut String, args: Rest<JSValue>) {
 
     while let Some((index, arg)) = iter.next() {
         // Handle formatted strings
-        if index == 0 && size > 1 {
-            if let Ok(format_str) = arg.clone().try_into::<String>() {
-                let mut chars = format_str.chars().peekable();
-                while let Some(c) = chars.next() {
-                    if c == '%' {
-                        match chars.next() {
-                            Some('s') => {
-                                if let Some((_, next_arg)) = iter.next() {
-                                    if let Ok(str) = next_arg.clone().try_into::<String>() {
-                                        result.push_str(&str);
-                                    } else {
-                                        format_raw_inner(
-                                            result,
-                                            next_arg,
-                                            &mut HashSet::default(),
-                                            0,
-                                        );
-                                    }
+        if index == 0
+            && size > 1
+            && let Ok(format_str) = arg.clone().try_into::<String>()
+        {
+            let mut chars = format_str.chars().peekable();
+            while let Some(c) = chars.next() {
+                if c == '%' {
+                    match chars.next() {
+                        Some('s') => {
+                            if let Some((_, next_arg)) = iter.next() {
+                                if let Ok(str) = next_arg.clone().try_into::<String>() {
+                                    result.push_str(&str);
                                 } else {
-                                    result.push_str("%s");
-                                }
-                                continue;
-                            }
-                            Some('d') | Some('i') => {
-                                if let Some((_, next_arg)) = iter.next() {
-                                    if let Ok(num) = next_arg.clone().try_into::<f64>() {
-                                        result.push_str(&num.trunc().to_string());
-                                    } else {
-                                        format_raw_inner(
-                                            result,
-                                            next_arg,
-                                            &mut HashSet::default(),
-                                            0,
-                                        );
-                                    }
-                                } else {
-                                    result.push_str("%d");
-                                }
-                                continue;
-                            }
-                            Some('f') => {
-                                if let Some((_, next_arg)) = iter.next() {
-                                    if let Ok(num) = next_arg.clone().try_into::<f64>() {
-                                        result.push_str(&num.to_string());
-                                    } else {
-                                        format_raw_inner(
-                                            result,
-                                            next_arg,
-                                            &mut HashSet::default(),
-                                            0,
-                                        );
-                                    }
-                                } else {
-                                    result.push_str("%f");
-                                }
-                                continue;
-                            }
-                            Some('o') | Some('O') => {
-                                if let Some((_, next_arg)) = iter.next() {
                                     format_raw_inner(result, next_arg, &mut HashSet::default(), 0);
-                                } else {
-                                    result.push_str("%o");
                                 }
-                                continue;
+                            } else {
+                                result.push_str("%s");
                             }
-                            Some('%') => {
-                                result.push('%');
-                                continue;
+                            continue;
+                        }
+                        Some('d') | Some('i') => {
+                            if let Some((_, next_arg)) = iter.next() {
+                                if let Ok(num) = next_arg.clone().try_into::<f64>() {
+                                    result.push_str(&num.trunc().to_string());
+                                } else {
+                                    format_raw_inner(result, next_arg, &mut HashSet::default(), 0);
+                                }
+                            } else {
+                                result.push_str("%d");
                             }
-                            Some(other) => {
-                                result.push('%');
-                                result.push(other);
-                                continue;
+                            continue;
+                        }
+                        Some('f') => {
+                            if let Some((_, next_arg)) = iter.next() {
+                                if let Ok(num) = next_arg.clone().try_into::<f64>() {
+                                    result.push_str(&num.to_string());
+                                } else {
+                                    format_raw_inner(result, next_arg, &mut HashSet::default(), 0);
+                                }
+                            } else {
+                                result.push_str("%f");
                             }
-                            None => {
-                                result.push('%');
-                                continue;
+                            continue;
+                        }
+                        Some('o') | Some('O') => {
+                            if let Some((_, next_arg)) = iter.next() {
+                                format_raw_inner(result, next_arg, &mut HashSet::default(), 0);
+                            } else {
+                                result.push_str("%o");
                             }
+                            continue;
+                        }
+                        Some('%') => {
+                            result.push('%');
+                            continue;
+                        }
+                        Some(other) => {
+                            result.push('%');
+                            result.push(other);
+                            continue;
+                        }
+                        None => {
+                            result.push('%');
+                            continue;
                         }
                     }
-                    result.push(c);
                 }
-
-                while let Some((_, extra)) = iter.next() {
-                    result.push(' ');
-                    format_raw_inner(result, extra, &mut HashSet::default(), 0);
-                }
-                continue;
+                result.push(c);
             }
+
+            for (_, extra) in iter.by_ref() {
+                result.push(' ');
+                format_raw_inner(result, extra, &mut HashSet::default(), 0);
+            }
+            continue;
         }
 
         // Non-formatted string regular argument
@@ -370,19 +356,18 @@ fn format_raw_inner(
 
         JSValueType::Constructor => {
             let obj: JSObject = value.into();
-            if let Ok(name) = obj.get::<_, String>("name") {
-                if !name.is_empty() {
-                    result.push_str(&format!("[class {}]", name));
-                    return;
-                }
+            if let Ok(name) = obj.get::<_, String>("name")
+                && !name.is_empty()
+            {
+                result.push_str(&format!("[class {}]", name));
+                return;
             }
 
-            if let Ok(prototype) = obj.get::<_, JSObject>("prototype") {
-                if let Ok(constructor_name) = prototype.get::<_, String>("constructor") {
-                    if !constructor_name.is_empty() {
-                        result.push_str(&format!("[class {}]", constructor_name));
-                    }
-                }
+            if let Ok(prototype) = obj.get::<_, JSObject>("prototype")
+                && let Ok(constructor_name) = prototype.get::<_, String>("constructor")
+                && !constructor_name.is_empty()
+            {
+                result.push_str(&format!("[class {}]", constructor_name));
             }
         }
 
@@ -396,21 +381,20 @@ fn format_raw_inner(
                 error_parts.push("Error".to_string());
             }
 
-            if let Ok(message) = obj.get::<_, String>("message") {
-                if !message.is_empty() {
-                    error_parts.push(message);
-                }
+            if let Ok(message) = obj.get::<_, String>("message")
+                && !message.is_empty()
+            {
+                error_parts.push(message);
             }
 
             result.push_str(&error_parts.join(": "));
 
-            if depth == 0 {
-                if let Ok(stack) = obj.get::<_, String>("stack") {
-                    if !stack.is_empty() {
-                        result.push('\n');
-                        result.push_str(&stack);
-                    }
-                }
+            if depth == 0
+                && let Ok(stack) = obj.get::<_, String>("stack")
+                && !stack.is_empty()
+            {
+                result.push('\n');
+                result.push_str(&stack);
             }
         }
 
@@ -620,7 +604,7 @@ mod tests {
 
     // Use thread-local buffer to avoid cross-test interleaving when tests run in parallel
     thread_local! {
-        static TEST_OUTPUT: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+        static TEST_OUTPUT: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
     }
 
     fn clear_test_output() {

@@ -15,15 +15,17 @@ impl File {
     fn new(data: JSArray, filename: String, options: Optional<JSObject>) -> JSResult<Self> {
         // Validate filename
         if filename.is_empty() {
-            return Err(RongJSError::TypeError(
-                "File name cannot be empty".to_string(),
-            ));
+            return Err(
+                HostError::new(rong::error::E_INVALID_ARG, "File name cannot be empty")
+                    .with_name("TypeError")
+                    .into(),
+            );
         }
 
         // Get current time as default last_modified
         let default_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| RongJSError::Error("Failed to get current time".to_string()))?
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Failed to get current time"))?
             .as_millis() as i64;
 
         // Extract options

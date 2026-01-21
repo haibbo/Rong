@@ -7,27 +7,34 @@ use std::sync::{Arc, Mutex as StdMutex};
 use tokio::io::AsyncRead;
 use tokio::sync::{Mutex, mpsc};
 
+type StreamChunk = Result<Bytes, String>;
+type StreamReceiver = mpsc::Receiver<StreamChunk>;
+type StreamSender = mpsc::Sender<StreamChunk>;
+type SharedReceiverSlot = Arc<StdMutex<Option<StreamReceiver>>>;
+type SharedReceiver = Arc<Mutex<Option<StreamReceiver>>>;
+type SharedSender = Arc<Mutex<Option<StreamSender>>>;
+
 #[js_export]
 pub struct ReadableStream {
     // A single-consumer source guarded by a lock; getReader() takes ownership.
-    pub(crate) rx_slot: Arc<StdMutex<Option<mpsc::Receiver<Result<Bytes, String>>>>>,
+    pub(crate) rx_slot: SharedReceiverSlot,
 }
 
 #[js_export]
 pub struct ReadableStreamDefaultReader {
     // Reference to the owning stream's slot so releaseLock can return ownership.
-    slot: Arc<StdMutex<Option<mpsc::Receiver<Result<Bytes, String>>>>>,
+    slot: SharedReceiverSlot,
     // Receiver owned by the reader while locked.
-    rx: Arc<Mutex<Option<mpsc::Receiver<Result<Bytes, String>>>>>,
+    rx: SharedReceiver,
 }
 
 #[js_export]
 pub struct ReadableStreamDefaultController {
-    tx: Arc<Mutex<Option<mpsc::Sender<Result<Bytes, String>>>>>,
+    tx: SharedSender,
 }
 
 impl ReadableStream {
-    pub fn from_receiver(rx: mpsc::Receiver<Result<Bytes, String>>) -> Self {
+    pub fn from_receiver(rx: StreamReceiver) -> Self {
         Self {
             rx_slot: Arc::new(StdMutex::new(Some(rx))),
         }
@@ -37,7 +44,7 @@ impl ReadableStream {
     where
         R: AsyncRead + Unpin + Send + 'static,
     {
-        let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(16);
+        let (tx, rx) = mpsc::channel::<StreamChunk>(16);
         rong::spawn(async move {
             let mut buf = vec![0u8; chunk_size.max(1)];
             loop {
@@ -78,21 +85,21 @@ struct PipeToOptions {
 #[js_class]
 impl ReadableStream {
     #[js_method(constructor)]
-    fn new(ctx: JSContext, underlying: function::Optional<JSValue>) -> JSResult<JSObject> {
+    fn constructor(ctx: JSContext, underlying: function::Optional<JSValue>) -> JSResult<JSObject> {
         // Create a basic channel-backed stream
-        let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(16);
+        let (tx, rx) = mpsc::channel::<StreamChunk>(16);
         let stream = Self::from_receiver(rx);
         let obj = JSReadableStream::new(&ctx, stream)?.into_object();
 
         // If an underlying source is provided, call start(controller) if present
-        if let Some(v) = underlying.0 {
-            if let Some(src) = v.into_object() {
-                let controller = ReadableStreamDefaultController {
-                    tx: Arc::new(Mutex::new(Some(tx))),
-                };
-                if let Ok(start) = src.get::<_, JSFunc>("start") {
-                    let _ = start.call::<_, JSValue>(Some(src.clone()), (controller,));
-                }
+        if let Some(v) = underlying.0
+            && let Some(src) = v.into_object()
+        {
+            let controller = ReadableStreamDefaultController {
+                tx: Arc::new(Mutex::new(Some(tx))),
+            };
+            if let Ok(start) = src.get::<_, JSFunc>("start") {
+                let _ = start.call::<_, JSValue>(Some(src.clone()), (controller,));
             }
         }
         Ok(obj)
@@ -103,15 +110,17 @@ impl ReadableStream {
         let mut guard = self
             .rx_slot
             .lock()
-            .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
         match guard.take() {
             Some(rx) => Ok(ReadableStreamDefaultReader {
                 slot: self.rx_slot.clone(),
                 rx: Arc::new(Mutex::new(Some(rx))),
             }),
-            None => Err(RongJSError::TypeError(
-                "ReadableStream is locked".to_string(),
-            )),
+            None => Err(
+                HostError::new(rong::error::E_INVALID_STATE, "ReadableStream is locked")
+                    .with_name("TypeError")
+                    .into(),
+            ),
         }
     }
 
@@ -120,7 +129,7 @@ impl ReadableStream {
         let mut guard = self
             .rx_slot
             .lock()
-            .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
         *guard = None;
         Ok(())
     }
@@ -139,10 +148,10 @@ impl ReadableStream {
         let prevent_abort = opts.prevent_abort.unwrap_or(false);
         let prevent_cancel = opts.prevent_cancel.unwrap_or(false);
 
-        if let Some(sig) = &opts.signal {
-            if sig.aborted() {
-                return Err(RongJSError::from_jsvalue(sig.get_reason()));
-            }
+        if let Some(sig) = &opts.signal
+            && sig.aborted()
+        {
+            return Err(RongJSError::from_thrown_value(sig.get_reason()));
         }
 
         // Acquire reader and writer
@@ -151,69 +160,71 @@ impl ReadableStream {
 
         // Fast path: if this ReadableStream is channel-backed and the writer is channel-backed,
         // forward bytes directly between channels without constructing JS ArrayBuffers.
-        if let Some(mut rx) = readable_stream_take_receiver(self) {
-            if let Some((tx, done_rx)) =
+        if let Some(mut rx) = readable_stream_take_receiver(self)
+            && let Some((tx, done_rx)) =
                 crate::writable::WritableStreamDefaultWriter::take_channel(&mut writer)
-            {
-                let mut abort_rx = opts.signal.as_ref().map(|s| s.subscribe());
-                let mut pipe_err: Option<RongJSError> = None;
+        {
+            let mut abort_rx = opts.signal.as_ref().map(|s| s.subscribe());
+            let mut pipe_err: Option<RongJSError> = None;
 
-                // Pump in Rust
-                loop {
-                    if let Some(arx) = &mut abort_rx {
-                        tokio::select! {
-                            item = rx.recv() => {
-                                match item {
-                                    Some(Ok(bytes)) => {
-                                        if tx.send(bytes).await.is_err() { break; }
-                                    }
-                                    Some(Err(e)) => { pipe_err = Some(RongJSError::Error(e)); break; }
-                                    None => break,
+            // Pump in Rust
+            loop {
+                if let Some(arx) = &mut abort_rx {
+                    tokio::select! {
+                        item = rx.recv() => {
+                            match item {
+                                Some(Ok(bytes)) => {
+                                    if tx.send(bytes).await.is_err() { break; }
                                 }
-                            }
-                            reason = arx.recv() => {
-                                pipe_err = Some(RongJSError::from_jsvalue(reason));
-                                break;
-                            }
-                        }
-                    } else {
-                        match rx.recv().await {
-                            Some(Ok(bytes)) => {
-                                if tx.send(bytes).await.is_err() {
+                                Some(Err(e)) => {
+                                    pipe_err = Some(HostError::new(rong::error::E_STREAM, e).into());
                                     break;
                                 }
+                                None => break,
                             }
-                            Some(Err(e)) => {
-                                pipe_err = Some(RongJSError::Error(e));
-                                break;
-                            }
-                            None => break,
+                        }
+                        reason = arx.recv() => {
+                            pipe_err = Some(RongJSError::from_thrown_value(reason));
+                            break;
                         }
                     }
-                }
-
-                // Close writer on normal completion
-                if pipe_err.is_none() && !prevent_close {
-                    // Drop sender and wait for writer flush if available
-                    drop(tx);
-                    if let Some(rx) = done_rx {
-                        let _ = rx.await;
+                } else {
+                    match rx.recv().await {
+                        Some(Ok(bytes)) => {
+                            if tx.send(bytes).await.is_err() {
+                                break;
+                            }
+                        }
+                        Some(Err(e)) => {
+                            pipe_err = Some(HostError::new(rong::error::E_STREAM, e).into());
+                            break;
+                        }
+                        None => break,
                     }
                 }
-
-                // Release locks (ignore errors)
-                let _ = reader.release_lock().await;
-                let _ = writer.release_lock().await;
-
-                // Abort writer on error if needed
-                if let Some(e) = pipe_err {
-                    if !prevent_abort {
-                        let _ = writer.abort().await;
-                    }
-                    return Err(e);
-                }
-                return Ok(());
             }
+
+            // Close writer on normal completion
+            if pipe_err.is_none() && !prevent_close {
+                // Drop sender and wait for writer flush if available
+                drop(tx);
+                if let Some(rx) = done_rx {
+                    let _ = rx.await;
+                }
+            }
+
+            // Release locks (ignore errors)
+            let _ = reader.release_lock().await;
+            let _ = writer.release_lock().await;
+
+            // Abort writer on error if needed
+            if let Some(e) = pipe_err {
+                if !prevent_abort {
+                    let _ = writer.abort().await;
+                }
+                return Err(e);
+            }
+            return Ok(());
         }
 
         // Fallback: JS-level pump
@@ -224,7 +235,7 @@ impl ReadableStream {
             let res_obj = if let Some(rx) = &mut abort_rx {
                 tokio::select! {
                     r = reader.read(ctx.clone()) => { Some(r?) }
-                    reason = rx.recv() => { pipe_err = Some(RongJSError::from_jsvalue(reason)); None }
+                    reason = rx.recv() => { pipe_err = Some(RongJSError::from_thrown_value(reason)); None }
                 }
             } else {
                 Some(reader.read(ctx.clone()).await?)
@@ -236,11 +247,11 @@ impl ReadableStream {
                 }
                 let chunk = r.get::<_, JSValue>("value")?;
                 // Also honor abort between read and write
-                if let Some(sig) = &opts.signal {
-                    if sig.aborted() {
-                        pipe_err = Some(RongJSError::from_jsvalue(sig.get_reason()));
-                        break;
-                    }
+                if let Some(sig) = &opts.signal
+                    && sig.aborted()
+                {
+                    pipe_err = Some(RongJSError::from_thrown_value(sig.get_reason()));
+                    break;
                 }
                 if let Err(e) = writer.write(chunk).await {
                     if !prevent_cancel {
@@ -276,15 +287,18 @@ impl ReadableStream {
         let rx = match readable_stream_take_receiver(self) {
             Some(rx) => rx,
             None => {
-                return Err(RongJSError::TypeError(
-                    "ReadableStream is locked".to_string(),
-                ));
+                return Err(HostError::new(
+                    rong::error::E_INVALID_STATE,
+                    "ReadableStream is locked",
+                )
+                .with_name("TypeError")
+                .into());
             }
         };
 
         // Create two branches and a task to fan out chunks
-        let (tx1, rx1) = mpsc::channel::<Result<Bytes, String>>(16);
-        let (tx2, rx2) = mpsc::channel::<Result<Bytes, String>>(16);
+        let (tx1, rx1) = mpsc::channel::<StreamChunk>(16);
+        let (tx2, rx2) = mpsc::channel::<StreamChunk>(16);
 
         rong::spawn(async move {
             let mut src = rx;
@@ -294,15 +308,15 @@ impl ReadableStream {
                 match item {
                     Ok(bytes) => {
                         // Clone bytes for each branch (Bytes is cheap to clone)
-                        if let Some(t1) = tx1.as_mut() {
-                            if t1.send(Ok(bytes.clone())).await.is_err() {
-                                tx1 = None;
-                            }
+                        if let Some(t1) = tx1.as_mut()
+                            && t1.send(Ok(bytes.clone())).await.is_err()
+                        {
+                            tx1 = None;
                         }
-                        if let Some(t2) = tx2.as_mut() {
-                            if t2.send(Ok(bytes)).await.is_err() {
-                                tx2 = None;
-                            }
+                        if let Some(t2) = tx2.as_mut()
+                            && t2.send(Ok(bytes)).await.is_err()
+                        {
+                            tx2 = None;
                         }
                         if tx1.is_none() && tx2.is_none() {
                             break;
@@ -337,7 +351,11 @@ impl ReadableStream {
 impl ReadableStreamDefaultReader {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(RongJSError::TypeError("Illegal constructor".to_string()))
+        Err(
+            HostError::new(rong::error::E_ILLEGAL_CONSTRUCTOR, "Illegal constructor")
+                .with_name("TypeError")
+                .into(),
+        )
     }
 
     #[js_method]
@@ -373,7 +391,7 @@ impl ReadableStreamDefaultReader {
                 out.set("value", ab)?;
                 Ok(out)
             }
-            Some(Err(e)) => Err(RongJSError::Error(e)),
+            Some(Err(e)) => Err(HostError::new(rong::error::E_STREAM, e).into()),
             None => {
                 // closed
                 let out = JSObject::new(&ctx);
@@ -395,7 +413,7 @@ impl ReadableStreamDefaultReader {
             let mut guard = self
                 .slot
                 .lock()
-                .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
             if guard.is_none() {
                 *guard = Some(rx);
             }
@@ -415,7 +433,11 @@ impl ReadableStreamDefaultReader {
 impl ReadableStreamDefaultController {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(RongJSError::TypeError("Illegal constructor".to_string()))
+        Err(
+            HostError::new(rong::error::E_ILLEGAL_CONSTRUCTOR, "Illegal constructor")
+                .with_name("TypeError")
+                .into(),
+        )
     }
 
     #[js_method]
@@ -426,23 +448,37 @@ impl ReadableStreamDefaultController {
                 if let Some(b) = ta.as_bytes() {
                     Bytes::copy_from_slice(b)
                 } else {
-                    return Err(RongJSError::TypeError("Invalid TypedArray".to_string()));
+                    return Err(
+                        HostError::new(rong::error::E_INVALID_ARG, "Invalid TypedArray")
+                            .with_name("TypeError")
+                            .into(),
+                    );
                 }
             } else if let Some(ab) = JSArrayBuffer::<u8>::from_object(obj) {
                 if let Some(b) = ab.as_bytes() {
                     Bytes::copy_from_slice(b)
                 } else {
-                    return Err(RongJSError::TypeError("Invalid ArrayBuffer".to_string()));
+                    return Err(
+                        HostError::new(rong::error::E_INVALID_ARG, "Invalid ArrayBuffer")
+                            .with_name("TypeError")
+                            .into(),
+                    );
                 }
             } else {
-                return Err(RongJSError::TypeError(
-                    "enqueue expects Uint8Array or ArrayBuffer".to_string(),
-                ));
+                return Err(HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    "enqueue expects Uint8Array or ArrayBuffer",
+                )
+                .with_name("TypeError")
+                .into());
             }
         } else {
-            return Err(RongJSError::TypeError(
-                "enqueue expects a TypedArray or ArrayBuffer".to_string(),
-            ));
+            return Err(HostError::new(
+                rong::error::E_INVALID_ARG,
+                "enqueue expects a TypedArray or ArrayBuffer",
+            )
+            .with_name("TypeError")
+            .into());
         };
 
         let mut slot = futures::executor::block_on(self.tx.lock());
@@ -452,7 +488,7 @@ impl ReadableStreamDefaultController {
             });
             Ok(())
         } else {
-            Err(RongJSError::Error("ReadableStream is closed".to_string()))
+            Err(HostError::new(rong::error::E_INVALID_STATE, "ReadableStream is closed").into())
         }
     }
 
@@ -480,9 +516,7 @@ impl ReadableStreamDefaultController {
 
 /// Take the underlying receiver from a ReadableStream. This consumes the stream's
 /// readable side and returns the channel for Rust consumers.
-pub fn readable_stream_take_receiver(
-    rs: &ReadableStream,
-) -> Option<mpsc::Receiver<Result<Bytes, String>>> {
+pub fn readable_stream_take_receiver(rs: &ReadableStream) -> Option<StreamReceiver> {
     let mut guard = rs.rx_slot.lock().ok()?;
     guard.take()
 }
@@ -498,39 +532,51 @@ fn install_instance_async_iter(ctx: &JSContext, obj: &JSObject) -> JSResult<()> 
     let next_fn = JSFunc::new(
         ctx,
         move |ctx: JSContext, this: This<JSObject>| async move {
-            if let Ok(rs) = (*this).borrow::<ReadableStream>() {
-                if let Some(mut rx) = readable_stream_take_receiver(&*rs) {
-                    let item = rx.recv().await;
-                    match item {
-                        Some(Ok(bytes)) => {
-                            if let Ok(mut slot) = rs.rx_slot.lock() {
-                                if slot.is_none() {
-                                    *slot = Some(rx);
-                                }
-                            }
-                            let out = JSObject::new(&ctx);
-                            out.set("done", false).ok();
-                            if let Ok(ab) = JSArrayBuffer::<u8>::from_bytes(&ctx, &bytes) {
-                                out.set("value", ab).ok();
-                            }
-                            Ok(out)
-                        }
-                        Some(Err(e)) => Err(RongJSError::Error(e)),
-                        None => {
-                            let out = JSObject::new(&ctx);
-                            out.set("done", true).ok();
-                            out.set("value", JSValue::undefined(&ctx)).ok();
-                            Ok(out)
-                        }
+            let rx_slot = match (*this).borrow::<ReadableStream>() {
+                Ok(rs) => rs.rx_slot.clone(),
+                Err(_) => {
+                    return Err(HostError::new(rong::error::E_TYPE, "Not ReadableStream")
+                        .with_name("TypeError")
+                        .into());
+                }
+            };
+
+            let mut rx = {
+                let mut guard = rx_slot
+                    .lock()
+                    .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
+                guard.take()
+            };
+
+            let Some(mut rx) = rx.take() else {
+                let out = JSObject::new(&ctx);
+                out.set("done", true).ok();
+                out.set("value", JSValue::undefined(&ctx)).ok();
+                return Ok(out);
+            };
+
+            let item = rx.recv().await;
+            match item {
+                Some(Ok(bytes)) => {
+                    if let Ok(mut slot) = rx_slot.lock()
+                        && slot.is_none()
+                    {
+                        *slot = Some(rx);
                     }
-                } else {
+                    let out = JSObject::new(&ctx);
+                    out.set("done", false).ok();
+                    if let Ok(ab) = JSArrayBuffer::<u8>::from_bytes(&ctx, &bytes) {
+                        out.set("value", ab).ok();
+                    }
+                    Ok(out)
+                }
+                Some(Err(e)) => Err(HostError::new(rong::error::E_STREAM, e).into()),
+                None => {
                     let out = JSObject::new(&ctx);
                     out.set("done", true).ok();
                     out.set("value", JSValue::undefined(&ctx)).ok();
                     Ok(out)
                 }
-            } else {
-                Err(RongJSError::TypeError("Not ReadableStream".to_string()))
             }
         },
     )?;
@@ -557,10 +603,7 @@ impl JSReadableStream {
         Ok(Self(obj))
     }
 
-    pub fn from_receiver(
-        ctx: &JSContext,
-        rx: mpsc::Receiver<Result<Bytes, String>>,
-    ) -> JSResult<Self> {
+    pub fn from_receiver(ctx: &JSContext, rx: StreamReceiver) -> JSResult<Self> {
         let stream = ReadableStream::from_receiver(rx);
         Self::new(ctx, stream)
     }
@@ -568,10 +611,7 @@ impl JSReadableStream {
     /// Construct a ReadableStream from a shared receiver slot.
     /// The slot is an Arc<Mutex<Option<Receiver>>> managed by another owner.
     /// This does not consume the channel until the stream is locked via getReader/iteration.
-    pub fn from_shared_receiver(
-        ctx: &JSContext,
-        slot: Arc<StdMutex<Option<mpsc::Receiver<Result<Bytes, String>>>>>,
-    ) -> JSResult<Self> {
+    pub fn from_shared_receiver(ctx: &JSContext, slot: SharedReceiverSlot) -> JSResult<Self> {
         let stream = ReadableStream { rx_slot: slot };
         Self::new(ctx, stream)
     }

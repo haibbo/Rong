@@ -7,7 +7,7 @@ pub use readable::{
 };
 pub use writable::{
     WritableStream, WritableStreamDefaultWriter, writable_stream_to_async_write,
-    writable_stream_to_sender,
+    writable_stream_to_sender, writable_stream_to_sender_with_done,
 };
 
 use rong::*;

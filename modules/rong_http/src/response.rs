@@ -37,9 +37,10 @@ struct InitOption {
 
 impl TryFromJSValue for InitOption {
     fn try_from_js(value: JSValue) -> JSResult<Self> {
-        let obj = value.into_object().ok_or(RongJSError::TypeError(
-            "Invalid Response Option".to_string(),
-        ))?;
+        let obj = value.into_object().ok_or_else(|| {
+            HostError::new(rong::error::E_INVALID_ARG, "Invalid Response Option")
+                .with_name("TypeError")
+        })?;
 
         let status = obj.get::<_, u16>("status").ok();
         let status_text = obj.get::<_, String>("statusText").ok();
@@ -74,10 +75,12 @@ impl Response {
             if let Some(status) = init.status {
                 // Validate status code
                 if !(100..=599).contains(&status) {
-                    return Err(RongJSError::TypeError(format!(
-                        "Invalid status code: {}",
-                        status
-                    )));
+                    return Err(HostError::new(
+                        rong::error::E_OUT_OF_RANGE,
+                        format!("Invalid status code: {}", status),
+                    )
+                    .with_name("RangeError")
+                    .into());
                 }
                 response.status = status;
             }
@@ -130,10 +133,10 @@ impl Response {
             return true;
         }
         // If we have materialized a ReadableStream, check whether it is locked
-        if let Some(obj) = self.body_stream.borrow().as_ref() {
-            if let Ok(rs) = obj.borrow::<rong_stream::ReadableStream>() {
-                return readable_stream_is_locked(&rs);
-            }
+        if let Some(obj) = self.body_stream.borrow().as_ref()
+            && let Ok(rs) = obj.borrow::<rong_stream::ReadableStream>()
+        {
+            return readable_stream_is_locked(&rs);
         }
         // Fallback: before materialization, channel not taken means not used
         match &self.body {
@@ -171,7 +174,7 @@ impl Response {
         }
 
         // Create and cache a stream based on the current body kind
-        let created = match &self.body {
+        match &self.body {
             Some(BodyKind::Channel(inner)) => {
                 // Do not consume the receiver on property access; build a stream from the shared slot
                 if let Ok(jsrs) = JSReadableStream::from_shared_receiver(&ctx, inner.clone()) {
@@ -219,8 +222,7 @@ impl Response {
                 }
             }
             None => None,
-        };
-        created
+        }
     }
 
     async fn body_to_bytes(&mut self) -> JSResult<Bytes> {
@@ -256,7 +258,7 @@ impl Response {
                 // Fallback to internal channel if stream is not materialized
                 if rx_opt.is_none() {
                     rx_opt = inner.lock().map(|mut g| g.take()).map_err(|_| {
-                        RongJSError::Error("Failed to lock channel body".to_string())
+                        HostError::new(rong::error::E_INTERNAL, "Failed to lock channel body")
                     })?;
                 }
 
@@ -267,12 +269,14 @@ impl Response {
                                 chunk = rx.recv() => {
                                     match chunk {
                                         Some(Ok(bytes)) => collected.extend_from_slice(&bytes),
-                                        Some(Err(e)) => { return Err(RongJSError::Error(e)); }
+                                        Some(Err(e)) => {
+                                            return Err(HostError::new(rong::error::E_IO, e).into());
+                                        }
                                         None => break,
                                     }
                                 }
                                 abort_reason = receiver.recv() => {
-                                    return Err(RongJSError::from_jsvalue(abort_reason));
+                                    return Err(RongJSError::from_thrown_value(abort_reason));
                                 }
                             }
                         }
@@ -281,7 +285,7 @@ impl Response {
                             match item {
                                 Ok(bytes) => collected.extend_from_slice(&bytes),
                                 Err(e) => {
-                                    return Err(RongJSError::Error(e));
+                                    return Err(HostError::new(rong::error::E_IO, e).into());
                                 }
                             }
                         }
@@ -300,9 +304,12 @@ impl Response {
     #[js_method]
     async fn text(&mut self) -> JSResult<String> {
         if self.body_used() {
-            return Err(RongJSError::TypeError(
-                "body used already for: text".to_string(),
-            ));
+            return Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "body used already for: text",
+            )
+            .with_name("TypeError")
+            .into());
         }
         self.consumed = true;
         let bytes = self.body_to_bytes().await?;
@@ -312,9 +319,12 @@ impl Response {
     #[js_method]
     async fn json(&mut self, ctx: JSContext) -> JSResult<JSValue> {
         if self.body_used() {
-            return Err(RongJSError::TypeError(
-                "body used already for: json".to_string(),
-            ));
+            return Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "body used already for: json",
+            )
+            .with_name("TypeError")
+            .into());
         }
         self.consumed = true;
         let bytes = self.body_to_bytes().await?;
@@ -325,9 +335,12 @@ impl Response {
     #[js_method]
     async fn blob(&mut self) -> JSResult<Blob> {
         if self.body_used() {
-            return Err(RongJSError::TypeError(
-                "body used already for: blob".to_string(),
-            ));
+            return Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "body used already for: blob",
+            )
+            .with_name("TypeError")
+            .into());
         }
         self.consumed = true;
         let bytes = self.body_to_bytes().await?;
@@ -341,9 +354,12 @@ impl Response {
     #[js_method(rename = "arrayBuffer")]
     async fn array_buffer(&mut self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
         if self.body_used() {
-            return Err(RongJSError::TypeError(
-                "body used already for: arrayBuffer".to_string(),
-            ));
+            return Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "body used already for: arrayBuffer",
+            )
+            .with_name("TypeError")
+            .into());
         }
         self.consumed = true;
         let bytes = self.body_to_bytes().await?;
@@ -365,14 +381,18 @@ impl Response {
 
         // Validate redirect status
         if !matches!(status, 301 | 302 | 303 | 307 | 308) {
-            return Err(RongJSError::TypeError(format!(
-                "Invalid redirect status: {}",
-                status
-            )));
+            return Err(HostError::new(
+                rong::error::E_INVALID_ARG,
+                format!("Invalid redirect status: {}", status),
+            )
+            .with_name("TypeError")
+            .into());
         }
 
-        let uri = Uri::try_from(url.as_str())
-            .map_err(|_| RongJSError::TypeError(format!("Invalid URL: {}", url)))?;
+        let uri = Uri::try_from(url.as_str()).map_err(|_| {
+            HostError::new(rong::error::E_INVALID_ARG, format!("Invalid URL: {}", url))
+                .with_name("TypeError")
+        })?;
 
         let mut headers = Headers::default();
         headers.set("Location".to_string(), url)?;
@@ -396,10 +416,8 @@ impl Response {
         // - abort_receiver may hold a JSValue reason inside the watch channel
         // - Cached body_stream JSObject if created
         let mut mark_fn = mark_fn;
-        if let Some(body) = &self.body {
-            if let BodyKind::JS(js_body) = body {
-                mark_fn(&js_body.0);
-            }
+        if let Some(BodyKind::JS(js_body)) = &self.body {
+            mark_fn(&js_body.0);
         }
 
         if let Some(receiver) = &self.abort_receiver {
@@ -407,7 +425,7 @@ impl Response {
         }
 
         if let Some(obj) = self.body_stream.borrow().as_ref() {
-            mark_fn(&*obj);
+            mark_fn(obj);
         }
     }
 }

@@ -8,11 +8,15 @@ use rong_url::URLSearchParams;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
 
+type BodyChunk = Result<Bytes, String>;
+type BodyReceiver = tokio::sync::mpsc::Receiver<BodyChunk>;
+type SharedBodyReceiver = Arc<Mutex<Option<BodyReceiver>>>;
+
 pub(crate) enum BodyKind {
     // Buffered, in-memory body as Bytes (Arc-backed, cheap clone, no aliasing issues)
     Buffered(Bytes),
     // Stream body via channel from net service (chunk or error)
-    Channel(Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Result<Bytes, String>>>>>),
+    Channel(SharedBodyReceiver),
     JS(HttpBody),
 }
 
@@ -42,17 +46,17 @@ impl HttpBody {
             }
 
             // Handle TypedArray
-            if let Some(typed_array) = JSTypedArray::from_object(obj.clone()) {
-                if let Some(bytes) = typed_array.as_bytes() {
-                    return Ok((Bytes::from(bytes.to_vec()), None));
-                }
+            if let Some(typed_array) = JSTypedArray::from_object(obj.clone())
+                && let Some(bytes) = typed_array.as_bytes()
+            {
+                return Ok((Bytes::from(bytes.to_vec()), None));
             }
 
             // Handle ArrayBuffer
-            if let Some(buffer) = JSArrayBuffer::<u8>::from_object(obj.clone()) {
-                if let Some(bytes) = buffer.as_bytes() {
-                    return Ok((Bytes::from(bytes.to_vec()), None));
-                }
+            if let Some(buffer) = JSArrayBuffer::<u8>::from_object(obj.clone())
+                && let Some(bytes) = buffer.as_bytes()
+            {
+                return Ok((Bytes::from(bytes.to_vec()), None));
             }
 
             // Handle Blob
@@ -118,15 +122,19 @@ pub(crate) fn decompress_bytes(bytes: Bytes, headers: &HeaderMap) -> JSResult<By
             Ok("gzip") => {
                 let mut decoder = GzDecoder::new(&bytes[..]);
                 let mut decompressed = Vec::new();
-                decoder
-                    .read_to_end(&mut decompressed)
-                    .map_err(|e| RongJSError::Error(format!("Failed to decompress gzip: {}", e)))?;
+                decoder.read_to_end(&mut decompressed).map_err(|e| {
+                    HostError::new(
+                        rong::error::E_IO,
+                        format!("Failed to decompress gzip: {}", e),
+                    )
+                })?;
                 Ok(Bytes::from(decompressed))
             }
-            Ok(encoding) => Err(RongJSError::Error(format!(
-                "Unsupported content-encoding: {}",
-                encoding
-            ))),
+            Ok(encoding) => Err(HostError::new(
+                rong::error::E_NOT_SUPPORTED,
+                format!("Unsupported content-encoding: {}", encoding),
+            )
+            .into()),
             Err(_) => Ok(bytes),
         }
     } else {

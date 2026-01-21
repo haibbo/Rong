@@ -21,12 +21,22 @@ impl URL {
     #[js_method(constructor)]
     fn new(url: String, base: Optional<String>) -> JSResult<Self> {
         let inner = if let Some(base) = base.0 {
-            let base = Url::parse(&base)
-                .map_err(|e| RongJSError::TypeError(format!("Invalid base URL: {}", e)))?;
-            base.join(&url)
-                .map_err(|e| RongJSError::TypeError(format!("Invalid URL: {}", e)))?
+            let base = Url::parse(&base).map_err(|e| {
+                HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    format!("Invalid base URL: {}", e),
+                )
+                .with_name("TypeError")
+            })?;
+            base.join(&url).map_err(|e| {
+                HostError::new(rong::error::E_INVALID_ARG, format!("Invalid URL: {}", e))
+                    .with_name("TypeError")
+            })?
         } else {
-            Url::parse(&url).map_err(|e| RongJSError::TypeError(format!("Invalid URL: {}", e)))?
+            Url::parse(&url).map_err(|e| {
+                HostError::new(rong::error::E_INVALID_ARG, format!("Invalid URL: {}", e))
+                    .with_name("TypeError")
+            })?
         };
 
         let shared_data = Rc::new(SharedUrlData {
@@ -49,7 +59,6 @@ impl URL {
 
     #[js_method(setter, rename = "hash")]
     fn set_hash(&mut self, value: String) {
-        println!("set to {}", value);
         let mut url = self.inner_mut();
         url.set_fragment(if value.is_empty() {
             None
@@ -92,8 +101,10 @@ impl URL {
 
     #[js_method(setter, rename = "href")]
     fn set_href(&mut self, value: String) -> JSResult<()> {
-        let new_url = Url::parse(&value)
-            .map_err(|e| RongJSError::TypeError(format!("Invalid URL: {}", e)))?;
+        let new_url = Url::parse(&value).map_err(|e| {
+            HostError::new(rong::error::E_INVALID_ARG, format!("Invalid URL: {}", e))
+                .with_name("TypeError")
+        })?;
 
         {
             let mut url = self.inner_mut();

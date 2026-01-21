@@ -74,10 +74,10 @@ fn basename(path: String, suffix: Optional<String>) -> String {
     let file_name = path.file_name().map(|s| s.to_string_lossy().into_owned());
 
     if let Some(name) = file_name {
-        if let Some(suffix) = suffix.0 {
-            if name.ends_with(&suffix) {
-                return name[..name.len() - suffix.len()].to_string();
-            }
+        if let Some(suffix) = suffix.0
+            && name.ends_with(&suffix)
+        {
+            return name[..name.len() - suffix.len()].to_string();
         }
         name
     } else {
@@ -352,16 +352,16 @@ fn format(path_object: JSObject) -> JSResult<String> {
     let mut path_buf = PathBuf::new();
 
     // Process parts in priority order
-    if let Ok(root) = path_object.get::<_, String>("root") {
-        if !root.is_empty() {
-            path_buf.push(root);
-        }
+    if let Ok(root) = path_object.get::<_, String>("root")
+        && !root.is_empty()
+    {
+        path_buf.push(root);
     }
 
-    if let Ok(dir) = path_object.get::<_, String>("dir") {
-        if !dir.is_empty() {
-            path_buf.push(dir);
-        }
+    if let Ok(dir) = path_object.get::<_, String>("dir")
+        && !dir.is_empty()
+    {
+        path_buf.push(dir);
     }
 
     if let Ok(base) = path_object.get::<_, String>("base") {
@@ -369,20 +369,20 @@ fn format(path_object: JSObject) -> JSResult<String> {
             path_buf.push(base);
         }
     } else {
-        if let Ok(name) = path_object.get::<_, String>("name") {
-            if !name.is_empty() {
-                path_buf.push(name);
-            }
+        if let Ok(name) = path_object.get::<_, String>("name")
+            && !name.is_empty()
+        {
+            path_buf.push(name);
         }
-        if let Ok(ext) = path_object.get::<_, String>("ext") {
-            if !ext.is_empty() {
-                let file_name = path_buf
-                    .file_name()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .unwrap_or_default()
-                    + &ext;
-                path_buf.set_file_name(file_name);
-            }
+        if let Ok(ext) = path_object.get::<_, String>("ext")
+            && !ext.is_empty()
+        {
+            let file_name = path_buf
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default()
+                + &ext;
+            path_buf.set_file_name(file_name);
         }
     }
 

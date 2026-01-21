@@ -57,10 +57,10 @@ async fn mkdir(path: String, option: Optional<MkdirOptions>) -> JSResult<()> {
     let options = option.0.unwrap_or_default();
 
     // Check if directory exists first
-    if let Ok(metadata) = fs::metadata(&resolved).await {
-        if metadata.is_dir() {
-            return Ok(()); // Directory already exists, return success
-        }
+    if let Ok(metadata) = fs::metadata(&resolved).await
+        && metadata.is_dir()
+    {
+        return Ok(()); // Directory already exists, return success
     }
 
     let result = if options.recursive.unwrap_or(false) {
@@ -69,7 +69,7 @@ async fn mkdir(path: String, option: Optional<MkdirOptions>) -> JSResult<()> {
         fs::create_dir(&resolved).await
     };
 
-    result.map_err(|e| RongJSError::TypeError(format!("Failed to create directory: {}", e)))?;
+    result.map_err(|e| HostError::new("FS_IO", format!("Failed to create directory: {}", e)))?;
 
     // Set mode if specified (Unix-like systems only)
     #[cfg(unix)]
@@ -79,7 +79,10 @@ async fn mkdir(path: String, option: Optional<MkdirOptions>) -> JSResult<()> {
         tokio::fs::set_permissions(&resolved, permissions)
             .await
             .map_err(|e| {
-                RongJSError::TypeError(format!("Failed to set directory permissions: {}", e))
+                HostError::new(
+                    "FS_IO",
+                    format!("Failed to set directory permissions: {}", e),
+                )
             })?;
     }
 
@@ -128,10 +131,11 @@ impl Stream for DirEntryStream {
                 Poll::Ready(Err(e)) => {
                     this.current_file_type_fut.take();
                     this.current_entry.take();
-                    return Poll::Ready(Some(Err(RongJSError::TypeError(format!(
-                        "Failed to get file type: {}",
-                        e
-                    )))));
+                    return Poll::Ready(Some(Err(HostError::new(
+                        "FS_IO",
+                        format!("Failed to get file type: {}", e),
+                    )
+                    .into())));
                 }
                 Poll::Pending => {
                     return Poll::Pending;
@@ -153,10 +157,11 @@ impl Stream for DirEntryStream {
                 Poll::Pending
             }
             Poll::Ready(Ok(None)) => Poll::Ready(None),
-            Poll::Ready(Err(e)) => Poll::Ready(Some(Err(RongJSError::TypeError(format!(
-                "Failed to read directory entry: {}",
-                e
-            ))))),
+            Poll::Ready(Err(e)) => Poll::Ready(Some(Err(HostError::new(
+                "FS_IO",
+                format!("Failed to read directory entry: {}", e),
+            )
+            .into()))),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -166,7 +171,7 @@ async fn readdir(ctx: JSContext, path: String) -> JSResult<JSObject> {
     let resolved = grant_file_access(&path)?;
     let entries = fs::read_dir(&resolved)
         .await
-        .map_err(|e| RongJSError::TypeError(format!("Failed to read directory: {}", e)))?;
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to read directory: {}", e)))?;
 
     let stream = DirEntryStream::new(entries);
     stream.to_js_async_iter(&ctx)
@@ -186,37 +191,35 @@ async fn remove(path: String, option: Optional<RemoveOptions>) -> JSResult<()> {
     match fs::metadata(&resolved).await {
         Ok(metadata) => {
             if metadata.is_file() || metadata.is_symlink() {
-                fs::remove_file(&resolved)
-                    .await
-                    .map_err(|e| RongJSError::TypeError(format!("Failed to remove file: {}", e)))
+                fs::remove_file(&resolved).await.map_err(|e| {
+                    HostError::new("FS_IO", format!("Failed to remove file: {}", e)).into()
+                })
             } else if metadata.is_dir() {
                 if options.recursive {
                     fs::remove_dir_all(&resolved).await.map_err(|e| {
-                        RongJSError::TypeError(format!(
-                            "Failed to remove directory recursively: {}",
-                            e
-                        ))
+                        HostError::new(
+                            "FS_IO",
+                            format!("Failed to remove directory recursively: {}", e),
+                        )
+                        .into()
                     })
                 } else {
                     fs::remove_dir(&resolved).await.map_err(|e| {
-                        RongJSError::TypeError(format!("Failed to remove directory: {}", e))
+                        HostError::new("FS_IO", format!("Failed to remove directory: {}", e)).into()
                     })
                 }
             } else {
-                Err(RongJSError::TypeError("Unknown file type".to_string()))
+                Err(HostError::new(rong::error::E_INTERNAL, "Unknown file type").into())
             }
         }
-        Err(e) => Err(RongJSError::TypeError(format!(
-            "Failed to access path: {}",
-            e
-        ))),
+        Err(e) => Err(HostError::new("FS_IO", format!("Failed to access path: {}", e)).into()),
     }
 }
 
 async fn chdir(directory: String) -> JSResult<()> {
     let resolved = grant_file_access(&directory)?;
     std::env::set_current_dir(&resolved)
-        .map_err(|e| RongJSError::TypeError(format!("Failed to change directory: {}", e)))
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to change directory: {}", e)).into())
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {

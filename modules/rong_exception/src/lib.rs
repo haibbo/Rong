@@ -6,8 +6,8 @@
 //! # Example
 //! ```javascript
 //! // Create a DOMException with a specific error type
-//! const ex = new DOMException("Operation failed", "ABORT_ERR");
-//! console.log(ex.name);    // "ABORT_ERR"
+//! const ex = new DOMException("Operation failed", "AbortError");
+//! console.log(ex.name);    // "AbortError"
 //! console.log(ex.message); // "Operation failed"
 //! ```
 //!
@@ -33,7 +33,7 @@ use rong::{function::*, *};
 /// Macro to define error names
 #[allow(clippy::upper_case_acronyms)]
 macro_rules! define_error_names {
-    ($($name:ident),*) => {
+    ($($name:ident => $display:literal),* $(,)?) => {
         #[allow(clippy::upper_case_acronyms)]
         #[allow(non_camel_case_types)]
         #[derive(Debug, Clone, Copy)]
@@ -42,33 +42,18 @@ macro_rules! define_error_names {
         }
 
         impl DOMExceptionName {
-            const ERROR_NAMES: &'static [&'static str] = &[$(stringify!($name)),*];
-
             /// Get the name as string with automatic conversion
             #[inline]
             pub fn as_str(&self) -> &'static str {
-                let name = Self::ERROR_NAMES[*self as usize];
-                // Convert "ERR" suffix to "Error" and remove underscores
-                if let Some(base) = name.strip_suffix("_ERR") {
-                    let mut result = String::with_capacity(base.len() + 5);
-                    for part in base.split('_') {
-                        if !part.is_empty() {
-                            result.push_str(&part[0..1].to_uppercase());
-                            result.push_str(&part[1..].to_lowercase());
-                        }
-                    }
-                    result.push_str("Error");
-                    return Box::leak(result.into_boxed_str());
+                match self {
+                    $(DOMExceptionName::$name => $display,)*
                 }
-                name
             }
 
             /// Iterate over all error names efficiently
             #[inline]
             pub fn iter() -> impl Iterator<Item = &'static str> {
-                Self::ERROR_NAMES.iter().map(|&name| {
-                    Self::find_or_default(name).as_str()
-                })
+                [$($display),*].into_iter()
             }
 
             /// Convert string to corresponding DOMExceptionName variant
@@ -76,8 +61,8 @@ macro_rules! define_error_names {
             #[inline]
             pub fn find_or_default(s: &str) -> Self {
                 match s {
-                $(stringify!($name) => DOMExceptionName::$name,)*
-                _ => DOMExceptionName::ERROR,
+                    $(stringify!($name) | $display => DOMExceptionName::$name,)*
+                    _ => DOMExceptionName::ERROR,
                 }
             }
         }
@@ -87,31 +72,31 @@ macro_rules! define_error_names {
 // This enum DOMExceptionName represents all standard DOM exception names supported by Node.js
 // https://webidl.spec.whatwg.org/#idl-DOMException-error-names
 define_error_names! {
-    INDEX_SIZE_ERR,
-    DOMSTRING_SIZE_ERR,
-    HIERARCHY_REQUEST_ERR,
-    INVALID_CHARACTER_ERR,
-    NO_DATA_ALLOWED_ERR,
-    NO_MODIFICATION_ALLOWED_ERR,
-    NOT_FOUND_ERR,
-    NOT_SUPPORTED_ERR,
-    INUSE_ATTRIBUTE_ERR,
-    INVALID_STATE_ERR,
-    SYNTAX_ERR,
-    INVALID_MODIFICATION_ERR,
-    NAMESPACE_ERR,
-    INVALID_ACCESS_ERR,
-    VALIDATION_ERR,
-    TYPE_MISMATCH_ERR,
-    SECURITY_ERR,
-    NETWORK_ERR,
-    ABORT_ERR,
-    URL_MISMATCH_ERR,
-    QUOTA_EXCEEDED_ERR,
-    TIMEOUT_ERR,
-    INVALID_NODE_TYPE_ERR,
-    DATA_CLONE_ERR,
-    ERROR
+    INDEX_SIZE_ERR => "IndexSizeError",
+    DOMSTRING_SIZE_ERR => "DOMStringSizeError",
+    HIERARCHY_REQUEST_ERR => "HierarchyRequestError",
+    INVALID_CHARACTER_ERR => "InvalidCharacterError",
+    NO_DATA_ALLOWED_ERR => "NoDataAllowedError",
+    NO_MODIFICATION_ALLOWED_ERR => "NoModificationAllowedError",
+    NOT_FOUND_ERR => "NotFoundError",
+    NOT_SUPPORTED_ERR => "NotSupportedError",
+    INUSE_ATTRIBUTE_ERR => "InUseAttributeError",
+    INVALID_STATE_ERR => "InvalidStateError",
+    SYNTAX_ERR => "SyntaxError",
+    INVALID_MODIFICATION_ERR => "InvalidModificationError",
+    NAMESPACE_ERR => "NamespaceError",
+    INVALID_ACCESS_ERR => "InvalidAccessError",
+    VALIDATION_ERR => "ValidationError",
+    TYPE_MISMATCH_ERR => "TypeMismatchError",
+    SECURITY_ERR => "SecurityError",
+    NETWORK_ERR => "NetworkError",
+    ABORT_ERR => "AbortError",
+    URL_MISMATCH_ERR => "URLMismatchError",
+    QUOTA_EXCEEDED_ERR => "QuotaExceededError",
+    TIMEOUT_ERR => "TimeoutError",
+    INVALID_NODE_TYPE_ERR => "InvalidNodeTypeError",
+    DATA_CLONE_ERR => "DataCloneError",
+    ERROR => "Error",
 }
 
 // Implement From<&str> to replace from_str

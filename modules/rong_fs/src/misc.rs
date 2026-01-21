@@ -11,7 +11,7 @@ async fn symlink(old_path: String, new_path: String) -> JSResult<()> {
     {
         fs::symlink(&resolved_old, &resolved_new)
             .await
-            .map_err(|e| RongJSError::TypeError(format!("Failed to create symlink: {}", e)))
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to create symlink: {}", e)).into())
     }
     #[cfg(windows)]
     {
@@ -27,7 +27,7 @@ async fn symlink(old_path: String, new_path: String) -> JSResult<()> {
             Err(e) => Err(e),
         }
         .await
-        .map_err(|e| RongJSError::TypeError(format!("Failed to create symlink: {}", e)))
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to create symlink: {}", e)).into())
     }
 }
 
@@ -37,7 +37,7 @@ async fn readlink(path: String) -> JSResult<String> {
     fs::read_link(&resolved)
         .await
         .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|e| RongJSError::TypeError(format!("Failed to read symlink: {}", e)))
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to read symlink: {}", e)).into())
 }
 
 /// Change file permissions (Unix only)
@@ -48,7 +48,7 @@ async fn chmod(path: String, mode: u32) -> JSResult<()> {
     let permissions = std::fs::Permissions::from_mode(mode);
     fs::set_permissions(&resolved, permissions)
         .await
-        .map_err(|e| RongJSError::TypeError(format!("Failed to change permissions: {}", e)))
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to change permissions: {}", e)).into())
 }
 
 /// Change file ownership (Unix only)
@@ -61,7 +61,7 @@ async fn chown(path: String, uid: u32, gid: u32) -> JSResult<()> {
         Some(Uid::from_raw(uid)),
         Some(Gid::from_raw(gid)),
     )
-    .map_err(|e| RongJSError::TypeError(format!("Failed to change ownership: {}", e)))
+    .map_err(|e| HostError::new("FS_IO", format!("Failed to change ownership: {}", e)).into())
 }
 
 /// Options for utime function
@@ -88,7 +88,7 @@ async fn utime(path: String, options: UTimeOptions) -> JSResult<()> {
         atime.unwrap_or_else(|| FileTime::from_system_time(SystemTime::now())),
         mtime.unwrap_or_else(|| FileTime::from_system_time(SystemTime::now())),
     )
-    .map_err(|e| RongJSError::TypeError(format!("Failed to set file times: {}", e)))
+    .map_err(|e| HostError::new("FS_IO", format!("Failed to set file times: {}", e)).into())
 }
 
 /// Rename a file or directory
@@ -97,7 +97,7 @@ async fn rename(from: String, to: String) -> JSResult<()> {
     let resolved_to = grant_file_access(&to)?;
     fs::rename(&resolved_from, &resolved_to)
         .await
-        .map_err(|e| RongJSError::TypeError(format!("Failed to rename file: {}", e)))
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to rename file: {}", e)).into())
 }
 
 /// Get the real path (canonical path) of a file
@@ -106,7 +106,7 @@ async fn real_path(path: String) -> JSResult<String> {
     fs::canonicalize(&resolved)
         .await
         .map(|p| p.to_string_lossy().into_owned())
-        .map_err(|e| RongJSError::TypeError(format!("Failed to resolve real path: {}", e)))
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to resolve real path: {}", e)).into())
 }
 
 /// Initialize miscellaneous file system functions

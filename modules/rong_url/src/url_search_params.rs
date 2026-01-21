@@ -39,12 +39,11 @@ impl URLSearchParams {
                     // Initialize from key-value pair array [[k1,v1], [k2,v2]]
                     for pair in arr.iter::<JSArray>() {
                         let pair = pair?;
-                        if pair.len() >= 2 {
-                            if let Some(key) = pair.get::<String>(0)? {
-                                if let Some(value) = pair.get::<String>(1)? {
-                                    params.push((key, value));
-                                }
-                            }
+                        if pair.len() >= 2
+                            && let Some(key) = pair.get::<String>(0)?
+                            && let Some(value) = pair.get::<String>(1)?
+                        {
+                            params.push((key, value));
                         }
                     }
                 } else {

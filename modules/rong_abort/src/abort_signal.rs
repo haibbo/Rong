@@ -66,7 +66,7 @@ impl AbortSignal {
         let inner = self.inner.lock().unwrap();
         // Always try to send the signal if there are active receivers
         if inner.sender.receiver_count() > 0 {
-            inner.sender.send(abort).into_result()?;
+            let _ = inner.sender.send(abort);
         }
         Ok(())
     }
@@ -95,7 +95,7 @@ impl AbortReceiver {
         let borrow = self.inner.borrow();
         if !borrow.is_undefined() {
             // Do not clone during GC marking; pass the borrowed JSValue reference
-            mark_fn(&*borrow);
+            mark_fn(&borrow);
         }
     }
 }
@@ -104,9 +104,12 @@ impl AbortReceiver {
 impl AbortSignal {
     #[js_method(constructor)]
     fn constructor() -> JSResult<()> {
-        Err(RongJSError::TypeError(
-            "Failed to construct 'AbortSignal': Illegal constructor".to_string(),
-        ))
+        Err(HostError::new(
+            rong::error::E_ILLEGAL_CONSTRUCTOR,
+            "Failed to construct 'AbortSignal': Illegal constructor",
+        )
+        .with_name("TypeError")
+        .into())
     }
 
     #[js_method(getter, enumerable, rename = "onabort")]
@@ -213,7 +216,10 @@ impl AbortSignal {
         let signal = Self::new(&ctx);
         signal.set_reason(reason);
         {
-            let mut inner = signal.inner.lock().into_result()?;
+            let mut inner = signal
+                .inner
+                .lock()
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "AbortSignal is poisoned"))?;
             inner.aborted = true;
         }
         Ok(signal)
@@ -264,7 +270,10 @@ impl AbortSignal {
 
         borrow.notify_abort(reason.clone())?;
 
-        let mut inner = borrow.inner.lock().into_result()?;
+        let mut inner = borrow
+            .inner
+            .lock()
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "AbortSignal is poisoned"))?;
         inner.aborted = true;
         inner.reason = reason;
         Ok(())

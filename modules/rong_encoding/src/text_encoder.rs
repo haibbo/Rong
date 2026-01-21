@@ -101,9 +101,12 @@ impl TextEncoder {
         }
 
         // If either check fails, return TypeError
-        Err(RongJSError::TypeError(
-            "The \"dest\" argument must be an instance of Uint8Array.".to_string(),
-        ))
+        Err(HostError::new(
+            rong::error::E_INVALID_ARG,
+            "The \"dest\" argument must be an instance of Uint8Array.",
+        )
+        .with_name("TypeError")
+        .into())
     }
 }
 

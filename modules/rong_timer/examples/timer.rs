@@ -38,18 +38,21 @@ fn main() {
                 .iter()
                 .find(|path| Path::new(path).exists())
                 .ok_or_else(|| {
-                    RongJSError::Error(format!(
-                        "Could not find timer_script.js in any of the expected locations.\n\
+                    HostError::new(
+                        rong::error::E_NOT_FOUND,
+                        format!(
+                            "Could not find timer_script.js in any of the expected locations.\n\
                          Tried:\n\
                          - {}\n\
                          - {}\n\
                          - {}\n\
                          Current directory: {}",
-                        possible_paths[0].display(),
-                        possible_paths[1].display(),
-                        possible_paths[2].display(),
-                        current_dir.display()
-                    ))
+                            possible_paths[0].display(),
+                            possible_paths[1].display(),
+                            possible_paths[2].display(),
+                            current_dir.display()
+                        ),
+                    )
                 })?;
 
             println!("Found JS file at: {}", js_path.display());

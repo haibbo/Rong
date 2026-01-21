@@ -62,9 +62,12 @@ impl FromJSValue<JSEngineValue> for EventKey {
         if let Ok(symbol) = JSSymbol::from_js_value(ctx, value) {
             return Ok(EventKey::Symbol(symbol));
         }
-        Err(RongJSError::TypeError(
-            "EventKey must be Symbol or String!".to_string(),
-        ))
+        Err(HostError::new(
+            rong::error::E_INVALID_ARG,
+            "EventKey must be Symbol or String!",
+        )
+        .with_name("TypeError")
+        .into())
     }
 }
 
@@ -175,7 +178,7 @@ where
 
                 match M::do_emit(this, key.clone(), Rest(vec![value])) {
                     Ok(has) if has => Ok(true),
-                    _ => Err(RongJSError::Error(err)),
+                    _ => Err(HostError::new(rong::error::E_ERROR, err).into()),
                 }
             }
             Ok(_) => Ok(false),
@@ -430,7 +433,7 @@ impl EventEmitter {
                 "EventEmitter overflow: {} listeners added. Use setMaxListeners() to increase limit",
                 current_len + 1,
             );
-            return Err(RongJSError::Error(warning));
+            return Err(HostError::new(rong::error::E_INVALID_STATE, warning).into());
         }
 
         let listener = EventListener { listener, once };
@@ -452,7 +455,10 @@ impl EventEmitter {
     }
 
     fn event_names(&self) -> JSResult<Vec<EventKey>> {
-        let events = self.inner.lock().into_result()?;
+        let events = self
+            .inner
+            .lock()
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "EventEmitter is poisoned"))?;
         Ok(events.listeners.keys().cloned().collect::<Vec<_>>())
     }
 
@@ -465,7 +471,10 @@ impl EventEmitter {
     ) -> JSResult<bool> {
         // Capture the listeners in a temporary vector so callback execution does not hold the lock.
         let listeners_snapshot = {
-            let events = self.inner.lock().into_result()?;
+            let events = self
+                .inner
+                .lock()
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "EventEmitter is poisoned"))?;
             match events.listeners.get(&key) {
                 Some(listeners) if !listeners.is_empty() => {
                     let mut snapshot = Vec::with_capacity(listeners.len());
@@ -490,7 +499,10 @@ impl EventEmitter {
             }
         }
 
-        let mut events = self.inner.lock().into_result()?;
+        let mut events = self
+            .inner
+            .lock()
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "EventEmitter is poisoned"))?;
         let mut should_mark_empty = false;
 
         {
@@ -516,7 +528,10 @@ impl EventEmitter {
     }
 
     fn remove_all_listeners(&self, key: Option<EventKey>) -> JSResult<()> {
-        let mut events = self.inner.lock().into_result()?;
+        let mut events = self
+            .inner
+            .lock()
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "EventEmitter is poisoned"))?;
         match key {
             Some(key) => {
                 events.listeners.remove(&key);
@@ -534,7 +549,10 @@ impl EventEmitter {
     }
 
     fn listener_count(&self, key: EventKey, listener: Option<JSFunc>) -> JSResult<u32> {
-        let events = self.inner.lock().into_result()?;
+        let events = self
+            .inner
+            .lock()
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "EventEmitter is poisoned"))?;
         let count = if let Some(listeners) = events.listeners.get(&key) {
             if let Some(listener) = listener {
                 listeners.iter().filter(|l| l.listener == listener).count()

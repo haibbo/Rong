@@ -113,7 +113,7 @@ async fn stat(path: String) -> JSResult<FileInfo> {
     tokio_fs::metadata(&resolved)
         .await
         .map(FileInfo::from_metadata)
-        .map_err(|e| RongJSError::TypeError(format!("Failed to get file info: {}", e)))
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to get file info: {}", e)).into())
 }
 
 async fn lstat(path: String) -> JSResult<FileInfo> {
@@ -121,7 +121,7 @@ async fn lstat(path: String) -> JSResult<FileInfo> {
     tokio_fs::symlink_metadata(&resolved)
         .await
         .map(FileInfo::from_metadata)
-        .map_err(|e| RongJSError::TypeError(format!("Failed to get file info: {}", e)))
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to get file info: {}", e)).into())
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {

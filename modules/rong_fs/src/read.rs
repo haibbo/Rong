@@ -18,16 +18,18 @@ async fn read_text_file(file: String, option: Optional<ReadFileOptions>) -> JSRe
 
         select! {
             result = fs::read_to_string(&resolved) => {
-                result.into_result()
+                result.map_err(|e| HostError::new("FS_IO", e.to_string()).into())
             }
 
             abort_reason = abort.recv() => {
                 // println!("read_text_file: Received abort signal");
-                Err(RongJSError::from_jsvalue(abort_reason))
+                Err(RongJSError::from_thrown_value(abort_reason))
             }
         }
     } else {
-        fs::read_to_string(resolved).await.into_result()
+        fs::read_to_string(resolved)
+            .await
+            .map_err(|e| HostError::new("FS_IO", e.to_string()).into())
     }
 }
 
@@ -41,26 +43,23 @@ async fn read_file(
 
     if let Some(signal) = options.signal {
         let mut abort = signal.subscribe();
-        println!("read_file: Subscribed to abort signal");
 
         select! {
             result = fs::read(&resolved) => {
-                println!("read_file: File read completed");
                 match result {
                     Ok(bytes) => JSArrayBuffer::<u8>::from_bytes_owned(&ctx, bytes),
-                    Err(e) => Err(RongJSError::TypeError(format!("Failed to read file: {}", e)))
+                    Err(e) => Err(HostError::new("FS_IO", format!("Failed to read file: {}", e)).into())
                 }
             }
 
             abort_reason = abort.recv() => {
-                println!("read_file: Received abort signal");
-                Err(RongJSError::from_jsvalue(abort_reason))
+                Err(RongJSError::from_thrown_value(abort_reason))
             }
         }
     } else {
         let bytes = fs::read(resolved)
             .await
-            .map_err(|e| RongJSError::TypeError(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to read file: {}", e)))?;
 
         JSArrayBuffer::<u8>::from_bytes_owned(&ctx, bytes)
     }

@@ -1,45 +1,54 @@
 use bytes::Bytes;
 use rong::*;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::io::AsyncWrite;
 use tokio::sync::{Mutex, mpsc, oneshot};
 
+type ByteSender = mpsc::Sender<Bytes>;
+type DoneReceiver = oneshot::Receiver<Result<(), String>>;
+type SharedSenderSlot = Arc<StdMutex<Option<ByteSender>>>;
+type SharedDoneSlot = Arc<StdMutex<Option<DoneReceiver>>>;
+type SharedErrorSlot = Arc<StdMutex<Option<String>>>;
+type SinkSlot = Rc<StdMutex<Option<JSObject>>>;
+type WriterChannel = (ByteSender, Option<DoneReceiver>);
+
 #[js_export]
 pub struct WritableStream {
     // A single writer lock; getWriter() takes ownership.
-    pub(crate) tx_slot: Arc<StdMutex<Option<mpsc::Sender<Bytes>>>>,
+    pub(crate) tx_slot: SharedSenderSlot,
     // Optional completion signal for async writer (Some when created via to_async_writer)
-    pub(crate) done_slot: Arc<StdMutex<Option<oneshot::Receiver<Result<(), String>>>>>,
+    pub(crate) done_slot: SharedDoneSlot,
     // Error slot to surface background write failures to the front-end
-    pub(crate) err_slot: Arc<StdMutex<Option<String>>>,
+    pub(crate) err_slot: SharedErrorSlot,
     // For JS-underlying sink mode
-    sink_slot: Arc<StdMutex<Option<JSObject>>>,
+    sink_slot: SinkSlot,
 }
 
 #[js_export]
 pub struct WritableStreamDefaultWriter {
     // Reference back to the stream's slot to support releaseLock
-    slot: Arc<StdMutex<Option<mpsc::Sender<Bytes>>>>,
+    slot: SharedSenderSlot,
     // Sender owned while the writer is locked
-    tx: Arc<Mutex<Option<mpsc::Sender<Bytes>>>>,
+    tx: Arc<Mutex<Option<ByteSender>>>,
     // Optional completion signal for close()
-    done_rx: Arc<StdMutex<Option<oneshot::Receiver<Result<(), String>>>>>,
+    done_rx: Arc<StdMutex<Option<DoneReceiver>>>,
     // Reference to stream's done slot to return it on releaseLock
-    done_slot_ref: Arc<StdMutex<Option<oneshot::Receiver<Result<(), String>>>>>,
+    done_slot_ref: SharedDoneSlot,
     // Shared error slot to report background errors
-    err_slot: Arc<StdMutex<Option<String>>>,
+    err_slot: SharedErrorSlot,
     // For JS sink mode: reference back to stream's sink slot and the held sink object
-    sink_slot_ref: Arc<StdMutex<Option<JSObject>>>,
+    sink_slot_ref: SinkSlot,
     sink_obj: Option<JSObject>,
 }
 
 impl WritableStream {
-    pub fn to_sender(tx: mpsc::Sender<Bytes>) -> Self {
+    pub fn to_sender(tx: ByteSender) -> Self {
         Self {
             tx_slot: Arc::new(StdMutex::new(Some(tx))),
             done_slot: Arc::new(StdMutex::new(None)),
             err_slot: Arc::new(StdMutex::new(None)),
-            sink_slot: Arc::new(StdMutex::new(None)),
+            sink_slot: Rc::new(StdMutex::new(None)),
         }
     }
 
@@ -49,7 +58,7 @@ impl WritableStream {
     {
         let (tx, mut rx) = mpsc::channel::<Bytes>(16);
         let (done_tx, done_rx) = oneshot::channel::<Result<(), String>>();
-        let err_slot: Arc<StdMutex<Option<String>>> = Arc::new(StdMutex::new(None));
+        let err_slot: SharedErrorSlot = Arc::new(StdMutex::new(None));
         let err_slot_for_task = err_slot.clone();
 
         tokio::task::spawn(async move {
@@ -60,15 +69,15 @@ impl WritableStream {
                     break;
                 }
             }
-            if let Err(e) = tokio::io::AsyncWriteExt::flush(&mut writer).await {
-                if error.is_none() {
-                    error = Some(e.to_string());
-                }
+            if let Err(e) = tokio::io::AsyncWriteExt::flush(&mut writer).await
+                && error.is_none()
+            {
+                error = Some(e.to_string());
             }
-            if let Some(e) = error.as_ref() {
-                if let Ok(mut g) = err_slot_for_task.lock() {
-                    *g = Some(e.clone());
-                }
+            if let Some(e) = error.as_ref()
+                && let Ok(mut g) = err_slot_for_task.lock()
+            {
+                *g = Some(e.clone());
             }
             let _ = done_tx.send(match error {
                 Some(e) => Err(e),
@@ -80,7 +89,7 @@ impl WritableStream {
             tx_slot: Arc::new(StdMutex::new(Some(tx))),
             done_slot: Arc::new(StdMutex::new(Some(done_rx))),
             err_slot,
-            sink_slot: Arc::new(StdMutex::new(None)),
+            sink_slot: Rc::new(StdMutex::new(None)),
         }
     }
 }
@@ -98,7 +107,7 @@ impl WritableStream {
             tx_slot: Arc::new(StdMutex::new(None)),
             done_slot: Arc::new(StdMutex::new(None)),
             err_slot: Arc::new(StdMutex::new(None)),
-            sink_slot: Arc::new(StdMutex::new(sink)),
+            sink_slot: Rc::new(StdMutex::new(sink)),
         })
     }
 
@@ -107,15 +116,14 @@ impl WritableStream {
         let mut guard = self
             .tx_slot
             .lock()
-            .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
         match guard.take() {
             Some(tx) => {
                 // Take done_rx if any (only for async writer)
                 let done_rx = {
-                    let mut d = self
-                        .done_slot
-                        .lock()
-                        .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+                    let mut d = self.done_slot.lock().map_err(|_| {
+                        HostError::new(rong::error::E_INTERNAL, "Stream is poisoned")
+                    })?;
                     d.take()
                 };
                 Ok(WritableStreamDefaultWriter {
@@ -133,11 +141,14 @@ impl WritableStream {
                 let mut sink_guard = self
                     .sink_slot
                     .lock()
-                    .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+                    .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
                 if sink_guard.is_none() {
-                    return Err(RongJSError::TypeError(
-                        "WritableStream is locked".to_string(),
-                    ));
+                    return Err(HostError::new(
+                        rong::error::E_INVALID_STATE,
+                        "WritableStream is locked",
+                    )
+                    .with_name("TypeError")
+                    .into());
                 }
                 let obj = sink_guard.take().unwrap();
                 Ok(WritableStreamDefaultWriter {
@@ -158,7 +169,7 @@ impl WritableStream {
         let mut guard = self
             .tx_slot
             .lock()
-            .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
         *guard = None;
         Ok(())
     }
@@ -168,24 +179,32 @@ impl WritableStream {
 impl WritableStreamDefaultWriter {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(RongJSError::TypeError("Illegal constructor".to_string()))
+        Err(
+            HostError::new(rong::error::E_ILLEGAL_CONSTRUCTOR, "Illegal constructor")
+                .with_name("TypeError")
+                .into(),
+        )
     }
 
     #[js_method]
     pub(crate) async fn write(&mut self, chunk: JSValue) -> JSResult<()> {
         // Surface background error if any
-        if let Ok(err_guard) = self.err_slot.lock() {
-            if let Some(e) = err_guard.as_ref() {
-                return Err(RongJSError::Error(format!("WritableStream error: {}", e)));
-            }
+        if let Ok(err_guard) = self.err_slot.lock()
+            && let Some(e) = err_guard.as_ref()
+        {
+            return Err(HostError::new(
+                rong::error::E_STREAM,
+                format!("WritableStream error: {}", e),
+            )
+            .into());
         }
         // If we have a JS sink, call its write method in JS thread
-        if let Some(sink_obj) = self.sink_obj.as_ref() {
-            if let Ok(write_fn) = sink_obj.get::<_, JSFunc>("write") {
-                // Await if it returns a Promise
-                let _r: JSValue = write_fn.call_async(None, (chunk,)).await?;
-                return Ok(());
-            }
+        if let Some(sink_obj) = self.sink_obj.as_ref()
+            && let Ok(write_fn) = sink_obj.get::<_, JSFunc>("write")
+        {
+            // Await if it returns a Promise
+            let _r: JSValue = write_fn.call_async(None, (chunk,)).await?;
+            return Ok(());
         }
 
         // Channel mode
@@ -194,43 +213,58 @@ impl WritableStreamDefaultWriter {
                 if let Some(b) = ta.as_bytes() {
                     Bytes::copy_from_slice(b)
                 } else {
-                    return Err(RongJSError::TypeError("Invalid TypedArray".to_string()));
+                    return Err(
+                        HostError::new(rong::error::E_INVALID_ARG, "Invalid TypedArray")
+                            .with_name("TypeError")
+                            .into(),
+                    );
                 }
             } else if let Some(ab) = JSArrayBuffer::<u8>::from_object(obj) {
                 if let Some(b) = ab.as_bytes() {
                     Bytes::copy_from_slice(b)
                 } else {
-                    return Err(RongJSError::TypeError("Invalid ArrayBuffer".to_string()));
+                    return Err(
+                        HostError::new(rong::error::E_INVALID_ARG, "Invalid ArrayBuffer")
+                            .with_name("TypeError")
+                            .into(),
+                    );
                 }
             } else {
-                return Err(RongJSError::TypeError(
-                    "write expects Uint8Array or ArrayBuffer".to_string(),
-                ));
+                return Err(HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    "write expects Uint8Array or ArrayBuffer",
+                )
+                .with_name("TypeError")
+                .into());
             }
         } else {
-            return Err(RongJSError::TypeError(
-                "write expects a TypedArray or ArrayBuffer".to_string(),
-            ));
+            return Err(HostError::new(
+                rong::error::E_INVALID_ARG,
+                "write expects a TypedArray or ArrayBuffer",
+            )
+            .with_name("TypeError")
+            .into());
         };
         let mut slot = self.tx.lock().await;
         match slot.as_mut() {
-            Some(tx) => tx
-                .send(bytes)
-                .await
-                .map_err(|_| RongJSError::Error("WritableStream closed".to_string())),
-            None => Err(RongJSError::Error(
-                "Writer not acquired or closed".to_string(),
-            )),
+            Some(tx) => tx.send(bytes).await.map_err(|_| {
+                HostError::new(rong::error::E_INVALID_STATE, "WritableStream closed").into()
+            }),
+            None => Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "Writer not acquired or closed",
+            )
+            .into()),
         }
     }
 
     #[js_method]
     pub(crate) async fn close(&mut self) -> JSResult<()> {
         // If JS sink has close
-        if let Some(sink_obj) = self.sink_obj.as_ref() {
-            if let Ok(close_fn) = sink_obj.get::<_, JSFunc>("close") {
-                let _r: JSValue = close_fn.call_async(None, ()).await?;
-            }
+        if let Some(sink_obj) = self.sink_obj.as_ref()
+            && let Ok(close_fn) = sink_obj.get::<_, JSFunc>("close")
+        {
+            let _r: JSValue = close_fn.call_async(None, ()).await?;
         }
 
         // Channel mode: drop sender and await completion if possible
@@ -242,13 +276,13 @@ impl WritableStreamDefaultWriter {
             let mut d = self
                 .done_rx
                 .lock()
-                .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
             d.take()
         };
         if let Some(rx) = rx_opt {
             match rx.await {
                 Ok(Ok(())) => Ok(()),
-                Ok(Err(e)) => Err(RongJSError::Error(e)),
+                Ok(Err(e)) => Err(HostError::new(rong::error::E_STREAM, e).into()),
                 Err(_) => Ok(()),
             }
         } else {
@@ -274,7 +308,7 @@ impl WritableStreamDefaultWriter {
             let mut guard = self
                 .slot
                 .lock()
-                .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
             if guard.is_none() {
                 *guard = Some(tx);
             }
@@ -284,14 +318,14 @@ impl WritableStreamDefaultWriter {
             let mut d = self
                 .done_rx
                 .lock()
-                .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
             d.take()
         };
         if let Some(done) = done_opt {
             let mut g = self
                 .done_slot_ref
                 .lock()
-                .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
             if g.is_none() {
                 *g = Some(done);
             }
@@ -301,7 +335,7 @@ impl WritableStreamDefaultWriter {
             let mut slot = self
                 .sink_slot_ref
                 .lock()
-                .map_err(|_| RongJSError::Error("Stream is poisoned".to_string()))?;
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
             if slot.is_none() {
                 *slot = Some(sink_obj);
             }
@@ -313,12 +347,7 @@ impl WritableStreamDefaultWriter {
 // Internal helpers for native fast paths
 impl WritableStreamDefaultWriter {
     // Expose the underlying channel sender and done signal for intra-crate optimizations
-    pub(crate) fn take_channel(
-        &mut self,
-    ) -> Option<(
-        mpsc::Sender<Bytes>,
-        Option<oneshot::Receiver<Result<(), String>>>,
-    )> {
+    pub(crate) fn take_channel(&mut self) -> Option<WriterChannel> {
         // Only available when the writer is channel-backed (not JS sink)
         if self.sink_obj.is_some() {
             return None;
@@ -338,6 +367,18 @@ impl WritableStreamDefaultWriter {
 // Public Rust helpers for other modules
 pub fn writable_stream_to_sender(tx: mpsc::Sender<Bytes>) -> WritableStream {
     WritableStream::to_sender(tx)
+}
+
+pub fn writable_stream_to_sender_with_done(
+    tx: ByteSender,
+    done_rx: DoneReceiver,
+) -> WritableStream {
+    WritableStream {
+        tx_slot: Arc::new(StdMutex::new(Some(tx))),
+        done_slot: Arc::new(StdMutex::new(Some(done_rx))),
+        err_slot: Arc::new(StdMutex::new(None)),
+        sink_slot: Rc::new(StdMutex::new(None)),
+    }
 }
 
 pub fn writable_stream_to_async_write<W>(writer: W) -> WritableStream

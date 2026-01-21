@@ -30,9 +30,12 @@ struct FsFile {
 impl FsFile {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(RongJSError::TypeError(
-            "Not Allowed 'new FsFile()', use Rong.open".to_string(),
-        ))
+        Err(HostError::new(
+            rong::error::E_ILLEGAL_CONSTRUCTOR,
+            "Not Allowed 'new FsFile()', use Rong.open",
+        )
+        .with_name("TypeError")
+        .into())
     }
 
     #[js_method]
@@ -41,7 +44,7 @@ impl FsFile {
         file.metadata()
             .await
             .map(FileInfo::from_metadata)
-            .map_err(|e| RongJSError::TypeError(format!("Failed to get file stats: {}", e)))
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to get file stats: {}", e)).into())
     }
 
     #[js_method]
@@ -61,10 +64,7 @@ impl FsFile {
         match file.read(buffer_slice).await {
             Ok(0) => Ok(None), // EOF - return null like Deno
             Ok(bytes_read) => Ok(Some(bytes_read)),
-            Err(e) => Err(RongJSError::TypeError(format!(
-                "Failed to read file: {}",
-                e
-            ))),
+            Err(e) => Err(HostError::new("FS_IO", format!("Failed to read file: {}", e)).into()),
         }
     }
 
@@ -77,7 +77,7 @@ impl FsFile {
         let mut file = self.file.lock().await;
         file.write_all(buf)
             .await
-            .map_err(|e| RongJSError::TypeError(format!("Failed to write file: {}", e)))?;
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to write file: {}", e)))?;
 
         Ok(buf.len())
     }
@@ -87,7 +87,7 @@ impl FsFile {
         let file = self.file.lock().await;
         file.sync_all()
             .await
-            .map_err(|e| RongJSError::TypeError(format!("Failed to sync file: {}", e)))
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to sync file: {}", e)).into())
     }
 
     #[js_method]
@@ -96,7 +96,7 @@ impl FsFile {
         let file = self.file.lock().await;
         file.set_len(length)
             .await
-            .map_err(|e| RongJSError::TypeError(format!("Failed to truncate file: {}", e)))
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to truncate file: {}", e)).into())
     }
 
     #[js_method]
@@ -109,10 +109,15 @@ impl FsFile {
             1 => SeekFrom::Current(offset),      // Rong.SeekMode.Current
             2 => SeekFrom::End(offset),          // Rong.SeekMode.End
             _ => {
-                return Err(RongJSError::TypeError(format!(
-                    "Invalid whence value: {}. Must be 0 (Start), 1 (Current), or 2 (End)",
-                    whence_mode
-                )));
+                return Err(HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    format!(
+                        "Invalid whence value: {}. Must be 0 (Start), 1 (Current), or 2 (End)",
+                        whence_mode
+                    ),
+                )
+                .with_name("TypeError")
+                .into());
             }
         };
 
@@ -121,7 +126,7 @@ impl FsFile {
         let new_position = file
             .seek(seek_from)
             .await
-            .map_err(|e| RongJSError::TypeError(format!("Failed to seek: {}", e)))?;
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to seek: {}", e)))?;
 
         Ok(new_position)
     }
@@ -173,16 +178,29 @@ impl FsFile {
         // Larger channel buffers smooth out bursts from network streams
         // and reduce backpressure on JS when writing large files.
         let (tx, mut rx) = mpsc::channel::<Bytes>(128);
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
         tokio::task::spawn(async move {
             let mut f = file.lock().await;
+            let mut error: Option<String> = None;
             while let Some(chunk) = rx.recv().await {
-                if let Err(_e) = f.write_all(&chunk).await {
+                if let Err(e) = f.write_all(&chunk).await {
+                    error = Some(e.to_string());
                     break;
                 }
             }
-            let _ = f.flush().await;
+            if let Err(e) = f.flush().await
+                && error.is_none()
+            {
+                error = Some(e.to_string());
+            }
+            let _ = done_tx.send(match error {
+                Some(e) => Err(e),
+                None => Ok(()),
+            });
         });
-        Ok(rong_stream::writable_stream_to_sender(tx))
+        Ok(rong_stream::writable_stream_to_sender_with_done(
+            tx, done_rx,
+        ))
     }
 }
 
@@ -221,7 +239,7 @@ async fn open_file(file: String, option: Optional<FileOpenOption>) -> JSResult<F
     let file_handle = open_options
         .open(&resolved)
         .await
-        .map_err(|e| RongJSError::TypeError(format!("Failed to open file '{}': {}", file, e)))?;
+        .map_err(|e| HostError::new("FS_IO", format!("Failed to open file '{}': {}", file, e)))?;
 
     Ok(FsFile {
         file: Arc::new(Mutex::new(file_handle)),
