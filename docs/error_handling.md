@@ -37,9 +37,9 @@ fn parse_url(url: String) -> JSResult<Url> {
 fn read_file(path: &str) -> JSResult<Vec<u8>> {
     std::fs::read(path).map_err(|e| {
         HostError::new(E_IO, e.to_string())
-            .with_data(serde_json::json!({
-                "path": path,
-                "errno": e.raw_os_error()
+            .with_data(rong::err_data!({
+                path: path,
+                os_error: (e.raw_os_error())  // Option<i32> -> number | null
             }))
             .into()
     })
@@ -157,11 +157,11 @@ try {
 Failures don't enter `catch`, suitable for frequent expected failures:
 
 ```rust
-// Rust - note: returns Ok(ResultObject)
-pub fn try_parse_json(text: String) -> JSResult<JSValue> {
-    match serde_json::from_str(&text) {
-        Ok(v) => Ok(json!({ "ok": true, "value": v })),
-        Err(e) => Ok(json!({ "ok": false, "error": e.to_string() })),
+// Rust - note: returns Ok(ResultObject) instead of Err(...)
+pub fn try_parse_json(ctx: &JSContext, text: String) -> JSResult<JSValue> {
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(v) => Ok(rong::js_value!(ctx, { ok: true, value: (v) })),
+        Err(e) => Ok(rong::js_value!(ctx, { ok: false, error: (e.to_string()) })),
     }
 }
 ```
@@ -212,14 +212,14 @@ HostError::new(code, message)
 .with_name("TypeError")
 
 // Attach structured data
-.with_data(serde_json::json!({ "key": "value" }))
+.with_data(rong::err_data!({ key: "value" }))
 
 // Convenience constructors
 HostError::invalid_arg_count(expected, got)  // Wrong argument count
 HostError::aborted(reason)                    // Operation aborted
 
 // Convert to RongJSError
-host_error.into()  // equivalent to RongJSError::Host(host_error)
+host_error.into()  // converts HostError into RongJSError
 ```
 
 ---
