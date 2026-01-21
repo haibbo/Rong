@@ -32,6 +32,7 @@ pub const E_PERMISSION_DENIED: &str = "E_PERMISSION_DENIED";
 pub const E_STREAM: &str = "E_STREAM";
 pub const E_TYPE: &str = "E_TYPE";
 
+use crate::context::thrown_store::ThrownValueHandle;
 use crate::{
     FromJSValue, IntoJSValue, JSArray, JSArrayOps, JSContext, JSContextImpl, JSErrorFactory,
     JSExceptionThrower, JSObject, JSObjectOps, JSValue, JSValueImpl,
@@ -271,13 +272,6 @@ impl HostError {
         }
         err
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ThrownValueHandle {
-    pub(crate) context_id: usize,
-    pub(crate) id: u32,
-    pub(crate) generation: u32,
 }
 
 /// Opaque handle to a JS-thrown/rejected payload captured inside a specific `JSContext`.
