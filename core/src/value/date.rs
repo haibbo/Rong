@@ -38,11 +38,9 @@ impl<V: JSValueImpl> JSDate<V> {
         V: JSValueImpl + JSTypeOf + JSValueConversion + JSObjectOps,
     {
         // Convert to JSObject to access methods
-        let date_obj = self
-            .inner
-            .clone()
-            .into_object()
-            .ok_or_else(|| RongJSError::TypeError("Date is not an object".into()))?;
+        let date_obj = self.inner.clone().into_object().ok_or_else(|| {
+            HostError::new(crate::error::E_TYPE, "Date is not an object").with_name("TypeError")
+        })?;
 
         // Get the getTime method
         let get_time = date_obj.get::<_, JSFunc<V>>("getTime")?;
@@ -85,7 +83,9 @@ where
     fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
         let js_value = JSValue::from_raw(ctx, value);
         if !js_value.is_date() {
-            return Err(RongJSError::TypeError("Value is not a Date".into()));
+            return Err(HostError::new(crate::error::E_TYPE, "Value is not a Date")
+                .with_name("TypeError")
+                .into());
         }
         Ok(JSDate { inner: js_value })
     }

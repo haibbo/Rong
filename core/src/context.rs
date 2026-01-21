@@ -1,7 +1,7 @@
 use crate::{
-    ClassSetup, FromJSValue, JSClass, JSObject, JSObjectOps, JSResult, JSRuntimeImpl, JSTypeOf,
-    JSValue, JSValueImpl, Promise, RongJSError,
-    result::ThrownValueHandle,
+    ClassSetup, FromJSValue, HostError, JSClass, JSObject, JSObjectOps, JSResult, JSRuntimeImpl,
+    JSTypeOf, JSValue, JSValueImpl, Promise, RongJSError,
+    error::ThrownValueHandle,
     source::{Source, SourceKind},
 };
 use crate::{JSRuntime, JSValueMapper};
@@ -99,8 +99,8 @@ pub trait JSContextImpl {
     /// # Returns
     /// * `Ok(Vec<u8>)` - The compiled bytecode as bytes if compilation succeeds
     /// * `Err(RongJSError)` - If compilation fails with one of these errors:
-    ///   - `RongJSError::CompileToByteErr`: General compilation error
-    ///   - `RongJSError::NotSupportByteCode`: Bytecode compilation not supported by runtime
+    ///   - `RongJSError::CompileToByteErr()`: General compilation error
+    ///   - `RongJSError::NotSupportByteCode()`: Bytecode compilation not supported by runtime
     fn compile_to_bytecode(&self, source: Source) -> Result<Vec<u8>, RongJSError>;
 
     /// Executes previously compiled bytecode
@@ -199,9 +199,16 @@ impl<C: JSContextImpl> JSContext<C> {
     /// - The runtime must outlive the context
     ///
     /// # Example
-    /// ```
-    /// let rt = RongJS::runtime();
-    /// let ctx = JSContext::new(&rt);
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSObjectOps};
+    ///
+    /// fn demo<E: JSEngine + 'static>()
+    /// where
+    ///     E::Value: JSObjectOps + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let _ctx = runtime.context();
+    /// }
     /// ```
     pub(crate) fn new(runtime: &JSRuntime<C::Runtime>) -> Self
     where
@@ -251,8 +258,8 @@ impl<C: JSContextImpl> JSContext<C> {
     /// - The returned reference must not outlive the original context
     ///
     /// # Example
-    /// ```rust
-    /// // In a callback from JS engine:
+    /// ```ignore
+    /// // Pseudo-code: this is only usable with a real engine-provided raw context pointer.
     /// unsafe {
     ///     let ctx = JSContext::from_borrowed_raw_ptr(ffi_ctx);
     ///     // Use ctx for the duration of the callback
@@ -282,9 +289,20 @@ impl<C: JSContextImpl> JSContext<C> {
     /// * `Err(RongJSError)` - If evaluation fails or throws an exception
     ///
     /// # Examples
-    /// ```
-    /// let result: i32 = ctx.eval(Source::new("1 + 2")).unwrap();
-    /// assert_eq!(result, 3);
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSArrayBufferOps, JSObjectOps, JSResult, Source};
+    ///
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
+    /// where
+    ///     E::Value: JSArrayBufferOps + JSObjectOps + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let ctx = runtime.context();
+    ///
+    ///     let result: i32 = ctx.eval(Source::from_bytes("1 + 2"))?;
+    ///     assert_eq!(result, 3);
+    ///     Ok(())
+    /// }
     /// ```
     pub fn eval<T>(&self, source: Source) -> JSResult<T>
     where
@@ -304,11 +322,23 @@ impl<C: JSContextImpl> JSContext<C> {
     /// A JSObject representing the global object
     ///
     /// # Examples
-    /// ```rust
-    /// let global = ctx.global();
-    /// global.set("myVar", 42);
-    /// let result: i32 = global.get("myVar").unwrap();
-    /// assert_eq!(result, 42);
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSArrayBufferOps, JSObjectOps, JSResult, JSTypeOf};
+    ///
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
+    /// where
+    ///     E::Value: JSArrayBufferOps + JSObjectOps + JSTypeOf + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let ctx = runtime.context();
+    ///
+    ///     let global = ctx.global();
+    ///     global.set("myVar", 42)?;
+    ///
+    ///     let result: i32 = global.get("myVar")?;
+    ///     assert_eq!(result, 42);
+    ///     Ok(())
+    /// }
     /// ```
     pub fn global(&self) -> JSObject<C::Value>
     where
@@ -324,7 +354,8 @@ impl<C: JSContextImpl> JSContext<C> {
     /// and stores it in the context's class registry. The class can then be used
     /// to create instances in JavaScript.
     ///
-    /// ```rust
+    /// ```ignore
+    /// // Pseudo-code (requires a JS engine + a type that implements JSClass)
     /// context.register_class::<MyClass>();
     /// ```
     pub fn register_class<JC>(&self) -> JSResult<()>
@@ -334,7 +365,7 @@ impl<C: JSContextImpl> JSContext<C> {
     {
         let registry = self
             .get_class_registry()
-            .ok_or(RongJSError::Error("No Class registry!".to_string()))?;
+            .ok_or_else(|| HostError::new(crate::error::E_INTERNAL, "No Class registry!"))?;
 
         if registry.borrow().contains_key(&TypeId::of::<JC>()) {
             return Ok(());
@@ -438,13 +469,24 @@ impl<C: JSContextImpl> JSContext<C> {
     /// * `Err(RongJSError)` - If compilation fails
     ///
     /// # Example
-    /// ```rust
-    /// // From string literal
-    /// let bytecode = ctx.compile_to_bytecode("function add(a, b) { return a + b; }")?;
-    /// let result: i32 = ctx.eval(bytecode)?;
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSObjectOps, JSResult};
     ///
-    /// // From bytes
-    /// let bytecode = ctx.compile_to_bytecode(b"let x = 1;")?;
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
+    /// where
+    ///     E::Value: JSObjectOps + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let ctx = runtime.context();
+    ///
+    ///     // From string literal
+    ///     let _bytecode = ctx.compile_to_bytecode("function add(a, b) { return a + b; }")?;
+    ///
+    ///     // From bytes
+    ///     let _bytecode = ctx.compile_to_bytecode(b"let x = 1;")?;
+    ///
+    ///     Ok(())
+    /// }
     /// ```
     pub fn compile_to_bytecode<T: AsRef<[u8]>>(&self, code: T) -> JSResult<Source> {
         self.rc

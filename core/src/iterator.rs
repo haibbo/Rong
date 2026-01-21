@@ -1,8 +1,5 @@
 use crate::rong::spawn;
-use crate::{
-    IntoJSValue, JSContext, JSExceptionHandler, JSFunc, JSObject, JSObjectOps, JSResult, JSSymbol,
-    JSValue,
-};
+use crate::{IntoJSValue, JSContext, JSFunc, JSObject, JSObjectOps, JSResult, JSSymbol, JSValue};
 use futures::{Stream, StreamExt};
 use std::cell::RefCell;
 use std::pin::Pin;
@@ -68,10 +65,7 @@ where
     }
 
     /// Convert this iterator to a JavaScript iterable object
-    pub fn to_js_iterable(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>
-    where
-        V::Context: JSExceptionHandler,
-    {
+    pub fn to_js_iterable(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
         let iterable = JSObject::new(ctx);
 
         // Create a simple object that has the iterator protocol
@@ -168,10 +162,7 @@ where
     }
 
     /// Convert this async iterator to a JavaScript async iterable object
-    pub fn to_js_async_iterable(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>
-    where
-        V::Context: JSExceptionHandler,
-    {
+    pub fn to_js_async_iterable(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
         let iterable = JSObject::new(ctx);
 
         // Create a simple object that has the async iterator protocol
@@ -259,7 +250,6 @@ where
     T: IntoJSValue<V> + 'static,
     I: IntoIterator<Item = T> + 'static,
     I::IntoIter: 'static,
-    V::Context: JSExceptionHandler,
 {
     fn to_js_iter(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
         let js_iter = JSIterator::from(self, ctx);
@@ -281,7 +271,6 @@ where
     V: JSObjectOps + 'static,
     T: IntoJSValue<V> + Send + 'static,
     S: Stream<Item = T> + Send + 'static,
-    V::Context: JSExceptionHandler,
 {
     fn to_js_async_iter(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
         let js_iter = JSAsyncIterator::from(self, ctx);

@@ -38,7 +38,7 @@ where
         if value.is_array() {
             JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
         } else {
-            Err(RongJSError::NotJSArray)
+            Err(RongJSError::NotJSArray())
         }
     }
 }
@@ -270,7 +270,7 @@ where
             let vec = array.iter::<T>().collect::<JSResult<Vec<_>>>()?;
             Ok(vec)
         } else {
-            Err(RongJSError::NotJSArray)
+            Err(RongJSError::NotJSArray())
         }
     }
 }

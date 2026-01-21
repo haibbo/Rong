@@ -1,7 +1,8 @@
 use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
-    FromJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject, JSObjectOps,
-    JSResult, JSValue, JSValueImpl, PropertyDescriptor, PropertyKey, RongJSError,
+    FromJSValue, HostError, JSArrayOps, JSContext, JSContextImpl, JSErrorFactory,
+    JSExceptionThrower, JSFunc, JSObject, JSObjectOps, JSResult, JSValue, JSValueImpl,
+    PropertyDescriptor, PropertyKey, RongJSError,
 };
 
 use std::any::TypeId;
@@ -52,8 +53,8 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
 pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     fn constructor(ctx: &V::Context, this: V, args: Vec<V>) -> V
     where
-        V::Context: JSExceptionHandler,
-        V: JSObjectOps,
+        V::Context: JSErrorFactory + JSExceptionThrower,
+        V: JSObjectOps + JSArrayOps,
     {
         let ctx = &JSContext::from_borrowed_raw_ptr(ctx.as_raw());
         let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
@@ -67,7 +68,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
 
         let instance = match Self::data_constructor().0.call(&mut accessor) {
             Ok(v) => {
-                if v.is_exception() || v.is_error() {
+                if v.is_exception() {
                     return v;
                 }
                 v
@@ -108,8 +109,8 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     /// call object as function
     fn call(ctx: &V::Context, function: V, this: V, args: Vec<V>) -> V
     where
-        V: JSObjectOps + 'static,
-        V::Context: JSExceptionHandler,
+        V: JSObjectOps + JSArrayOps + 'static,
+        V::Context: JSErrorFactory + JSExceptionThrower,
     {
         let ctx = &JSContext::from_borrowed_raw_ptr(ctx.as_raw());
         let mut accessor = ParamsAccessor::new(ctx, this, args);
@@ -121,7 +122,7 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
 
         let mut func = match obj.borrow_mut::<RustFunc<V>>() {
             Ok(f) => f,
-            Err(_) => return RongJSError::NotJSFunc.throw_js_exception(ctx),
+            Err(_) => return RongJSError::NotJSFunc().throw_js_exception(ctx),
         };
 
         // ignore checking whether v is exception or error, sicne no one use it again here
@@ -198,10 +199,12 @@ where
         let constructor = context
             .get_class_registry()
             .and_then(|registry| registry.borrow().get(&TypeId::of::<JC>()).cloned())
-            .ok_or(RongJSError::Error(format!(
-                "JS Class {} is not registered",
-                std::any::type_name::<JC>()
-            )))?;
+            .ok_or_else(|| {
+                HostError::new(
+                    crate::error::E_INVALID_STATE,
+                    format!("JS Class {} is not registered", std::any::type_name::<JC>()),
+                )
+            })?;
 
         Ok(Self(JSObject::from_raw(context, constructor)))
     }
@@ -238,10 +241,12 @@ where
         T: JSClass<V>,
     {
         if !Class::instance_of::<T>(self) {
-            return Err(RongJSError::TypeError(format!(
-                "Not instance of {}",
-                std::any::type_name::<T>()
-            )));
+            return Err(HostError::new(
+                crate::error::E_TYPE,
+                format!("Not instance of {}", std::any::type_name::<T>()),
+            )
+            .with_name("TypeError")
+            .into());
         }
 
         let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
@@ -259,10 +264,12 @@ where
         T: JSClass<V>,
     {
         if !Class::instance_of::<T>(self) {
-            return Err(RongJSError::TypeError(format!(
-                "Not instance of {}",
-                std::any::type_name::<T>()
-            )));
+            return Err(HostError::new(
+                crate::error::E_TYPE,
+                format!("Not instance of {}", std::any::type_name::<T>()),
+            )
+            .with_name("TypeError")
+            .into());
         }
 
         let ptr = self.as_value().get_opaque() as *mut RefCell<T>;

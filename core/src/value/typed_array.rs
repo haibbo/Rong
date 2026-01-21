@@ -116,10 +116,10 @@ where
             if value.get_kind().is_some() {
                 JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
             } else {
-                Err(RongJSError::NotJSTypedArray)
+                Err(RongJSError::NotJSTypedArray())
             }
         } else {
-            Err(RongJSError::NotJSTypedArray)
+            Err(RongJSError::NotJSTypedArray())
         }
     }
 }
@@ -187,14 +187,14 @@ where
     ) -> JSResult<Self> {
         // Check alignment
         let bytes_per_element = T::BYTES_PER_ELEMENT;
-        if byte_offset % bytes_per_element != 0 {
-            return Err(RongJSError::TypedArrayAlignmentError);
+        if !byte_offset.is_multiple_of(bytes_per_element) {
+            return Err(RongJSError::TypedArrayAlignmentError());
         }
 
         // Check if byte_offset is valid
         let buffer_size = buffer.len();
         if byte_offset > buffer_size {
-            return Err(RongJSError::TypedArrayRangeError);
+            return Err(RongJSError::TypedArrayRangeError());
         }
 
         // Calculate maximum possible length
@@ -203,7 +203,7 @@ where
         // Validate length
         let length = length.unwrap_or(max_length);
         if length > max_length {
-            return Err(RongJSError::TypedArrayRangeError);
+            return Err(RongJSError::TypedArrayRangeError());
         }
 
         // Create TypedArray with buffer and offset
@@ -228,7 +228,7 @@ where
         let buffer = self
             .as_value()
             .get_array_buffer()
-            .ok_or(RongJSError::NotJSArrayBuffer)?;
+            .ok_or_else(RongJSError::NotJSArrayBuffer)?;
         JSArrayBuffer::from_js_value(&self.get_ctx(), buffer)
     }
 

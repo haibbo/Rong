@@ -55,7 +55,7 @@ where
         if value.is_symbol() {
             Ok(Self(JSValue::from_raw(ctx, value).into()))
         } else {
-            Err(RongJSError::NotSymbol)
+            Err(RongJSError::NotSymbol())
         }
     }
 }

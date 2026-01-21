@@ -1,12 +1,13 @@
+pub use rong_core::err_data;
 pub use rong_core::{
-    Class as CoreClass, ClassSetup, FromJSValue, IntoJSAsyncIteratorExt, IntoJSIteratorExt,
-    IntoJSResult, IntoJSValue, JSArray as CoreJSArray, JSArrayBuffer as CoreJSArrayBuffer,
+    Class as CoreClass, ClassSetup, FromJSValue, HostError, IntoJSAsyncIteratorExt,
+    IntoJSIteratorExt, IntoJSValue, JSArray as CoreJSArray, JSArrayBuffer as CoreJSArrayBuffer,
     JSAsyncIterator, JSClass, JSContext as CoreJSContext, JSContextService, JSDate as CoreJSDate,
     JSEngine, JSException as CoreJSException, JSFunc as CoreJSFunc, JSIterator,
     JSObject as CoreJSObject, JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService,
     JSSymbol as CoreJSSymbol, JSTypedArray as CoreJSTypedArray, JSTypedArrayKind,
     JSValue as CoreJSValue, JSValueType, JsonToJsValue, Promise as CorePromise,
-    PropertyDescriptor as CorePropertyDescriptor, RongJSError, Source, SourceKind,
+    PropertyDescriptor as CorePropertyDescriptor, RongJSError, Source, SourceKind, error,
 };
 // Re-export selected runtime API from rong_core::rong so downstream crates use `rong::...`
 pub use rong_core::rong::{Rong, Worker, WorkerMessage, spawn};
@@ -35,6 +36,9 @@ mod engine {
     use rong_arkjs::HarmonyArkJS;
     pub type RongJS = HarmonyArkJS;
 }
+
+#[cfg(not(any(feature = "quickjs", feature = "jscore", feature = "arkjs")))]
+compile_error!("`rong` requires an engine feature: enable one of `quickjs`, `jscore`, or `arkjs`.");
 
 pub use engine::*;
 

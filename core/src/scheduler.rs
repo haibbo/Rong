@@ -1,6 +1,6 @@
 use crate::{
-    JSContext, JSContextImpl, JSFunc, JSObject, JSObjectOps, JSResult, JSRuntimeService,
-    JSValueImpl, RongJSError,
+    HostError, JSContext, JSContextImpl, JSFunc, JSObject, JSObjectOps, JSResult, JSRuntimeService,
+    JSValueImpl,
 };
 use futures::Future;
 use std::{
@@ -61,12 +61,11 @@ impl JsInvokeQueue {
                 let mut next = q_high.pop_front().or_else(|| q_norm.pop_front());
                 if next.is_none() {
                     while let Some(ev) = q_event.pop_front() {
-                        if let Some(key) = &ev.dedup_key {
-                            if let Some(&latest) = event_gen.get(key) {
-                                if ev.generation != latest {
-                                    continue;
-                                }
-                            }
+                        if let Some(key) = &ev.dedup_key
+                            && let Some(&latest) = event_gen.get(key)
+                            && ev.generation != latest
+                        {
+                            continue;
                         }
                         next = Some(ev);
                         break;
@@ -150,11 +149,12 @@ where
         .tx
         .send(item)
         .await
-        .map_err(|_| RongJSError::Error("scheduler queue closed".into()))?;
+        .map_err(|_| HostError::new(crate::error::E_INTERNAL, "scheduler queue closed"))?;
 
     if let Some(rx) = reply_rx {
-        rx.await
-            .unwrap_or_else(|_| Err(RongJSError::Error("scheduler reply dropped".into())))
+        rx.await.unwrap_or_else(|_| {
+            Err(HostError::new(crate::error::E_INTERNAL, "scheduler reply dropped").into())
+        })
     } else {
         Ok(())
     }
@@ -178,13 +178,7 @@ where
     let _guard = gate.0.lock().await;
 
     match args_obj {
-        Some(obj) => func
-            .call_async::<_, R>(this_obj, (obj,))
-            .await
-            .map_err(|e| RongJSError::Error(e.to_string())),
-        None => func
-            .call_async::<_, R>(this_obj, ())
-            .await
-            .map_err(|e| RongJSError::Error(e.to_string())),
+        Some(obj) => func.call_async::<_, R>(this_obj, (obj,)).await,
+        None => func.call_async::<_, R>(this_obj, ()).await,
     }
 }

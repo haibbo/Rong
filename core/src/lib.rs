@@ -1,9 +1,9 @@
 mod class;
 mod context;
+pub mod error;
 pub mod function;
 mod iterator;
 mod promise;
-mod result;
 pub mod rong;
 mod runtime;
 mod scheduler;
@@ -14,9 +14,9 @@ pub use scheduler::{JsInvokePriority, enqueue_js_invoke};
 
 pub use class::*;
 pub use context::*;
+pub use error::{HostError, JSResult, RongJSError};
 pub use iterator::*;
 pub use promise::*;
-pub use result::{IntoJSResult, JSResult, RongJSError};
 pub use runtime::*;
 pub use source::{Source, SourceKind};
 pub use value::*;

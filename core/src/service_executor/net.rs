@@ -6,7 +6,7 @@ use http::header;
 use http::{HeaderValue, header::HeaderName};
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper_util::client::legacy::Client;
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
 
@@ -45,7 +45,7 @@ pub async fn post_json(
 
     let body_bytes = Bytes::copy_from_slice(body);
     let request_body: BoxBody<Bytes, Error> = Full::new(body_bytes)
-        .map_err(|_| Error::new(ErrorKind::Other, "body error"))
+        .map_err(|_| Error::other("body error"))
         .boxed();
 
     let request = builder
@@ -202,9 +202,7 @@ pub(crate) async fn process_request(
 
     let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(STREAM_CHAN_CAP);
     let mut abort = msg.abort_rx.take();
-    let coalesce_target = msg
-        .stream_coalesce_target
-        .max(MIN_STREAM_COALESCE_TARGET);
+    let coalesce_target = msg.stream_coalesce_target.max(MIN_STREAM_COALESCE_TARGET);
     tokio::task::spawn(async move {
         let mut body = body;
         // Aggregate small frames into larger chunks before sending across the

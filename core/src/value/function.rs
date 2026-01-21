@@ -41,7 +41,7 @@ where
         if value.is_function() {
             JSObject::from_js_value(ctx, value).map(|obj| Self(obj))
         } else {
-            Err(RongJSError::NotJSFunc)
+            Err(RongJSError::NotJSFunc())
         }
     }
 }
@@ -62,8 +62,18 @@ impl<V: JSObjectOps> JSFunc<V> {
     /// Returns `JSResult<Self>` containing the new JS function if successful
     ///
     /// # Example
-    /// ```rust
-    /// let func = JSFunc::new(ctx, |x: i32| x + 1)?;
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSFunc, JSObjectOps, JSResult};
+    ///
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
+    /// where
+    ///     E::Value: JSObjectOps + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let ctx = runtime.context();
+    ///     let _func = JSFunc::<E::Value>::new(&ctx, |x: i32| x + 1)?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn new<F, P, K>(ctx: &JSContext<V::Context>, f: F) -> JSResult<Self>
     where
@@ -95,12 +105,22 @@ impl<V: JSObjectOps> JSFunc<V> {
     /// Returns `Err(RongJSError)` if the call fails or throws an exception.
     ///
     /// # Examples
-    /// ```rust
-    /// // Call with single argument
-    /// let result: i32 = func.call(None,(42,))?;
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSArrayBufferOps, JSFunc, JSObjectOps, JSResult};
     ///
-    /// // Call with multiple arguments
-    /// let result: String = func.call(None,(1, "two", 3.0))?;
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
+    /// where
+    ///     E::Value: JSArrayBufferOps + JSObjectOps + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let ctx = runtime.context();
+    ///     let func = JSFunc::<E::Value>::new(&ctx, |x: i32| x + 1)?;
+    ///
+    ///     // Call with single argument
+    ///     let _result: i32 = func.call(None, (42,))?;
+    ///
+    ///     Ok(())
+    /// }
     /// ```
     pub fn call<Args, R>(&self, this: Option<JSObject<V>>, args: Args) -> JSResult<R>
     where
@@ -132,12 +152,20 @@ impl<V: JSObjectOps> JSFunc<V> {
     /// Returns `Err(RongJSError)` if the call fails or throws an exception.
     ///
     /// # Examples
-    /// ```rust
-    /// // Call async function with single argument
-    /// let result: i32 = func.call_async(None,(42,)).await?;
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSArrayBufferOps, JSFunc, JSObjectOps, JSResult, JSTypeOf};
     ///
-    /// // Call async function with multiple arguments
-    /// let result: String = func.call_async(None,(1, "two", 3.0)).await?;
+    /// async fn demo<E: JSEngine + 'static>() -> JSResult<()>
+    /// where
+    ///     E::Value: JSArrayBufferOps + JSObjectOps + JSTypeOf + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let ctx = runtime.context();
+    ///     let func = JSFunc::<E::Value>::new(&ctx, |x: i32| x + 1)?;
+    ///
+    ///     let _result: i32 = func.call_async(None, (42,)).await?;
+    ///     Ok(())
+    /// }
     /// ```
     pub async fn call_async<Args, R>(&self, this: Option<JSObject<V>>, args: Args) -> JSResult<R>
     where

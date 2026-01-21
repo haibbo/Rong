@@ -3,7 +3,7 @@ use bytes::Bytes;
 use http::Request as HttpRequest;
 use http::header;
 use http_body_util::{BodyExt, Full};
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc::error::TrySendError, oneshot};
 
@@ -65,10 +65,10 @@ pub(super) async fn download_resource(
 ) -> Result<(), String> {
     let mut sink_opt = sink;
 
-    if let Some(parent) = dest.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            return finalize_sink(sink_opt, Err(format!("create dir: {}", e)));
-        }
+    if let Some(parent) = dest.parent()
+        && let Err(e) = std::fs::create_dir_all(parent)
+    {
+        return finalize_sink(sink_opt, Err(format!("create dir: {}", e)));
     }
 
     let temp_path = dest.with_extension("part");
@@ -93,7 +93,7 @@ pub(super) async fn download_resource(
         }
     }
     let empty = Full::new(Bytes::new())
-        .map_err(|_| Error::new(ErrorKind::Other, "body error"))
+        .map_err(|_| Error::other("body error"))
         .boxed();
     let request = match builder.body(empty) {
         Ok(req) => req,
@@ -114,15 +114,14 @@ pub(super) async fn download_resource(
 
     let mut sink_active = true;
     let forward = |data: &[u8], sink_opt: &mut Option<Box<dyn BodySink>>, active: &mut bool| {
-        if *active {
-            if let Some(ref mut sink) = sink_opt.as_mut() {
-                if let Err(err) = sink.write(data) {
-                    let sink_err = Err(err.clone());
-                    sink.close(&sink_err);
-                    *sink_opt = None;
-                    *active = false;
-                }
-            }
+        if *active
+            && let Some(sink) = sink_opt.as_mut()
+            && let Err(err) = sink.write(data)
+        {
+            let sink_err = Err(err.clone());
+            sink.close(&sink_err);
+            *sink_opt = None;
+            *active = false;
         }
     };
 

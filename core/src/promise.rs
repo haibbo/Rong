@@ -1,6 +1,6 @@
 use crate::rong::spawn;
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSExceptionHandler, JSFunc, JSObject,
+    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSErrorFactory, JSFunc, JSObject,
     JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl, RongJSError, function::JSParameterType,
 };
 use std::cell::RefCell;
@@ -163,12 +163,12 @@ pub trait PromiseResolver<V: JSValueImpl> {
 // Implement for RongJSError types
 impl<V> PromiseResolver<V> for RongJSError
 where
-    V: JSObjectOps,
-    V::Context: JSExceptionHandler,
+    V: JSObjectOps + crate::JSArrayOps,
+    V::Context: JSErrorFactory,
 {
     fn resolve_promise(self, _resolve: JSFunc<V>, reject: JSFunc<V>) {
         let ctx = reject.get_ctx();
-        let js_err = self.into_js_error(&ctx);
+        let js_err = self.into_catch_value(&ctx);
         let _ = reject.call::<_, ()>(None, (js_err,));
     }
 }
@@ -202,8 +202,8 @@ where
 impl<V, T> PromiseResolver<V> for JSResult<T>
 where
     T: IntoJSValue<V>,
-    V: JSObjectOps,
-    V::Context: JSExceptionHandler,
+    V: JSObjectOps + crate::JSArrayOps,
+    V::Context: JSErrorFactory,
 {
     fn resolve_promise(self, resolve: JSFunc<V>, reject: JSFunc<V>) {
         match self {
@@ -215,7 +215,7 @@ where
             }
             Err(err) => {
                 let ctx = reject.get_ctx();
-                let js_error_value = err.into_js_error(&ctx).into_value();
+                let js_error_value = err.into_catch_value(&ctx).into_value();
                 let this = V::create_undefined(ctx.as_ref());
                 let _ = ctx
                     .as_ref()
@@ -242,9 +242,20 @@ impl<V: JSValueImpl + 'static> Promise<V> {
     /// Converts the Promise into a Future that resolves to a value of type T.
     ///
     /// # Example
-    /// ```
-    /// let promise = ctx.eval::<Promise>(js_code)?;
-    /// let future = promise.into_future::<i32>();
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSArrayBufferOps, JSObjectOps, Promise, Source, JSResult};
+    ///
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
+    /// where
+    ///     E::Value: JSArrayBufferOps + JSObjectOps + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let ctx = runtime.context();
+    ///
+    ///     let promise: Promise<E::Value> = ctx.eval(Source::from_bytes("Promise.resolve(1)"))?;
+    ///     let _future = promise.into_future::<i32>();
+    ///     Ok(())
+    /// }
     /// ```
     pub fn into_future<T>(self) -> PromiseFuture<V, T>
     where
@@ -285,10 +296,7 @@ where
                 //println!("resolve callback called");
                 let mut state = resolve_state.borrow_mut();
 
-                let resolved = match T::from_js_value(&ctx, value.into_value()) {
-                    Ok(v) => Ok(v),
-                    Err(e) => Err(e),
-                };
+                let resolved = T::from_js_value(&ctx, value.into_value());
 
                 if let PromiseState::Pending(waker) =
                     std::mem::replace(&mut *state, PromiseState::Resolved(resolved))
@@ -307,7 +315,7 @@ where
                     let mut state = reject_state.borrow_mut();
                     if let PromiseState::Pending(waker) = std::mem::replace(
                         &mut *state,
-                        PromiseState::Resolved(Err(RongJSError::from_jsvalue(reason))),
+                        PromiseState::Resolved(Err(RongJSError::from_thrown_value(reason))),
                     ) {
                         waker.wake_by_ref();
                     }

@@ -36,7 +36,7 @@ where
         if value.is_object() {
             Ok(JSValue::from_raw(ctx, value).into())
         } else {
-            Err(RongJSError::NotObject)
+            Err(RongJSError::NotObject())
         }
     }
 }
@@ -139,9 +139,20 @@ where
     /// Creates a JSObject from a JSON string
     ///
     /// # Example
-    /// ```
-    /// let json = r#"{"name":"John","age":30}"#;
-    /// let obj = JSObject::from_json_string(&ctx, json)?;
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSObject, JSObjectOps, JSResult};
+    ///
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
+    /// where
+    ///     E::Value: JSObjectOps + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let ctx = runtime.context();
+    ///
+    ///     let json = r#"{"name":"John","age":30}"#;
+    ///     let _obj = JSObject::<E::Value>::from_json_string(&ctx, json)?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn from_json_string(ctx: &JSContext<V::Context>, json: &str) -> JSResult<Self> {
         let v = json.json_to_jsvalue(ctx)?;

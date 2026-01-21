@@ -5,6 +5,9 @@ use std::hash::Hash;
 mod convert;
 pub use convert::*;
 
+mod error;
+pub use error::*;
+
 mod exception;
 pub use exception::*;
 
@@ -241,7 +244,9 @@ where
         if self.is_exception() {
             let ctx: JSContext<V::Context> =
                 JSContext::from_borrowed_raw_ptr(self.as_raw_context());
-            Err(RongJSError::from_jsvalue(JSValue::from_raw(&ctx, self)))
+            Err(RongJSError::from_thrown_value(JSValue::from_raw(
+                &ctx, self,
+            )))
         } else {
             Ok(f(self))
         }
@@ -260,11 +265,16 @@ macro_rules! impl_js_converter {
                 let mut result: $out_type = Default::default();
                 if unsafe { $to_fn(*self.as_raw_context(), *self.as_raw_value(), &mut result) } < 0
                 {
-                    Err(RongJSError::TypeError(format!(
-                        "Expected JSValue to be type {}, but got {:?}",
-                        std::any::type_name::<$out_type>(),
-                        self.type_of()
-                    )))
+                    Err($crate::HostError::new(
+                        $crate::error::E_TYPE,
+                        format!(
+                            "Expected JSValue to be type {}, but got {:?}",
+                            std::any::type_name::<$out_type>(),
+                            self.type_of()
+                        ),
+                    )
+                    .with_name("TypeError")
+                    .into())
                 } else {
                     Ok(result)
                 }

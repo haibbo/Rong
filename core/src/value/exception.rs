@@ -1,3 +1,4 @@
+use super::{JSError, JSErrorFactory};
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult, JSTypeOf,
     JSValue, JSValueImpl, RongJSError,
@@ -30,7 +31,7 @@ where
     V: JSValueImpl + JSTypeOf,
 {
     pub fn from_object(value: JSObject<V>) -> Option<Self> {
-        if value.is_exception() || value.is_error() {
+        if value.is_exception() {
             return Some(Self(value));
         }
         None
@@ -42,10 +43,10 @@ where
     V: JSTypeOf,
 {
     fn from_js_value(ctx: &JSContext<V::Context>, value: V) -> JSResult<Self> {
-        if value.is_exception() || value.is_error() {
+        if value.is_exception() {
             Ok(Self(JSObject::from_js_value(ctx, value)?))
         } else {
-            Err(RongJSError::NotObject)
+            Err(RongJSError::NotObject())
         }
     }
 }
@@ -86,88 +87,58 @@ where
     }
 }
 
-/// Represents a JavaScript error with message and stack trace
-#[derive(Debug, PartialEq, Eq)]
-pub struct JSError {
-    pub message: Option<String>,
-    pub stack: Option<String>,
-}
-
-impl fmt::Display for JSError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
-        match (&self.message, &self.stack) {
-            (Some(msg), Some(stack)) => write!(f, "{}\n{}", msg, stack),
-            (Some(msg), None) => write!(f, "{}", msg),
-            (None, Some(stack)) => write!(f, "{}", stack),
-            (None, None) => write!(f, "Unknown JavaScript Error"),
-        }
-    }
-}
-
-impl std::error::Error for JSError {}
-
-/// JavaScript Exception Handling Trait
+/// Enters the JavaScript exception channel by throwing a value.
 ///
-/// This trait defines methods for handling various types of exceptions in JavaScript engines
-///
-/// Note:
-/// This only creates the exception, it still needs to be thrown to the JS engine.
-pub trait JSExceptionHandler: JSContextImpl {
-    /// Throws a SyntaxError
-    fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value;
-
-    /// Throws a TypeError
-    fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value;
-
-    /// Throws a ReferenceError
-    fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value;
-
-    /// Throws a RangeError
-    fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value;
-
-    /// Throws a generic Error
-    fn throw_error(&self, message: impl AsRef<str>) -> Self::Value;
-
-    /// Throws any JavaScript value as an exception
+/// This is the only mechanism that should mark a value as an exception (`is_exception()`).
+pub trait JSExceptionThrower: JSContextImpl {
     fn throw(&self, value: Self::Value) -> Self::Value;
-
-    /// Creates a new Error object
-    fn new_error(&self) -> Self::Value;
 }
 
 impl<C> JSContext<C>
 where
-    C: JSContextImpl + JSExceptionHandler,
+    C: JSContextImpl + JSExceptionThrower,
     C::Value: JSValueImpl,
 {
-    pub fn throw_syntax_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
-        let raw = self.as_ref().throw_syntax_error(message);
-        JSValue::from_raw(self, raw)
-    }
-
-    pub fn throw_type_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
-        let raw = self.as_ref().throw_type_error(message);
-        JSValue::from_raw(self, raw)
-    }
-
-    pub fn throw_reference_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
-        let raw = self.as_ref().throw_reference_error(message);
-        JSValue::from_raw(self, raw)
-    }
-
-    pub fn throw_range_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
-        let raw = self.as_ref().throw_range_error(message);
-        JSValue::from_raw(self, raw)
-    }
-
-    pub fn throw_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
-        let raw = self.as_ref().throw_error(message);
-        JSValue::from_raw(self, raw)
-    }
-
     pub fn throw(&self, value: JSValue<C::Value>) -> JSValue<C::Value> {
         let raw = self.as_ref().throw(value.into_value());
         JSValue::from_raw(self, raw)
+    }
+}
+
+impl<C> JSContext<C>
+where
+    C: JSContextImpl + JSExceptionThrower + JSErrorFactory,
+    C::Value: JSValueImpl,
+{
+    pub fn throw_named_error(
+        &self,
+        name: &str,
+        message: impl AsRef<str>,
+        code: Option<&str>,
+    ) -> JSValue<C::Value> {
+        let raw = self.as_ref().new_error(name, message, code);
+        let raw = self.as_ref().throw(raw);
+        JSValue::from_raw(self, raw)
+    }
+
+    pub fn throw_syntax_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
+        self.throw_named_error("SyntaxError", message, None)
+    }
+
+    pub fn throw_type_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
+        self.throw_named_error("TypeError", message, None)
+    }
+
+    pub fn throw_reference_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
+        self.throw_named_error("ReferenceError", message, None)
+    }
+
+    pub fn throw_range_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
+        self.throw_named_error("RangeError", message, None)
+    }
+
+    pub fn throw_error(&self, message: impl AsRef<str>) -> JSValue<C::Value> {
+        self.throw_named_error("Error", message, None)
     }
 }
 

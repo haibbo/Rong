@@ -55,7 +55,7 @@ where
                 _phantom: PhantomData,
             })
         } else {
-            Err(RongJSError::NotJSArrayBuffer)
+            Err(RongJSError::NotJSArrayBuffer())
         }
     }
 }
@@ -93,13 +93,23 @@ where
     /// If you have owned data and want to avoid copying, use `from_bytes_owned` instead.
     ///
     /// # Examples
-    /// ```
-    /// let buffer = JSArrayBuffer::from_bytes(ctx, &[1, 2, 3])?;
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSArrayBuffer, JSArrayBufferOps, JSObjectOps, JSResult};
+    ///
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
+    /// where
+    ///     E::Value: JSArrayBufferOps + JSObjectOps + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let ctx = runtime.context();
+    ///     let _buffer = JSArrayBuffer::<E::Value, u8>::from_bytes(&ctx, &[1, 2, 3])?;
+    ///     Ok(())
+    /// }
     /// ```
     pub fn from_bytes(ctx: &JSContext<V::Context>, bytes: &[u8]) -> JSResult<Self> {
         // Validate that the byte length is a multiple of the element size
-        if bytes.len() % T::BYTES_PER_ELEMENT != 0 {
-            return Err(RongJSError::TypedArrayAlignmentError);
+        if !bytes.len().is_multiple_of(T::BYTES_PER_ELEMENT) {
+            return Err(RongJSError::TypedArrayAlignmentError());
         }
 
         let value = V::from_bytes(ctx.as_ref(), bytes);
@@ -113,15 +123,32 @@ where
     /// of the underlying memory.
     ///
     /// # Examples
-    /// ```
-    /// // From Vec (zero-copy)
-    /// let buffer = JSArrayBuffer::from_bytes_owned(ctx, vec![1, 2, 3])?;
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSArrayBuffer, JSArrayBufferOps, JSObjectOps, JSResult};
     ///
-    /// // From Box<[u8]> (zero-copy)
-    /// let buffer = JSArrayBuffer::from_bytes_owned(ctx, vec![1, 2, 3].into_boxed_slice())?;
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
+    /// where
+    ///     E::Value: JSArrayBufferOps + JSObjectOps + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let ctx = runtime.context();
     ///
-    /// // From &[u8] (will copy)
-    /// let buffer = JSArrayBuffer::from_bytes_owned(ctx, &[1, 2, 3].to_vec())?;
+    ///     // From Vec (zero-copy)
+    ///     let _buffer =
+    ///         JSArrayBuffer::<E::Value, u8>::from_bytes_owned(&ctx, vec![1u8, 2, 3])?;
+    ///
+    ///     // From Box<[u8]> (zero-copy)
+    ///     let _buffer = JSArrayBuffer::<E::Value, u8>::from_bytes_owned(
+    ///         &ctx,
+    ///         vec![1u8, 2, 3].into_boxed_slice(),
+    ///     )?;
+    ///
+    ///     // From &[u8] (will copy)
+    ///     let _buffer =
+    ///         JSArrayBuffer::<E::Value, u8>::from_bytes_owned(&ctx, vec![1u8, 2, 3])?;
+    ///
+    ///     Ok(())
+    /// }
     /// ```
     pub fn from_bytes_owned<B: Into<Vec<u8>>>(
         ctx: &JSContext<V::Context>,
@@ -129,8 +156,8 @@ where
     ) -> JSResult<Self> {
         let vec = data.into();
         // Validate that the byte length is a multiple of the element size
-        if vec.len() % T::BYTES_PER_ELEMENT != 0 {
-            return Err(RongJSError::TypedArrayAlignmentError);
+        if !vec.len().is_multiple_of(T::BYTES_PER_ELEMENT) {
+            return Err(RongJSError::TypedArrayAlignmentError());
         }
 
         let value = V::from_vec(ctx.as_ref(), vec);
@@ -185,7 +212,7 @@ where
 
     /// Validate if the given byte offset is properly aligned for this type
     pub fn validate_alignment(&self, offset: usize) -> bool {
-        offset % T::BYTES_PER_ELEMENT == 0
+        offset.is_multiple_of(T::BYTES_PER_ELEMENT)
     }
 
     /// Construct a JSArrayBuffer from a JSObject if it is an ArrayBuffer

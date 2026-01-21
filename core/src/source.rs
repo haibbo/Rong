@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{IntoJSResult, JSContext, JSContextImpl, JSResult, RongJSError};
+use crate::{HostError, JSContext, JSContextImpl, JSResult};
 
 #[derive(Debug, Clone)]
 pub enum SourceKind {
@@ -26,6 +26,8 @@ impl Source {
     ///
     /// # Example
     /// ```rust
+    /// use rong_core::Source;
+    ///
     /// // From string literal
     /// let source = Source::from_bytes("let x = 1;");
     ///
@@ -47,6 +49,8 @@ impl Source {
     ///
     /// # Example
     /// ```rust
+    /// use rong_core::Source;
+    ///
     /// let source = Source::from_bytes("let x = 1;")
     ///     .with_name("example.js");
     /// ```
@@ -72,9 +76,12 @@ impl Source {
 
         // Verify file extension
         if path.as_ref().extension().and_then(|ext| ext.to_str()) != Some("rong") {
-            return Err(RongJSError::Error(
-                "Bytecode files must have .rong extension".to_string(),
-            ));
+            return Err(HostError::new(
+                crate::error::E_INVALID_ARG,
+                "Bytecode files must have .rong extension",
+            )
+            .with_name("TypeError")
+            .into());
         }
 
         // Open file with explicit create and truncate options
@@ -83,18 +90,15 @@ impl Source {
             .create(true)
             .truncate(true)
             .open(path.as_ref())
-            .await
-            .into_result()?;
+            .await?;
 
         // Write header with separator
-        file.write_all(b"RONG").await.into_result()?;
-        file.write_all(ctx.runtime().engine.as_bytes())
-            .await
-            .into_result()?;
-        file.write_all(&[0]).await.into_result()?; // Null separator
+        file.write_all(b"RONG").await?;
+        file.write_all(ctx.runtime().engine.as_bytes()).await?;
+        file.write_all(&[0]).await?; // Null separator
 
         // Write bytecode
-        file.write_all(self.code()).await.into_result()?;
+        file.write_all(self.code()).await?;
 
         Ok(())
     }
@@ -111,7 +115,7 @@ impl Source {
         ctx: &JSContext<C>,
         path: impl AsRef<Path>,
     ) -> JSResult<Self> {
-        let code = tokio::fs::read(path.as_ref()).await.into_result()?;
+        let code = tokio::fs::read(path.as_ref()).await?;
 
         let kind = match path.as_ref().extension().and_then(|ext| ext.to_str()) {
             Some("js") => SourceKind::JavaScript(code),
@@ -128,21 +132,35 @@ impl Source {
                         // Skip header and null separator
                         SourceKind::ByteCode(code[expected_header.len() + 1..].to_vec())
                     } else {
-                        return Err(RongJSError::Error(format!(
-                            "Bytecode was compiled for a different engine. Expected: {}, Found: {}",
-                            engine_name,
-                            String::from_utf8_lossy(&code[6..])
-                        )));
+                        return Err(
+                            HostError::new(
+                                crate::error::E_NOT_SUPPORTED,
+                                format!(
+                                    "Bytecode was compiled for a different engine. Expected: {}, Found: {}",
+                                    engine_name,
+                                    String::from_utf8_lossy(&code[6..])
+                                ),
+                            )
+                            .into(),
+                        );
                     }
                 } else {
-                    return Err(RongJSError::Error("Invalid .rong file format".to_string()));
+                    return Err(HostError::new(
+                        crate::error::E_INVALID_DATA,
+                        "Invalid .rong file format",
+                    )
+                    .into());
                 }
             }
             _ => {
-                return Err(RongJSError::Error(format!(
-                    "Unsupported file type. Supported extensions: .js,.rong. Found: {}",
-                    path.as_ref().display()
-                )));
+                return Err(HostError::new(
+                    crate::error::E_NOT_SUPPORTED,
+                    format!(
+                        "Unsupported file type. Supported extensions: .js,.rong. Found: {}",
+                        path.as_ref().display()
+                    ),
+                )
+                .into());
             }
         };
 

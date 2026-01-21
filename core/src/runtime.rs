@@ -65,9 +65,16 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
     /// - Contexts are isolated execution environments within the same runtime.
     ///
     /// # Example
-    /// ```rust
-    /// let runtime = JSEngine::runtime();
-    /// let context = runtime.context();
+    /// ```rust,no_run
+    /// use rong_core::{JSEngine, JSObjectOps};
+    ///
+    /// fn demo<E: JSEngine + 'static>()
+    /// where
+    ///     E::Value: JSObjectOps + 'static,
+    /// {
+    ///     let runtime = E::runtime();
+    ///     let _context = runtime.context();
+    /// }
     /// ```
     pub fn context(&self) -> JSContext<R::Context>
     where

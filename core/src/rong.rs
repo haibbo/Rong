@@ -1,4 +1,4 @@
-use crate::{JSEngine, JSResult, JSRuntime, RongJSError};
+use crate::{HostError, JSEngine, JSResult, JSRuntime};
 use std::any::Any;
 use std::future::Future;
 use std::marker::PhantomData;
@@ -193,10 +193,14 @@ impl<E: JSEngine + 'static> Worker<E> {
                 "[spawn_future Worker {}] Failed to send task: {:?}",
                 self.id, e
             );
-            return Err(RongJSError::Error(format!(
-                "Failed to spawn future on worker {}: channel error: {:?}",
-                self.id, e
-            )));
+            return Err(HostError::new(
+                crate::error::E_INTERNAL,
+                format!(
+                    "Failed to spawn future on worker {}: channel error: {:?}",
+                    self.id, e
+                ),
+            )
+            .into());
         }
         Ok(())
     }
@@ -230,9 +234,11 @@ impl<E: JSEngine + 'static> Worker<E> {
                                 // SAFETY: We checked R is () and the box contains (), so zeroed is safe.
                                 Ok(unsafe { std::mem::zeroed::<R>() })
                             } else {
-                                Err(RongJSError::Error(
-                                    "Downcast failed in block_on callback".to_string(),
-                                ))
+                                Err(HostError::new(
+                                    crate::error::E_INTERNAL,
+                                    "Downcast failed in block_on callback",
+                                )
+                                .into())
                             }
                         }
                     }
@@ -275,10 +281,10 @@ impl<E: JSEngine + 'static> Worker<E> {
         // Send task to worker thread (blocking send)
         futures::executor::block_on(async {
             if let Err(e) = self.task_tx.send(task).await {
-                return Err(RongJSError::Error(format!(
-                    "[block_on Worker {}] Failed to send task: {:?}",
-                    self.id, e
-                )));
+                return Err::<(), HostError>(HostError::new(
+                    crate::error::E_INTERNAL,
+                    format!("[block_on Worker {}] Failed to send task: {:?}", self.id, e),
+                ));
             }
             Ok(())
         })?;
@@ -286,10 +292,13 @@ impl<E: JSEngine + 'static> Worker<E> {
         // Wait for the final JSResult<R> from the callback
         futures::executor::block_on(async {
             final_result_rx.await.map_err(|e| {
-                RongJSError::Error(format!(
-                    "[block_on Worker {}] Failed to receive final result: {:?}",
-                    self.id, e
-                ))
+                HostError::new(
+                    crate::error::E_INTERNAL,
+                    format!(
+                        "[block_on Worker {}] Failed to receive final result: {:?}",
+                        self.id, e
+                    ),
+                )
             })
         })?
     }
@@ -342,10 +351,11 @@ impl<E: JSEngine + 'static> Worker<E> {
                 eprintln!("Worker {} message channel closed, message dropped", self.id);
             }
             // Convert SendError to our error type
-            RongJSError::Error(format!(
-                "Failed to post message to worker {}: {:?}",
-                self.id, e
-            ))
+            HostError::new(
+                crate::error::E_INTERNAL,
+                format!("Failed to post message to worker {}: {:?}", self.id, e),
+            )
+            .into()
         })
     }
 }
@@ -444,11 +454,15 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
     /// * `Arc<Rong<E>>` - A thread-safe reference to the created Rong instance
     ///
     /// # Example
-    /// ```rust
-    /// let rong = Rong::builder()
-    ///     .with_num_workers(8)
-    ///     .with_task_queue_size(200)
-    ///     .build();
+    /// ```rust,no_run
+    /// use rong_core::{rong::Rong, JSEngine};
+    ///
+    /// fn demo<E: JSEngine + 'static>() {
+    ///     let _rong = Rong::<E>::builder()
+    ///         .with_num_workers(8)
+    ///         .with_task_queue_size(200)
+    ///         .build();
+    /// }
     /// ```
     pub fn build(self) -> Arc<Rong<E>> {
         // Initialize the shared service runtime with configured threads (idempotent)
@@ -512,12 +526,13 @@ impl<E: JSEngine + 'static> Rong<E> {
     /// * `Result<R, RongJSError>` - The result of the async function execution
     ///
     /// # Example
-    /// ```rust
-    /// let rong = Rong::builder().build();
-    /// let result = rong.block_on(|runtime, receiver| async {
-    ///     // Your async code here
-    ///     Ok(42)
-    /// }).unwrap();
+    /// ```rust,no_run
+    /// use rong_core::{rong::Rong, JSEngine, JSResult};
+    ///
+    /// fn demo<E: JSEngine + 'static>() {
+    ///     let rong = Rong::<E>::builder().build();
+    ///     let _result: JSResult<i32> = rong.block_on(|_runtime, _receiver| async { Ok(42) });
+    /// }
     /// ```
     pub fn block_on<F, Fut, R>(&self, future_fn: F) -> JSResult<R>
     where
@@ -724,15 +739,15 @@ impl<E: JSEngine + 'static> Rong<E> {
                         maybe_message = worker_message_rx.recv(), if current_task_message_tx.is_some() => {
                              if let Some(message) = maybe_message {
                                 // Forward the message to the current task, ignoring errors (task might have ended)
-                                if let Some(tx) = &current_task_message_tx {
-                                    // Never drop messages here: dropping view/native calls causes view-side timeouts.
-                                    // Apply backpressure if the receiver is temporarily slow instead.
-                                    if tx.send(message).await.is_ok() {
-                                        if let Some(rt) = &current_js_runtime {
-                                            rt.run_pending_jobs();
-                                        }
-                                    }
-                                }
+	                                if let Some(tx) = &current_task_message_tx {
+	                                    // Never drop messages here: dropping view/native calls causes view-side timeouts.
+	                                    // Apply backpressure if the receiver is temporarily slow instead.
+	                                    if tx.send(message).await.is_ok()
+	                                        && let Some(rt) = &current_js_runtime
+	                                    {
+	                                        rt.run_pending_jobs();
+	                                    }
+	                                }
                              } else {
                                  // worker_message_rx closed, might indicate an issue or shutdown
                                  println!("Worker {} message channel closed.", worker_id);
@@ -745,10 +760,10 @@ impl<E: JSEngine + 'static> Rong<E> {
                             // The user future returns Result<Box<dyn Any>, Aborted> wrapped in Result<_, JoinError>
                             let final_result: JSResult<Box<dyn Any + Send>> = match maybe_result {
                                 Ok(Ok(inner_result)) => inner_result, // Task finished successfully (Ok from JoinHandle, Ok from AbortableFuture)
-                                Ok(Err(_aborted)) => Err(RongJSError::Error("Task aborted".to_string())), // Ok from JoinHandle, Err from AbortableFuture (aborted)
+                                Ok(Err(_aborted)) => Err(HostError::aborted(None).into()), // Ok from JoinHandle, Err from AbortableFuture (aborted)
                                 Err(join_error) => { // Err from JoinHandle (task panicked or runtime dropped)
                                      eprintln!("[Worker {}] User task panicked or runtime dropped: {:?}", worker_id, join_error);
-                                     Err(RongJSError::Error(format!("User task panicked or runtime dropped: {}", join_error)))
+                                     Err(HostError::new(crate::error::E_INTERNAL, format!("User task panicked or runtime dropped: {}", join_error)).into())
                                 }
                             };
 
@@ -827,7 +842,7 @@ impl<E: JSEngine + 'static> Rong<E> {
             }
         }
 
-        Err(RongJSError::Error("No free worker available".to_string()))
+        Err(HostError::new(crate::error::E_INVALID_STATE, "No free worker available").into())
     }
 
     /// Get the count of free workers in the pool
