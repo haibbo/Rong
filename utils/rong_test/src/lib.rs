@@ -2,6 +2,24 @@ pub use rong::*;
 // Re-export commonly used types for tests
 pub use rong::function::{Constructor, Optional, Rest, This, ThisMut};
 
+#[cfg(feature = "http")]
+pub mod http {
+    pub use axum;
+
+    pub async fn spawn_axum(app: axum::Router) -> std::io::Result<std::net::SocketAddr> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let addr = listener.local_addr()?;
+
+        tokio::spawn(async move {
+            if let Err(err) = axum::serve(listener, app).await {
+                eprintln!("axum test server exited with error: {}", err);
+            }
+        });
+
+        Ok(addr)
+    }
+}
+
 pub fn thrown_js_value(ctx: &JSContext, err: &RongJSError) -> JSResult<JSValue> {
     err.thrown_value(ctx)
         .ok_or_else(|| HostError::new(rong::error::E_INTERNAL, "Expected thrown JS value").into())

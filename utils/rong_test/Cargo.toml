@@ -8,3 +8,7 @@ description = "Test utilities for rong"
 rong = { workspace = true }
 tokio = { workspace = true }
 futures = { workspace = true }
+axum = { workspace = true, optional = true }
+
+[features]
+http = ["dep:axum"]
