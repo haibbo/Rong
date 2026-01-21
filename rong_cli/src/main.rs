@@ -75,9 +75,12 @@ async fn compile_file(ctx: &JSContext, input: PathBuf, output: PathBuf) -> Resul
     let js_code = match source.kind() {
         SourceKind::JavaScript(code) => code,
         SourceKind::ByteCode(_) => {
-            return Err(RongJSError::Error(
-                "Cannot compile already compiled bytecode".to_string(),
-            ));
+            return Err(HostError::new(
+                rong::error::E_INVALID_ARG,
+                "Cannot compile already compiled bytecode",
+            )
+            .with_name("TypeError")
+            .into());
         }
     };
 
