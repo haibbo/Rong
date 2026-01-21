@@ -1,11 +1,10 @@
 use crate::{QJSRuntime, QJSValue, qjs};
 use rong_core::{
-    JSClass, JSContextImpl, JSExceptionHandler, JSRuntimeImpl, JSTypeOf, JSValueImpl, RongJSError,
-    Source,
+    JSClass, JSContextImpl, JSErrorFactory, JSExceptionThrower, JSRuntimeImpl, JSTypeOf,
+    JSValueImpl, RongJSError, Source,
 };
 use std::ffi::CString;
 use std::mem::MaybeUninit;
-use std::os::raw::c_char;
 
 pub struct QJSContext {
     pub(crate) ctx: *mut qjs::JSContext,
@@ -57,7 +56,7 @@ impl JSContextImpl for QJSContext {
         };
         let obj = self.eval_raw(&source, options.to_flags());
         if obj.is_exception() {
-            return Err(RongJSError::CompileToByteErr);
+            return Err(RongJSError::CompileToByteErr());
         }
 
         let mut out_size = 0;
@@ -70,7 +69,7 @@ impl JSContextImpl for QJSContext {
             );
 
             if buf.is_null() {
-                return Err(RongJSError::CompileToByteErr);
+                return Err(RongJSError::CompileToByteErr());
             }
 
             std::slice::from_raw_parts(buf, out_size)
@@ -281,58 +280,68 @@ impl QJSContext {
             }
         }
     }
+}
 
-    fn throw_excep_internal<F>(&self, message: &str, throw_fn: F) -> QJSValue
-    where
-        F: FnOnce(*mut qjs::JSContext, *const c_char, *const c_char) -> qjs::JSValue,
-    {
-        let c_message = CString::new(message).unwrap();
-        let raw = { throw_fn(self.ctx, c"%s".as_ptr(), c_message.as_ptr()) };
-        QJSValue::from_owned_raw(self.ctx, raw).with_exception()
+impl JSErrorFactory for QJSContext {
+    fn new_error(&self, name: &str, message: impl AsRef<str>, code: Option<&str>) -> Self::Value {
+        let message = message.as_ref();
+        unsafe {
+            let global = qjs::JS_GetGlobalObject(self.ctx);
+
+            let ctor_name = if matches!(
+                name,
+                "Error" | "TypeError" | "RangeError" | "ReferenceError" | "SyntaxError"
+            ) {
+                name
+            } else {
+                "Error"
+            };
+
+            let ctor_name_c = CString::new(ctor_name).unwrap();
+            let ctor = qjs::JS_GetPropertyStr(self.ctx, global, ctor_name_c.as_ptr());
+
+            let mut obj = qjs::QJS_NewUndefined(self.ctx);
+            if qjs::JS_IsFunction(self.ctx, ctor) {
+                let msg = qjs::JS_NewStringLen(self.ctx, message.as_ptr() as _, message.len() as _);
+                let mut args = [msg];
+                obj = qjs::JS_CallConstructor(self.ctx, ctor, 1, args.as_mut_ptr());
+                qjs::JS_FreeValue(self.ctx, msg);
+            }
+
+            if qjs::QJS_IsUndefined(self.ctx, obj) || qjs::QJS_IsException(self.ctx, obj) {
+                if !qjs::QJS_IsUndefined(self.ctx, obj) {
+                    qjs::JS_FreeValue(self.ctx, obj);
+                }
+                obj = qjs::JS_NewError(self.ctx);
+                let msg = qjs::JS_NewStringLen(self.ctx, message.as_ptr() as _, message.len() as _);
+                let _ = qjs::JS_SetPropertyStr(self.ctx, obj, c"message".as_ptr(), msg);
+            }
+
+            if name != "Error" {
+                let name_val = qjs::JS_NewStringLen(self.ctx, name.as_ptr() as _, name.len() as _);
+                let _ = qjs::JS_SetPropertyStr(self.ctx, obj, c"name".as_ptr(), name_val);
+            }
+
+            if let Some(code) = code {
+                let code_val = qjs::JS_NewStringLen(self.ctx, code.as_ptr() as _, code.len() as _);
+                let _ = qjs::JS_DefinePropertyValueStr(
+                    self.ctx,
+                    obj,
+                    c"code".as_ptr(),
+                    code_val,
+                    (qjs::JS_PROP_WRITABLE | qjs::JS_PROP_CONFIGURABLE) as i32,
+                );
+            }
+
+            qjs::JS_FreeValue(self.ctx, ctor);
+            qjs::JS_FreeValue(self.ctx, global);
+
+            QJSValue::from_owned_raw(self.ctx, obj).with_error()
+        }
     }
 }
 
-impl JSExceptionHandler for QJSContext {
-    fn throw_syntax_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
-            qjs::JS_ThrowSyntaxError(ctx, fmt, msg);
-            qjs::JS_GetException(ctx)
-        })
-    }
-
-    fn throw_type_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
-            qjs::JS_ThrowTypeError(ctx, fmt, msg);
-            qjs::JS_GetException(ctx)
-        })
-    }
-
-    fn throw_reference_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
-            qjs::JS_ThrowReferenceError(ctx, fmt, msg);
-            qjs::JS_GetException(ctx)
-        })
-    }
-
-    fn throw_range_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
-            qjs::JS_ThrowRangeError(ctx, fmt, msg);
-            qjs::JS_GetException(ctx)
-        })
-    }
-
-    fn throw_error(&self, message: impl AsRef<str>) -> Self::Value {
-        self.throw_excep_internal(message.as_ref(), |ctx, fmt, msg| unsafe {
-            qjs::JS_ThrowPlainError(ctx, fmt, msg);
-            qjs::JS_GetException(ctx)
-        })
-        .with_exception()
-    }
-
-    fn new_error(&self) -> Self::Value {
-        QJSValue::from_owned_raw(self.ctx, unsafe { qjs::JS_NewError(self.ctx) }).with_error()
-    }
-
+impl JSExceptionThrower for QJSContext {
     fn throw(&self, value: Self::Value) -> Self::Value {
         QJSValue::from_owned_raw(self.ctx, value.into_raw_value()).with_exception()
     }

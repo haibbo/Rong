@@ -48,14 +48,14 @@ pub(crate) unsafe extern "C" fn gc_mark<JC>(
     unsafe {
         // Extract the Rust object and call gc_mark_with on it
         let ptr = qjs::QJS_ObjectGetPrivate(val) as *mut RefCell<JC>;
-        if !ptr.is_null() {
-            if let Ok(borrowed) = (*ptr).try_borrow() {
-                // Use the callback-based approach for marking
-                borrowed.gc_mark_with(|value| {
-                    let v = *value.as_value().as_raw_value();
-                    qjs::JS_MarkValue(rt, v, mark_func);
-                });
-            }
+        if !ptr.is_null()
+            && let Ok(borrowed) = (*ptr).try_borrow()
+        {
+            // Use the callback-based approach for marking
+            borrowed.gc_mark_with(|value| {
+                let v = *value.as_value().as_raw_value();
+                qjs::JS_MarkValue(rt, v, mark_func);
+            });
         }
     }
 }

@@ -246,7 +246,7 @@ impl_js_converter!(
         const JS_MAX_SAFE_INTEGER: i64 = (1i64 << 53) - 1;
         const JS_MIN_SAFE_INTEGER: i64 = -JS_MAX_SAFE_INTEGER;
 
-        if value >= JS_MIN_SAFE_INTEGER && value <= JS_MAX_SAFE_INTEGER {
+        if (JS_MIN_SAFE_INTEGER..=JS_MAX_SAFE_INTEGER).contains(&value) {
             qjs::QJS_NewFloat64(ctx, value as f64)
         } else {
             qjs::JS_NewBigInt64(ctx, value)
