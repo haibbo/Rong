@@ -17,6 +17,7 @@ http-body = "1.0"
 hyper = { workspace = true }
 hyper-rustls = { workspace = true }
 hyper-util = { workspace = true }
+rustls = { workspace = true }
 rong_navigator = { workspace = true }
 rong_url = { workspace = true }
 uuid = { workspace = true }
@@ -31,13 +32,12 @@ jscore = ["rong/jscore"]
 arkjs = ["rong/arkjs"]
 
 [dev-dependencies]
-rong_test = { workspace = true }
+rong_test = { workspace = true, features = ["http"] }
 rong_encoding = { workspace = true }
 rong_console = { workspace = true }
 rong_assert = { workspace = true }
 rong_timer = { workspace = true }
 futures = { workspace = true }
 tokio-stream = { workspace = true }
-axum = { workspace = true }
 serde_json = { workspace = true }
 rong_fs = { workspace = true }

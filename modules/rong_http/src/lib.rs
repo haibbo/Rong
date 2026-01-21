@@ -1,12 +1,17 @@
 use rong::*;
 
 mod body;
+mod client;
+mod download;
 mod fetch;
 mod formdata;
 mod header;
 mod request;
 mod response;
 mod security;
+
+pub use client::*;
+pub use download::*;
 
 // Re-export security-related items
 pub use security::{NetworkAccessGuard, set_network_access_guard};

@@ -9,11 +9,11 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 use tokio_stream::{StreamExt as _, wrappers::ReceiverStream};
 
+use crate::client;
 use crate::formdata::FormData;
 use crate::request::{Request, RequestInit};
 use crate::response::Response;
 use crate::security::grant_network_access;
-use rong::service_executor;
 use rong_stream::ReadableStream;
 
 // Convert Request to hyper::Request
@@ -135,7 +135,7 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     let small_threshold = 256 * 1024; // 256KB
 
     // Race the network request with an early abort. If the abort wins, reject with its reason.
-    let net_fut = service_executor::send_request(hyper_request, small_threshold, abort_bridge);
+    let net_fut = client::send_request(hyper_request, small_threshold, abort_bridge);
     let net_resp = if let Some(early_abort) = &mut abort_receiver {
         tokio::select! {
             res = net_fut => res.map_err(|e| {
@@ -156,11 +156,11 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     };
 
     let body_kind = match net_resp.body {
-        service_executor::HttpBody::Small(bytes) => crate::body::BodyKind::Buffered(bytes),
-        service_executor::HttpBody::Stream(rx) => {
+        client::HttpBody::Small(bytes) => crate::body::BodyKind::Buffered(bytes),
+        client::HttpBody::Stream(rx) => {
             crate::body::BodyKind::Channel(Arc::new(Mutex::new(Some(rx))))
         }
-        service_executor::HttpBody::Empty => crate::body::BodyKind::Buffered(Bytes::new()),
+        client::HttpBody::Empty => crate::body::BodyKind::Buffered(Bytes::new()),
     };
 
     Ok(Response::from_meta(
@@ -182,22 +182,21 @@ pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::body::Bytes as AxumBytes;
-    use axum::routing::put;
-    use axum::{
+    use flate2::{Compression, write::GzEncoder};
+    use futures::{StreamExt as FuturesStreamExt, stream};
+    use rong_test::*;
+    use rong_test::http::axum::body::Bytes as AxumBytes;
+    use rong_test::http::axum::routing::{get, put};
+    use rong_test::http::axum::{
         Router,
         body::Body,
         http::HeaderMap,
         response::{IntoResponse, Response as AxumResponse},
-        routing::get,
     };
-    use flate2::{Compression, write::GzEncoder};
-    use futures::{StreamExt as FuturesStreamExt, stream};
-    use rong_test::*;
+    use rong_test::http::{axum, spawn_axum};
     use std::convert::Infallible;
     use std::io::Write;
     use std::net::SocketAddr;
-    use tokio::net::TcpListener;
     use tokio::time::{Duration, sleep};
 
     async fn test_ip() -> impl IntoResponse {
@@ -285,14 +284,7 @@ mod tests {
                 }),
             );
 
-        let listener = TcpListener::bind("127.0.0.1:0").await?;
-        let addr = listener.local_addr()?;
-
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
-
-        Ok(addr)
+        spawn_axum(app).await
     }
 
     #[test]
