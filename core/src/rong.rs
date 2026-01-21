@@ -466,7 +466,7 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
     /// ```
     pub fn build(self) -> Arc<Rong<E>> {
         // Initialize the shared service runtime with configured threads (idempotent)
-        crate::service_executor::start_service_runtime(self.service_worker_threads);
+        crate::bg::start(self.service_worker_threads);
 
         let rong = Arc::new(Rong {
             workers: Arc::new(TokioMutex::new(Vec::with_capacity(self.worker_count))),
@@ -914,8 +914,6 @@ impl<E: JSEngine + 'static> Drop for Rong<E> {
     fn drop(&mut self) {
         // Ensure workers are terminated when Rong is dropped by calling the shutdown logic
         let _ = self.shutdown();
-        // Stop global net runtime if running
-        crate::service_executor::stop_service_runtime();
     }
 }
 

@@ -279,12 +279,16 @@ impl HostError {
 /// The payload can be any JS value (including primitives). You cannot construct this type directly;
 /// use `RongJSError::from_thrown_value`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ThrownValue {
+pub(crate) struct ThrownValue {
     handle: ThrownValueHandle,
 }
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
-pub enum RongJSError {
+#[error(transparent)]
+pub struct RongJSError(pub(crate) RongJSErrorKind);
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RongJSErrorKind {
     /// Host-originated failure that must be surfaced to JS as an `Error` object.
     #[error("{0}")]
     Host(HostError),
@@ -470,9 +474,9 @@ impl RongJSError {
         C: JSContextImpl,
         C::Value: JSObjectOps,
     {
-        match self {
-            Self::Host(host) => Self::Host(host),
-            Self::Thrown(thrown) => {
+        match self.0 {
+            RongJSErrorKind::Host(host) => Self(RongJSErrorKind::Host(host)),
+            RongJSErrorKind::Thrown(thrown) => {
                 let handle = thrown.handle;
                 let thrown = ctx.resolve_thrown(handle);
 
@@ -495,13 +499,13 @@ impl RongJSError {
                     .or_else(|| thrown.and_then(|v| String::from_js_value(ctx, v).ok()))
                     .unwrap_or_else(|| "JavaScript threw a value".to_string());
 
-                Self::Host(HostError {
+                Self(RongJSErrorKind::Host(HostError {
                     name: "Error",
                     code: E_JS_THROWN,
                     message,
                     data: Some(ErrorData::Object(data)),
                     thrown: Some(handle),
-                })
+                }))
             }
         }
     }
@@ -511,8 +515,8 @@ impl RongJSError {
         V: JSValueImpl + JSObjectOps + JSArrayOps,
         V::Context: JSErrorFactory + JSExceptionThrower,
     {
-        match self {
-            Self::Thrown(thrown) => {
+        match self.0 {
+            RongJSErrorKind::Thrown(thrown) => {
                 let handle = thrown.handle;
                 let Some(value) = ctx.take_thrown(handle) else {
                     let raw = ctx.as_ref().new_error(
@@ -525,7 +529,7 @@ impl RongJSError {
                 ctx.throw(value).into_value()
             }
 
-            Self::Host(host) => {
+            RongJSErrorKind::Host(host) => {
                 let obj = Self::host_error_object::<V>(&host, ctx);
                 if host.code == E_JS_THROWN
                     && let Some(handle) = host.thrown
@@ -545,8 +549,8 @@ impl RongJSError {
         V: JSValueImpl + JSObjectOps + JSArrayOps,
         V::Context: JSErrorFactory,
     {
-        match self {
-            Self::Thrown(thrown) => {
+        match self.0 {
+            RongJSErrorKind::Thrown(thrown) => {
                 let handle = thrown.handle;
                 let Some(value) = ctx.take_thrown(handle) else {
                     let raw = ctx.as_ref().new_error(
@@ -558,7 +562,7 @@ impl RongJSError {
                 };
                 value
             }
-            Self::Host(host) => {
+            RongJSErrorKind::Host(host) => {
                 let obj = Self::host_error_object::<V>(&host, ctx);
                 if host.code == E_JS_THROWN
                     && let Some(handle) = host.thrown
@@ -575,32 +579,46 @@ impl RongJSError {
     pub fn from_thrown_value<V: JSValueImpl>(value: JSValue<V>) -> Self {
         let ctx: JSContext<V::Context> =
             JSContext::from_borrowed_raw_ptr(value.as_value().as_raw_context());
-        Self::Thrown(ThrownValue {
+        Self(RongJSErrorKind::Thrown(ThrownValue {
             handle: ctx.capture_thrown(value),
-        })
+        }))
     }
 
     pub fn thrown_value<C>(&self, ctx: &JSContext<C>) -> Option<JSValue<C::Value>>
     where
         C: JSContextImpl,
     {
-        match self {
-            Self::Thrown(thrown) => ctx.resolve_thrown(thrown.handle),
+        match &self.0 {
+            RongJSErrorKind::Thrown(thrown) => ctx.resolve_thrown(thrown.handle),
             _ => None,
         }
     }
 
+    pub fn as_host_error(&self) -> Option<&HostError> {
+        match &self.0 {
+            RongJSErrorKind::Host(host) => Some(host),
+            RongJSErrorKind::Thrown(_) => None,
+        }
+    }
+
+    pub fn into_host_error(self) -> Option<HostError> {
+        match self.0 {
+            RongJSErrorKind::Host(host) => Some(host),
+            RongJSErrorKind::Thrown(_) => None,
+        }
+    }
+
     pub fn is_thrown(&self) -> bool {
-        matches!(self, Self::Thrown(_))
+        matches!(self.0, RongJSErrorKind::Thrown(_))
     }
 
     pub fn is_property_not_found(&self) -> bool {
-        matches!(self, Self::Host(host) if host.code == E_MISSING_PROPERTY)
+        matches!(self.0, RongJSErrorKind::Host(ref host) if host.code == E_MISSING_PROPERTY)
     }
 
     pub fn is_not_support_bytecode(&self) -> bool {
-        match self {
-            Self::Host(host) if host.code == E_NOT_SUPPORTED => matches!(
+        match &self.0 {
+            RongJSErrorKind::Host(host) if host.code == E_NOT_SUPPORTED => matches!(
                 host.data.as_ref(),
                 Some(ErrorData::Object(map))
                     if map.get("feature").and_then(|v| v.as_str()) == Some("bytecode")
@@ -631,7 +649,7 @@ where
 
 impl From<HostError> for RongJSError {
     fn from(err: HostError) -> Self {
-        RongJSError::Host(err)
+        RongJSError(RongJSErrorKind::Host(err))
     }
 }
 

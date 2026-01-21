@@ -1,3 +1,4 @@
+pub mod bg;
 mod class;
 mod context;
 pub mod error;
@@ -7,8 +8,8 @@ mod promise;
 pub mod rong;
 mod runtime;
 mod scheduler;
-pub mod service_executor;
 mod source;
+pub mod user_agent;
 mod value;
 pub use scheduler::{JsInvokePriority, enqueue_js_invoke};
 

@@ -1,11 +1,12 @@
-use super::{ServiceCommand, get_user_agent, net::HttpBody, send_request};
 use bytes::Bytes;
 use http::Request as HttpRequest;
 use http::header;
 use http_body_util::{BodyExt, Full};
 use std::io::Error;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::{mpsc::error::TrySendError, oneshot};
+use tokio::sync::oneshot;
+
+use crate::client::{HttpBody, send_request};
 
 const DEFAULT_DOWNLOAD_SMALL_THRESHOLD: usize = 64 * 1024;
 
@@ -22,42 +23,25 @@ pub fn request_download(
 ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
     let (completion_tx, completion_rx) = oneshot::channel();
 
-    let tx = {
-        let guard = super::runtime::runtime_slot().lock().unwrap();
-        if let Some(rt) = guard.as_ref() {
-            rt.tx.clone()
-        } else {
-            let _ = completion_tx.send(Err("service runtime not started".to_string()));
-            return Err("service runtime not started".to_string());
-        }
-    };
-
-    let cmd = ServiceCommand::Download {
-        url: url.into(),
-        dest: dest.into(),
-        abort_rx,
-        sink,
-        completion: completion_tx,
-    };
-
-    match tx.try_send(cmd) {
-        Ok(_) => Ok(completion_rx),
-        Err(TrySendError::Full(cmd)) => {
-            if let ServiceCommand::Download { completion, .. } = cmd {
-                let _ = completion.send(Err("service runtime queue full".to_string()));
-            }
-            Err("service runtime queue full".to_string())
-        }
-        Err(TrySendError::Closed(cmd)) => {
-            if let ServiceCommand::Download { completion, .. } = cmd {
-                let _ = completion.send(Err("service runtime down".to_string()));
-            }
-            Err("service runtime down".to_string())
-        }
+    if !rong::bg::is_started() {
+        return Err(
+            "background task manager not started (call `Rong::builder().build()` or `rong::bg::start(...)` first)"
+                .to_string(),
+        );
     }
+
+    let url = url.into();
+    let dest = dest.into();
+    rong::bg::spawn(async move {
+        let res = download_resource(&url, &dest, abort_rx, sink).await;
+        let _ = completion_tx.send(res);
+    })
+    .map_err(|e| e.to_string())?;
+
+    Ok(completion_rx)
 }
 
-pub(super) async fn download_resource(
+async fn download_resource(
     url: &str,
     dest: &std::path::PathBuf,
     abort_rx: Option<oneshot::Receiver<()>>,
@@ -65,10 +49,10 @@ pub(super) async fn download_resource(
 ) -> Result<(), String> {
     let mut sink_opt = sink;
 
-    if let Some(parent) = dest.parent()
-        && let Err(e) = std::fs::create_dir_all(parent)
-    {
-        return finalize_sink(sink_opt, Err(format!("create dir: {}", e)));
+    if let Some(parent) = dest.parent() {
+        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+            return finalize_sink(sink_opt, Err(format!("create dir: {}", e)));
+        }
     }
 
     let temp_path = dest.with_extension("part");
@@ -82,7 +66,7 @@ pub(super) async fn download_resource(
         .uri(url)
         .header(header::ACCEPT, "*/*");
     if let Some(headers) = builder.headers_mut() {
-        let ua = get_user_agent();
+        let ua = rong::get_user_agent();
         match header::HeaderValue::from_str(&ua) {
             Ok(v) => {
                 headers.insert(header::USER_AGENT, v);
