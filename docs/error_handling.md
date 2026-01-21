@@ -8,16 +8,16 @@ This document is for Rong module developers, covering error handling patterns at
 
 ### Common Scenarios
 
-| Scenario | Rust Code |
-|----------|-----------|
-| Type mismatch | `HostError::new(E_TYPE, "expected string").with_name("TypeError")` |
-| Wrong argument count | `HostError::invalid_arg_count(2, got)` |
-| Out of range | `HostError::new(E_OUT_OF_RANGE, "index out of bounds").with_name("RangeError")` |
-| IO failure | `HostError::new(E_IO, err.to_string())` |
-| Permission denied | `HostError::new(E_PERMISSION_DENIED, "access denied")` |
-| Operation aborted | `HostError::aborted(reason)` |
-| Invalid state | `HostError::new(E_INVALID_STATE, "stream already closed")` |
-| Preserve JS thrown value | `RongJSError::from_thrown_value(js_value)` |
+| Scenario                 | Rust Code                                                                          |
+| :---                     | :---                                                                               |
+| Type mismatch            | `HostError::new(E_TYPE, "expected string").with_name("TypeError")`                 |
+| Wrong argument count     | `HostError::invalid_arg_count(2, got)`                                             |
+| Out of range             | `HostError::new(E_OUT_OF_RANGE, "index out of bounds").with_name("RangeError")`    |
+| IO failure               | `HostError::new(E_IO, err.to_string())`                                            |
+| Permission denied        | `HostError::new(E_PERMISSION_DENIED, "access denied")`                             |
+| Operation aborted        | `HostError::aborted(reason)`                                                       |
+| Invalid state            | `HostError::new(E_INVALID_STATE, "stream already closed")`                         |
+| Preserve JS thrown value | `RongJSError::from_thrown_value(js_value)`                                         |
 
 ### Complete Examples
 
@@ -97,36 +97,36 @@ In JS, `return new Error("x")` is a normal return value; only `throw` enters the
 
 ### 3. Host failures use HostError, JS thrown values use from_thrown_value
 
-| Error Source | Rust Representation | Use Case |
-|--------------|---------------------|----------|
-| Rust-side failure | `HostError::new(code, msg)` | Argument validation, IO, permissions, etc. |
-| JS-side throw | `RongJSError::from_thrown_value(v)` | Exceptions from eval/call/promise |
+| Error Source      | Rust Representation                 | Use Case                                   |
+| :---              | :---                                | :---                                       |
+| Rust-side failure | `HostError::new(code, msg)`         | Argument validation, IO, permissions, etc. |
+| JS-side throw     | `RongJSError::from_thrown_value(v)` | Exceptions from eval/call/promise          |
 
 ---
 
 ## Error Code Reference
 
-Location: `rong::error::E_*`
+Location: [`rong::error::E_*`](../core/src/error.rs)
 
-| Code | Meaning | Typical `.with_name()` |
-|------|---------|------------------------|
-| `E_TYPE` | Type mismatch | `TypeError` |
-| `E_INVALID_ARG` | Invalid argument | `TypeError` |
-| `E_OUT_OF_RANGE` | Index/value out of bounds | `RangeError` |
-| `E_MISSING_PROPERTY` | Property not found | `ReferenceError` |
-| `E_IO` | IO error | `Error` |
-| `E_PERMISSION_DENIED` | Permission denied | `Error` |
-| `E_NOT_FOUND` | Resource not found | `Error` |
-| `E_ALREADY_EXISTS` | Resource already exists | `Error` |
-| `E_ABORT` | Operation aborted | `AbortError` |
-| `E_INVALID_STATE` | Invalid state | `Error` / `InvalidStateError` |
-| `E_INVALID_DATA` | Data format error | `Error` |
-| `E_NOT_SUPPORTED` | Feature not supported | `Error` |
-| `E_STREAM` | Stream error | `Error` |
-| `E_COMPILE` | Compilation error | `SyntaxError` |
-| `E_INTERNAL` | Internal error | `Error` |
-| `E_ILLEGAL_CONSTRUCTOR` | Illegal constructor | `TypeError` |
-| `E_JS_THROWN` | Wrapped JS thrown value | (preserves original name) |
+| Code                      | Meaning                   | Typical `.with_name()`        |
+| :---                      | :---                      | :---                          |
+| `E_TYPE`                  | Type mismatch             | `TypeError`                   |
+| `E_INVALID_ARG`           | Invalid argument          | `TypeError`                   |
+| `E_OUT_OF_RANGE`          | Index/value out of bounds | `RangeError`                  |
+| `E_MISSING_PROPERTY`      | Property not found        | `ReferenceError`              |
+| `E_IO`                    | IO error                  | `Error`                       |
+| `E_PERMISSION_DENIED`     | Permission denied         | `Error`                       |
+| `E_NOT_FOUND`             | Resource not found        | `Error`                       |
+| `E_ALREADY_EXISTS`        | Resource already exists   | `Error`                       |
+| `E_ABORT`                 | Operation aborted         | `AbortError`                  |
+| `E_INVALID_STATE`         | Invalid state             | `Error` / `InvalidStateError` |
+| `E_INVALID_DATA`          | Data format error         | `Error`                       |
+| `E_NOT_SUPPORTED`         | Feature not supported     | `Error`                       |
+| `E_STREAM`                | Stream error              | `Error`                       |
+| `E_COMPILE`               | Compilation error         | `SyntaxError`                 |
+| `E_INTERNAL`              | Internal error            | `Error`                       |
+| `E_ILLEGAL_CONSTRUCTOR`   | Illegal constructor       | `TypeError`                   |
+| `E_JS_THROWN`             | Wrapped JS thrown value   | (preserves original name)     |
 
 **Module-specific codes**: Modules can define their own codes with prefixes like `FS_*`, `NET_*`, `HTTP_*`.
 
