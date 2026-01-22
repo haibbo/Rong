@@ -20,6 +20,8 @@ rong_buffer = { workspace = true, optional = true }
 rong_fs = { workspace = true, optional = true }
 rong_storage = { workspace = true, optional = true }
 rong_stream = { workspace = true, optional = true }
+rong_process = { workspace = true, optional = true }
+rong_child_process = { workspace = true, optional = true }
 
 [features]
 default = [
@@ -36,8 +38,9 @@ default = [
     "url",
     "buffer",
     "fs",
-    "stream"
+    "stream",
 ]
+
 timer = ["rong_timer"]
 navigator = ["rong_navigator"]
 path = ["rong_path"]
@@ -53,3 +56,5 @@ buffer = ["rong_buffer"]
 fs = ["rong_fs"]
 storage = ["rong_storage"]
 stream = ["rong_stream"]
+process = ["rong_process"]
+child_process = ["rong_child_process"]
