@@ -3,6 +3,7 @@ class TestRunner {
     this.tests = [];
     this.passed = 0;
     this.failed = 0;
+    this.failures = [];
     this.currentSuite = null;
     this.testCount = 0;
     this.suites = new Map(); // Store suites and their hooks
@@ -89,6 +90,12 @@ class TestRunner {
       console.log(`    ✓ Passed`);
     } catch (e) {
       this.failed++;
+      this.failures.push({
+        suite: suite?.name ?? "<unknown suite>",
+        test: test?.name ?? "<unknown test>",
+        message: e?.message ?? String(e),
+        stack: e?.stack ?? null,
+      });
       console.log(`    ✗ Failed`);
       if (e.message) console.log(`      Error: ${e.message}`);
       if (e.stack) console.log(e.stack.split("\n").slice(1).join("\n"));

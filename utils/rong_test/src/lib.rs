@@ -122,6 +122,17 @@ impl<'a> UnitJSRunner<'a> {
             .eval_async(Source::from_bytes("runner.runTests()"))
             .await?;
 
+        if !result {
+            let details: String = self
+                .ctx
+                .eval_async(Source::from_bytes(
+                    "JSON.stringify({ passed: runner.passed, failed: runner.failed, failures: runner.failures })",
+                ))
+                .await
+                .unwrap_or_else(|_| "<failed to read runner.failures>".to_string());
+            eprintln!("JS unit tests failed: {}", details);
+        }
+
         Ok(result)
     }
 }
