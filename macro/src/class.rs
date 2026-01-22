@@ -195,6 +195,17 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
 
         let params = &method.sig.inputs;
         let has_receiver = method.sig.receiver().is_some();
+        let returns_js_result = match &method.sig.output {
+            syn::ReturnType::Default => false,
+            syn::ReturnType::Type(_, ty) => match &**ty {
+                syn::Type::Path(p) => p
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|s| s.ident == "JSResult"),
+                _ => false,
+            },
+        };
 
         if has_receiver {
             // Remove self parameter for instance methods
@@ -215,13 +226,26 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
             // Handle instance methods with proper This/ThisMut mapping
             let (receiver_type, method_call) = if let Some(receiver) = method.sig.receiver() {
                 if receiver.mutability.is_some() {
+                    if is_async {
+                        return Err(syn::Error::new_spanned(
+                            &method.sig.ident,
+                            "async methods with `&mut self` are not supported; use `&self` with interior mutability (RefCell/Mutex) or make the method synchronous",
+                        ));
+                    }
+
                     // For &mut self methods, use ThisMut and map to Self::method_name
                     (
-                        quote! { mut __self: rong::function::ThisMut<#impl_type> },
-                        if is_async {
-                            quote! { Self::#method_name(&mut *__self, #(#patterns),*).await }
+                        quote! { __this: rong::function::ThisMut<#impl_type> },
+                        if returns_js_result {
+                            quote! {{
+                                let mut __self = __this.borrow_mut()?;
+                                Self::#method_name(&mut *__self, #(#patterns),*)
+                            }}
                         } else {
-                            quote! { Self::#method_name(&mut *__self, #(#patterns),*) }
+                            quote! {{
+                                let mut __self = __this.borrow_mut()?;
+                                Ok(Self::#method_name(&mut *__self, #(#patterns),*))
+                            }}
                         },
                     )
                 } else {

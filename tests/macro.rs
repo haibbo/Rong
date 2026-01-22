@@ -75,10 +75,12 @@ impl Point {
     }
 
     #[js_method(rename = "moveByAsync")]
-    async fn move_by_async(&mut self, dx: i32, dy: i32) {
+    async fn move_by_async(&self, dx: i32, dy: i32) -> Self {
         tokio::time::sleep(Duration::from_millis(50)).await;
-        self.x += dx;
-        self.y += dy;
+        Self {
+            x: self.x + dx,
+            y: self.y + dy,
+        }
     }
 
     #[js_method(rename = "createAsync")]
@@ -349,8 +351,7 @@ mod tests {
                     r#"
                     (async function() {
                         let p = new PointX(1, 2);
-                        await p.moveByAsync(10, 20);
-                        return p;
+                        return await p.moveByAsync(10, 20);
                     })();
                 "#,
                 ))
