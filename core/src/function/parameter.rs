@@ -3,14 +3,15 @@ use crate::{
     JSTypeOf, JSValue, JSValueImpl,
 };
 use std::cell::RefMut;
+use std::collections::VecDeque;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 /// Arguments retrieved from the JavaScript side for calling Rust functions.
 pub struct ParamsAccessor<'a, V: JSValueImpl> {
     ctx: &'a JSContext<V::Context>,
     this: V,
-    args: Vec<V>,
+    args: VecDeque<V>,
     is_last_param: bool,
 }
 
@@ -19,7 +20,7 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
         Self {
             ctx,
             this,
-            args,
+            args: args.into(),
             is_last_param: false,
         }
     }
@@ -29,11 +30,7 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
     }
 
     fn next_arg(&mut self) -> Option<V> {
-        if !self.args.is_empty() {
-            Some(self.args.remove(0))
-        } else {
-            None
-        }
+        self.args.pop_front()
     }
 
     pub fn get_this(&self) -> V {
@@ -68,7 +65,7 @@ impl<'a, V: JSValueImpl> ParamsAccessor<'a, V> {
 pub struct This<T>(pub T);
 
 /// Represents the `this` context in JavaScript function calls with mutable access
-pub struct ThisMut<T: 'static>(pub(crate) RefMut<'static, T>);
+pub struct ThisMut<T, V: JSValueImpl>(pub(crate) JSObject<V>, PhantomData<T>);
 
 /// Represents an optional parameter in JavaScript function calls.
 ///
@@ -119,16 +116,17 @@ impl<T> Deref for This<T> {
     }
 }
 
-impl<T> Deref for ThisMut<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl<T, V> ThisMut<T, V>
+where
+    V: JSObjectOps,
+    T: JSClass<V>,
+{
+    pub fn object(&self) -> JSObject<V> {
+        self.0.clone()
     }
-}
 
-impl<T> DerefMut for ThisMut<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+    pub fn borrow_mut(&self) -> JSResult<RefMut<'_, T>> {
+        self.0.borrow_mut::<T>()
     }
 }
 
@@ -277,7 +275,7 @@ where
     }
 }
 
-impl<T, V> GetParam<V> for ThisMut<T>
+impl<T, V> GetParam<V> for ThisMut<T, V>
 where
     V: JSObjectOps,
     T: JSClass<V>,
@@ -289,11 +287,15 @@ where
 
         let obj =
             JSObject::from_js_value(accessor.context(), JSValue::from_raw(accessor.ctx, value))?;
-        let borrowed = obj.borrow_mut::<T>()?;
-
-        // Safety: because JSObject ensures the object's lifecycle.
-        let static_ref: RefMut<'static, T> = unsafe { std::mem::transmute(borrowed) };
-        Ok(ThisMut(static_ref))
+        if !crate::Class::instance_of::<T>(&obj) {
+            return Err(crate::HostError::new(
+                crate::error::E_TYPE,
+                format!("Not instance of {}", std::any::type_name::<T>()),
+            )
+            .with_name("TypeError")
+            .into());
+        }
+        Ok(ThisMut(obj, PhantomData))
     }
 }
 

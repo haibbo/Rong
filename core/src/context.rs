@@ -399,7 +399,7 @@ impl<C: JSContextImpl> JSContext<C> {
 
         let obj = self.global();
         let constructor = JSValue::from_raw(self, value.clone());
-        JC::class_setup(&ClassSetup::new(constructor.clone().into(), self))?;
+        JC::class_setup(&ClassSetup::new(constructor.clone().into(), self)?)?;
         obj.set(JC::NAME, constructor)?;
 
         registry.borrow_mut().insert(TypeId::of::<JC>(), value);
@@ -611,11 +611,17 @@ impl<C: JSContextImpl> Drop for JSContext<C> {
             // First, shutdown all context-scoped services.
             self.rc.services.shutdown();
 
-            let data = self.get_opaque();
+            let raw_ctx = self.rc.inner.as_raw();
+            let key = C::context_id(raw_ctx);
+            let data = CTX_OPAQUE
+                .write()
+                .unwrap()
+                .remove(&key)
+                .map(|ptr| ptr as *mut ContextOpaque<C::Value>)
+                .unwrap_or(std::ptr::null_mut());
+
             if !data.is_null() {
                 unsafe {
-                    //println!("cleanup context and resources");
-
                     // cleanup class registry
                     let registry = &(*data).registry;
                     registry.borrow_mut().clear();

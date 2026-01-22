@@ -256,7 +256,9 @@ where
             Err(RongJSError::Borrow(std::any::type_name::<T>()))
         } else {
             // SAFETY: ptr was created by Box::into_raw in instance()
-            Ok(unsafe { &*ptr }.borrow())
+            unsafe { &*ptr }
+                .try_borrow()
+                .map_err(|_| RongJSError::Borrow(std::any::type_name::<T>()))
         }
     }
 
@@ -279,7 +281,9 @@ where
             Err(RongJSError::Borrow(std::any::type_name::<T>()))
         } else {
             // SAFETY: ptr was created by Box::into_raw in instance()
-            Ok(unsafe { &*ptr }.borrow_mut())
+            unsafe { &*ptr }
+                .try_borrow_mut()
+                .map_err(|_| RongJSError::Borrow(std::any::type_name::<T>()))
         }
     }
 
@@ -298,17 +302,17 @@ impl<'a, V> ClassSetup<'a, V>
 where
     V: JSObjectOps,
 {
-    pub(crate) fn new(constructor: JSObject<V>, context: &'a JSContext<V::Context>) -> Self {
+    pub(crate) fn new(
+        constructor: JSObject<V>,
+        context: &'a JSContext<V::Context>,
+    ) -> JSResult<Self> {
         let constructor = Class(constructor);
-        let prototype = constructor
-            .0
-            .get::<_, JSObject<V>>("prototype")
-            .expect("Class prototype not found");
-        Self {
+        let prototype = constructor.0.get::<_, JSObject<V>>("prototype")?;
+        Ok(Self {
             constructor: constructor.0,
             prototype,
             context,
-        }
+        })
     }
 
     /// Access the underlying JS context

@@ -18,7 +18,14 @@ pub use rong_core::user_agent::{DEFAULT_USER_AGENT, get_user_agent, set_user_age
 // Re-export selected scheduler APIs (module remains internal to core)
 pub use rong_core::{JsInvokePriority, enqueue_js_invoke};
 
-pub use rong_core::function;
+pub mod function {
+    pub use rong_core::function::{
+        Constructor, FromParams, IntoJSCallable, IntoOnceJSCallable, JSParameterType, KAsyncFnMut,
+        KAsyncFnOnce, KFnMut, KFnOnce, Optional, ParamsAccessor, Rest, This,
+    };
+
+    pub type ThisMut<T> = rong_core::function::ThisMut<T, crate::JSEngineValue>;
+}
 
 #[cfg(feature = "quickjs")]
 mod engine {

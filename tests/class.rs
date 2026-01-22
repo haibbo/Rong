@@ -41,13 +41,21 @@ impl JSClass<JSEngineValue> for Point {
     fn class_setup(class: &ClassSetup<JSEngineValue>) -> JSResult<()> {
         class.property("x", |builder| {
             let getter = class.new_func(|this: This<Point>| this.x)?;
-            let setter = class.new_func(|mut this: ThisMut<Point>, x: i32| this.x = x)?;
+            let setter = class.new_func(|this: ThisMut<Point>, x: i32| -> JSResult<()> {
+                let mut point = this.borrow_mut()?;
+                point.x = x;
+                Ok(())
+            })?;
             Ok(builder.getter(getter).setter(setter).configurable(true))
         })?;
 
         class.property("y", |builder| {
             let getter = class.new_func(|this: This<Point>| this.y)?;
-            let setter = class.new_func(|mut this: ThisMut<Point>, y: i32| this.y = y)?;
+            let setter = class.new_func(|this: ThisMut<Point>, y: i32| -> JSResult<()> {
+                let mut point = this.borrow_mut()?;
+                point.y = y;
+                Ok(())
+            })?;
             Ok(builder.getter(getter).setter(setter).configurable(true))
         })?;
 
@@ -67,8 +75,10 @@ impl JSClass<JSEngineValue> for Point {
 
         class.method(
             "setJSObj",
-            |mut this: ThisMut<Point>, callback: JSObject| {
-                this.set_jsobj(callback);
+            |this: ThisMut<Point>, callback: JSObject| -> JSResult<()> {
+                let mut point = this.borrow_mut()?;
+                point.set_jsobj(callback);
+                Ok(())
             },
         )?;
 

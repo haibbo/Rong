@@ -135,8 +135,8 @@ where
     ///
     /// # Returns
     /// A `JSFunc<V>` representing the `then` method of the Promise.
-    pub fn then(&self) -> JSFunc<V> {
-        self.obj.get("then").unwrap()
+    pub fn then(&self) -> JSResult<JSFunc<V>> {
+        self.obj.get("then")
     }
 
     /// Returns the `catch` method of the Promise.
@@ -145,8 +145,8 @@ where
     ///
     /// # Returns
     /// A `JSFunc<V>` representing the `catch` method of the Promise.
-    pub fn catch(&self) -> JSFunc<V> {
-        self.obj.get("catch").unwrap()
+    pub fn catch(&self) -> JSResult<JSFunc<V>> {
+        self.obj.get("catch")
     }
 
     pub fn into_object(self) -> JSObject<V> {
@@ -325,12 +325,12 @@ where
 
             // Register resolve handlers
             this.promise
-                .then()
+                .then()?
                 .call::<_, ()>(Some(this.promise.obj.clone()), (resolve,))?;
 
             // Also register catch handler for unhandled rejections
             this.promise
-                .catch()
+                .catch()?
                 .call::<_, ()>(Some(this.promise.obj.clone()), (reject,))?;
 
             return Poll::Pending;

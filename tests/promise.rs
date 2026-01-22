@@ -51,7 +51,7 @@ fn test_rust_promise_with_resolve() {
             *result_clone.borrow_mut() = Some(value);
         })?;
 
-        let then = promise.then();
+        let then = promise.then()?;
         then.call::<_, ()>(Some(promise.into_object()), (cb,))
             .unwrap();
 

@@ -226,21 +226,11 @@ impl<E: JSEngine + 'static> Worker<E> {
                     // Downcast happens *here*, just before sending the final result back
                     match v_any.downcast::<R>() {
                         Ok(boxed_r) => Ok(*boxed_r),
-                        Err(original_box) => {
-                            // Handle the specific case where R is () and the box contains ()
-                            if std::any::TypeId::of::<R>() == std::any::TypeId::of::<()>()
-                                && original_box.is::<()>()
-                            {
-                                // SAFETY: We checked R is () and the box contains (), so zeroed is safe.
-                                Ok(unsafe { std::mem::zeroed::<R>() })
-                            } else {
-                                Err(HostError::new(
-                                    crate::error::E_INTERNAL,
-                                    "Downcast failed in block_on callback",
-                                )
-                                .into())
-                            }
-                        }
+                        Err(_) => Err(HostError::new(
+                            crate::error::E_INTERNAL,
+                            "Downcast failed in block_on callback",
+                        )
+                        .into()),
                     }
                 }
                 Err(e) => Err(e),
