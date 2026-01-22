@@ -9,7 +9,7 @@ members = [
     "modules/rong_http", "modules/rong_encoding", "modules/rong_event",
     "modules/rong_assert", "modules/rong_exception", "modules/rong_storage",
     "modules/rong_abort", "modules/rong_console", "modules/rong_url", "modules/rong_buffer",
-    "modules/rong_fs", "modules/rong_stream",
+    "modules/rong_fs", "modules/rong_stream", "modules/rong_process",
     "rong_modules", "rong_cli"
 ]
 
@@ -40,6 +40,7 @@ rong_stream = { path = "modules/rong_stream" }
 rong_navigator = { path = "modules/rong_navigator" }
 rong_path = { path = "modules/rong_path" }
 rong_storage = { path = "modules/rong_storage" }
+rong_process = { path = "modules/rong_process" }
 
 # External dependencies
 tokio = { version = "1.49", features = ["rt", "rt-multi-thread", "time", "macros", "sync", "fs", "io-util"] }

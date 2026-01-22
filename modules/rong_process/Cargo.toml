@@ -1,0 +1,22 @@
+[package]
+name = "rong_process"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rong = { workspace = true }
+rong_event = { workspace = true }
+rong_stream = { workspace = true }
+tokio = { workspace = true }
+
+[features]
+# Forward JS engine features to the main rong crate
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+arkjs = ["rong/arkjs"]
+
+[dev-dependencies]
+rong_test = { workspace = true }
+rong_timer = { workspace = true }
+rong_console = { workspace = true }
+rong_assert = { workspace = true }
