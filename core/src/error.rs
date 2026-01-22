@@ -20,6 +20,7 @@ pub const E_INVALID_STATE: &str = "E_INVALID_STATE";
 pub const E_IO: &str = "E_IO";
 pub const E_JS_THROWN: &str = "E_JS_THROWN";
 pub const E_MISSING_PROPERTY: &str = "E_MISSING_PROPERTY";
+pub const E_NETWORK: &str = "E_NETWORK";
 pub const E_NOT_ARRAY: &str = "E_NOT_ARRAY";
 pub const E_NOT_ARRAY_BUFFER: &str = "E_NOT_ARRAY_BUFFER";
 pub const E_NOT_EXCEPTION: &str = "E_NOT_EXCEPTION";
@@ -30,6 +31,7 @@ pub const E_NOT_TYPED_ARRAY: &str = "E_NOT_TYPED_ARRAY";
 pub const E_OUT_OF_RANGE: &str = "E_OUT_OF_RANGE";
 pub const E_PERMISSION_DENIED: &str = "E_PERMISSION_DENIED";
 pub const E_STREAM: &str = "E_STREAM";
+pub const E_TIMEOUT: &str = "E_TIMEOUT";
 pub const E_TYPE: &str = "E_TYPE";
 
 use crate::context::thrown_store::ThrownValueHandle;
