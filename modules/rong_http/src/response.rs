@@ -22,6 +22,7 @@ pub struct Response {
     body: Option<BodyKind>,
     consumed: bool,
     redirected: bool,
+    type_: String,
     abort_receiver: Option<AbortReceiver>,
     // Cache a JS ReadableStream instance so repeated Response.body access
     // returns the same object and doesn't have side effects.
@@ -64,6 +65,7 @@ impl Response {
             status: 200,
             status_text: "".to_string(),
             consumed: false,
+            type_: "default".to_string(),
             ..Default::default()
         };
 
@@ -145,9 +147,9 @@ impl Response {
         }
     }
 
-    #[js_method(getter)]
-    fn type_(&self) -> &'static str {
-        "todo"
+    #[js_method(getter, rename = "type")]
+    fn type_(&self) -> String {
+        self.type_.clone()
     }
 
     #[js_method]
@@ -161,6 +163,7 @@ impl Response {
             body: self.body.clone(),
             consumed: self.consumed,
             redirected: self.redirected,
+            type_: self.type_.clone(),
             abort_receiver: self.abort_receiver.clone(),
             body_stream: RefCell::new(self.body_stream.borrow().clone()),
         }
@@ -371,6 +374,7 @@ impl Response {
         Self {
             status: 0,
             status_text: String::new(),
+            type_: "error".to_string(),
             ..Default::default()
         }
     }
@@ -402,6 +406,7 @@ impl Response {
             status,
             headers,
             redirected: true,
+            type_: "default".to_string(),
             ..Default::default()
         })
     }
@@ -438,6 +443,8 @@ impl Response {
         abort_receiver: Option<AbortReceiver>,
         method: Method,
         url: Uri,
+        redirected: bool,
+        type_: String,
     ) -> Self {
         // Convert hyper headers to Headers
         let mut headers = Headers::default();
@@ -455,7 +462,8 @@ impl Response {
             status_text: status.canonical_reason().unwrap_or("").to_string(),
             body: Some(body_kind),
             consumed: false,
-            redirected: false,
+            redirected,
+            type_,
             abort_receiver,
             ..Default::default()
         }

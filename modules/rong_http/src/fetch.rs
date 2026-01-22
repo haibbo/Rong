@@ -6,7 +6,7 @@ use hyper::body::Bytes;
 use rong::{function::Optional, *};
 use std::io::Error;
 use std::sync::{Arc, Mutex};
-use tokio::sync::oneshot;
+use tokio::sync::{Notify, oneshot};
 use tokio_stream::{StreamExt as _, wrappers::ReceiverStream};
 
 use crate::client;
@@ -44,7 +44,12 @@ async fn to_hyper_request(mut request: Request) -> JSResult<HttpRequest<BoxBody<
                     let sb = StreamBody::new(stream);
                     sb.boxed()
                 } else {
-                    Full::new(Bytes::new()).map_err(|e| match e {}).boxed()
+                    return Err(HostError::new(
+                        rong::error::E_INVALID_STATE,
+                        "ReadableStream request body already used",
+                    )
+                    .with_name("TypeError")
+                    .into());
                 }
             } else {
                 // Fallback to non-streaming conversion - convert once and reuse
@@ -100,79 +105,261 @@ async fn to_hyper_request(mut request: Request) -> JSResult<HttpRequest<BoxBody<
 
 pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Response> {
     // Create Request object from input and init
-    let request = Request::new(input, init).map_err(|e| {
+    let mut request = Request::new(input, init).map_err(|e| {
         HostError::new(rong::error::E_INVALID_ARG, e.to_string()).with_name("TypeError")
     })?;
 
-    // Check network access permission
+    // Domain check for initial URL
     let domain = request.domain()?;
     grant_network_access(&domain)?;
 
     // Get abort signal if present
     let mut abort_receiver = request.abort_signal().map(|signal| signal.subscribe());
 
-    // Convert Request to hyper::Request
-    let hyper_request = to_hyper_request(request).await?;
-    let orig_method = hyper_request.method().clone();
-    let orig_uri = hyper_request.uri().clone();
+    let mut redirect_count = 0;
+    const MAX_REDIRECTS: u32 = 20;
 
-    // Send via dedicated net service
-    let abort_bridge = if let Some(r) = &mut abort_receiver {
-        let (tx, rx) = oneshot::channel::<()>();
-        let mut abort_rx = r.clone();
-        tokio::task::spawn_local(async move {
-            let _ = abort_rx.recv().await;
-            let _ = tx.send(());
-        });
-        Some(rx)
-    } else {
-        None
-    };
+    loop {
+        // Convert Request to hyper::Request
+        // We clone the request because to_hyper_request consumes it, and we might need
+        // the original request object for the next iteration of the loop (if redirecting).
+        let hyper_request = to_hyper_request(request.clone()).await?;
+        let orig_method = hyper_request.method().clone();
+        let orig_uri = hyper_request.uri().clone();
 
-    // Buffer responses up to 256KB in memory before streaming.
-    // This significantly improves performance for typical API responses (JSON, HTML, etc.)
-    // while still streaming large files to avoid excessive memory usage.
-    let small_threshold = 256 * 1024; // 256KB
+        // Send via dedicated net service.
+        // Note: `client::send_request` treats oneshot sender-drop as "aborted", so the abort sender
+        // must remain alive for the whole response stream lifetime. We keep it in a task, and only
+        // stop it explicitly when we discard a redirect response and continue the loop.
+        let (abort_bridge, abort_bridge_stop) = if let Some(r) = &mut abort_receiver {
+            let (tx, rx) = oneshot::channel::<()>();
+            let stop = Arc::new(Notify::new());
+            let stop_wait = stop.clone();
+            let mut abort_rx = r.clone();
+            tokio::task::spawn_local(async move {
+                tokio::select! {
+                    _ = abort_rx.recv() => {
+                        let _ = tx.send(());
+                    }
+                    _ = stop_wait.notified() => {}
+                }
+            });
+            (Some(rx), Some(stop))
+        } else {
+            (None, None)
+        };
 
-    // Race the network request with an early abort. If the abort wins, reject with its reason.
-    let net_fut = client::send_request(hyper_request, small_threshold, abort_bridge);
-    let net_resp = if let Some(early_abort) = &mut abort_receiver {
-        tokio::select! {
-            res = net_fut => res.map_err(|e| {
+        // Buffer responses up to 256KB in memory before streaming.
+        let small_threshold = 256 * 1024; // 256KB
+
+        // Race the network request with an early abort. If the abort wins, reject with its reason.
+        let net_fut = client::send_request(hyper_request, small_threshold, abort_bridge);
+        let net_resp = if let Some(early_abort) = &mut abort_receiver {
+            tokio::select! {
+                res = net_fut => res.map_err(|e| {
+                    HostError::new(rong::error::E_IO, "fetch failed")
+                        .with_name("TypeError")
+                        .with_data(rong::err_data!({ detail: (e.to_string()) }))
+                })?,
+                reason = early_abort.recv() => {
+                    return Err(RongJSError::from_thrown_value(reason));
+                }
+            }
+        } else {
+            net_fut.await.map_err(|e| {
                 HostError::new(rong::error::E_IO, "fetch failed")
                     .with_name("TypeError")
                     .with_data(rong::err_data!({ detail: (e.to_string()) }))
-            })?,
-            reason = early_abort.recv() => {
-                return Err(RongJSError::from_thrown_value(reason));
+            })?
+        };
+
+        // Handle Redirects
+        let status = net_resp.status.as_u16();
+        if matches!(status, 301 | 302 | 303 | 307 | 308) {
+            match request.redirect() {
+                "error" => {
+                    if let Some(stop) = abort_bridge_stop {
+                        stop.notify_one();
+                    }
+                    return Err(HostError::new(
+                        rong::error::E_NETWORK,
+                        "Redirects not allowed in 'error' mode",
+                    )
+                    .with_name("TypeError")
+                    .into());
+                }
+                "manual" => {
+                    // Fall through to return response
+                }
+                "follow" | _ => {
+                    if redirect_count >= MAX_REDIRECTS {
+                        if let Some(stop) = abort_bridge_stop {
+                            stop.notify_one();
+                        }
+                        return Err(HostError::new(
+                            rong::error::E_NETWORK,
+                            "Maximum redirect count exceeded",
+                        )
+                        .with_name("NetworkError")
+                        .into());
+                    }
+
+                    if let Some(location) = net_resp
+                        .headers
+                        .get("location")
+                        .and_then(|v| v.to_str().ok())
+                    {
+                        redirect_count += 1;
+
+                        // Resolve URL
+                        let base = match url::Url::parse(&request.url.to_string()) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                if let Some(stop) = abort_bridge_stop.as_ref() {
+                                    stop.notify_one();
+                                }
+                                return Err(HostError::new(
+                                    rong::error::E_INTERNAL,
+                                    format!("Invalid base URL: {}", e),
+                                )
+                                .into());
+                            }
+                        };
+
+                        let next_url = match base.join(location) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                if let Some(stop) = abort_bridge_stop.as_ref() {
+                                    stop.notify_one();
+                                }
+                                return Err(HostError::new(
+                                    rong::error::E_NETWORK,
+                                    format!("Invalid redirect URL: {}", e),
+                                )
+                                .into());
+                            }
+                        };
+
+                        if next_url.scheme() != "http" && next_url.scheme() != "https" {
+                            if let Some(stop) = abort_bridge_stop.as_ref() {
+                                stop.notify_one();
+                            }
+                            return Err(HostError::new(
+                                rong::error::E_NETWORK,
+                                format!("Unsupported redirect URL scheme: {}", next_url.scheme()),
+                            )
+                            .with_name("TypeError")
+                            .into());
+                        }
+
+                        let current_host = base.host_str();
+                        let current_port = base.port_or_known_default();
+                        let next_host = next_url.host_str();
+                        let next_port = next_url.port_or_known_default();
+                        let is_cross_host = current_host != next_host || current_port != next_port;
+                        if is_cross_host {
+                            request.headers.delete("authorization".to_string());
+                            request.headers.delete("proxy-authorization".to_string());
+                            request.headers.delete("cookie".to_string());
+                            request.headers.delete("host".to_string());
+                        }
+
+                        // Check permission for new domain
+                        let host = match next_url.host_str() {
+                            Some(v) => v,
+                            None => {
+                                if let Some(stop) = abort_bridge_stop.as_ref() {
+                                    stop.notify_one();
+                                }
+                                return Err(HostError::new(
+                                    rong::error::E_NETWORK,
+                                    "Redirect URL has no host",
+                                )
+                                .with_name("TypeError")
+                                .into());
+                            }
+                        };
+                        if let Err(e) = grant_network_access(host) {
+                            if let Some(stop) = abort_bridge_stop.as_ref() {
+                                stop.notify_one();
+                            }
+                            return Err(e);
+                        }
+
+                        // Update request URL
+                        request.url = match next_url.to_string().parse::<http::Uri>() {
+                            Ok(v) => v,
+                            Err(e) => {
+                                if let Some(stop) = abort_bridge_stop.as_ref() {
+                                    stop.notify_one();
+                                }
+                                return Err(HostError::new(
+                                    rong::error::E_INTERNAL,
+                                    format!("Invalid URI: {}", e),
+                                )
+                                .into());
+                            }
+                        };
+
+                        // Handle method/body changes for redirects
+                        let should_switch_to_get = match status {
+                            303 => {
+                                request.method != http::Method::GET
+                                    && request.method != http::Method::HEAD
+                            }
+                            301 | 302 => request.method == http::Method::POST,
+                            _ => false,
+                        };
+
+                        if should_switch_to_get {
+                            request.method = http::Method::GET;
+                            request.body = None;
+                            request.headers.delete("content-length".to_string());
+                            request.headers.delete("content-type".to_string());
+                            request.headers.delete("transfer-encoding".to_string());
+                        }
+
+                        // Discard the redirect response and continue.
+                        // If it was streaming, notify the abort bridge to stop background reads.
+                        if let Some(stop) = abort_bridge_stop {
+                            stop.notify_one();
+                        }
+
+                        continue;
+                    }
+                }
             }
         }
-    } else {
-        net_fut.await.map_err(|e| {
-            HostError::new(rong::error::E_IO, "fetch failed")
-                .with_name("TypeError")
-                .with_data(rong::err_data!({ detail: (e.to_string()) }))
-        })?
-    };
 
-    let body_kind = match net_resp.body {
-        client::HttpBody::Small(bytes) => crate::body::BodyKind::Buffered(bytes),
-        client::HttpBody::Stream(rx) => {
-            crate::body::BodyKind::Channel(Arc::new(Mutex::new(Some(rx))))
-        }
-        client::HttpBody::Empty => crate::body::BodyKind::Buffered(Bytes::new()),
-    };
+        let body_kind = match net_resp.body {
+            client::HttpBody::Small(bytes) => crate::body::BodyKind::Buffered(bytes),
+            client::HttpBody::Stream(rx) => {
+                crate::body::BodyKind::Channel(Arc::new(Mutex::new(Some(rx))))
+            }
+            client::HttpBody::Empty => crate::body::BodyKind::Buffered(Bytes::new()),
+        };
 
-    Ok(Response::from_meta(
-        net_resp.status,
-        net_resp.headers,
-        body_kind,
-        abort_receiver,
-        orig_method,
-        orig_uri,
-    ))
+        let type_ =
+            if matches!(status, 301 | 302 | 303 | 307 | 308) && request.redirect() == "manual" {
+                // We currently return a transparent 3xx response (headers/status accessible),
+                // so this should remain "basic" rather than claiming browser-style opaqueredirect.
+                "basic".to_string()
+            } else {
+                "basic".to_string()
+            };
+
+        return Ok(Response::from_meta(
+            net_resp.status,
+            net_resp.headers,
+            body_kind,
+            abort_receiver,
+            orig_method,
+            orig_uri,
+            redirect_count > 0,
+            type_,
+        ));
+    }
 }
-
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
     let fetch_fn = JSFunc::new(ctx, fetch)?;
     ctx.global().set("fetch", fetch_fn)?;
@@ -184,7 +371,6 @@ mod tests {
     use super::*;
     use flate2::{Compression, write::GzEncoder};
     use futures::{StreamExt as FuturesStreamExt, stream};
-    use rong_test::*;
     use rong_test::http::axum::body::Bytes as AxumBytes;
     use rong_test::http::axum::routing::{get, put};
     use rong_test::http::axum::{
@@ -194,6 +380,7 @@ mod tests {
         response::{IntoResponse, Response as AxumResponse},
     };
     use rong_test::http::{axum, spawn_axum};
+    use rong_test::*;
     use std::convert::Infallible;
     use std::io::Write;
     use std::net::SocketAddr;
@@ -265,6 +452,38 @@ mod tests {
             .unwrap()
     }
 
+    async fn test_redirect(uri: axum::http::Uri) -> impl IntoResponse {
+        // Parse query params (n=count)
+        let query = uri.query().unwrap_or("");
+        let count = query
+            .split('&')
+            .find(|p| p.starts_with("n="))
+            .map(|p| p[2..].parse::<i32>().unwrap_or(1))
+            .unwrap_or(1);
+
+        if count > 0 {
+            AxumResponse::builder()
+                .status(302)
+                .header("Location", format!("/redirect?n={}", count - 1))
+                .body(Body::empty())
+                .unwrap()
+        } else {
+            AxumResponse::builder()
+                .status(302)
+                .header("Location", "/ip")
+                .body(Body::empty())
+                .unwrap()
+        }
+    }
+
+    async fn test_303() -> impl IntoResponse {
+        AxumResponse::builder()
+            .status(303)
+            .header("Location", "/ip")
+            .body(Body::empty())
+            .unwrap()
+    }
+
     async fn start_test_server() -> std::io::Result<SocketAddr> {
         let app = Router::new()
             .route("/ip", get(test_ip))
@@ -272,6 +491,8 @@ mod tests {
             .route("/delay", get(test_delay))
             .route("/large", get(test_large))
             .route("/headers", get(test_headers))
+            .route("/redirect", get(test_redirect))
+            .route("/303", put(test_303)) // PUT request receiving 303 -> GET /ip
             .route(
                 "/upload",
                 put(|bytes: AxumBytes| async move {

@@ -199,6 +199,57 @@ describe("fetch", () => {
     assert(text.includes("chunk_0099"));
     await Rong.remove(outPath);
   });
+
+  describe("redirect", () => {
+    it("should follow redirects by default", async () => {
+      const url = new URL("/redirect?n=2", TEST_SERVER_URL);
+      const response = await fetch(url);
+      expect(response.ok).toBe(true);
+      expect(response.status).toBe(200);
+      expect(response.redirected).toBe(true);
+      const data = await response.json();
+      expect(data.origin).toBe("127.0.0.1");
+    });
+
+    it("should handle redirect: manual", async () => {
+      const url = new URL("/redirect?n=1", TEST_SERVER_URL);
+      const response = await fetch(url, { redirect: "manual" });
+      expect(response.type).toBe("basic");
+      expect(response.status).toBe(302);
+      expect(response.headers.has("location")).toBe(true);
+    });
+
+    it("should handle redirect: error", async () => {
+      const url = new URL("/redirect?n=1", TEST_SERVER_URL);
+      try {
+        await fetch(url, { redirect: "error" });
+        throw new Error("Should have thrown");
+      } catch (e) {
+        expect(e instanceof TypeError).toBe(true);
+      }
+    });
+
+    it("should change POST/PUT to GET on 303 redirect", async () => {
+      const url = new URL("/303", TEST_SERVER_URL);
+      // PUT /303 -> 303 Location: /ip -> GET /ip
+      const response = await fetch(url, { method: "PUT" });
+      expect(response.ok).toBe(true);
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.origin).toBe("127.0.0.1");
+    });
+
+    it("should limit redirects", async () => {
+      const url = new URL("/redirect?n=25", TEST_SERVER_URL);
+      try {
+        await fetch(url);
+        throw new Error("Should have thrown");
+      } catch (e) {
+        // Implementation throws HostError::NETWORK -> NetworkError
+        expect(e.name).toBe("NetworkError");
+      }
+    });
+  });
 });
 
 describe("Abort to fetch", () => {
