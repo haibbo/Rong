@@ -48,7 +48,7 @@ impl FsFile {
     }
 
     #[js_method]
-    async fn read(&mut self, buffer: JSArrayBuffer<u8>) -> JSResult<Option<usize>> {
+    async fn read(&self, buffer: JSArrayBuffer<u8>) -> JSResult<Option<usize>> {
         // Get buffer length
         let buf_len = buffer.len();
         if buf_len == 0 {
@@ -69,7 +69,7 @@ impl FsFile {
     }
 
     #[js_method]
-    async fn write(&mut self, buffer: JSArrayBuffer<u8>) -> JSResult<usize> {
+    async fn write(&self, buffer: JSArrayBuffer<u8>) -> JSResult<usize> {
         // Get buffer data
         let buf = buffer.as_slice();
 
@@ -83,7 +83,7 @@ impl FsFile {
     }
 
     #[js_method]
-    async fn sync(&mut self) -> JSResult<()> {
+    async fn sync(&self) -> JSResult<()> {
         let file = self.file.lock().await;
         file.sync_all()
             .await
@@ -91,7 +91,7 @@ impl FsFile {
     }
 
     #[js_method]
-    async fn truncate(&mut self, len: Optional<u64>) -> JSResult<()> {
+    async fn truncate(&self, len: Optional<u64>) -> JSResult<()> {
         let length = len.0.unwrap_or(0);
         let file = self.file.lock().await;
         file.set_len(length)
@@ -100,7 +100,7 @@ impl FsFile {
     }
 
     #[js_method]
-    async fn seek(&mut self, offset: i64, whence: Optional<u32>) -> JSResult<u64> {
+    async fn seek(&self, offset: i64, whence: Optional<u32>) -> JSResult<u64> {
         let whence_mode = whence.0.unwrap_or(0); // Default to Start (0)
 
         // Convert whence number to SeekFrom
@@ -132,7 +132,7 @@ impl FsFile {
     }
 
     #[js_method]
-    async fn close(&mut self) -> JSResult<()> {
+    async fn close(&self) -> JSResult<()> {
         // Sync before closing
         self.sync().await
     }

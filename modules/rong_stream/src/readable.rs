@@ -155,7 +155,7 @@ impl ReadableStream {
         }
 
         // Acquire reader and writer
-        let mut reader = self.get_reader()?;
+        let reader = self.get_reader()?;
         let mut writer = dest.get_writer()?;
 
         // Fast path: if this ReadableStream is channel-backed and the writer is channel-backed,
@@ -359,7 +359,7 @@ impl ReadableStreamDefaultReader {
     }
 
     #[js_method]
-    async fn read(&mut self, ctx: JSContext) -> JSResult<JSObject> {
+    async fn read(&self, ctx: JSContext) -> JSResult<JSObject> {
         // Take the receiver out to avoid holding the lock across await
         let mut rx_opt = {
             let mut slot = self.rx.lock().await;
@@ -402,7 +402,7 @@ impl ReadableStreamDefaultReader {
     }
 
     #[js_method(rename = "releaseLock")]
-    async fn release_lock(&mut self) -> JSResult<()> {
+    async fn release_lock(&self) -> JSResult<()> {
         // Take receiver out
         let rx_opt = {
             let mut slot = self.rx.lock().await;
@@ -422,7 +422,7 @@ impl ReadableStreamDefaultReader {
     }
 
     #[js_method]
-    async fn cancel(&mut self) -> JSResult<()> {
+    async fn cancel(&self) -> JSResult<()> {
         let mut slot = self.rx.lock().await;
         *slot = None;
         Ok(())

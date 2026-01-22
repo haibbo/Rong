@@ -156,14 +156,15 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
         let net_fut = client::send_request(hyper_request, small_threshold, abort_bridge);
         let net_resp = if let Some(early_abort) = &mut abort_receiver {
             tokio::select! {
+                biased;
+                reason = early_abort.recv() => {
+                    return Err(RongJSError::from_thrown_value(reason));
+                }
                 res = net_fut => res.map_err(|e| {
                     HostError::new(rong::error::E_IO, "fetch failed")
                         .with_name("TypeError")
                         .with_data(rong::err_data!({ detail: (e.to_string()) }))
                 })?,
-                reason = early_abort.recv() => {
-                    return Err(RongJSError::from_thrown_value(reason));
-                }
             }
         } else {
             net_fut.await.map_err(|e| {

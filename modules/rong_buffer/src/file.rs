@@ -79,7 +79,7 @@ impl File {
     }
 
     #[js_method]
-    pub async fn text(&mut self) -> JSResult<String> {
+    pub async fn text(&self) -> JSResult<String> {
         self.blob.text().await
     }
 

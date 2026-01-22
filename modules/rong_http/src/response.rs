@@ -8,7 +8,7 @@ use crate::header::Headers;
 use rong_abort::AbortReceiver;
 use rong_buffer::Blob;
 use rong_stream::{JSReadableStream, readable_stream_is_locked};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use tokio::sync::mpsc;
 
 #[derive(Default)]
@@ -20,7 +20,7 @@ pub struct Response {
     status: u16,
     status_text: String,
     body: Option<BodyKind>,
-    consumed: bool,
+    consumed: Cell<bool>,
     redirected: bool,
     type_: String,
     abort_receiver: Option<AbortReceiver>,
@@ -64,7 +64,7 @@ impl Response {
         let mut response = Self {
             status: 200,
             status_text: "".to_string(),
-            consumed: false,
+            consumed: Cell::new(false),
             type_: "default".to_string(),
             ..Default::default()
         };
@@ -131,7 +131,7 @@ impl Response {
 
     #[js_method(getter, rename = "bodyUsed")]
     pub fn body_used(&self) -> bool {
-        if self.consumed {
+        if self.consumed.get() {
             return true;
         }
         // If we have materialized a ReadableStream, check whether it is locked
@@ -161,7 +161,7 @@ impl Response {
             status: self.status,
             status_text: self.status_text.clone(),
             body: self.body.clone(),
-            consumed: self.consumed,
+            consumed: Cell::new(self.consumed.get()),
             redirected: self.redirected,
             type_: self.type_.clone(),
             abort_receiver: self.abort_receiver.clone(),
@@ -228,8 +228,8 @@ impl Response {
         }
     }
 
-    async fn body_to_bytes(&mut self) -> JSResult<Bytes> {
-        match &mut self.body {
+    async fn body_to_bytes(&self) -> JSResult<Bytes> {
+        match &self.body {
             Some(BodyKind::JS(body)) => body.bytes().await,
             Some(BodyKind::Buffered(b)) => {
                 let header_map = self.headers.as_header_map();
@@ -266,9 +266,14 @@ impl Response {
                 }
 
                 if let Some(mut rx) = rx_opt {
-                    if let Some(receiver) = &mut self.abort_receiver {
+                    let mut abort_receiver = self.abort_receiver.clone();
+                    if let Some(receiver) = &mut abort_receiver {
                         loop {
                             tokio::select! {
+                                biased;
+                                abort_reason = receiver.recv() => {
+                                    return Err(RongJSError::from_thrown_value(abort_reason));
+                                }
                                 chunk = rx.recv() => {
                                     match chunk {
                                         Some(Ok(bytes)) => collected.extend_from_slice(&bytes),
@@ -277,9 +282,6 @@ impl Response {
                                         }
                                         None => break,
                                     }
-                                }
-                                abort_reason = receiver.recv() => {
-                                    return Err(RongJSError::from_thrown_value(abort_reason));
                                 }
                             }
                         }
@@ -305,7 +307,7 @@ impl Response {
     }
 
     #[js_method]
-    async fn text(&mut self) -> JSResult<String> {
+    async fn text(&self) -> JSResult<String> {
         if self.body_used() {
             return Err(HostError::new(
                 rong::error::E_INVALID_STATE,
@@ -314,13 +316,13 @@ impl Response {
             .with_name("TypeError")
             .into());
         }
-        self.consumed = true;
+        self.consumed.set(true);
         let bytes = self.body_to_bytes().await?;
         Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
     #[js_method]
-    async fn json(&mut self, ctx: JSContext) -> JSResult<JSValue> {
+    async fn json(&self, ctx: JSContext) -> JSResult<JSValue> {
         if self.body_used() {
             return Err(HostError::new(
                 rong::error::E_INVALID_STATE,
@@ -329,14 +331,14 @@ impl Response {
             .with_name("TypeError")
             .into());
         }
-        self.consumed = true;
+        self.consumed.set(true);
         let bytes = self.body_to_bytes().await?;
         let text = String::from_utf8_lossy(&bytes).into_owned();
         text.as_str().json_to_js_value(&ctx)
     }
 
     #[js_method]
-    async fn blob(&mut self) -> JSResult<Blob> {
+    async fn blob(&self) -> JSResult<Blob> {
         if self.body_used() {
             return Err(HostError::new(
                 rong::error::E_INVALID_STATE,
@@ -345,7 +347,7 @@ impl Response {
             .with_name("TypeError")
             .into());
         }
-        self.consumed = true;
+        self.consumed.set(true);
         let bytes = self.body_to_bytes().await?;
         let mime = self
             .headers
@@ -355,7 +357,7 @@ impl Response {
     }
 
     #[js_method(rename = "arrayBuffer")]
-    async fn array_buffer(&mut self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
+    async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
         if self.body_used() {
             return Err(HostError::new(
                 rong::error::E_INVALID_STATE,
@@ -364,7 +366,7 @@ impl Response {
             .with_name("TypeError")
             .into());
         }
-        self.consumed = true;
+        self.consumed.set(true);
         let bytes = self.body_to_bytes().await?;
         JSArrayBuffer::from_bytes(&ctx, &bytes)
     }
@@ -461,7 +463,7 @@ impl Response {
             status: status.as_u16(),
             status_text: status.canonical_reason().unwrap_or("").to_string(),
             body: Some(body_kind),
-            consumed: false,
+            consumed: Cell::new(false),
             redirected,
             type_,
             abort_receiver,

@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use rong::*;
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::io::AsyncWrite;
@@ -39,7 +40,7 @@ pub struct WritableStreamDefaultWriter {
     err_slot: SharedErrorSlot,
     // For JS sink mode: reference back to stream's sink slot and the held sink object
     sink_slot_ref: SinkSlot,
-    sink_obj: Option<JSObject>,
+    sink_obj: RefCell<Option<JSObject>>,
 }
 
 impl WritableStream {
@@ -133,7 +134,7 @@ impl WritableStream {
                     done_slot_ref: self.done_slot.clone(),
                     err_slot: self.err_slot.clone(),
                     sink_slot_ref: self.sink_slot.clone(),
-                    sink_obj: None,
+                    sink_obj: RefCell::new(None),
                 })
             }
             None => {
@@ -158,7 +159,7 @@ impl WritableStream {
                     done_slot_ref: self.done_slot.clone(),
                     err_slot: self.err_slot.clone(),
                     sink_slot_ref: self.sink_slot.clone(),
-                    sink_obj: Some(obj),
+                    sink_obj: RefCell::new(Some(obj)),
                 })
             }
         }
@@ -187,7 +188,7 @@ impl WritableStreamDefaultWriter {
     }
 
     #[js_method]
-    pub(crate) async fn write(&mut self, chunk: JSValue) -> JSResult<()> {
+    pub(crate) async fn write(&self, chunk: JSValue) -> JSResult<()> {
         // Surface background error if any
         if let Ok(err_guard) = self.err_slot.lock()
             && let Some(e) = err_guard.as_ref()
@@ -199,7 +200,8 @@ impl WritableStreamDefaultWriter {
             .into());
         }
         // If we have a JS sink, call its write method in JS thread
-        if let Some(sink_obj) = self.sink_obj.as_ref()
+        let sink_obj = self.sink_obj.borrow().clone();
+        if let Some(sink_obj) = sink_obj
             && let Ok(write_fn) = sink_obj.get::<_, JSFunc>("write")
         {
             // Await if it returns a Promise
@@ -259,9 +261,10 @@ impl WritableStreamDefaultWriter {
     }
 
     #[js_method]
-    pub(crate) async fn close(&mut self) -> JSResult<()> {
+    pub(crate) async fn close(&self) -> JSResult<()> {
         // If JS sink has close
-        if let Some(sink_obj) = self.sink_obj.as_ref()
+        let sink_obj = self.sink_obj.borrow().clone();
+        if let Some(sink_obj) = sink_obj
             && let Ok(close_fn) = sink_obj.get::<_, JSFunc>("close")
         {
             let _r: JSValue = close_fn.call_async(None, ()).await?;
@@ -291,14 +294,17 @@ impl WritableStreamDefaultWriter {
     }
 
     #[js_method]
-    pub(crate) async fn abort(&mut self) -> JSResult<()> {
+    pub(crate) async fn abort(&self) -> JSResult<()> {
         let mut slot = self.tx.lock().await;
         *slot = None;
         Ok(())
     }
 
     #[js_method(rename = "releaseLock")]
-    pub(crate) async fn release_lock(&mut self) -> JSResult<()> {
+    pub(crate) async fn release_lock(&self) -> JSResult<()> {
+        // Take JS sink (if any) first so we don't hold a RefCell borrow across await.
+        let sink_opt = self.sink_obj.borrow_mut().take();
+
         // Take back sender and return it to the stream's slot
         let tx_opt = {
             let mut slot = self.tx.lock().await;
@@ -331,7 +337,7 @@ impl WritableStreamDefaultWriter {
             }
         }
         // Return JS sink to stream slot if present
-        if let Some(sink_obj) = self.sink_obj.take() {
+        if let Some(sink_obj) = sink_opt {
             let mut slot = self
                 .sink_slot_ref
                 .lock()
@@ -349,7 +355,7 @@ impl WritableStreamDefaultWriter {
     // Expose the underlying channel sender and done signal for intra-crate optimizations
     pub(crate) fn take_channel(&mut self) -> Option<WriterChannel> {
         // Only available when the writer is channel-backed (not JS sink)
-        if self.sink_obj.is_some() {
+        if self.sink_obj.borrow().is_some() {
             return None;
         }
         // Take ownership of the sender
