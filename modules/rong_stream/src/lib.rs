@@ -6,7 +6,7 @@ pub use readable::{
     readable_stream_is_locked, readable_stream_take_receiver,
 };
 pub use writable::{
-    WritableStream, WritableStreamDefaultWriter, writable_stream_to_async_write,
+    JSWritableStream, WritableStream, WritableStreamDefaultWriter, writable_stream_to_async_write,
     writable_stream_to_sender, writable_stream_to_sender_with_done,
 };
 

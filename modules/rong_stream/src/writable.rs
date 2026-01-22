@@ -393,3 +393,30 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<WritableStreamDefaultWriter>()?;
     Ok(())
 }
+
+/// Wrapper helper for clearer semantics
+#[derive(Clone)]
+pub struct JSWritableStream(pub JSObject);
+
+impl JSWritableStream {
+    pub fn new(ctx: &JSContext, stream: WritableStream) -> JSResult<Self> {
+        let obj = rong::Class::get::<WritableStream>(ctx)?.instance(stream);
+        Ok(Self(obj))
+    }
+
+    pub fn from_async_writer<W>(ctx: &JSContext, writer: W) -> JSResult<Self>
+    where
+        W: AsyncWrite + Unpin + Send + 'static,
+    {
+        let stream = WritableStream::to_async_writer(writer);
+        Self::new(ctx, stream)
+    }
+
+    pub fn into_object(self) -> JSObject {
+        self.0
+    }
+
+    pub fn object(&self) -> JSObject {
+        self.0.clone()
+    }
+}
