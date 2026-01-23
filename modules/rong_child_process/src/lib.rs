@@ -627,7 +627,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     child_process.set("exec", JSFunc::new(ctx, exec)?)?;
     child_process.set("execFile", JSFunc::new(ctx, exec_file)?)?;
 
-    ctx.rong().set("childProcess", child_process)?;
+    ctx.global().set("child_process", child_process)?;
 
     Ok(())
 }
