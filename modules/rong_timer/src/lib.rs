@@ -23,39 +23,39 @@ use rong::{JSContext, JSFunc, JSResult, JSRuntimeService, JSValue, function::Opt
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Mutex, MutexGuard};
 use tokio::sync::Notify;
 use tokio::time::Duration;
 
 mod promise;
 
+fn lock_poison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[derive(Clone)]
 pub struct TimerRegistry {
     inner: Rc<TimerRegistryInner>,
-    // Track number of active timers for shutdown synchronization
-    active_count: Arc<(Mutex<usize>, Condvar)>,
+}
+
+struct TimerEntry {
+    notifier: Rc<Notify>,
+    // For callback-style timers (global setTimeout/setInterval).
+    // We keep the JSFunc in the registry so `on_shutdown` can drop it before the JS runtime is freed,
+    // even if the spawned timer task hasn't been polled/canceled yet.
+    callback: Option<JSFunc>,
 }
 
 struct TimerRegistryInner {
     next_id: AtomicU32,
-    notifiers: Mutex<HashMap<u32, Rc<Notify>>>,
+    timers: Mutex<HashMap<u32, TimerEntry>>,
 }
 
 impl JSRuntimeService for TimerRegistry {
     fn on_shutdown(&self) {
-        // First, notify all timers to stop
+        // IMPORTANT: don't block here. This runs during JSRuntime drop on the LocalSet thread.
+        // Blocking prevents timer tasks from running and can leak JS GC objects under QuickJS.
         self.shutdown();
-
-        // Then wait for all timer tasks to complete
-        let (lock, cvar) = &*self.active_count;
-        let count = lock.lock().unwrap();
-
-        // Wait while there are still active timers, with timeout protection
-        if *count > 0 {
-            // Wait with a single reasonable timeout
-            let _ = cvar.wait_timeout(count, Duration::from_secs(2)).unwrap();
-            // No need to loop, one timeout is sufficient
-        }
     }
 }
 
@@ -64,9 +64,8 @@ impl Default for TimerRegistry {
         Self {
             inner: Rc::new(TimerRegistryInner {
                 next_id: AtomicU32::new(0),
-                notifiers: Mutex::new(HashMap::new()),
+                timers: Mutex::new(HashMap::new()),
             }),
-            active_count: Arc::new((Mutex::new(0), Condvar::new())),
         }
     }
 }
@@ -77,53 +76,57 @@ impl TimerRegistry {
     }
 
     fn register_timer(&self, id: u32, notifier: Rc<Notify>) {
-        self.inner.notifiers.lock().unwrap().insert(id, notifier);
+        lock_poison(&self.inner.timers).insert(
+            id,
+            TimerEntry {
+                notifier,
+                callback: None,
+            },
+        );
+    }
 
-        // Increment active count
-        let (lock, _cvar) = &*self.active_count;
-        let mut count = lock.lock().unwrap();
-        *count += 1;
+    fn register_timer_with_callback(&self, id: u32, notifier: Rc<Notify>, callback: JSFunc) {
+        lock_poison(&self.inner.timers).insert(
+            id,
+            TimerEntry {
+                notifier,
+                callback: Some(callback),
+            },
+        );
     }
 
     fn cancel_timer(&self, id: u32) {
-        let canceled = if let Some(notifier) = self.inner.notifiers.lock().unwrap().remove(&id) {
-            notifier.notify_waiters();
-            true
+        if let Some(entry) = lock_poison(&self.inner.timers).remove(&id) {
+            entry.notifier.notify_waiters();
         } else {
-            false
-        };
-
-        // Decrement active count only if we actually canceled a timer
-        if canceled {
-            self.decrement_active_count();
+            return;
         }
     }
 
-    fn decrement_active_count(&self) {
-        let (lock, cvar) = &*self.active_count;
-        let mut count = lock.lock().unwrap();
-        if *count > 0 {
-            *count -= 1;
-            if *count == 0 {
-                // Notify that all timers are complete
-                cvar.notify_all();
-            }
-        }
+    fn finish_timer(&self, id: u32) {
+        // Best-effort cleanup. It's fine if the timer was already canceled/shutdown.
+        let _ = lock_poison(&self.inner.timers).remove(&id);
     }
 
     fn is_timer_active(&self, id: u32) -> bool {
-        self.inner.notifiers.lock().unwrap().contains_key(&id)
+        lock_poison(&self.inner.timers).contains_key(&id)
+    }
+
+    fn get_callback(&self, id: u32) -> Option<JSFunc> {
+        lock_poison(&self.inner.timers)
+            .get(&id)
+            .and_then(|e| e.callback.clone())
     }
 
     fn shutdown(&self) {
-        let mut notifiers = self.inner.notifiers.lock().unwrap();
-        if notifiers.is_empty() {
+        let mut timers = lock_poison(&self.inner.timers);
+        if timers.is_empty() {
             return;
         }
 
         // Copy the notifiers before draining to avoid deadlock
-        let notifiers_copy: Vec<Rc<Notify>> = notifiers.values().cloned().collect();
-        notifiers.clear();
+        let notifiers_copy: Vec<Rc<Notify>> = timers.values().map(|e| e.notifier.clone()).collect();
+        timers.clear(); // drops callbacks before the JS runtime is freed
 
         // Notify all timers outside the lock
         for notifier in notifiers_copy {
@@ -141,56 +144,52 @@ fn set_timeout_with_repeat(
     let id = registry.next_id();
     let notifier = Rc::new(Notify::new());
 
-    registry.register_timer(id, notifier.clone());
+    registry.register_timer_with_callback(id, notifier.clone(), callback);
     let delay = delay.unwrap_or(0.0).max(0.0) as u64;
     let registry_clone = registry.clone();
 
     spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_millis(delay.max(1)));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // Repeating timers: use `interval.tick()` for all executions.
+        // `tokio::time::interval`'s first `tick()` completes immediately; consume it so the
+        // first callback fires after the specified delay (browser/Node-like behavior).
+        if repeat {
+            let mut interval = tokio::time::interval(Duration::from_millis(delay.max(1)));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            interval.tick().await; // consume immediate tick
 
-        // Initial delay
+            while registry_clone.is_timer_active(id) {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let Some(cb) = registry_clone.get_callback(id) else {
+                            break;
+                        };
+                        if cb.call_async::<_, ()>(None,()).await.is_err() {
+                            registry_clone.finish_timer(id);
+                            break;
+                        }
+                    }
+                    _ = notifier.notified() => break,
+                }
+            }
+
+            registry_clone.finish_timer(id);
+            return;
+        }
+
+        // One-shot timer (setTimeout).
         if delay > 0 {
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_millis(delay)) => {}
                 _ = notifier.notified() => {
-                    registry_clone.decrement_active_count();
                     return;
                 }
             }
         }
 
-        // First execution
-        if registry_clone.is_timer_active(id) {
-            let call_result = callback.call_async::<_, ()>(None, ()).await;
-
-            // If not a repeating timer, always clean up and return, regardless of call result
-            if !repeat {
-                registry_clone.decrement_active_count();
-                return;
-            }
-
-            // For repeating timers, exit if the callback failed
-            if call_result.is_err() {
-                registry_clone.decrement_active_count();
-                return;
-            }
+        if let Some(cb) = registry_clone.get_callback(id) {
+            let _ = cb.call_async::<_, ()>(None, ()).await;
         }
-
-        // Repeat loop - only reached for repeating timers where the first call succeeded
-        while registry_clone.is_timer_active(id) {
-            tokio::select! {
-                _ = interval.tick() => {
-                    if callback.call_async::<_, ()>(None,()).await.is_err() {
-                        break;
-                    }
-                }
-                _ = notifier.notified() => break,
-            }
-        }
-
-        // Ensure we decrement the count when the task finishes
-        registry_clone.decrement_active_count();
+        registry_clone.finish_timer(id);
     });
 
     id

@@ -17,8 +17,8 @@ use tokio::time::{Interval, interval, sleep};
 fn get_current_timestamp() -> f64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as f64
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0)
 }
 
 // Promise-based setTimeout - returns a Promise that resolves after the delay
@@ -82,10 +82,6 @@ struct IntervalStream {
     canceled: std::sync::Arc<AtomicBool>,
 }
 
-// This is safe to implement because we don't use Rc directly in the IntervalStream
-// The registry is only used in the setup and Drop implementation
-unsafe impl Send for IntervalStream {}
-
 impl Stream for IntervalStream {
     type Item = f64;
 
@@ -117,8 +113,12 @@ impl Drop for IntervalStream {
 
 // Promise-based setInterval - returns an async iterator that yields timestamps
 pub fn set_interval(ctx: JSContext, delay: Optional<f64>) -> JSResult<JSObject> {
-    let delay = delay.0.unwrap_or(0.0);
-    let delay = if delay < 0.0 { 0.0 } else { delay };
+    let delay_ms = delay.0.unwrap_or(0.0);
+    let delay_ms = if delay_ms.is_finite() && delay_ms > 0.0 {
+        delay_ms
+    } else {
+        0.0
+    };
 
     // Create a channel for cancellation notification
     let (notify_tx, notify_rx) = mpsc::channel::<()>(1);
@@ -148,7 +148,7 @@ pub fn set_interval(ctx: JSContext, delay: Optional<f64>) -> JSResult<JSObject> 
 
     // Create the stream with an interval that ticks at the specified rate
     let stream = IntervalStream {
-        interval: interval(Duration::from_secs_f64(delay / 1000.0)),
+        interval: interval(Duration::from_millis(delay_ms as u64).max(Duration::from_millis(1))),
         notify_rx,
         registry: registry.clone(),
         timer_id,
