@@ -116,6 +116,20 @@ impl<'a> UnitJSRunner<'a> {
 
     /// Run all tests and return true if all tests passed
     pub async fn run(&self) -> JSResult<bool> {
+        // Optional debugging controls:
+        // - RONG_TEST_LIMIT: run only the first N tests (by global test number)
+        // - RONG_TEST_FILTER: regex matched against "suite test"
+        if let Ok(limit) = std::env::var("RONG_TEST_LIMIT")
+            && let Ok(n) = limit.parse::<u32>()
+        {
+            self.ctx.global().set("__RONG_TEST_LIMIT__", n).ok();
+        }
+        if let Ok(filter) = std::env::var("RONG_TEST_FILTER")
+            && !filter.is_empty()
+        {
+            self.ctx.global().set("__RONG_TEST_FILTER__", filter).ok();
+        }
+
         // Execute the test and wait for completion
         let result: bool = self
             .ctx

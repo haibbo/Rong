@@ -73,79 +73,95 @@ class TestRunner {
         await callback();
       }
 
-      // Run the test with 30 second timeout
-      await Promise.race([
-        new Promise(async (resolve, reject) => {
-          try {
-            // Check if test function expects a done callback (based on function.length)
-            if (test.fn.length > 0) {
-              // Test uses done callback
-              let doneCallCount = 0;
-              let settled = false;
-              let settleTimer = null;
+      // Run the test with optional 30 second timeout (only if setTimeout is available)
+      const testPromise = new Promise(async (resolve, reject) => {
+        try {
+          // Check if test function expects a done callback (based on function.length)
+          if (test.fn.length > 0) {
+            // Test uses done callback
+            let doneCallCount = 0;
+            let settled = false;
+            let settleTimer = null;
 
-              const done = (error) => {
-                doneCallCount += 1;
+            const done = (error) => {
+              doneCallCount += 1;
 
-                if (doneCallCount > 1) {
-                  // If we're still pending, fail; if already settled, at least surface it.
-                  if (!settled) {
-                    settled = true;
-                    if (settleTimer) clearTimeout(settleTimer);
-                    reject(new Error("done() called multiple times"));
-                  } else {
-                    console.error("done() called multiple times (after test already settled)");
-                  }
-                  return;
+              if (doneCallCount > 1) {
+                // If we're still pending, fail; if already settled, at least surface it.
+                if (!settled) {
+                  settled = true;
+                  if (settleTimer && typeof clearTimeout === "function") clearTimeout(settleTimer);
+                  reject(new Error("done() called multiple times"));
+                } else {
+                  console.error("done() called multiple times (after test already settled)");
                 }
+                return;
+              }
 
-                if (error) {
-                  if (!settled) {
-                    settled = true;
-                    if (settleTimer) clearTimeout(settleTimer);
-                    reject(error);
-                  }
-                  return;
+              if (error) {
+                if (!settled) {
+                  settled = true;
+                  if (settleTimer && typeof clearTimeout === "function") clearTimeout(settleTimer);
+                  reject(error);
                 }
+                return;
+              }
 
-                // Delay settle to end of tick so immediate double-calls can be detected.
+              // Delay settle to end of tick so immediate double-calls can be detected.
+              // Only use setTimeout if available (timer module might not be loaded)
+              if (typeof setTimeout === "function") {
                 settleTimer = setTimeout(() => {
                   if (settled) return;
                   settled = true;
                   resolve();
                 }, 0);
-              };
-
-              // Call test with done callback
-              const result = test.fn(done);
-
-              // If test returns a promise, it's using both promise and callback (error)
-              if (result && typeof result.then === "function") {
+              } else {
+                // No timer available, settle immediately
                 if (!settled) {
                   settled = true;
-                  if (settleTimer) clearTimeout(settleTimer);
-                  reject(new Error("Test uses both promise and done callback"));
+                  resolve();
                 }
               }
-            } else {
-              // Test uses promise or sync return
-              const result = test.fn();
-              if (result && typeof result.then === "function") {
-                await result;
+            };
+
+            // Call test with done callback
+            const result = test.fn(done);
+
+            // If test returns a promise, it's using both promise and callback (error)
+            if (result && typeof result.then === "function") {
+              if (!settled) {
+                settled = true;
+                if (settleTimer && typeof clearTimeout === "function") clearTimeout(settleTimer);
+                reject(new Error("Test uses both promise and done callback"));
               }
-              resolve();
             }
-          } catch (e) {
-            reject(e);
+          } else {
+            // Test uses promise or sync return
+            const result = test.fn();
+            if (result && typeof result.then === "function") {
+              await result;
+            }
+            resolve();
           }
-        }),
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Test timeout after 30 seconds: ${test.name}`)),
-            30000,
+        } catch (e) {
+          reject(e);
+        }
+      });
+
+      // Add timeout only if setTimeout is available
+      if (typeof setTimeout === "function") {
+        await Promise.race([
+          testPromise,
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`Test timeout after 30 seconds: ${test.name}`)),
+              30000,
+            ),
           ),
-        ),
-      ]);
+        ]);
+      } else {
+        await testPromise;
+      }
 
       this.passed++;
       console.log(`    ✓ Passed`);
@@ -173,9 +189,30 @@ class TestRunner {
   }
 
   async runTests() {
+    const limit =
+      typeof globalThis.__RONG_TEST_LIMIT__ === "number"
+        ? globalThis.__RONG_TEST_LIMIT__
+        : null;
+    const filter =
+      typeof globalThis.__RONG_TEST_FILTER__ === "string" &&
+      globalThis.__RONG_TEST_FILTER__.length > 0
+        ? new RegExp(globalThis.__RONG_TEST_FILTER__)
+        : null;
+
     for (const suite of this.tests) {
       console.log(`\nRunning suite: ${suite.name}`);
       for (const test of suite.tests) {
+        if (limit != null && test.number > limit) {
+          console.log(`\nTest Results:`);
+          console.log(`  Passed: ${this.passed}`);
+          console.log(`  Failed: ${this.failed}`);
+          return this.failed === 0;
+        }
+
+        if (filter && !filter.test(`${suite.name} ${test.name}`)) {
+          continue;
+        }
+
         console.log(`${test.number}. ${test.name}...`);
         await this.runTest(suite, test);
       }
