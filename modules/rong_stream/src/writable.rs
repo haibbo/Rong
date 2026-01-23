@@ -151,7 +151,9 @@ impl WritableStream {
                     .with_name("TypeError")
                     .into());
                 }
-                let obj = sink_guard.take().unwrap();
+                let obj = sink_guard.take().ok_or_else(|| {
+                    HostError::new(rong::error::E_INTERNAL, "WritableStream sink missing")
+                })?;
                 Ok(WritableStreamDefaultWriter {
                     slot: self.tx_slot.clone(),
                     tx: Arc::new(Mutex::new(None)),

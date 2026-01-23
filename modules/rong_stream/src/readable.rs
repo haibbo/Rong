@@ -1,18 +1,20 @@
 use crate::writable::WritableStream;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use rong::function::This;
 use rong::*;
 use rong_abort::AbortSignal;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::io::AsyncRead;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::mpsc;
 
 type StreamChunk = Result<Bytes, String>;
 type StreamReceiver = mpsc::Receiver<StreamChunk>;
-type StreamSender = mpsc::Sender<StreamChunk>;
+type ControlSender = mpsc::UnboundedSender<StreamChunk>;
+type ControlReceiver = mpsc::UnboundedReceiver<StreamChunk>;
 type SharedReceiverSlot = Arc<StdMutex<Option<StreamReceiver>>>;
-type SharedReceiver = Arc<Mutex<Option<StreamReceiver>>>;
-type SharedSender = Arc<Mutex<Option<StreamSender>>>;
+type SharedReceiver = Arc<StdMutex<Option<StreamReceiver>>>;
+type SharedSender = Arc<StdMutex<Option<ControlSender>>>;
 
 #[js_export]
 pub struct ReadableStream {
@@ -26,6 +28,7 @@ pub struct ReadableStreamDefaultReader {
     slot: SharedReceiverSlot,
     // Receiver owned by the reader while locked.
     rx: SharedReceiver,
+    canceled: Arc<AtomicBool>,
 }
 
 #[js_export]
@@ -46,16 +49,13 @@ impl ReadableStream {
     {
         let (tx, rx) = mpsc::channel::<StreamChunk>(16);
         rong::spawn(async move {
-            let mut buf = vec![0u8; chunk_size.max(1)];
+            let mut buf = BytesMut::with_capacity(chunk_size.max(1));
             loop {
-                match tokio::io::AsyncReadExt::read(&mut reader, &mut buf).await {
+                buf.clear();
+                match tokio::io::AsyncReadExt::read_buf(&mut reader, &mut buf).await {
                     Ok(0) => break,
-                    Ok(n) => {
-                        if tx
-                            .send(Ok(Bytes::copy_from_slice(&buf[..n])))
-                            .await
-                            .is_err()
-                        {
+                    Ok(_) => {
+                        if tx.send(Ok(buf.split().freeze())).await.is_err() {
                             break;
                         }
                     }
@@ -88,18 +88,30 @@ impl ReadableStream {
     fn constructor(ctx: JSContext, underlying: function::Optional<JSValue>) -> JSResult<JSObject> {
         // Create a basic channel-backed stream
         let (tx, rx) = mpsc::channel::<StreamChunk>(16);
+        let (control_tx, mut control_rx): (ControlSender, ControlReceiver) =
+            mpsc::unbounded_channel();
         let stream = Self::from_receiver(rx);
         let obj = JSReadableStream::new(&ctx, stream)?.into_object();
+
+        // Forward controller writes to the bounded stream channel in-order.
+        let tx_forwards = tx.clone();
+        rong::spawn(async move {
+            while let Some(item) = control_rx.recv().await {
+                if tx_forwards.send(item).await.is_err() {
+                    break;
+                }
+            }
+        });
 
         // If an underlying source is provided, call start(controller) if present
         if let Some(v) = underlying.0
             && let Some(src) = v.into_object()
         {
             let controller = ReadableStreamDefaultController {
-                tx: Arc::new(Mutex::new(Some(tx))),
+                tx: Arc::new(StdMutex::new(Some(control_tx))),
             };
             if let Ok(start) = src.get::<_, JSFunc>("start") {
-                let _ = start.call::<_, JSValue>(Some(src.clone()), (controller,));
+                start.call::<_, JSValue>(Some(src.clone()), (controller,))?;
             }
         }
         Ok(obj)
@@ -114,7 +126,8 @@ impl ReadableStream {
         match guard.take() {
             Some(rx) => Ok(ReadableStreamDefaultReader {
                 slot: self.rx_slot.clone(),
-                rx: Arc::new(Mutex::new(Some(rx))),
+                rx: Arc::new(StdMutex::new(Some(rx))),
+                canceled: Arc::new(AtomicBool::new(false)),
             }),
             None => Err(
                 HostError::new(rong::error::E_INVALID_STATE, "ReadableStream is locked")
@@ -214,7 +227,7 @@ impl ReadableStream {
             }
 
             // Release locks (ignore errors)
-            let _ = reader.release_lock().await;
+            let _ = reader.release_lock();
             let _ = writer.release_lock().await;
 
             // Abort writer on error if needed
@@ -268,7 +281,7 @@ impl ReadableStream {
         if pipe_err.is_none() && !prevent_close {
             let _ = writer.close().await;
         }
-        let _ = reader.release_lock().await;
+        let _ = reader.release_lock();
         let _ = writer.release_lock().await;
         if let Some(e) = pipe_err {
             if !prevent_abort {
@@ -362,7 +375,10 @@ impl ReadableStreamDefaultReader {
     async fn read(&self, ctx: JSContext) -> JSResult<JSObject> {
         // Take the receiver out to avoid holding the lock across await
         let mut rx_opt = {
-            let mut slot = self.rx.lock().await;
+            let mut slot = self
+                .rx
+                .lock()
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Reader is poisoned"))?;
             slot.take()
         };
 
@@ -379,15 +395,29 @@ impl ReadableStreamDefaultReader {
         let next = rx.recv().await;
         // Put the receiver back
         {
-            let mut slot = self.rx.lock().await;
-            *slot = Some(rx);
+            let mut slot = self
+                .rx
+                .lock()
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Reader is poisoned"))?;
+            if self.canceled.load(Ordering::Acquire) {
+                *slot = None;
+                // Drop rx by not restoring it.
+            } else {
+                *slot = Some(rx);
+            }
+        }
+
+        if self.canceled.load(Ordering::Acquire) {
+            let out = JSObject::new(&ctx);
+            out.set("done", true)?;
+            return Ok(out);
         }
 
         match next {
             Some(Ok(bytes)) => {
                 let out = JSObject::new(&ctx);
                 out.set("done", false)?;
-                let ab = JSArrayBuffer::<u8>::from_bytes(&ctx, &bytes)?;
+                let ab = JSArrayBuffer::<u8>::from_bytes_owned(&ctx, bytes.to_vec())?;
                 out.set("value", ab)?;
                 Ok(out)
             }
@@ -402,14 +432,19 @@ impl ReadableStreamDefaultReader {
     }
 
     #[js_method(rename = "releaseLock")]
-    async fn release_lock(&self) -> JSResult<()> {
+    fn release_lock(&self) -> JSResult<()> {
         // Take receiver out
         let rx_opt = {
-            let mut slot = self.rx.lock().await;
+            let mut slot = self
+                .rx
+                .lock()
+                .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Reader is poisoned"))?;
             slot.take()
         };
         // Return it back to the stream's slot so another reader can be acquired
-        if let Some(rx) = rx_opt {
+        if let Some(rx) = rx_opt
+            && !self.canceled.load(Ordering::Acquire)
+        {
             let mut guard = self
                 .slot
                 .lock()
@@ -423,8 +458,12 @@ impl ReadableStreamDefaultReader {
 
     #[js_method]
     async fn cancel(&self) -> JSResult<()> {
-        let mut slot = self.rx.lock().await;
-        *slot = None;
+        self.canceled.store(true, Ordering::Release);
+        let mut slot = self
+            .rx
+            .lock()
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Reader is poisoned"))?;
+        *slot = None; // if a read is in-flight, it will observe `canceled` and drop on restore
         Ok(())
     }
 }
@@ -481,12 +520,14 @@ impl ReadableStreamDefaultController {
             .into());
         };
 
-        let mut slot = futures::executor::block_on(self.tx.lock());
+        let mut slot = self
+            .tx
+            .lock()
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
         if let Some(tx) = slot.as_mut() {
-            futures::executor::block_on(async {
-                let _ = tx.send(Ok(bytes)).await;
-            });
-            Ok(())
+            tx.send(Ok(bytes)).map_err(|_| {
+                HostError::new(rong::error::E_INVALID_STATE, "ReadableStream is closed").into()
+            })
         } else {
             Err(HostError::new(rong::error::E_INVALID_STATE, "ReadableStream is closed").into())
         }
@@ -494,7 +535,10 @@ impl ReadableStreamDefaultController {
 
     #[js_method]
     fn close(&mut self) -> JSResult<()> {
-        let mut slot = futures::executor::block_on(self.tx.lock());
+        let mut slot = self
+            .tx
+            .lock()
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
         *slot = None;
         Ok(())
     }
@@ -505,9 +549,12 @@ impl ReadableStreamDefaultController {
             .0
             .map(|v| v.to_string())
             .unwrap_or_else(|| "ReadableStream error".to_string());
-        let mut slot = futures::executor::block_on(self.tx.lock());
+        let mut slot = self
+            .tx
+            .lock()
+            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
         if let Some(tx) = slot.as_mut() {
-            let _ = futures::executor::block_on(async { tx.send(Err(msg)).await });
+            let _ = tx.send(Err(msg));
         }
         *slot = None;
         Ok(())
