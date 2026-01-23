@@ -324,7 +324,7 @@ impl Headers {
         this: This<JSObject>, // Header Object
         callback: JSFunc,
         this_arg: Optional<JSObject>,
-    ) {
+    ) -> JSResult<()> {
         // Value to use as this when executing callback. It's optional
         let this_arg = this_arg.0;
 
@@ -332,8 +332,9 @@ impl Headers {
             let value_str = value.to_str().unwrap_or_default();
             let name_str = name.as_str();
 
-            let _ = callback.call::<_, ()>(this_arg.clone(), (value_str, name_str, this.0.clone()));
+            callback.call::<_, ()>(this_arg.clone(), (value_str, name_str, this.0.clone()))?;
         }
+        Ok(())
     }
 }
 

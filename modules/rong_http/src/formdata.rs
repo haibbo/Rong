@@ -73,9 +73,9 @@ impl Iterator for FormDataEntriesIter {
         if self.pos < self.entries.len() {
             let (key, value, _) = self.entries[self.pos].clone();
             self.pos += 1;
-            let array = JSArray::new(&self.ctx).unwrap();
-            array.push(key).unwrap();
-            array.push(value).unwrap();
+            let array = JSArray::new(&self.ctx).ok()?;
+            array.push(key).ok()?;
+            array.push(value).ok()?;
             Some(array)
         } else {
             None

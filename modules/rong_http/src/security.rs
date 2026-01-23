@@ -48,6 +48,29 @@ pub fn set_network_access_guard(guard: Box<dyn NetworkAccessGuard>) {
     });
 }
 
+/// Scoped network access guard setter.
+/// Restores the previous guard when the returned scope is dropped.
+pub fn set_network_access_guard_scoped(
+    guard: Box<dyn NetworkAccessGuard>,
+) -> NetworkAccessGuardScope {
+    let prev = NETWORK_ACCESS_GUARD.with(|g| std::mem::replace(&mut *g.borrow_mut(), guard));
+    NetworkAccessGuardScope { prev: Some(prev) }
+}
+
+pub struct NetworkAccessGuardScope {
+    prev: Option<Box<dyn NetworkAccessGuard>>,
+}
+
+impl Drop for NetworkAccessGuardScope {
+    fn drop(&mut self) {
+        if let Some(prev) = self.prev.take() {
+            NETWORK_ACCESS_GUARD.with(|g| {
+                *g.borrow_mut() = prev;
+            });
+        }
+    }
+}
+
 /// Grant network access for a specific domain
 /// This function checks if the current network access guard allows access to the given domain
 pub fn grant_network_access(domain: &str) -> JSResult<()> {

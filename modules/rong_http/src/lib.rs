@@ -14,7 +14,9 @@ pub use client::*;
 pub use download::*;
 
 // Re-export security-related items
-pub use security::{NetworkAccessGuard, set_network_access_guard};
+pub use security::{
+    NetworkAccessGuard, set_network_access_guard, set_network_access_guard_scoped,
+};
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     header::init(ctx)?;

@@ -110,6 +110,28 @@ describe("Response", () => {
       const b2 = response.body;
       expect(b1 === b2).toBe(true);
     });
+
+    it("should not allow multiple body reads", async () => {
+      const response = new Response(JSON.stringify({ ok: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const a = await response.json();
+      expect(a.ok).toBe(true);
+
+      // Second read must fail per spec.
+      let threw = false;
+      try {
+        await response.text();
+      } catch (err) {
+        threw = true;
+        expect(err instanceof TypeError).toBe(true);
+        expect(/body used already/.test(String(err))).toBe(true);
+      }
+      if (!threw) {
+        throw new Error("Expected second body read to fail");
+      }
+    });
   });
 
   describe("clone", () => {

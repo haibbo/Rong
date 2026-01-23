@@ -9,6 +9,7 @@ use rong_abort::AbortReceiver;
 use rong_buffer::Blob;
 use rong_stream::{JSReadableStream, readable_stream_is_locked};
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 use tokio::sync::mpsc;
 
 #[derive(Default)]
@@ -20,13 +21,14 @@ pub struct Response {
     status: u16,
     status_text: String,
     body: Option<BodyKind>,
-    consumed: Cell<bool>,
+    // JS method bindings clone the Rust struct; share state so bodyUsed is consistent.
+    consumed: Rc<Cell<bool>>,
     redirected: bool,
     type_: String,
     abort_receiver: Option<AbortReceiver>,
     // Cache a JS ReadableStream instance so repeated Response.body access
     // returns the same object and doesn't have side effects.
-    body_stream: RefCell<Option<JSObject>>,
+    body_stream: Rc<RefCell<Option<JSObject>>>,
 }
 
 #[derive(FromJSValue)]
@@ -64,7 +66,7 @@ impl Response {
         let mut response = Self {
             status: 200,
             status_text: "".to_string(),
-            consumed: Cell::new(false),
+            consumed: Rc::new(Cell::new(false)),
             type_: "default".to_string(),
             ..Default::default()
         };
@@ -161,11 +163,11 @@ impl Response {
             status: self.status,
             status_text: self.status_text.clone(),
             body: self.body.clone(),
-            consumed: Cell::new(self.consumed.get()),
+            consumed: Rc::new(Cell::new(self.consumed.get())),
             redirected: self.redirected,
             type_: self.type_.clone(),
             abort_receiver: self.abort_receiver.clone(),
-            body_stream: RefCell::new(self.body_stream.borrow().clone()),
+            body_stream: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -463,7 +465,7 @@ impl Response {
             status: status.as_u16(),
             status_text: status.canonical_reason().unwrap_or("").to_string(),
             body: Some(body_kind),
-            consumed: Cell::new(false),
+            consumed: Rc::new(Cell::new(false)),
             redirected,
             type_,
             abort_receiver,

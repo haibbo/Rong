@@ -581,7 +581,9 @@ mod tests {
 
     #[test]
     fn test_network_access_guard() {
-        use crate::security::{NetworkAccessGuard, grant_network_access, set_network_access_guard};
+        use crate::security::{
+            NetworkAccessGuard, grant_network_access, set_network_access_guard_scoped,
+        };
 
         // Test default guard allows all domains
         let result = grant_network_access("httpbin.org");
@@ -603,8 +605,8 @@ mod tests {
             }
         }
 
-        // Set restricted network guard
-        set_network_access_guard(Box::new(RestrictedNetworkGuard));
+        // Set restricted network guard (scoped so it can't leak into other tests on the same thread)
+        let _scope = set_network_access_guard_scoped(Box::new(RestrictedNetworkGuard));
 
         // Test allowed domain - should succeed
         let allowed_result = grant_network_access("allowed.example.com");
