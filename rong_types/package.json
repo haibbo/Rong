@@ -1,0 +1,27 @@
+{
+  "name": "@rong/types",
+  "version": "0.2.0",
+  "description": "TypeScript type definitions for Rong JavaScript runtime",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "rong",
+    "types",
+    "typescript",
+    "runtime"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist",
+    "src"
+  ]
+}
