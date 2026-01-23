@@ -77,29 +77,23 @@ impl FileInfo {
 
     #[js_method(getter)]
     fn modified(&self) -> Option<f64> {
-        self.modified.map(|t| {
-            t.duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as f64
-        })
+        self.modified
+            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as f64)
     }
 
     #[js_method(getter)]
     fn accessed(&self) -> Option<f64> {
-        self.accessed.map(|t| {
-            t.duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as f64
-        })
+        self.accessed
+            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as f64)
     }
 
     #[js_method(getter)]
     fn created(&self) -> Option<f64> {
-        self.created.map(|t| {
-            t.duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as f64
-        })
+        self.created
+            .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as f64)
     }
 
     #[js_method(getter)]

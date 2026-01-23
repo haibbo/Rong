@@ -1,6 +1,6 @@
 use crate::grant_file_access;
 use crate::stat::FileInfo;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use rong::{function::Optional, *};
 use rong_stream::{JSReadableStream, WritableStream};
 use std::sync::Arc;
@@ -144,17 +144,14 @@ impl FsFile {
         let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(16);
         let chunk_size = 64 * 1024; // 64 KiB default chunk size (similar to Deno defaults)
         tokio::task::spawn(async move {
-            let mut buf = vec![0u8; chunk_size];
+            let mut buf = BytesMut::with_capacity(chunk_size);
             let mut f = file.lock().await;
             loop {
-                match f.read(&mut buf).await {
+                buf.clear();
+                match tokio::io::AsyncReadExt::read_buf(&mut *f, &mut buf).await {
                     Ok(0) => break,
-                    Ok(n) => {
-                        if tx
-                            .send(Ok(Bytes::copy_from_slice(&buf[..n])))
-                            .await
-                            .is_err()
-                        {
+                    Ok(_) => {
+                        if tx.send(Ok(buf.split().freeze())).await.is_err() {
                             break;
                         }
                     }
