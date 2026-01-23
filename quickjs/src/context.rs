@@ -59,22 +59,24 @@ impl JSContextImpl for QJSContext {
             return Err(RongJSError::CompileToByteErr());
         }
 
-        let mut out_size = 0;
-        let slice = unsafe {
-            let buf = qjs::JS_WriteObject(
+        let mut out_size: usize = 0;
+        let buf = unsafe {
+            qjs::JS_WriteObject(
                 self.ctx,
                 &mut out_size,
                 *obj.as_raw_value(),
                 qjs::JS_WRITE_OBJ_BYTECODE as _,
-            );
-
-            if buf.is_null() {
-                return Err(RongJSError::CompileToByteErr());
-            }
-
-            std::slice::from_raw_parts(buf, out_size)
+            )
         };
-        let bytecode = slice.to_vec();
+
+        if buf.is_null() {
+            return Err(RongJSError::CompileToByteErr());
+        }
+
+        let bytecode = unsafe { std::slice::from_raw_parts(buf, out_size) }.to_vec();
+        unsafe {
+            qjs::QJS_Free(self.ctx, buf.cast());
+        }
         Ok(bytecode)
     }
 
@@ -86,15 +88,19 @@ impl JSContextImpl for QJSContext {
                 bytes.len(),
                 qjs::JS_READ_OBJ_BYTECODE as i32,
             );
+
             if qjs::QJS_IsException(self.ctx, obj) {
-                QJSValue::from_owned_raw(self.ctx, obj).with_exception()
+                let exception = qjs::JS_GetException(self.ctx);
+                return QJSValue::from_owned_raw(self.ctx, exception).with_exception();
+            }
+
+            // JS_EvalFunction takes ownership of `obj`.
+            let eval_result = qjs::JS_EvalFunction(self.ctx, obj);
+            if qjs::QJS_IsException(self.ctx, eval_result) {
+                let exception = qjs::JS_GetException(self.ctx);
+                QJSValue::from_owned_raw(self.ctx, exception).with_exception()
             } else {
-                let eval_result = qjs::JS_EvalFunction(self.ctx, obj);
-                if qjs::QJS_IsException(self.ctx, eval_result) {
-                    QJSValue::from_owned_raw(self.ctx, eval_result).with_exception()
-                } else {
-                    QJSValue::from_owned_raw(self.ctx, eval_result)
-                }
+                QJSValue::from_owned_raw(self.ctx, eval_result)
             }
         }
     }
@@ -163,7 +169,14 @@ impl JSContextImpl for QJSContext {
         // Create promise
         let promise = unsafe { qjs::JS_NewPromiseCapability(self.ctx, resolving_funcs_ptr) };
 
-        // Safety: JS_NewPromiseCapability initializes the array
+        // On exception, QuickJS may not have initialized `resolving_funcs`.
+        if unsafe { qjs::QJS_IsException(self.ctx, promise) } {
+            let undef =
+                || QJSValue::from_owned_raw(self.ctx, unsafe { qjs::QJS_NewUndefined(self.ctx) });
+            return (undef(), undef(), undef());
+        }
+
+        // Safety: JS_NewPromiseCapability initializes the array on success.
         let resolving_funcs = unsafe { resolving_funcs.assume_init() };
 
         let resolve = QJSValue::from_owned_raw(self.ctx, resolving_funcs[0]);

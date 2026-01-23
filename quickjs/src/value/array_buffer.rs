@@ -1,7 +1,6 @@
 use crate::QJSValue;
 use crate::qjs;
 use rong_core::{JSArrayBufferOps, JSValueImpl};
-use std::ptr;
 use std::slice;
 
 impl JSArrayBufferOps for QJSValue {
@@ -24,23 +23,23 @@ impl JSArrayBufferOps for QJSValue {
 
     fn from_vec(ctx: &Self::Context, vec: Vec<u8>) -> Self {
         unsafe {
-            // Convert Vec into Box to ensure proper memory layout
-            let data = vec.into_boxed_slice();
-            let len = data.len();
-            let ptr = Box::into_raw(data);
+            let mut vec = vec;
+            let len = vec.len();
+            let data_ptr = vec.as_mut_ptr();
+            let opaque = Box::into_raw(Box::new(vec)) as *mut ::std::os::raw::c_void;
 
             let array_buffer = qjs::JS_NewArrayBuffer(
                 ctx.to_raw(),
-                ptr as *mut _,
+                data_ptr as *mut _,
                 len as _,
                 Some(deallocator_callback),
-                ptr::null_mut(),
+                opaque,
                 false, // is_shared = false
             );
 
             if qjs::QJS_IsException(ctx.to_raw(), array_buffer) {
                 // Clean up the memory if creation fails
-                let _ = Box::from_raw(ptr);
+                let _ = Box::from_raw(opaque as *mut Vec<u8>);
                 let exception = qjs::JS_GetException(ctx.to_raw());
                 QJSValue::from_owned_raw(ctx.to_raw(), exception).with_exception()
             } else {
@@ -89,8 +88,10 @@ unsafe extern "C" fn deallocator_callback(
     _ptr: *mut ::std::os::raw::c_void,
 ) {
     if !opaque.is_null() {
+        // SAFETY: `opaque` was created by `Box::into_raw(Box::new(Vec<u8>))` in `from_vec`.
+        // QuickJS calls this deallocator exactly once for the ArrayBuffer.
         unsafe {
-            let _ = Box::from_raw(opaque as *mut u8);
+            drop(Box::from_raw(opaque as *mut Vec<u8>));
         }
     }
 }

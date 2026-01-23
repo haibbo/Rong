@@ -27,6 +27,20 @@ bool QJS_IsObject(JSContext *ctx, JSValue v);
 int QJS_GetRefCount(JSValue v);
 
 /*
+ * Free memory allocated by QuickJS APIs (eg JS_WriteObject).
+ *
+ * Bindgen allowlists currently don't expose `js_free` (lowercase), so we wrap it.
+ */
+void QJS_Free(JSContext *ctx, void *ptr);
+
+/*
+ * Stable identity helpers for JSValue that avoid reading uninitialized union/padding bytes
+ * (important when JSValue is a struct on 64-bit builds).
+ */
+int32_t QJS_ValueIdentTag(JSValue v);
+uint64_t QJS_ValueIdentPayload(JSValue v);
+
+/*
 * create class
 *
 * @param name: Name of the JavaScript constructor function

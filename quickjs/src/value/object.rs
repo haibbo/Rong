@@ -97,14 +97,14 @@ impl JSObjectOps for QJSValue {
     fn get_property(&self, key: Self) -> Option<Self> {
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
-            let v = qjs::JS_GetProperty(key.ctx, self.value, atom);
+            let v = qjs::JS_GetProperty(self.ctx, self.value, atom);
             qjs::JS_FreeAtom(self.ctx, atom);
             v
         };
         if unsafe { qjs::QJS_IsUndefined(self.ctx, v) } {
             None
         } else {
-            Some(QJSValue::from_owned_raw(key.ctx, v))
+            Some(QJSValue::from_owned_raw(self.ctx, v))
         }
     }
 
@@ -146,8 +146,9 @@ impl JSObjectOps for QJSValue {
                 if !qjs::QJS_IsException(ctx, prop) {
                     properties.push(QJSValue::from_owned_raw(ctx, prop));
                 }
-                qjs::JS_FreeAtom(ctx, atom.atom);
             }
+
+            qjs::JS_FreePropertyEnum(ctx, enums, count);
 
             Some(properties)
         }

@@ -27,19 +27,23 @@ pub(crate) enum QJSValueType {
 
 impl PartialEq for QJSValue {
     fn eq(&self, other: &Self) -> bool {
-        unsafe { qjs::JS_IsEqual(self.ctx, self.value, other.value) != 0 }
+        if self.ctx != other.ctx {
+            return false;
+        }
+
+        // Identity semantics without reading uninitialized union/padding bytes.
+        unsafe {
+            qjs::QJS_ValueIdentTag(self.value) == qjs::QJS_ValueIdentTag(other.value)
+                && qjs::QJS_ValueIdentPayload(self.value) == qjs::QJS_ValueIdentPayload(other.value)
+        }
     }
 }
 
 impl Hash for QJSValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // Hash the entire JSValue struct as bytes (platform-independent)
         unsafe {
-            let value_bytes = std::slice::from_raw_parts(
-                &self.value as *const qjs::JSValue as *const u8,
-                std::mem::size_of::<qjs::JSValue>(),
-            );
-            value_bytes.hash(state);
+            qjs::QJS_ValueIdentTag(self.value).hash(state);
+            qjs::QJS_ValueIdentPayload(self.value).hash(state);
         }
         self.ctx.hash(state);
     }
@@ -47,7 +51,11 @@ impl Hash for QJSValue {
 
 impl Clone for QJSValue {
     fn clone(&self) -> Self {
-        let value = unsafe { qjs::JS_DupValue(self.ctx, self.value) };
+        let value = if self.ctx.is_null() {
+            self.value
+        } else {
+            unsafe { qjs::JS_DupValue(self.ctx, self.value) }
+        };
         Self {
             value,
             ctx: self.ctx,
@@ -76,7 +84,11 @@ impl QJSValue {
         // In callback context, generally, all JS variables are from JS engine, in order to make Rust lifetime
         // and ownship works, these variables should be increased referece count first, and then Rust side can
         // drop QJSValue safely
-        let value = unsafe { qjs::JS_DupValue(ctx, value) };
+        let value = if ctx.is_null() {
+            value
+        } else {
+            unsafe { qjs::JS_DupValue(ctx, value) }
+        };
 
         Self {
             value,
@@ -97,8 +109,10 @@ impl QJSValue {
     // and ownship works, these variables should be increased referece count first, and then Rust side can
     // drop QJSValue safely
     pub(crate) fn protect(mut self) -> Self {
-        let value = unsafe { qjs::JS_DupValue(self.ctx, self.value) };
-        self.value = value;
+        if !self.ctx.is_null() {
+            let value = unsafe { qjs::JS_DupValue(self.ctx, self.value) };
+            self.value = value;
+        }
         self
     }
 
@@ -188,7 +202,7 @@ impl JSValueImpl for QJSValue {
 
 impl QJSValue {
     // it's for debug only
-    #![allow(unused)]
+    #[allow(dead_code)]
     pub fn get_ref_count(value: qjs::JSValue) -> i32 {
         unsafe { qjs::QJS_GetRefCount(value) }
     }
