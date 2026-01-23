@@ -226,12 +226,9 @@ impl URL {
 
     #[js_method(getter, rename = "searchParams")]
     fn search_params(&mut self) -> URLSearchParams {
-        if self.search_params.is_none() {
-            // Create a new URLSearchParams instance with a reference to our shared data
-            self.search_params = Some(URLSearchParams::from_shared_data(self.shared_data.clone()));
-        }
-
-        self.search_params.clone().unwrap()
+        self.search_params
+            .get_or_insert_with(|| URLSearchParams::from_shared_data(self.shared_data.clone()))
+            .clone()
     }
 
     #[allow(clippy::inherent_to_string)]
