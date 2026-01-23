@@ -33,6 +33,10 @@ pub struct AbortReceiver {
 }
 
 impl AbortSignal {
+    fn lock_inner(&self) -> std::sync::MutexGuard<'_, AbortSignalInner> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     pub fn new(ctx: &JSContext) -> Self {
         let (sender, _) = watch::channel(JSValue::undefined(ctx));
         Self {
@@ -50,7 +54,7 @@ impl AbortSignal {
     /// communication pattern
     #[must_use]
     pub fn subscribe(&self) -> AbortReceiver {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock_inner();
         let recv = inner.sender.subscribe();
         if inner.aborted {
             let reason = inner.reason.clone();
@@ -63,7 +67,7 @@ impl AbortSignal {
     /// If the signal hasn't been sent yet, it will be sent to all subscribed receivers
     /// Uses watch channel to ensure all receivers receive the same signal
     pub fn notify_abort(&self, abort: JSValue) -> JSResult<()> {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock_inner();
         // Always try to send the signal if there are active receivers
         if inner.sender.receiver_count() > 0 {
             let _ = inner.sender.send(abort);
@@ -127,18 +131,18 @@ impl AbortSignal {
 
     #[js_method(getter, enumerable)]
     pub fn aborted(&self) -> bool {
-        self.inner.lock().unwrap().aborted
+        self.lock_inner().aborted
     }
 
     #[js_method(getter, enumerable, rename = "reason")]
     pub fn get_reason(&self) -> JSValue {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock_inner();
         inner.reason.clone()
     }
 
     #[js_method(setter, rename = "reason")]
     pub(crate) fn set_reason(&self, reason: Optional<JSValue>) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.lock_inner();
         if let Some(r) = reason.0 {
             inner.reason = r;
         }
@@ -146,7 +150,7 @@ impl AbortSignal {
 
     #[js_method(rename = "throwIfAborted")]
     fn throw_if_aborted(&self, ctx: JSContext) -> JSValue {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.lock_inner();
         if inner.aborted && !inner.reason.is_undefined() {
             ctx.throw(inner.reason.clone())
         } else {
@@ -171,7 +175,7 @@ impl AbortSignal {
 
             if borrow.aborted() {
                 {
-                    let mut inner = new_signal.inner.lock().unwrap();
+                    let mut inner = new_signal.lock_inner();
                     inner.aborted = true;
                     inner.reason = borrow.get_reason();
                 }
@@ -196,7 +200,7 @@ impl AbortSignal {
 
                 let to_abort_obj = to_abort.borrow_mut::<AbortSignal>()?;
                 {
-                    let mut inner = to_abort_obj.inner.lock().unwrap();
+                    let mut inner = to_abort_obj.lock_inner();
                     inner.aborted = true;
                     inner.reason = reason;
                 }
@@ -233,7 +237,7 @@ impl AbortSignal {
         let signal = Self::new(&ctx);
         let timeout_error = get_reason_or_dom_exception(&ctx, None, DOMExceptionName::TIMEOUT_ERR)?;
         {
-            let mut inner = signal.inner.lock().unwrap();
+            let mut inner = signal.lock_inner();
             inner.reason = timeout_error;
         }
 
@@ -245,7 +249,7 @@ impl AbortSignal {
 
             if let Ok(signal) = instance_clone.borrow_mut::<AbortSignal>() {
                 {
-                    let mut inner = signal.inner.lock().unwrap();
+                    let mut inner = signal.lock_inner();
                     inner.aborted = true;
                 }
                 drop(signal);
@@ -259,23 +263,26 @@ impl AbortSignal {
 
     /// send abort signal to this
     pub(crate) fn broadcast_abort(ctx: &JSContext, this: This<JSObject>) -> JSResult<()> {
-        Self::do_emit(This(this.0.clone()), EventKey::from("abort"), Rest(vec![]))?;
-
         let borrow = this.borrow_mut::<AbortSignal>()?;
         let reason = get_reason_or_dom_exception(
             ctx,
-            Some(borrow.inner.lock().unwrap().reason.clone()),
+            Some(borrow.lock_inner().reason.clone()),
             DOMExceptionName::ABORT_ERR,
         )?;
 
-        borrow.notify_abort(reason.clone())?;
+        // Update observable state before emitting the event so handlers see `aborted === true`.
+        {
+            let mut inner = borrow.lock_inner();
+            inner.aborted = true;
+            inner.reason = reason.clone();
+        }
 
-        let mut inner = borrow
-            .inner
-            .lock()
-            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "AbortSignal is poisoned"))?;
-        inner.aborted = true;
-        inner.reason = reason;
+        borrow.notify_abort(reason)?;
+
+        // Drop borrow before emitting event to allow event handlers to access AbortSignal
+        drop(borrow);
+
+        Self::do_emit(This(this.0.clone()), EventKey::from("abort"), Rest(vec![]))?;
         Ok(())
     }
 
@@ -307,6 +314,6 @@ fn get_reason_or_dom_exception(
 
 impl Emitter for AbortSignal {
     fn get_event_emitter(&self) -> EventEmitter {
-        self.inner.lock().unwrap().emitter.clone()
+        self.lock_inner().emitter.clone()
     }
 }
