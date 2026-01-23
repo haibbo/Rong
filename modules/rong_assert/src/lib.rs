@@ -30,12 +30,28 @@ fn handle_assertion_error(
     )
 }
 
+fn get_loose_equal_fn(ctx: &JSContext) -> JSResult<JSFunc> {
+    let assert_obj: JSObject = ctx.global().get("assert")?;
+    if let Ok(existing) = assert_obj.get::<_, JSFunc>("__looseEqual") {
+        return Ok(existing);
+    }
+
+    // Node's `assert.equal` uses loose equality (==).
+    let func = ctx.eval::<JSFunc>(Source::from_bytes("(a, b) => a == b"))?;
+    assert_obj.set("__looseEqual", func.clone())?;
+    Ok(func)
+}
+
 /// Asserts that two values are equal.
 fn equal(ctx: JSContext, left: JSValue, right: JSValue, message: Optional<JSValue>) -> JSValue {
-    if left == right {
-        JSValue::from(&ctx, true)
-    } else {
-        handle_assertion_error(&ctx, message, "AssertionError: It's not equal!")
+    // JSValue's Rust `PartialEq` is identity-based (engine handle equality), so we must compare
+    // using JavaScript semantics.
+    let result = get_loose_equal_fn(&ctx).and_then(|f| f.call::<_, bool>(None, (left, right)));
+
+    match result {
+        Ok(true) => JSValue::undefined(&ctx),
+        Ok(false) => handle_assertion_error(&ctx, message, "AssertionError: It's not equal!"),
+        Err(e) => ctx.throw_error(format!("AssertionError internal: {e}")),
     }
 }
 
