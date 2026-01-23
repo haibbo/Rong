@@ -41,6 +41,26 @@ default = [
     "stream",
 ]
 
+all = [
+    "timer",
+    "navigator",
+    "path",
+    "http",
+    "encoding",
+    "event",
+    "assert",
+    "exception",
+    "abort",
+    "console",
+    "url",
+    "buffer",
+    "fs",
+    "storage",
+    "stream",
+    "process",
+    "child_process",
+]
+
 timer = ["rong_timer"]
 navigator = ["rong_navigator"]
 path = ["rong_path"]
