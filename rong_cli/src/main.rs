@@ -2,6 +2,7 @@ use rong::*;
 use std::env;
 use std::path::PathBuf;
 
+mod completer;
 mod extension;
 mod repl;
 

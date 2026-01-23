@@ -1,5 +1,6 @@
+use crate::completer::{self, ReplHelper};
 use rong::*;
-use rustyline::DefaultEditor;
+use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
@@ -92,9 +93,7 @@ fn ensure_inspect_fn(ctx: &JSContext) -> JSResult<JSFunc> {
             if (t === "number" || t === "boolean" || t === "bigint") return String(v);
             if (t === "function") return v.name ? `[Function: ${v.name}]` : "[Function]";
             if (v instanceof Error) {
-              let msg = v.toString();
-              if (v.stack) msg += "\n" + v.stack;
-              return msg;
+              return v.toString();
             }
             try {
               const s = JSON.stringify(v, null, 2);
@@ -131,10 +130,54 @@ fn has_top_level_await(code: &str) -> bool {
     code.contains("await ") && !code.contains("async function") && !code.contains("async (")
 }
 
+/// Extract simple variable names from let/const/var declarations
+fn extract_declarations(code: &str) -> Vec<String> {
+    let mut vars = Vec::new();
+    // Simple pattern: let/const/var followed by identifier
+    // This won't handle destructuring, but covers common REPL usage
+    for line in code.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("//") || trimmed.starts_with("/*") {
+            continue;
+        }
+        for keyword in &["let ", "const ", "var "] {
+            if let Some(rest) = trimmed.strip_prefix(keyword) {
+                // Handle simple comma-separated declarations: let a = 1, b = 2;
+                for part in rest.split(',') {
+                    let ident: String = part
+                        .trim_start()
+                        .chars()
+                        .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
+                        .collect();
+                    if !ident.is_empty() {
+                        vars.push(ident);
+                    }
+                }
+            }
+        }
+    }
+    vars
+}
+
 async fn eval_and_print(ctx: &JSContext, code: &str) -> JSResult<()> {
     // Wrap top-level await in async IIFE for REPL convenience
+    // Also expose declared variables to global scope
     let wrapped_code = if has_top_level_await(code) {
-        format!("(async () => {{ {} }})();", code)
+        let vars = extract_declarations(code);
+        if vars.is_empty() {
+            format!("(async () => {{ {} }})();", code)
+        } else {
+            // Expose declared variables to globalThis after execution
+            let mut expose = String::new();
+            for v in &vars {
+                expose.push_str("globalThis.");
+                expose.push_str(v);
+                expose.push_str(" = ");
+                expose.push_str(v);
+                expose.push_str("; ");
+            }
+            format!("(async () => {{ {} {}  }})();", code, expose)
+        }
     } else {
         code.to_string()
     };
@@ -196,12 +239,18 @@ pub async fn run(ctx: &JSContext) -> JSResult<()> {
     println!("Welcome to Rong v{}.", env!("CARGO_PKG_VERSION"));
     println!("Type \".help\" for more information.");
 
-    let mut rl = DefaultEditor::new().map_err(|e| {
+    // Set up completion state
+    let completion_state = completer::new_completion_state();
+    completer::update_completions(ctx, &completion_state);
+
+    let helper = ReplHelper::new(completion_state.clone());
+    let mut rl = Editor::new().map_err(|e| {
         HostError::new(
             rong::error::E_IO,
             format!("failed to initialize editor: {e}"),
         )
     })?;
+    rl.set_helper(Some(helper));
 
     // Load history from home directory
     let history_path = dirs::home_dir().map(|mut p| {
@@ -250,6 +299,8 @@ pub async fn run(ctx: &JSContext) -> JSResult<()> {
                                 } else {
                                     eprintln!("Usage: .load <file.js>");
                                 }
+                                // Refresh completions in case the file added globals.
+                                completer::update_completions(ctx, &completion_state);
                                 continue;
                             }
                             "." => {
@@ -285,6 +336,9 @@ pub async fn run(ctx: &JSContext) -> JSResult<()> {
                 if let Err(e) = eval_and_print(ctx, &code).await {
                     eprintln!("Uncaught {}", render_error(ctx, e));
                 }
+
+                // Update completions with any new globals
+                completer::update_completions(ctx, &completion_state);
             }
             Err(ReadlineError::Interrupted) => {
                 // Ctrl+C
