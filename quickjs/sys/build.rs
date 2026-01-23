@@ -114,7 +114,7 @@ fn ios_setup() {
     }
 }
 
-fn build_static_archive() {
+fn build_static_archive(out_dir: &str) {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
 
     match target_os.as_str() {
@@ -130,9 +130,16 @@ fn build_static_archive() {
 
     // PROFILE(debug or release) is set automatically by cargo
     let profile = env::var("PROFILE").unwrap();
+    let jobs = env::var("NUM_JOBS").unwrap_or_else(|_| "4".to_string());
 
     let output = Command::new("make")
-        .args(["-j4", &format!("PROFILE={}", profile)])
+        .args([
+            &format!("-j{jobs}"),
+            &format!("PROFILE={profile}"),
+            // Ensure build artifacts stay inside Cargo's OUT_DIR to avoid polluting the repo and
+            // triggering unnecessary rebuilds.
+            &format!("OUT_DIR={out_dir}"),
+        ])
         .output()
         .expect("Failed to execute make");
 
@@ -143,7 +150,7 @@ fn build_static_archive() {
     );
 }
 
-fn generate_binding(out_dir: &String) {
+fn generate_binding(out_dir: &str) {
     let builder = bindgen::Builder::default()
         .header("quickjs.wrapper.h")
         .clang_arg("-I./quickjs-ng")
@@ -181,12 +188,19 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
 
     checkout_submodule();
-    build_static_archive();
+    build_static_archive(&out_dir);
     generate_binding(&out_dir);
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=Makefile");
-    println!("cargo:rerun-if-changed=patch/*");
+    println!("cargo:rerun-if-changed=quickjs.wrapper.h");
+    // Watch directories so edits/additions don't require updating this list.
+    println!("cargo:rerun-if-changed=patch");
+    println!("cargo:rerun-if-changed=quickjs-ng");
+    println!("cargo:rerun-if-env-changed=NUM_JOBS");
+    println!("cargo:rerun-if-env-changed=OHOS_NDK_HOME");
+    println!("cargo:rerun-if-env-changed=ANDROID_NDK_HOME");
+    println!("cargo:rerun-if-env-changed=API");
 
     // where to find static library libquickjs
     println!("cargo:rustc-link-search=native={}", out_dir);
