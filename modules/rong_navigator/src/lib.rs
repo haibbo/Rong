@@ -24,7 +24,8 @@ mod tests {
     fn test_user_agent() {
         run(|ctx| {
             // Test setting custom user agent
-            rong::set_user_agent("CustomUA/1.0").unwrap();
+            rong::set_user_agent("CustomUA/1.0")
+                .map_err(|e| rong::HostError::new(rong::error::E_INVALID_ARG, e))?;
             let custom_ua = rong::get_user_agent();
             assert_eq!(custom_ua, "CustomUA/1.0");
 
