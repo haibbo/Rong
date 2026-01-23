@@ -98,8 +98,6 @@ impl TimerRegistry {
     fn cancel_timer(&self, id: u32) {
         if let Some(entry) = lock_poison(&self.inner.timers).remove(&id) {
             entry.notifier.notify_waiters();
-        } else {
-            return;
         }
     }
 

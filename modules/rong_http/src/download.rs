@@ -49,10 +49,10 @@ async fn download_resource(
 ) -> Result<(), String> {
     let mut sink_opt = sink;
 
-    if let Some(parent) = dest.parent() {
-        if let Err(e) = tokio::fs::create_dir_all(parent).await {
-            return finalize_sink(sink_opt, Err(format!("create dir: {}", e)));
-        }
+    if let Some(parent) = dest.parent()
+        && let Err(e) = tokio::fs::create_dir_all(parent).await
+    {
+        return finalize_sink(sink_opt, Err(format!("create dir: {}", e)));
     }
 
     let temp_path = dest.with_extension("part");

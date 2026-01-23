@@ -357,7 +357,7 @@ fn parse_args(args: &Optional<JSValue>) -> JSResult<Vec<String>> {
         if let Some(arr) = args_val
             .clone()
             .into_object()
-            .and_then(|o| JSArray::from_object(o))
+            .and_then(JSArray::from_object)
         {
             let mut result = Vec::new();
             for i in 0..arr.len() {

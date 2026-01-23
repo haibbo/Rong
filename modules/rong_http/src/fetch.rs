@@ -192,7 +192,7 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
                 "manual" => {
                     // Fall through to return response
                 }
-                "follow" | _ => {
+                "follow" => {
                     if redirect_count >= MAX_REDIRECTS {
                         if let Some(stop) = abort_bridge_stop {
                             stop.notify_one();

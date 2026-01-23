@@ -129,7 +129,7 @@ impl Process {
 
         let (result_secs, result_nanos) = if let Some(prev_val) = prev.0 {
             // Calculate difference from previous hrtime
-            if let Some(arr) = prev_val.into_object().and_then(|o| JSArray::from_object(o)) {
+            if let Some(arr) = prev_val.into_object().and_then(JSArray::from_object) {
                 let prev_secs: u64 = arr.get(0)?.unwrap_or(0);
                 let prev_nanos: u32 = arr.get(1)?.unwrap_or(0);
 

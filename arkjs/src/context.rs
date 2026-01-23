@@ -255,7 +255,7 @@ impl JSErrorFactory for ArkJSContext {
             let _ = arkjs::OH_JSVM_SetNamedProperty(
                 self.raw,
                 error,
-                b"name\0".as_ptr() as _,
+                c"name".as_ptr() as _,
                 name_value,
             );
 
@@ -271,7 +271,7 @@ impl JSErrorFactory for ArkJSContext {
                 let _ = arkjs::OH_JSVM_SetNamedProperty(
                     self.raw,
                     error,
-                    b"code\0".as_ptr() as _,
+                    c"code".as_ptr() as _,
                     code_value,
                 );
             }
