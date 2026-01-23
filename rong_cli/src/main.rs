@@ -9,6 +9,7 @@ mod repl;
 enum Command {
     Run(PathBuf),
     Compile { input: PathBuf, output: PathBuf },
+    Repl,
     Help,
     Version,
 }
@@ -17,6 +18,7 @@ fn usage() {
     println!(
         r#"
 Usage:
+  rong                      Start REPL (or run stdin when piped)
   rong run <file.js>
   rong compile <input.js> <output.rong>
   rong -v | --version
@@ -37,7 +39,7 @@ fn parse_args() -> Result<Command, String> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        return Ok(Command::Help);
+        return Ok(Command::Repl);
     }
 
     match args[1].as_str() {
@@ -58,13 +60,37 @@ fn parse_args() -> Result<Command, String> {
                 output: args[3].clone().into(),
             })
         }
-        _ => Err(format!("Unknown command: {}", args[1])),
+        _ => {
+            // If the argument looks like a file path (ends with .js or .rong), treat it as a run command
+            let arg = &args[1];
+            if arg.ends_with(".js") || arg.ends_with(".rong") {
+                Ok(Command::Run(arg.clone().into()))
+            } else {
+                Err(format!("Unknown command: {}", args[1]))
+            }
+        }
     }
 }
 
 async fn run_file(ctx: &JSContext, path: PathBuf) -> Result<(), RongJSError> {
     let source = Source::from_path(ctx, &path).await?;
-    ctx.eval_async::<()>(source).await
+
+    // For JavaScript files, wrap top-level await in async IIFE
+    match source.kind() {
+        rong::SourceKind::JavaScript(code) => {
+            let code_str = String::from_utf8_lossy(code);
+            let wrapped = if code_str.contains("await ")
+                && !code_str.contains("async function")
+                && !code_str.contains("async (")
+            {
+                format!("(async () => {{ {} }})();", code_str)
+            } else {
+                code_str.to_string()
+            };
+            ctx.eval_async::<()>(Source::from_bytes(wrapped)).await
+        }
+        _ => ctx.eval_async::<()>(source).await,
+    }
 }
 
 async fn compile_file(ctx: &JSContext, input: PathBuf, output: PathBuf) -> Result<(), RongJSError> {
@@ -109,7 +135,7 @@ fn main() -> Result<(), RongJSError> {
                 usage();
             }
             Command::Version => {
-                println!("rong v0.1.0");
+                println!("rong v{}", env!("CARGO_PKG_VERSION"));
             }
             _ => unreachable!(),
         }
@@ -125,6 +151,7 @@ fn main() -> Result<(), RongJSError> {
 
                 // Process the command with the initialized context
                 match command {
+                    Command::Repl => repl::run(&ctx).await,
                     Command::Run(path) => run_file(&ctx, path).await,
                     Command::Compile { input, output } => compile_file(&ctx, input, output).await,
                     _ => unreachable!(), // Help and Version already handled

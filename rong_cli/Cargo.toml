@@ -8,8 +8,10 @@ name = "rong"
 path = "src/main.rs"
 
 [dependencies]
+dirs = "6.0.0"
 rong = { workspace = true }
-rong_modules = { path = "../rong_modules" }
+rong_modules = { path = "../rong_modules", features = ["all"] }
+rustyline = "17.0.2"
 
 [features]
 # Forward JS engine features to the main rong crate
