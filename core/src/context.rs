@@ -500,7 +500,7 @@ impl<C: JSContextImpl> JSContext<C> {
     ///   - &str: JavaScript source code as string
     ///   - &[u8]: JavaScript source code as bytes
     ///   - String: Owned JavaScript source code
-    ///   - Vec<u8>: Owned JavaScript source code as bytes
+    ///   - `Vec<u8>`: Owned JavaScript source code as bytes
     ///
     /// # Returns
     /// * `Ok(Source)` - Compiled bytecode wrapped in a Source, ready to be evaluated

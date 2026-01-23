@@ -91,7 +91,7 @@ pub struct Optional<T>(pub Option<T>);
 /// Represents rest parameters in JavaScript function calls.
 ///
 /// # Usage
-/// - Collects all remaining arguments into a Vec<T>
+/// - Collects all remaining arguments into a `Vec<T>`
 /// - Must be the last parameter if present
 /// - Does not count towards required parameter count
 /// - Useful for variadic functions
@@ -379,7 +379,7 @@ impl JSParameterType for usize {}
 /// &str does not implement FromJSValue
 impl JSParameterType for &str {}
 
-/// Option<T> can be used as a parameter type for async functions
+/// `Option<T>` can be used as a parameter type for async functions
 impl<T> JSParameterType for Option<T> where T: JSParameterType {}
 
 macro_rules! impl_from_params {

@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 /// This provides a unified way to create JavaScript iterators from Rust iterators.
 /// It follows the JavaScript iteration protocol and can be used with `for...of` loops.
 ///
-/// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_iterable_protocol
+/// <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Iteration_protocols#the_iterable_protocol>
 /// In order to be iterable, an object must implement the [Symbol.iterator]() method,
 /// meaning that the object (or one of the objects up its prototype chain) must have
 /// a property with a [Symbol.iterator] key which is available via constant Symbol.iterator.

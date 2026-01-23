@@ -22,7 +22,7 @@ impl Source {
     ///   - &str: JavaScript source code as string
     ///   - &[u8]: JavaScript source code as bytes
     ///   - String: Owned JavaScript source code
-    ///   - Vec<u8>: Owned JavaScript source code as bytes
+    ///   - `Vec<u8>`: Owned JavaScript source code as bytes
     ///
     /// # Example
     /// ```rust

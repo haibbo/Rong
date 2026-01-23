@@ -118,7 +118,7 @@ where
 
     /// Create a new ArrayBuffer from owned bytes
     ///
-    /// This method accepts any type that can be converted into Vec<u8>.
+    /// This method accepts any type that can be converted into `Vec<u8>`.
     /// When possible, it will use zero-copy optimization by taking ownership
     /// of the underlying memory.
     ///
