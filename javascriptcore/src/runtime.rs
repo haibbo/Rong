@@ -43,6 +43,6 @@ impl JSEngine for JavaScriptCore {
     }
 
     fn version() -> String {
-        String::from("Unkown")
+        String::from("Unknown")
     }
 }

@@ -35,7 +35,14 @@ impl JSContextImpl for JSCContext {
 
     fn eval(&self, source: rong_core::Source) -> Self::Value {
         let filename = source.name().unwrap_or("eval");
-        let code = CString::new(source.code()).unwrap();
+        // Keep engine behavior consistent with QuickJS backend, which evaluates in strict mode
+        // (it sets JS_EVAL_FLAG_STRICT by default).
+        //
+        // JavaScriptCore's JSEvaluateScript does not provide a strict-mode flag, so we enforce it
+        // by prepending a directive prologue.
+        let mut code_bytes = b"\"use strict\";\n".to_vec();
+        code_bytes.extend_from_slice(source.code());
+        let code = CString::new(code_bytes).unwrap();
         let c_filename = CString::new(filename).unwrap();
 
         unsafe {
@@ -90,33 +97,101 @@ impl JSContextImpl for JSCContext {
         this: Self::Value,
         argv: Vec<Self::Value>,
     ) -> Self::Value {
-        let mut exception: jsc::JSValueRef = std::ptr::null_mut();
+        unsafe {
+            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
-        // Convert argv to raw JSValues
-        let args: Vec<jsc::JSValueRef> = argv
-            .iter()
-            .map(|v| {
-                let raw = *v.as_raw_value();
-                raw.cast()
-            })
-            .collect();
+            let function_obj = function.as_obj();
+            let this_value: jsc::JSValueRef = (*this.as_raw_value()).cast();
 
-        let result = unsafe {
-            jsc::JSObjectCallAsFunction(
-                self.raw,
-                function.as_obj(),
-                this.as_obj(),
-                args.len(),
-                args.as_ptr(),
-                &mut exception,
-            )
-        };
+            // Convert argv to raw JSValues
+            let args: Vec<jsc::JSValueRef> = argv
+                .iter()
+                .map(|v| {
+                    let raw = *v.as_raw_value();
+                    raw.cast()
+                })
+                .collect();
 
-        if !exception.is_null() {
-            return JSCValue::from_owned_raw(self.raw, exception).with_exception();
+            // Fast path: object `this` can be passed directly.
+            // For non-object `this` (undefined/null/primitive), we must use
+            // Function.prototype.call so JavaScriptCore applies correct this-binding rules.
+            let result = if jsc::JSValueIsObject(self.raw, this_value) {
+                let this_obj = jsc::JSValueToObject(self.raw, this_value, &mut exception);
+                if !exception.is_null() {
+                    return JSCValue::from_owned_raw(self.raw, exception).with_exception();
+                }
+                jsc::JSObjectCallAsFunction(
+                    self.raw,
+                    function_obj,
+                    this_obj,
+                    args.len(),
+                    args.as_ptr(),
+                    &mut exception,
+                )
+            } else {
+                // Use Function.prototype.call instead of function.call to avoid user overrides.
+                let global_obj = jsc::JSContextGetGlobalObject(self.raw);
+
+                let function_key = jsc::JSStringCreateWithUTF8CString(c"Function".as_ptr());
+                let function_value =
+                    jsc::JSObjectGetProperty(self.raw, global_obj, function_key, &mut exception);
+                jsc::JSStringRelease(function_key);
+                if !exception.is_null() {
+                    return JSCValue::from_owned_raw(self.raw, exception).with_exception();
+                }
+
+                let function_ctor = jsc::JSValueToObject(self.raw, function_value, &mut exception);
+                if !exception.is_null() {
+                    return JSCValue::from_owned_raw(self.raw, exception).with_exception();
+                }
+
+                let prototype_key = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
+                let prototype_value =
+                    jsc::JSObjectGetProperty(self.raw, function_ctor, prototype_key, &mut exception);
+                jsc::JSStringRelease(prototype_key);
+                if !exception.is_null() {
+                    return JSCValue::from_owned_raw(self.raw, exception).with_exception();
+                }
+
+                let prototype_obj =
+                    jsc::JSValueToObject(self.raw, prototype_value, &mut exception);
+                if !exception.is_null() {
+                    return JSCValue::from_owned_raw(self.raw, exception).with_exception();
+                }
+
+                let call_key = jsc::JSStringCreateWithUTF8CString(c"call".as_ptr());
+                let call_value =
+                    jsc::JSObjectGetProperty(self.raw, prototype_obj, call_key, &mut exception);
+                jsc::JSStringRelease(call_key);
+                if !exception.is_null() {
+                    return JSCValue::from_owned_raw(self.raw, exception).with_exception();
+                }
+
+                let call_obj = jsc::JSValueToObject(self.raw, call_value, &mut exception);
+                if !exception.is_null() {
+                    return JSCValue::from_owned_raw(self.raw, exception).with_exception();
+                }
+
+                let mut call_args: Vec<jsc::JSValueRef> = Vec::with_capacity(args.len() + 1);
+                call_args.push(this_value);
+                call_args.extend(args);
+
+                jsc::JSObjectCallAsFunction(
+                    self.raw,
+                    call_obj,
+                    function_obj,
+                    call_args.len(),
+                    call_args.as_ptr(),
+                    &mut exception,
+                )
+            };
+
+            if !exception.is_null() {
+                return JSCValue::from_owned_raw(self.raw, exception).with_exception();
+            }
+
+            JSCValue::from_owned_raw(self.raw, result)
         }
-
-        JSCValue::from_owned_raw(self.raw, result)
     }
 
     fn promise(&self) -> (Self::Value, Self::Value, Self::Value) {

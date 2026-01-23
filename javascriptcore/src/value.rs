@@ -23,11 +23,13 @@ pub struct JSCValue {
     value: *const jsc::OpaqueJSValue,
     ctx: *mut jsc::OpaqueJSContext,
     value_type: JSCValueType,
+    protected: bool,
 }
 
 impl PartialEq for JSCValue {
     fn eq(&self, other: &Self) -> bool {
-        unsafe { jsc::JSValueIsEqual(self.ctx, self.value, other.value, std::ptr::null_mut()) }
+        // Identity semantics: same context pointer + same JSValueRef pointer.
+        self.ctx == other.ctx && self.value == other.value
     }
 }
 
@@ -35,7 +37,6 @@ impl Hash for JSCValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.value.hash(state);
         self.ctx.hash(state);
-        self.value_type.hash(state);
     }
 }
 
@@ -45,6 +46,7 @@ impl JSCValue {
             ctx,
             value,
             value_type: JSCValueType::Other,
+            protected: false,
         }
     }
 
@@ -62,10 +64,14 @@ impl JSCValue {
     }
 
     /// Protects the current value from garbage collection.
-    pub(crate) fn protect(self) -> Self {
+    pub(crate) fn protect(mut self) -> Self {
+        if self.protected || self.ctx.is_null() || self.value.is_null() {
+            return self;
+        }
         unsafe {
             jsc::JSValueProtect(self.ctx, self.value);
         }
+        self.protected = true;
         self
     }
 
@@ -101,14 +107,14 @@ impl JSCValue {
     }
 
     pub(crate) fn from_owned_obj(ctx: *mut jsc::OpaqueJSContext, obj: jsc::JSObjectRef) -> Self {
-        JSCValue::new(ctx, obj).with_object()
+        JSCValue::new(ctx, obj).with_object().protect()
     }
 }
 
 impl Drop for JSCValue {
     fn drop(&mut self) {
         // Finalizer callback, ctx is set to NULL
-        if !self.ctx.is_null() {
+        if self.protected && !self.ctx.is_null() {
             unsafe {
                 jsc::JSValueUnprotect(self.ctx, self.value);
             }
@@ -135,12 +141,23 @@ impl JSValueImpl for JSCValue {
         ctx: <Self::Context as JSContextImpl>::RawContext,
         value: Self::RawValue,
     ) -> Self {
-        JSCValue::new(ctx, value)
+        JSCValue::new(ctx, value).protect()
     }
 
     fn into_raw_value(self) -> Self::RawValue {
-        let value = self.value;
-        std::mem::forget(self); // // forbiden triggering drop
+        let mut this = self;
+
+        // `into_raw_value` transfers ownership to the engine.
+        // If we protected this value, balance it first so we don't leak protections.
+        if this.protected && !this.ctx.is_null() && !this.value.is_null() {
+            unsafe {
+                jsc::JSValueUnprotect(this.ctx, this.value);
+            }
+            this.protected = false;
+        }
+
+        let value = this.value;
+        std::mem::forget(this);
         value
     }
 

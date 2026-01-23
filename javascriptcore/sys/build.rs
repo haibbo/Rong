@@ -37,7 +37,6 @@ fn main() {
     // full path JavaScriptCore.framework/Headers
     let framework_path = "System/Library/Frameworks/JavaScriptCore.framework/Headers";
     let header_path = PathBuf::from(&sdk_path).join(framework_path);
-    println!("x{:?}", header_path);
 
     let header_file = header_path.join("JavaScript.h");
 

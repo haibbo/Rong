@@ -7,34 +7,7 @@ use std::slice;
 impl JSArrayBufferOps for JSCValue {
     /// Create an ArrayBuffer by copying existing data
     fn from_bytes(ctx: &Self::Context, bytes: &[u8]) -> Self {
-        unsafe {
-            let mut exception: jsc::JSValueRef = ptr::null_mut();
-
-            // Create a copy of the bytes
-            let mut data = bytes.to_vec();
-            let len = data.len();
-            let ptr = data.as_mut_ptr();
-
-            // Take ownership of the data to prevent it from being dropped
-            std::mem::forget(data);
-
-            let array_buffer = jsc::JSObjectMakeArrayBufferWithBytesNoCopy(
-                ctx.to_raw(),
-                ptr as *mut _,
-                len,
-                Some(deallocator_callback),
-                ptr::null_mut(),
-                &mut exception,
-            );
-
-            if !exception.is_null() {
-                // Clean up the memory if creation fails
-                let _ = Vec::from_raw_parts(ptr, len, len);
-                JSCValue::from_owned_raw(ctx.to_raw(), exception).with_exception()
-            } else {
-                JSCValue::from_owned_obj(ctx.to_raw(), array_buffer)
-            }
-        }
+        Self::from_vec(ctx, bytes.to_vec())
     }
 
     /// Create an ArrayBuffer from an existing Vec without copying (zero-copy)
@@ -45,21 +18,21 @@ impl JSArrayBufferOps for JSCValue {
             let len = vec.len();
             let ptr = vec.as_mut_ptr();
 
-            // Take ownership of the vec to prevent it from being dropped
-            std::mem::forget(vec);
+            // Keep the Vec alive until JavaScriptCore calls our deallocator callback.
+            let deallocator_context = Box::into_raw(Box::new(vec)) as *mut ::std::os::raw::c_void;
 
             let array_buffer = jsc::JSObjectMakeArrayBufferWithBytesNoCopy(
                 ctx.to_raw(),
                 ptr as *mut _,
                 len,
                 Some(deallocator_callback),
-                ptr::null_mut(),
+                deallocator_context,
                 &mut exception,
             );
 
             if !exception.is_null() {
-                // Clean up the memory if creation fails
-                let _ = Vec::from_raw_parts(ptr, len, len);
+                // Clean up the context if creation fails.
+                let _ = Box::from_raw(deallocator_context as *mut Vec<u8>);
                 JSCValue::from_owned_raw(ctx.to_raw(), exception).with_exception()
             } else {
                 JSCValue::from_owned_obj(ctx.to_raw(), array_buffer)
@@ -116,21 +89,11 @@ impl JSArrayBufferOps for JSCValue {
 
 // Callback for deallocating ArrayBuffer memory
 unsafe extern "C" fn deallocator_callback(
-    bytes: *mut ::std::os::raw::c_void,
-    _deallocator_context: *mut ::std::os::raw::c_void,
+    _bytes: *mut ::std::os::raw::c_void,
+    deallocator_context: *mut ::std::os::raw::c_void,
 ) {
-    if !bytes.is_null() {
-        // Get the length from the ArrayBuffer before deallocating
-        let len = {
-            unsafe {
-                let slice = slice::from_raw_parts(bytes as *const u8, 0);
-                slice.as_ptr().align_offset(std::mem::align_of::<u8>())
-            }
-        };
-
-        // Reconstruct the Vec and let it drop
-        unsafe {
-            let _ = Vec::from_raw_parts(bytes as *mut u8, len, len);
-        }
+    if !deallocator_context.is_null() {
+        // Drop the Vec<u8> we stored as the deallocator context.
+        let _ = unsafe { Box::from_raw(deallocator_context as *mut Vec<u8>) };
     }
 }
