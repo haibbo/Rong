@@ -417,7 +417,7 @@ impl EventEmitter {
         prepend: bool,
         once: bool,
     ) -> JSResult<bool> {
-        let mut events = self.inner.lock().unwrap();
+        let mut events = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         let is_new = !events.listeners.contains_key(&key);
 
         let max_listener = events.max_listener;
@@ -448,10 +448,11 @@ impl EventEmitter {
     }
 
     fn remove_listener(&self, key: EventKey, listener: JSFunc) {
-        let mut events = self.inner.lock().unwrap();
-        events.listeners.entry(key).and_modify(|listeners| {
-            listeners.retain(|l| l.listener != listener);
-        });
+        let mut events = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        events
+            .listeners
+            .entry(key)
+            .and_modify(|listeners| listeners.retain(|l| l.listener != listener));
     }
 
     fn event_names(&self) -> JSResult<Vec<EventKey>> {
@@ -485,17 +486,35 @@ impl EventEmitter {
             }
         };
 
-        let mut listeners_to_remove: Option<Vec<JSFunc>> = None;
+        let mut once_listeners_to_remove: Vec<JSFunc> = Vec::new();
 
         // Execute callbacks without holding the mutex to avoid deadlocks when listeners mutate state.
         for listener in listeners_snapshot.iter() {
-            let _ = listener
-                .listener
-                .call::<_, ()>(Some(this.clone()), (args.clone(),));
             if listener.once {
-                listeners_to_remove
-                    .get_or_insert_with(|| Vec::with_capacity(1))
-                    .push(listener.listener.clone());
+                once_listeners_to_remove.push(listener.listener.clone());
+            }
+
+            // Propagate exceptions to JS (throw/reject).
+            if let Err(e) = listener
+                .listener
+                .call::<_, ()>(Some(this.clone()), (args.clone(),))
+            {
+                if !once_listeners_to_remove.is_empty() {
+                    let mut events = self.inner.lock().map_err(|_| {
+                        HostError::new(rong::error::E_INTERNAL, "EventEmitter is poisoned")
+                    })?;
+                    if let Some(listeners) = events.listeners.get_mut(&key) {
+                        listeners.retain(|l| !once_listeners_to_remove.contains(&l.listener));
+                        if listeners.is_empty() {
+                            events.listeners.remove(&key);
+                            *is_empty = true;
+                        }
+                    } else {
+                        *is_empty = true;
+                    }
+                }
+
+                return Err(e);
             }
         }
 
@@ -507,8 +526,8 @@ impl EventEmitter {
 
         {
             if let Some(listeners) = events.listeners.get_mut(&key) {
-                if let Some(listeners_to_remove) = listeners_to_remove.as_ref() {
-                    listeners.retain(|l| !listeners_to_remove.contains(&l.listener));
+                if !once_listeners_to_remove.is_empty() {
+                    listeners.retain(|l| !once_listeners_to_remove.contains(&l.listener));
                 }
 
                 if listeners.is_empty() {
