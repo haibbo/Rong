@@ -63,7 +63,9 @@ fn write_console(level: LogLevel, message: String) {
         if writer.is_none() {
             *writer = Some(Box::new(DefaultWriter));
         }
-        writer.as_ref().unwrap().write(level, message);
+        if let Some(writer) = writer.as_ref() {
+            writer.write(level, message);
+        }
     });
 }
 
@@ -74,7 +76,7 @@ fn console_writer_is_tty() -> bool {
         if writer.is_none() {
             *writer = Some(Box::new(DefaultWriter));
         }
-        writer.as_ref().unwrap().is_tty()
+        writer.as_ref().is_some_and(|writer| writer.is_tty())
     })
 }
 
@@ -104,7 +106,7 @@ fn clear() {
         // ANSI clear screen sequence
         print!("\x1B[2J\x1B[1;1H");
         // Ensure immediate output flush
-        io::stdout().flush().unwrap();
+        let _ = io::stdout().flush();
     } else {
         // In non-terminal environment, print a newline
         println!();
