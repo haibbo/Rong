@@ -44,7 +44,10 @@ pub fn class_instance_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
             fn from_js_value(ctx: &rong::JSContext, value: rong::JSValue) -> rong::JSResult<Self> {
                 let obj = rong::JSObject::from_js_value(ctx, value)?;
                 let instance = obj.borrow::<Self>()?;
-                Ok(instance.clone())
+                // Some JS-exposed structs implement an inherent `clone()` method (e.g. `Response.prototype.clone()`).
+                // Method-call syntax would prefer the inherent method over `Clone::clone`, which would break
+                // internal "this" passing by returning a fresh value instead of a plain Rust clone.
+                Ok(<Self as ::core::clone::Clone>::clone(&*instance))
             }
         }
 
