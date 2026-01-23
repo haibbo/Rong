@@ -73,18 +73,79 @@ class TestRunner {
         await callback();
       }
 
-      // Run the test
-      await new Promise(async (resolve, reject) => {
-        try {
-          const result = test.fn();
-          if (result && typeof result.then === "function") {
-            await result;
+      // Run the test with 30 second timeout
+      await Promise.race([
+        new Promise(async (resolve, reject) => {
+          try {
+            // Check if test function expects a done callback (based on function.length)
+            if (test.fn.length > 0) {
+              // Test uses done callback
+              let doneCallCount = 0;
+              let settled = false;
+              let settleTimer = null;
+
+              const done = (error) => {
+                doneCallCount += 1;
+
+                if (doneCallCount > 1) {
+                  // If we're still pending, fail; if already settled, at least surface it.
+                  if (!settled) {
+                    settled = true;
+                    if (settleTimer) clearTimeout(settleTimer);
+                    reject(new Error("done() called multiple times"));
+                  } else {
+                    console.error("done() called multiple times (after test already settled)");
+                  }
+                  return;
+                }
+
+                if (error) {
+                  if (!settled) {
+                    settled = true;
+                    if (settleTimer) clearTimeout(settleTimer);
+                    reject(error);
+                  }
+                  return;
+                }
+
+                // Delay settle to end of tick so immediate double-calls can be detected.
+                settleTimer = setTimeout(() => {
+                  if (settled) return;
+                  settled = true;
+                  resolve();
+                }, 0);
+              };
+
+              // Call test with done callback
+              const result = test.fn(done);
+
+              // If test returns a promise, it's using both promise and callback (error)
+              if (result && typeof result.then === "function") {
+                if (!settled) {
+                  settled = true;
+                  if (settleTimer) clearTimeout(settleTimer);
+                  reject(new Error("Test uses both promise and done callback"));
+                }
+              }
+            } else {
+              // Test uses promise or sync return
+              const result = test.fn();
+              if (result && typeof result.then === "function") {
+                await result;
+              }
+              resolve();
+            }
+          } catch (e) {
+            reject(e);
           }
-          resolve();
-        } catch (e) {
-          reject(e);
-        }
-      });
+        }),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Test timeout after 30 seconds: ${test.name}`)),
+            30000,
+          ),
+        ),
+      ]);
 
       this.passed++;
       console.log(`    ✓ Passed`);

@@ -12,8 +12,46 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Logging helpers
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[PASS]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[FAIL]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
 # Available engines
 ENGINES=("quickjs" "jscore")
+
+# Cleanup function to kill child processes
+cleanup() {
+    if [[ "${CLEANED_UP:-false}" == true ]]; then
+        return 0
+    fi
+    CLEANED_UP=true
+
+    if pgrep -P $$ >/dev/null 2>&1; then
+        log_warning "Cleaning up child processes..."
+        pkill -TERM -P $$ 2>/dev/null || true
+        sleep 0.2
+        pkill -KILL -P $$ 2>/dev/null || true
+        wait 2>/dev/null || true
+    fi
+}
+
+# Set trap to cleanup on exit/signals
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
 
 # Auto-discover test categories
 get_core_tests() {
@@ -47,34 +85,21 @@ print_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  -e, --engine ENGINE     Run tests for specific engine (quickjs, jscore, all)"
-    echo "  -t, --test TEST         Run specific test (core test name or module name)"
-    echo "  -c, --core              Run only core tests"
-    echo "  -m, --modules           Run only module tests"
-    echo "  -h, --help              Show this help message"
+    echo "  -e, --engine ENGINE           Run tests for specific engine (quickjs, jscore, all)"
+    echo "  -t, --test TEST               Run specific test (core test name or module name)"
+    echo "  -c, --core                    Run only core tests"
+    echo "  -m, --modules                 Run only module tests"
+    echo "  -k, --continue-on-error       Continue running tests after failure (default: stop on error)"
+    echo "  -h, --help                    Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0                      # Run all tests on all engines"
-    echo "  $0 -e quickjs          # Run all tests on QuickJS"
-    echo "  $0 -e jscore -c        # Run core tests on JavaScriptCore"
-    echo "  $0 -t iterator         # Run iterator tests on all engines"
-    echo "  $0 -t rong_http        # Run rong_http module tests on all engines"
-}
-
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[PASS]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[FAIL]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    echo "  $0                            # Run all tests, stop on first failure"
+    echo "  $0 -k                         # Run all tests, continue on failures"
+    echo "  $0 -e quickjs                 # Run all tests on QuickJS"
+    echo "  $0 -e jscore -c               # Run core tests on JavaScriptCore"
+    echo "  $0 -t iterator                # Run iterator tests on all engines"
+    echo "  $0 -t rong_http               # Run rong_http module tests on all engines"
+    echo "  $0 -k -m                      # Run all module tests, continue on error"
 }
 
 run_core_test() {
@@ -91,6 +116,12 @@ run_core_test() {
     else
         log_error "Core test $test_name failed on $engine"
         FAILED_TESTS=$((FAILED_TESTS + 1))
+
+        if [[ "$FAIL_FAST" == true ]]; then
+            log_error "Stopping due to fail-fast mode (default); use -k/--continue-on-error to keep going"
+            print_summary
+            exit 1
+        fi
         return 1
     fi
 }
@@ -109,6 +140,12 @@ run_module_test() {
     else
         log_error "Module test $module_name failed on $engine"
         FAILED_TESTS=$((FAILED_TESTS + 1))
+
+        if [[ "$FAIL_FAST" == true ]]; then
+            log_error "Stopping due to fail-fast mode (default); use -k/--continue-on-error to keep going"
+            print_summary
+            exit 1
+        fi
         return 1
     fi
 }
@@ -179,6 +216,7 @@ ENGINE_FILTER=""
 TEST_FILTER=""
 CORE_ONLY=false
 MODULES_ONLY=false
+FAIL_FAST=true  # Default: stop on first failure
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -196,6 +234,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -m|--modules)
             MODULES_ONLY=true
+            shift
+            ;;
+        -k|--continue-on-error)
+            FAIL_FAST=false
             shift
             ;;
         -h|--help)
