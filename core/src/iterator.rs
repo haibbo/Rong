@@ -115,10 +115,10 @@ where
 pub struct JSAsyncIterator<V, T>
 where
     V: JSObjectOps + 'static,
-    T: IntoJSValue<V> + Send + 'static,
+    T: IntoJSValue<V> + 'static,
 {
     /// The underlying Rust stream wrapped in Rc<Mutex<>> for async shared access
-    stream: Rc<Mutex<Pin<Box<dyn Stream<Item = T> + Send + 'static>>>>,
+    stream: Rc<Mutex<Pin<Box<dyn Stream<Item = T> + 'static>>>>,
     /// Cached result object to avoid creating new objects on each iteration
     result: JSObject<V>,
 }
@@ -126,12 +126,12 @@ where
 impl<V, T> JSAsyncIterator<V, T>
 where
     V: JSObjectOps + 'static,
-    T: IntoJSValue<V> + Send + 'static,
+    T: IntoJSValue<V> + 'static,
 {
     /// Create a new JSAsyncIterator from any type that implements Stream
     pub fn from<S>(stream: S, ctx: &JSContext<V::Context>) -> Self
     where
-        S: Stream<Item = T> + Send + 'static,
+        S: Stream<Item = T> + 'static,
     {
         Self {
             stream: Rc::new(Mutex::new(Box::pin(stream))),
@@ -223,7 +223,7 @@ where
 impl<V, T> Clone for JSAsyncIterator<V, T>
 where
     V: JSObjectOps + 'static,
-    T: IntoJSValue<V> + Send + 'static,
+    T: IntoJSValue<V> + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -267,8 +267,8 @@ where
 impl<V, T, S> IntoJSAsyncIteratorExt<V, T> for S
 where
     V: JSObjectOps + 'static,
-    T: IntoJSValue<V> + Send + 'static,
-    S: Stream<Item = T> + Send + 'static,
+    T: IntoJSValue<V> + 'static,
+    S: Stream<Item = T> + 'static,
 {
     fn to_js_async_iter(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
         let js_iter = JSAsyncIterator::from(self, ctx);

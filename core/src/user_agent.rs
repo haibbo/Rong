@@ -14,7 +14,7 @@ pub fn set_user_agent(ua: impl Into<String>) -> Result<(), String> {
         .map_err(|e| format!("invalid user agent header: {}", e))?;
 
     let slot = USER_AGENT_SLOT.get_or_init(|| Mutex::new(DEFAULT_USER_AGENT.to_string()));
-    let mut guard = slot.lock().unwrap();
+    let mut guard = slot.lock().unwrap_or_else(|e| e.into_inner());
     *guard = ua_string;
     Ok(())
 }
@@ -24,6 +24,6 @@ pub fn get_user_agent() -> String {
     USER_AGENT_SLOT
         .get_or_init(|| Mutex::new(DEFAULT_USER_AGENT.to_string()))
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .clone()
 }
