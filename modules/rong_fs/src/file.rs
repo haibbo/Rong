@@ -220,23 +220,51 @@ async fn open_file(file: String, option: Optional<FileOpenOption>) -> JSResult<F
     let truncate = opts.truncate.unwrap_or(false);
     let create = opts.create.unwrap_or(false);
     let create_new = opts.create_new.unwrap_or(false);
-    let _mode = opts.mode; // TODO: implement mode support
-
-    // Configure file open options
-    let mut open_options = OpenOptions::new();
-    open_options
-        .read(read)
-        .write(write)
-        .append(append)
-        .truncate(truncate)
-        .create(create)
-        .create_new(create_new);
+    let mode = opts.mode;
 
     // Open the file
-    let file_handle = open_options
-        .open(&resolved)
-        .await
-        .map_err(|e| HostError::new("FS_IO", format!("Failed to open file '{}': {}", file, e)))?;
+    let file_handle = if cfg!(unix) && mode.is_some() {
+        #[cfg(unix)]
+        {
+            let resolved = resolved.clone();
+            let file_name = file.clone();
+            let mode = mode.unwrap_or(0);
+            let handle = tokio::task::spawn_blocking(move || {
+                let mut open_options = std::fs::OpenOptions::new();
+                open_options
+                    .read(read)
+                    .write(write)
+                    .append(append)
+                    .truncate(truncate)
+                    .create(create)
+                    .create_new(create_new);
+                std::os::unix::fs::OpenOptionsExt::mode(&mut open_options, mode);
+                open_options.open(&resolved)
+            })
+            .await
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to open file '{}': {}", file_name, e)))?
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to open file '{}': {}", file_name, e)))?;
+            File::from_std(handle)
+        }
+        #[cfg(not(unix))]
+        {
+            unreachable!("mode should be ignored on non-unix platforms");
+        }
+    } else {
+        let mut open_options = OpenOptions::new();
+        open_options
+            .read(read)
+            .write(write)
+            .append(append)
+            .truncate(truncate)
+            .create(create)
+            .create_new(create_new);
+
+        open_options
+            .open(&resolved)
+            .await
+            .map_err(|e| HostError::new("FS_IO", format!("Failed to open file '{}': {}", file, e)))?
+    };
 
     Ok(FsFile {
         file: Arc::new(Mutex::new(file_handle)),
