@@ -276,6 +276,14 @@ describe("Child Process", () => {
       const code = await child.wait();
       assert.equal(code, 42, "exitCode should be 42");
     });
+
+    it("should emit exit event", async () => {
+      const child = child_process.spawn("echo", ["test"]);
+      const code = await new Promise((resolve) => {
+        child.once("exit", resolve);
+      });
+      assert.equal(code, 0, "exit event should provide exit code");
+    });
   });
 
   describe("ChildProcess properties", () => {

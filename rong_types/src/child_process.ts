@@ -3,6 +3,8 @@
  * Corresponds to: modules/rong_child_process
  */
 
+import type { EventEmitter } from './event';
+
 export interface SpawnOptions {
   /** Current working directory */
   cwd?: string;
@@ -32,7 +34,7 @@ export interface ExecResult {
   stderr: string;
 }
 
-export interface ChildProcess {
+export interface ChildProcess extends EventEmitter {
   /** Process ID (null if process failed to spawn) */
   readonly pid: number | null;
 

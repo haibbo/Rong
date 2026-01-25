@@ -7,14 +7,27 @@
 
 use rong::{
     HostError, JSArray, JSContext, JSFunc, JSObject, JSResult, JSValue, Promise,
-    function::Optional, js_class, js_export, js_method,
+    function::{Optional, Rest, This},
+    js_class, js_export, js_method,
 };
 use rong_event::{Emitter, EmitterExt, EventEmitter};
 use rong_stream::{JSReadableStream, JSWritableStream};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::Duration;
 use tokio::process::{Child, Command};
+use tokio::sync::Notify;
+
+#[cfg(windows)]
+use tokio::sync::mpsc;
+
+#[cfg(windows)]
+enum ChildCommand {
+    Kill,
+}
 
 fn type_error(message: impl Into<String>) -> HostError {
     HostError::new(rong::error::E_TYPE, message).with_name("TypeError")
@@ -70,16 +83,16 @@ impl SpawnOptions {
     }
 }
 
-/// Shared child process handle for kill/wait operations
-type SharedChild = Arc<Mutex<Option<Child>>>;
-
 /// ChildProcess class representing a spawned child process
 #[js_export]
 pub struct ChildProcess {
     events: EventEmitter,
     pid: Option<u32>,
     exit_code: Arc<Mutex<Option<i32>>>,
-    child: SharedChild,
+    exit_notify: Arc<Notify>,
+    exited: Arc<AtomicBool>,
+    #[cfg(windows)]
+    kill_tx: Option<mpsc::Sender<ChildCommand>>,
 }
 
 #[js_class]
@@ -90,7 +103,10 @@ impl ChildProcess {
             events: EventEmitter::new(),
             pid: None,
             exit_code: Arc::new(Mutex::new(None)),
-            child: Arc::new(Mutex::new(None)),
+            exit_notify: Arc::new(Notify::new()),
+            exited: Arc::new(AtomicBool::new(false)),
+            #[cfg(windows)]
+            kill_tx: None,
         }
     }
 
@@ -153,45 +169,26 @@ impl ChildProcess {
 
         #[cfg(windows)]
         {
-            // Windows only supports termination, ignore signal parameter
-            let mut guard = match self.child.lock() {
-                Ok(g) => g,
-                Err(_) => return false,
-            };
-            if let Some(ref mut child) = *guard {
-                child.start_kill().is_ok()
-            } else {
-                false
+            let _ = pid;
+            let _ = signal;
+            if let Some(tx) = &self.kill_tx {
+                return tx.try_send(ChildCommand::Kill).is_ok();
             }
+            false
         }
     }
 
     /// Wait for the process to exit and return the exit code.
     #[js_method]
     pub async fn wait(&self) -> JSResult<Option<i32>> {
-        // Take the child out to await it
-        let child = {
-            let mut guard = self.child.lock().map_err(|_| {
-                HostError::new(rong::error::E_INTERNAL, "Child process lock poisoned")
-            })?;
-            guard.take()
-        };
-
-        if let Some(mut child) = child {
-            let status = child
-                .wait()
-                .await
-                .map_err(|e| HostError::new(rong::error::E_IO, format!("Failed to wait: {}", e)))?;
-            let code = status.code();
-            // Store exit code
-            if let Ok(mut ec) = self.exit_code.lock() {
-                *ec = code;
+        loop {
+            let notified = self.exit_notify.notified();
+            if self.exited.load(Ordering::SeqCst) {
+                break;
             }
-            Ok(code)
-        } else {
-            // Already waited or no child
-            Ok(self.exit_code.lock().ok().and_then(|g| *g))
+            notified.await;
         }
+        Ok(self.exit_code.lock().ok().and_then(|g| *g))
     }
 
     #[js_method(gc_mark)]
@@ -462,10 +459,21 @@ fn spawn(
     let stdout_reader = child.stdout.take();
     let stderr_reader = child.stderr.take();
 
-    // Create ChildProcess with the child handle for kill/wait
+    // Create ChildProcess instance
     let mut child_process = ChildProcess::new();
     child_process.pid = pid;
-    child_process.child = Arc::new(Mutex::new(Some(child)));
+
+    // Clones for the background wait task.
+    let exit_code = child_process.exit_code.clone();
+    let exit_notify = child_process.exit_notify.clone();
+    let exited = child_process.exited.clone();
+
+    #[cfg(windows)]
+    let mut kill_rx = {
+        let (tx, rx) = mpsc::channel::<ChildCommand>(4);
+        child_process.kill_tx = Some(tx);
+        rx
+    };
 
     // Create the JS object
     let child_obj = JSValue::from(&ctx, child_process);
@@ -494,6 +502,66 @@ fn spawn(
     } else {
         child_obj.set("stderr", JSValue::null(&ctx))?;
     }
+
+    // Start background wait task to emit 'exit' and resolve waiters
+    let ctx_for_exit = ctx.clone();
+    let child_obj_for_exit = child_obj.clone();
+
+    rong::spawn(async move {
+        let emit_exit = |code: Option<i32>| {
+            if let Ok(mut ec) = exit_code.lock() {
+                *ec = code;
+            }
+            exited.store(true, Ordering::SeqCst);
+            exit_notify.notify_waiters();
+
+            let code_val = match code {
+                Some(code) => JSValue::from(&ctx_for_exit, code),
+                None => JSValue::null(&ctx_for_exit),
+            };
+            let _ = ChildProcess::do_emit(
+                This(child_obj_for_exit.clone()),
+                rong_event::EventKey::from("exit"),
+                Rest(vec![code_val]),
+            );
+        };
+
+        #[cfg(windows)]
+        {
+            loop {
+                tokio::select! {
+                    status = child.wait() => {
+                        let code = status.ok().and_then(|s| s.code());
+                        emit_exit(code);
+                        break;
+                    }
+                    cmd = kill_rx.recv() => {
+                        match cmd {
+                            Some(ChildCommand::Kill) => {
+                                let _ = child.start_kill();
+                            }
+                            None => {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !exited.load(Ordering::SeqCst) {
+                let status = child.wait().await;
+                let code = status.ok().and_then(|s| s.code());
+                emit_exit(code);
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            let status = child.wait().await;
+            let code = status.ok().and_then(|s| s.code());
+            emit_exit(code);
+        }
+    });
 
     Ok(child_obj)
 }
