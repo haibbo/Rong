@@ -1,5 +1,7 @@
 use rong::{function::*, *};
 use rong_buffer::{Blob, File};
+use std::collections::HashMap;
+use url::form_urlencoded;
 
 #[js_export]
 #[derive(Clone)]
@@ -175,6 +177,25 @@ impl FormData {
         }
         .to_js_iter(&ctx)
     }
+
+    /// forEach() executes a provided function once for each key/value pair in the FormData
+    #[js_method(rename = "forEach")]
+    fn for_each(
+        &self,
+        this: This<JSObject>,
+        callback: JSFunc,
+        this_arg: Optional<JSObject>,
+    ) -> JSResult<()> {
+        let this_arg = this_arg.0;
+
+        for (name, value, _) in &self.entries {
+            callback.call::<_, ()>(
+                this_arg.clone(),
+                (value.clone(), name.clone(), this.0.clone()),
+            )?;
+        }
+        Ok(())
+    }
 }
 
 impl FormData {
@@ -239,6 +260,191 @@ impl FormData {
     pub(crate) fn content_type(boundary: &str) -> String {
         format!("multipart/form-data; boundary={}", boundary)
     }
+
+    pub(crate) fn from_bytes(body: &[u8], content_type: &str) -> JSResult<Self> {
+        if let Some(boundary) = Self::parse_boundary(content_type) {
+            return Self::from_multipart(body, &boundary);
+        }
+
+        let lower = content_type.to_ascii_lowercase();
+        if lower.starts_with("application/x-www-form-urlencoded") {
+            let text = String::from_utf8_lossy(body).into_owned();
+            return Ok(Self::from_urlencoded(&text));
+        }
+
+        Err(HostError::new(
+            rong::error::E_INVALID_ARG,
+            "Unsupported Content-Type for formData()",
+        )
+        .with_name("TypeError")
+        .into())
+    }
+
+    pub(crate) fn parse_boundary(content_type: &str) -> Option<String> {
+        let lower = content_type.to_ascii_lowercase();
+        if !lower.starts_with("multipart/form-data") {
+            return None;
+        }
+        for part in content_type.split(';').skip(1) {
+            let part = part.trim();
+            if let Some((key, val)) = part.split_once('=') {
+                if key.trim().eq_ignore_ascii_case("boundary") {
+                    return Some(val.trim().trim_matches('"').to_string());
+                }
+            }
+        }
+        None
+    }
+
+    pub(crate) fn from_urlencoded(body: &str) -> Self {
+        let mut entries = Vec::new();
+        for (key, value) in form_urlencoded::parse(body.as_bytes()) {
+            entries.push((
+                key.into_owned(),
+                FormDataEntryValue::String(value.into_owned()),
+                String::new(),
+            ));
+        }
+        Self { entries }
+    }
+
+    pub(crate) fn from_multipart(body: &[u8], boundary: &str) -> JSResult<Self> {
+        let delimiter = format!("--{}", boundary).into_bytes();
+        let delimiter_with_crlf = format!("\r\n--{}", boundary).into_bytes();
+
+        if !body.starts_with(&delimiter) {
+            return Err(HostError::new(
+                rong::error::E_INVALID_ARG,
+                "Invalid multipart body: missing starting boundary",
+            )
+            .with_name("TypeError")
+            .into());
+        }
+
+        let mut entries = Vec::new();
+        let mut pos = delimiter.len();
+
+        // End without parts
+        if body.get(pos..pos + 2) == Some(b"--") {
+            return Ok(Self { entries });
+        }
+
+        if body.get(pos..pos + 2) == Some(b"\r\n") {
+            pos += 2;
+        }
+
+        loop {
+            let header_end = find_subslice(body, b"\r\n\r\n", pos).ok_or_else(|| {
+                HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    "Invalid multipart body: missing header terminator",
+                )
+                .with_name("TypeError")
+            })?;
+            let headers = parse_headers(&body[pos..header_end]);
+            let content_start = header_end + 4;
+
+            let next_boundary = find_subslice(body, &delimiter_with_crlf, content_start).ok_or_else(
+                || {
+                    HostError::new(
+                        rong::error::E_INVALID_ARG,
+                        "Invalid multipart body: missing boundary",
+                    )
+                    .with_name("TypeError")
+                },
+            )?;
+
+            let content = &body[content_start..next_boundary];
+
+            let disposition = headers
+                .get("content-disposition")
+                .ok_or_else(|| {
+                    HostError::new(
+                        rong::error::E_INVALID_ARG,
+                        "Missing Content-Disposition header",
+                    )
+                    .with_name("TypeError")
+                })?
+                .to_string();
+            let (name, filename) = parse_content_disposition(&disposition);
+            let name = name.ok_or_else(|| {
+                HostError::new(
+                    rong::error::E_INVALID_ARG,
+                    "Content-Disposition missing name",
+                )
+                .with_name("TypeError")
+            })?;
+
+            let content_type = headers
+                .get("content-type")
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+
+            if let Some(filename) = filename {
+                let file = File::from_parts(content_type, content.to_vec(), filename.clone(), None)?;
+                entries.push((name, FormDataEntryValue::File(file), filename));
+            } else {
+                let value = String::from_utf8_lossy(content).into_owned();
+                entries.push((name, FormDataEntryValue::String(value), String::new()));
+            }
+
+            pos = next_boundary + delimiter_with_crlf.len();
+
+            if body.get(pos..pos + 2) == Some(b"--") {
+                break;
+            }
+
+            if body.get(pos..pos + 2) == Some(b"\r\n") {
+                pos += 2;
+            }
+        }
+
+        Ok(Self { entries })
+    }
+}
+
+fn parse_headers(raw: &[u8]) -> HashMap<String, String> {
+    let mut headers = HashMap::new();
+    let text = String::from_utf8_lossy(raw);
+    for line in text.split("\r\n") {
+        if let Some((name, value)) = line.split_once(':') {
+            headers.insert(
+                name.trim().to_ascii_lowercase(),
+                value.trim().to_string(),
+            );
+        }
+    }
+    headers
+}
+
+fn parse_content_disposition(value: &str) -> (Option<String>, Option<String>) {
+    let mut name = None;
+    let mut filename = None;
+
+    for part in value.split(';').skip(1) {
+        let part = part.trim();
+        if let Some((key, raw)) = part.split_once('=') {
+            let key = key.trim().to_ascii_lowercase();
+            let val = raw.trim().trim_matches('"').to_string();
+            if key == "name" {
+                name = Some(val);
+            } else if key == "filename" {
+                filename = Some(val);
+            }
+        }
+    }
+
+    (name, filename)
+}
+
+fn find_subslice(haystack: &[u8], needle: &[u8], start: usize) -> Option<usize> {
+    if needle.is_empty() || haystack.len() < needle.len() || start >= haystack.len() {
+        return None;
+    }
+    haystack[start..]
+        .windows(needle.len())
+        .position(|window| window == needle)
+        .map(|idx| idx + start)
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {

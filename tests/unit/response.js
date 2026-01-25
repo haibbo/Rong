@@ -132,6 +132,46 @@ describe("Response", () => {
         throw new Error("Expected second body read to fail");
       }
     });
+
+    it("should parse formData from urlencoded body", async () => {
+      const params = new URLSearchParams();
+      params.append("name", "Alice");
+      params.append("age", "30");
+
+      const response = new Response(params.toString(), {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
+
+      const form = await response.formData();
+      expect(form.get("name")).toBe("Alice");
+      expect(form.get("age")).toBe("30");
+    });
+
+    it("should parse formData from multipart body", async () => {
+      const boundary = "----RongBoundaryTest";
+      const body =
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name=\"field\"\r\n\r\n` +
+        `value\r\n` +
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n` +
+        `Content-Type: text/plain\r\n\r\n` +
+        `hello\r\n` +
+        `--${boundary}--\r\n`;
+
+      const response = new Response(body, {
+        headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+      });
+
+      const form = await response.formData();
+      expect(form.get("field")).toBe("value");
+
+      const file = form.get("file");
+      expect(file instanceof File).toBe(true);
+      expect(file.name).toBe("test.txt");
+      const text = await file.text();
+      expect(text).toBe("hello");
+    });
   });
 
   describe("clone", () => {

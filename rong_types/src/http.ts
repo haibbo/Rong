@@ -52,7 +52,7 @@ export interface FetchResponse {
   blob(): Promise<Blob>;
 
   /** Get response body as FormData */
-  // Note: Rong's Response currently does not implement `formData()`
+  formData(): Promise<FormData>;
 
   /** Get response body as ReadableStream */
   readonly body: ReadableStream<Uint8Array> | null;

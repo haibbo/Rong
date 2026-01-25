@@ -2,9 +2,12 @@ use http::{Method, Uri};
 use rong::{function::Optional, *};
 
 use crate::body::HttpBody;
+use crate::formdata::FormData;
 use crate::header::Headers;
 use rong_abort::AbortSignal;
+use rong_stream::{ReadableStream, readable_stream_is_locked};
 use rong_url::URL;
+use std::cell::Cell;
 
 #[js_export]
 pub struct Request {
@@ -14,6 +17,7 @@ pub struct Request {
     pub(crate) body: Option<HttpBody>,
     redirect: RequestRedirect,
     signal: Option<AbortSignal>, // AbortSignal
+    consumed: Cell<bool>,
 }
 
 impl Request {
@@ -232,7 +236,16 @@ impl Request {
 
     #[js_method(getter, rename = "bodyUsed")]
     fn body_used(&self) -> bool {
-        self.body.is_none()
+        if self.consumed.get() {
+            return true;
+        }
+        if let Some(body) = &self.body
+            && let Some(obj) = body.0.clone().into_object()
+            && let Ok(rs) = obj.borrow::<ReadableStream>()
+        {
+            return readable_stream_is_locked(&rs);
+        }
+        false
     }
 
     #[js_method]
@@ -244,11 +257,21 @@ impl Request {
             body: self.body.clone(),
             redirect: self.redirect.clone(),
             signal: self.signal.clone(),
+            consumed: Cell::new(self.consumed.get()),
         }
     }
 
     #[js_method]
     async fn text(&self) -> JSResult<String> {
+        if self.body_used() {
+            return Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "body used already for: text",
+            )
+            .with_name("TypeError")
+            .into());
+        }
+        self.consumed.set(true);
         if let Some(body) = &self.body {
             body.text().await
         } else {
@@ -264,6 +287,15 @@ impl Request {
 
     #[js_method(rename = "arrayBuffer")]
     async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
+        if self.body_used() {
+            return Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "body used already for: arrayBuffer",
+            )
+            .with_name("TypeError")
+            .into());
+        }
+        self.consumed.set(true);
         if let Some(body) = &self.body {
             let bytes = body.bytes().await?;
             JSArrayBuffer::from_bytes(&ctx, &bytes)
@@ -273,9 +305,37 @@ impl Request {
     }
 
     #[js_method(rename = "formData")]
-    async fn form_data(&self) -> JSResult<JSObject> {
-        // TODO: Implement form data parsing
-        Err(HostError::new(rong::error::E_NOT_SUPPORTED, "Not implemented").into())
+    async fn form_data(&self, ctx: JSContext) -> JSResult<JSObject> {
+        if self.body_used() {
+            return Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "body used already for: formData",
+            )
+            .with_name("TypeError")
+            .into());
+        }
+
+        self.consumed.set(true);
+
+        if let Some(body) = &self.body
+            && let Some(obj) = body.0.clone().into_object()
+            && let Ok(formdata) = obj.borrow::<FormData>()
+        {
+            return Ok(Class::get::<FormData>(&ctx)?.instance(formdata.clone()));
+        }
+
+        let bytes = if let Some(body) = &self.body {
+            body.bytes().await?
+        } else {
+            bytes::Bytes::new()
+        };
+
+        let content_type = self
+            .headers
+            .get("Content-Type".to_string())?
+            .unwrap_or_default();
+        let form = FormData::from_bytes(&bytes, &content_type)?;
+        Ok(Class::get::<FormData>(&ctx)?.instance(form))
     }
 
     #[js_method(gc_mark)]
@@ -298,6 +358,7 @@ impl Default for Request {
             body: None,
             redirect: RequestRedirect::default(),
             signal: None,
+            consumed: Cell::new(false),
         }
     }
 }

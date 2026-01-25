@@ -192,7 +192,10 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
                 "manual" => {
                     // Fall through to return response
                 }
-                "follow" => {
+                // `Request::redirect()` is backed by an enum, so only "follow" is possible here.
+                // Keep `_` for forward compatibility, but assert in debug builds.
+                _ => {
+                    debug_assert_eq!(request.redirect(), "follow");
                     if redirect_count >= MAX_REDIRECTS {
                         if let Some(stop) = abort_bridge_stop {
                             stop.notify_one();

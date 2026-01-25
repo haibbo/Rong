@@ -108,6 +108,23 @@ describe("FormData", () => {
     assert.equal(entries[2][1].name, "test.txt");
   });
 
+  it("forEach", () => {
+    const formData = new FormData();
+    formData.append("name", "John");
+    formData.append("file", new File(["content"], "test.txt"));
+
+    const seen = [];
+    formData.forEach((value, key) => {
+      seen.push([key, value]);
+    });
+
+    assert.equal(seen.length, 2);
+    assert.equal(seen[0][0], "name");
+    assert.equal(seen[0][1], "John");
+    assert.equal(seen[1][0], "file");
+    assert(seen[1][1] instanceof File);
+  });
+
   it("keys", async () => {
     const formData = new FormData();
     formData.append("name", "John");

@@ -4,6 +4,7 @@ use http::{Method, Uri, header};
 use rong::{function::Optional, *};
 
 use crate::body::{BodyKind, HttpBody};
+use crate::formdata::FormData;
 use crate::header::Headers;
 use rong_abort::AbortReceiver;
 use rong_buffer::Blob;
@@ -373,6 +374,27 @@ impl Response {
         JSArrayBuffer::from_bytes(&ctx, &bytes)
     }
 
+    #[js_method(rename = "formData")]
+    async fn form_data(&self, ctx: JSContext) -> JSResult<JSObject> {
+        if self.body_used() {
+            return Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "body used already for: formData",
+            )
+            .with_name("TypeError")
+            .into());
+        }
+        self.consumed.set(true);
+
+        let bytes = self.body_to_bytes().await?;
+        let content_type = self
+            .headers
+            .get("Content-Type".to_string())?
+            .unwrap_or_default();
+        let form = FormData::from_bytes(&bytes, &content_type)?;
+        Ok(Class::get::<FormData>(&ctx)?.instance(form))
+    }
+
     #[js_method]
     fn error() -> Self {
         Self {
@@ -494,6 +516,7 @@ mod tests {
 
             rong_buffer::init(&ctx)?;
             crate::header::init(&ctx)?;
+            crate::formdata::init(&ctx)?;
             init(&ctx)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "response.js")
