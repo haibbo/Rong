@@ -11,6 +11,18 @@ pub struct File {
 
 #[js_class]
 impl File {
+    fn now_ms() -> JSResult<i64> {
+        let duration = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| {
+                RongJSError::from(HostError::new(
+                    rong::error::E_INTERNAL,
+                    "Failed to get current time",
+                ))
+            })?;
+        Ok(duration.as_millis() as i64)
+    }
+
     #[js_method(constructor)]
     fn new(data: JSArray, filename: String, options: Optional<JSObject>) -> JSResult<Self> {
         // Validate filename
@@ -23,10 +35,7 @@ impl File {
         }
 
         // Get current time as default last_modified
-        let default_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Failed to get current time"))?
-            .as_millis() as i64;
+        let default_time = Self::now_ms()?;
 
         // Extract options
         let (last_modified, blob_options) = if let Some(ref opts) = options.0 {
@@ -45,6 +54,28 @@ impl File {
             blob,
             filename,
             last_modified,
+        })
+    }
+
+    pub fn from_parts(
+        mime_type: String,
+        data: Vec<u8>,
+        filename: String,
+        last_modified: Option<i64>,
+    ) -> JSResult<Self> {
+        if filename.is_empty() {
+            return Err(
+                HostError::new(rong::error::E_INVALID_ARG, "File name cannot be empty")
+                    .with_name("TypeError")
+                    .into(),
+            );
+        }
+
+        let default_time = Self::now_ms()?;
+        Ok(Self {
+            blob: Blob::from_parts(mime_type, data),
+            filename,
+            last_modified: last_modified.unwrap_or(default_time),
         })
     }
 
