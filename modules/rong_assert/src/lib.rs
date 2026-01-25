@@ -117,9 +117,8 @@ fn does_not_throw(ctx: JSContext, func: JSFunc, message: Optional<JSValue>) -> J
     if func
         .call::<_, ()>(None, (JSValue::undefined(&ctx),))
         .is_err()
-        && let Some(msg) = message.0
     {
-        return msg;
+        return handle_assertion_error(&ctx, message, "AssertionError: Got unwanted exception");
     }
     // If no error was thrown, return undefined
     JSValue::undefined(&ctx)
