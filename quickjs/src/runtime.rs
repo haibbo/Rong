@@ -1,17 +1,49 @@
 use crate::{QJSContext, QJSValue, qjs};
 use rong_core::{JSEngine, JSRuntimeImpl};
+use std::collections::HashMap;
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
 
-pub struct QJSRuntime {
-    rt: *mut qjs::JSRuntime,
+thread_local! {
+    static RUNTIME_REGISTRY: RefCell<HashMap<usize, Weak<QJSRuntimeInner>>> =
+        RefCell::new(HashMap::new());
 }
 
-impl Drop for QJSRuntime {
+pub(crate) struct QJSRuntimeInner {
+    pub(crate) rt: *mut qjs::JSRuntime,
+}
+
+impl Drop for QJSRuntimeInner {
     fn drop(&mut self) {
-        // println!("free QJS Runtime");
+        // Remove before freeing to avoid upgrading a dead runtime.
+        let key = self.rt as usize;
+        RUNTIME_REGISTRY.with(|m| {
+            m.borrow_mut().remove(&key);
+        });
+
         unsafe {
+            // Best-effort cleanup: drain jobs and run GC before freeing the runtime.
+            // This reduces shutdown-time crashes if user code leaves pending jobs.
+            let mut ctx = std::ptr::null_mut();
+            let mut iterations: usize = 0;
+            const MAX_JOB_DRAIN: usize = 10_000;
+            while qjs::JS_IsJobPending(self.rt) && iterations < MAX_JOB_DRAIN {
+                let rc = qjs::JS_ExecutePendingJob(self.rt, &mut ctx);
+                if rc < 0 {
+                    break;
+                }
+                iterations += 1;
+            }
+            qjs::JS_RunGC(self.rt);
+            qjs::JS_RunGC(self.rt);
             qjs::JS_FreeRuntime(self.rt);
         }
     }
+}
+
+#[derive(Clone)]
+pub struct QJSRuntime {
+    pub(crate) inner: Rc<QJSRuntimeInner>,
 }
 
 impl JSRuntimeImpl for QJSRuntime {
@@ -21,6 +53,11 @@ impl JSRuntimeImpl for QJSRuntime {
     // new QuickJS JS Runtime
     fn new() -> Self {
         let rt = unsafe { qjs::JS_NewRuntime() };
+        let inner = Rc::new(QJSRuntimeInner { rt });
+        let key = rt as usize;
+        RUNTIME_REGISTRY.with(|m| {
+            m.borrow_mut().insert(key, Rc::downgrade(&inner));
+        });
 
         //0x200: dump every object free
         //0x4000: dump leaked objects and strings in JS_FreeRuntime
@@ -37,18 +74,18 @@ impl JSRuntimeImpl for QJSRuntime {
                 qjs::JS_SetDumpFlags(rt, flags);
             }
         }
-        Self { rt }
+        Self { inner }
     }
 
     fn to_raw(&self) -> Self::RawRuntime {
-        self.rt
+        self.inner.rt
     }
 
     fn run_pending_jobs(&self) -> i32 {
         unsafe {
             let mut ctx = std::ptr::null_mut();
-            while qjs::JS_IsJobPending(self.rt) {
-                qjs::JS_ExecutePendingJob(self.rt, &mut ctx);
+            while qjs::JS_IsJobPending(self.inner.rt) {
+                qjs::JS_ExecutePendingJob(self.inner.rt, &mut ctx);
             }
         }
         0
@@ -58,9 +95,21 @@ impl JSRuntimeImpl for QJSRuntime {
         unsafe {
             #[cfg(debug_assertions)]
             println!("run gc");
-            qjs::JS_RunGC(self.rt);
+            qjs::JS_RunGC(self.inner.rt);
         }
     }
+}
+
+pub(crate) fn runtime_guard_from_ctx(
+    ctx: *mut qjs::JSContext,
+) -> Option<Rc<QJSRuntimeInner>> {
+    if ctx.is_null() {
+        return None;
+    }
+    // SAFETY: `ctx` is expected to be a valid QuickJS context pointer.
+    let rt = unsafe { qjs::JS_GetRuntime(ctx) };
+    let key = rt as usize;
+    RUNTIME_REGISTRY.with(|m| m.borrow().get(&key).and_then(|w| w.upgrade()))
 }
 
 pub struct QuickJS;

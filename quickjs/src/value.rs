@@ -1,10 +1,12 @@
 use crate::{QJSContext, qjs};
+use crate::runtime::{QJSRuntimeInner, runtime_guard_from_ctx};
 use rong_core::{
     JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RongJSError, impl_js_converter,
 };
 use std::ffi::CString;
 use std::hash::Hash;
 use std::slice;
+use std::rc::Rc;
 
 mod array;
 mod array_buffer;
@@ -15,7 +17,32 @@ mod valuetype;
 pub struct QJSValue {
     value: qjs::JSValue,
     ctx: *mut qjs::JSContext,
+    // Keep the owning runtime alive and free values via JS_FreeValueRT.
+    // This avoids shutdown-time crashes where a value outlives its originating context.
+    rt_guard: Option<Rc<QJSRuntimeInner>>,
     value_type: QJSValueType,
+}
+
+unsafe fn dup_value(
+    ctx: *mut qjs::JSContext,
+    rt_guard: &Option<Rc<QJSRuntimeInner>>,
+    value: qjs::JSValue,
+) -> qjs::JSValue {
+    if let Some(rt) = rt_guard {
+        unsafe { qjs::JS_DupValueRT(rt.rt, value) }
+    } else if !ctx.is_null() {
+        unsafe { qjs::JS_DupValue(ctx, value) }
+    } else {
+        value
+    }
+}
+
+unsafe fn free_value(ctx: *mut qjs::JSContext, rt_guard: &Option<Rc<QJSRuntimeInner>>, value: qjs::JSValue) {
+    if let Some(rt) = rt_guard {
+        unsafe { qjs::JS_FreeValueRT(rt.rt, value) }
+    } else if !ctx.is_null() {
+        unsafe { qjs::JS_FreeValue(ctx, value) }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -51,14 +78,11 @@ impl Hash for QJSValue {
 
 impl Clone for QJSValue {
     fn clone(&self) -> Self {
-        let value = if self.ctx.is_null() {
-            self.value
-        } else {
-            unsafe { qjs::JS_DupValue(self.ctx, self.value) }
-        };
+        let value = unsafe { dup_value(self.ctx, &self.rt_guard, self.value) };
         Self {
             value,
             ctx: self.ctx,
+            rt_guard: self.rt_guard.clone(),
             value_type: self.value_type,
         }
     }
@@ -67,10 +91,8 @@ impl Clone for QJSValue {
 impl Drop for QJSValue {
     fn drop(&mut self) {
         unsafe {
-            // Finalizer callback, ctx is set to NULL
-            if !self.ctx.is_null() {
-                qjs::JS_FreeValue(self.ctx, self.value);
-            }
+            // Finalizer callback: ctx (and rt_guard) can be NULL/None. In that case, do nothing.
+            free_value(self.ctx, &self.rt_guard, self.value);
         }
     }
 }
@@ -84,23 +106,23 @@ impl QJSValue {
         // In callback context, generally, all JS variables are from JS engine, in order to make Rust lifetime
         // and ownship works, these variables should be increased referece count first, and then Rust side can
         // drop QJSValue safely
-        let value = if ctx.is_null() {
-            value
-        } else {
-            unsafe { qjs::JS_DupValue(ctx, value) }
-        };
+        let rt_guard = runtime_guard_from_ctx(ctx);
+        let value = unsafe { dup_value(ctx, &rt_guard, value) };
 
         Self {
             value,
             ctx,
+            rt_guard,
             value_type: QJSValueType::Other,
         }
     }
 
     pub(crate) fn new(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Self {
+        let rt_guard = runtime_guard_from_ctx(ctx);
         Self {
             value,
             ctx,
+            rt_guard,
             value_type: QJSValueType::Other,
         }
     }
@@ -109,10 +131,7 @@ impl QJSValue {
     // and ownship works, these variables should be increased referece count first, and then Rust side can
     // drop QJSValue safely
     pub(crate) fn protect(mut self) -> Self {
-        if !self.ctx.is_null() {
-            let value = unsafe { qjs::JS_DupValue(self.ctx, self.value) };
-            self.value = value;
-        }
+        self.value = unsafe { dup_value(self.ctx, &self.rt_guard, self.value) };
         self
     }
 

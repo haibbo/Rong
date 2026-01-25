@@ -5,9 +5,15 @@ use rong_core::{
 };
 use std::ffi::CString;
 use std::mem::MaybeUninit;
+use std::rc::Rc;
+
+use crate::runtime::{QJSRuntimeInner, runtime_guard_from_ctx};
 
 pub struct QJSContext {
     pub(crate) ctx: *mut qjs::JSContext,
+    // Keeps the owning runtime alive while this context exists.
+    // This prevents shutdown-time crashes if Rust values outlive the originating context.
+    rt_guard: Option<Rc<QJSRuntimeInner>>,
 }
 
 impl Drop for QJSContext {
@@ -22,6 +28,7 @@ impl Clone for QJSContext {
     fn clone(&self) -> Self {
         Self {
             ctx: unsafe { qjs::JS_DupContext(self.ctx) },
+            rt_guard: self.rt_guard.clone(),
         }
     }
 }
@@ -33,7 +40,10 @@ impl JSContextImpl for QJSContext {
 
     fn new(runtime: &Self::Runtime) -> Self {
         let ctx = unsafe { qjs::JS_NewContext(runtime.to_raw()) };
-        Self { ctx }
+        Self {
+            ctx,
+            rt_guard: Some(runtime.inner.clone()),
+        }
     }
 
     fn as_raw(&self) -> &Self::RawContext {
@@ -193,7 +203,10 @@ impl JSContextImpl for QJSContext {
 impl QJSContext {
     fn _from_borrowed_raw(ctx: *mut qjs::JSContext) -> Self {
         let ctx = unsafe { qjs::JS_DupContext(ctx) };
-        Self { ctx }
+        Self {
+            rt_guard: runtime_guard_from_ctx(ctx),
+            ctx,
+        }
     }
 
     pub(crate) fn to_raw(&self) -> *mut qjs::JSContext {
