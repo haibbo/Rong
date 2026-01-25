@@ -1,4 +1,4 @@
-# @rong/types
+# @lingxia/rong
 
 TypeScript type definitions for the Rong JavaScript runtime (globals injected by Rust).
 
@@ -19,7 +19,7 @@ Rong also implements/extends a subset of Web APIs; the type package relies on Ty
 ## Installation
 
 ```bash
-npm install @rong/types
+npm install @lingxia/rong
 ```
 
 ## Usage (typechecking only)
@@ -29,7 +29,7 @@ Add to your `tsconfig.json`:
 ```json
 {
   "compilerOptions": {
-    "types": ["@rong/types"]
+    "types": ["@lingxia/rong"]
   }
 }
 ```

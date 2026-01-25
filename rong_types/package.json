@@ -1,6 +1,6 @@
 {
-  "name": "@rong/types",
-  "version": "0.2.0",
+  "name": "@lingxia/rong",
+  "version": "0.0.1",
   "description": "TypeScript type definitions for Rong JavaScript runtime",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -10,7 +10,7 @@
  * ```json
  * {
  *   "compilerOptions": {
- *     "types": ["@rong/types"]
+ *     "types": ["@lingxia/rong"]
  *   }
  * }
  * ```
