@@ -20,13 +20,12 @@ fn usage() {
         r#"
 Usage:
   rong                      Start REPL (or run stdin when piped)
-  rong run <file.js>
+  rong <file.js|file.rong>
   rong compile <input.js> <output.rong>
   rong -v | --version
   rong -h | --help
 
 Commands:
-  run         Execute a JavaScript file
   compile     Compile JavaScript to bytecode
 
 Options:
@@ -46,12 +45,6 @@ fn parse_args() -> Result<Command, String> {
     match args[1].as_str() {
         "-h" | "--help" => Ok(Command::Help),
         "-v" | "--version" => Ok(Command::Version),
-        "run" => {
-            if args.len() < 3 {
-                return Err("Missing file argument for run command".to_string());
-            }
-            Ok(Command::Run(args[2].clone().into()))
-        }
         "compile" => {
             if args.len() < 4 {
                 return Err("Missing input/output arguments for compile command".to_string());
@@ -62,7 +55,7 @@ fn parse_args() -> Result<Command, String> {
             })
         }
         _ => {
-            // If the argument looks like a file path (ends with .js or .rong), treat it as a run command
+            // If the argument looks like a file path (ends with .js or .rong), execute it.
             let arg = &args[1];
             if arg.ends_with(".js") || arg.ends_with(".rong") {
                 Ok(Command::Run(arg.clone().into()))
