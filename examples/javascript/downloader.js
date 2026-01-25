@@ -1,5 +1,5 @@
 // Streaming file downloader (progress + low memory)
-// Usage: rong run downloader.js <url> <output-filename>
+// Usage: rong downloader.js <url> <output-filename>
 
 async function downloadFile(url, outputPath) {
   let file = null;
@@ -69,7 +69,7 @@ async function downloadFile(url, outputPath) {
 const args = Rong.args;
 
 if (args.length < 3) {
-  console.log("Usage: rong run downloader.js <url> <output-filename>");
+  console.log("Usage: rong downloader.js <url> <output-filename>");
   Rong.exit(1);
 }
 

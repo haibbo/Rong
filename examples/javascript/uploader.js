@@ -1,5 +1,5 @@
 // Resumable Streaming File Uploader (chunked + Content-Range / Upload-Offset)
-// Usage: rong run uploader.js <file-path> <server-url>
+// Usage: rong uploader.js <file-path> <server-url>
 
 const CHUNK_SIZE = 4 * 1024 * 1024; // 4 MiB chunks
 
@@ -128,7 +128,7 @@ async function uploadFile(localPath, serverUrl) {
 const args = Rong.args;
 
 if (args.length < 3) {
-  console.log("Usage: rong run uploader.js <file-path> <server-url>");
+  console.log("Usage: rong uploader.js <file-path> <server-url>");
   Rong.exit(1);
 }
 

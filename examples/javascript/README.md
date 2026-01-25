@@ -9,17 +9,17 @@ This directory contains JavaScript examples demonstrating how to use the Rong Ja
 
 ## Running Examples
 
-Use the `rong_cli` tool with the `run` command to execute these examples:
+Use the `rong_cli` tool to execute these examples:
 
 ```bash
 # Download a file (streaming)
-cargo run -p rong_cli -- run examples/javascript/downloader.js https://example.com/file.txt downloaded.txt
+cargo run -p rong_cli -- examples/javascript/downloader.js https://example.com/file.txt downloaded.txt
 
 # Upload a file (streaming PUT)
-cargo run -p rong_cli -- run examples/javascript/uploader.js path/to/local/file.txt https://httpbin.org/upload
+cargo run -p rong_cli -- examples/javascript/uploader.js path/to/local/file.txt https://httpbin.org/upload
 
 # Or if you have built the binary
-./target/debug/rong run examples/javascript/downloader.js https://example.com/file.txt downloaded.txt
+./target/debug/rong examples/javascript/downloader.js https://example.com/file.txt downloaded.txt
 ```
 
 ## Command-line Arguments
@@ -40,7 +40,7 @@ You can also compile JavaScript files to bytecode for faster loading:
 cargo run -p rong_cli -- compile examples/javascript/downloader.js downloader.rong
 
 # Run the compiled bytecode
-cargo run -p rong_cli -- run downloader.rong https://example.com/file.txt downloaded.txt
+cargo run -p rong_cli -- downloader.rong https://example.com/file.txt downloaded.txt
 ```
 
 ## Notes
