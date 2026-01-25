@@ -4,6 +4,275 @@ use rong_core::{
 };
 use std::ffi::CString;
 use std::hash::Hash;
+use std::ptr;
+use std::sync::OnceLock;
+
+#[cfg(target_os = "macos")]
+unsafe fn dlsym(name: &'static [u8]) -> *mut std::ffi::c_void {
+    debug_assert!(name.last() == Some(&0));
+    unsafe extern "C" {
+        fn dlsym(handle: *mut std::ffi::c_void, symbol: *const std::ffi::c_char)
+            -> *mut std::ffi::c_void;
+    }
+    // `RTLD_DEFAULT` is `((void *) -2)` on macOS.
+    let handle = (-2isize) as *mut std::ffi::c_void;
+    unsafe { dlsym(handle, name.as_ptr().cast()) }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn dlsym_fn<T: Copy>(name: &'static [u8]) -> Option<T> {
+    let sym = unsafe { dlsym(name) };
+    if sym.is_null() {
+        None
+    } else {
+        Some(unsafe { std::mem::transmute_copy::<*mut std::ffi::c_void, T>(&sym) })
+    }
+}
+
+type JSIsBigIntFn = unsafe extern "C" fn(*mut jsc::OpaqueJSContext, jsc::JSValueRef) -> bool;
+type JSBigIntCreateI64Fn = unsafe extern "C" fn(
+    *mut jsc::OpaqueJSContext,
+    i64,
+    *mut jsc::JSValueRef,
+) -> jsc::JSValueRef;
+type JSBigIntCreateU64Fn = unsafe extern "C" fn(
+    *mut jsc::OpaqueJSContext,
+    u64,
+    *mut jsc::JSValueRef,
+) -> jsc::JSValueRef;
+type JSToI64Fn =
+    unsafe extern "C" fn(*mut jsc::OpaqueJSContext, jsc::JSValueRef, *mut jsc::JSValueRef) -> i64;
+type JSToU64Fn =
+    unsafe extern "C" fn(*mut jsc::OpaqueJSContext, jsc::JSValueRef, *mut jsc::JSValueRef) -> u64;
+
+#[cfg(target_os = "macos")]
+fn jsvalue_is_bigint_sym() -> Option<JSIsBigIntFn> {
+    static SYM: OnceLock<Option<JSIsBigIntFn>> = OnceLock::new();
+    *SYM.get_or_init(|| unsafe { dlsym_fn(b"JSValueIsBigInt\0") })
+}
+
+#[cfg(target_os = "macos")]
+fn jsbigint_create_i64_sym() -> Option<JSBigIntCreateI64Fn> {
+    static SYM: OnceLock<Option<JSBigIntCreateI64Fn>> = OnceLock::new();
+    *SYM.get_or_init(|| unsafe { dlsym_fn(b"JSBigIntCreateWithInt64\0") })
+}
+
+#[cfg(target_os = "macos")]
+fn jsbigint_create_u64_sym() -> Option<JSBigIntCreateU64Fn> {
+    static SYM: OnceLock<Option<JSBigIntCreateU64Fn>> = OnceLock::new();
+    *SYM.get_or_init(|| unsafe { dlsym_fn(b"JSBigIntCreateWithUInt64\0") })
+}
+
+#[cfg(target_os = "macos")]
+fn jsvalue_to_i64_sym() -> Option<JSToI64Fn> {
+    static SYM: OnceLock<Option<JSToI64Fn>> = OnceLock::new();
+    *SYM.get_or_init(|| unsafe { dlsym_fn(b"JSValueToInt64\0") })
+}
+
+#[cfg(target_os = "macos")]
+fn jsvalue_to_u64_sym() -> Option<JSToU64Fn> {
+    static SYM: OnceLock<Option<JSToU64Fn>> = OnceLock::new();
+    *SYM.get_or_init(|| unsafe { dlsym_fn(b"JSValueToUInt64\0") })
+}
+
+/// Create a BigInt from a decimal string by evaluating JS (works on older macOS).
+unsafe fn create_bigint_from_str(
+    ctx: *const jsc::OpaqueJSContext,
+    value: &str,
+) -> jsc::JSValueRef {
+    let ctx = ctx as *mut jsc::OpaqueJSContext;
+    let code = format!("BigInt(\"{}\")", value);
+    let c_code = CString::new(code).unwrap();
+    let js_str = unsafe { jsc::JSStringCreateWithUTF8CString(c_code.as_ptr()) };
+    let mut exception: jsc::JSValueRef = ptr::null_mut();
+    let result = unsafe {
+        jsc::JSEvaluateScript(
+            ctx,
+            js_str,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            1,
+            &mut exception,
+        )
+    };
+    unsafe { jsc::JSStringRelease(js_str) };
+    if exception.is_null() {
+        result
+    } else {
+        unsafe { jsc::JSValueMakeUndefined(ctx) }
+    }
+}
+
+/// Check if a value is BigInt. Uses native BigInt APIs when available; falls back to JS typeof.
+pub(crate) unsafe fn jsvalue_is_bigint(
+    ctx: *const jsc::OpaqueJSContext,
+    value: jsc::JSValueRef,
+) -> bool {
+    let ctx = ctx as *mut jsc::OpaqueJSContext;
+    #[cfg(target_os = "ios")]
+    {
+        return unsafe { jsc::JSValueIsBigInt(ctx, value) };
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(f) = jsvalue_is_bigint_sym() {
+            return unsafe { f(ctx, value) };
+        }
+    }
+
+    // Use JS typeof to check if it's a bigint (works everywhere).
+    let code = c"(function(v) { return typeof v === 'bigint'; })";
+    let js_str = unsafe { jsc::JSStringCreateWithUTF8CString(code.as_ptr()) };
+    let mut exception: jsc::JSValueRef = ptr::null_mut();
+    let func = unsafe {
+        jsc::JSEvaluateScript(ctx, js_str, ptr::null_mut(), ptr::null_mut(), 1, &mut exception)
+    };
+    unsafe { jsc::JSStringRelease(js_str) };
+
+    if exception.is_null() && unsafe { jsc::JSValueIsObject(ctx, func) } {
+        let func_obj = unsafe { jsc::JSValueToObject(ctx, func, ptr::null_mut()) };
+        let args = [value];
+        let result = unsafe {
+            jsc::JSObjectCallAsFunction(
+                ctx,
+                func_obj,
+                ptr::null_mut(),
+                1,
+                args.as_ptr(),
+                &mut exception,
+            )
+        };
+        if exception.is_null() {
+            return unsafe { jsc::JSValueToBoolean(ctx, result) };
+        }
+    }
+    false
+}
+
+/// Convert BigInt to string using JS code (works everywhere).
+unsafe fn bigint_to_string(
+    ctx: *const jsc::OpaqueJSContext,
+    value: jsc::JSValueRef,
+) -> Option<String> {
+    let ctx = ctx as *mut jsc::OpaqueJSContext;
+    let code = c"(function(v) { return v.toString(); })";
+    let js_str = unsafe { jsc::JSStringCreateWithUTF8CString(code.as_ptr()) };
+    let mut exception: jsc::JSValueRef = ptr::null_mut();
+    let func = unsafe {
+        jsc::JSEvaluateScript(ctx, js_str, ptr::null_mut(), ptr::null_mut(), 1, &mut exception)
+    };
+    unsafe { jsc::JSStringRelease(js_str) };
+
+    if exception.is_null() && unsafe { jsc::JSValueIsObject(ctx, func) } {
+        let func_obj = unsafe { jsc::JSValueToObject(ctx, func, ptr::null_mut()) };
+        let args = [value];
+        let result = unsafe {
+            jsc::JSObjectCallAsFunction(
+                ctx,
+                func_obj,
+                ptr::null_mut(),
+                1,
+                args.as_ptr(),
+                &mut exception,
+            )
+        };
+        if exception.is_null() && unsafe { jsc::JSValueIsString(ctx, result) } {
+            let js_string = unsafe { jsc::JSValueToStringCopy(ctx, result, ptr::null_mut()) };
+            let len = unsafe { jsc::JSStringGetMaximumUTF8CStringSize(js_string) };
+            let mut buffer = vec![0u8; len];
+            unsafe {
+                jsc::JSStringGetUTF8CString(js_string, buffer.as_mut_ptr() as *mut i8, len);
+            }
+            unsafe { jsc::JSStringRelease(js_string) };
+            let cstr = unsafe { std::ffi::CStr::from_ptr(buffer.as_ptr() as *const i8) };
+            return cstr.to_str().ok().map(|s| s.to_string());
+        }
+    }
+    None
+}
+
+unsafe fn bigint_from_i64(ctx: *const jsc::OpaqueJSContext, value: i64) -> jsc::JSValueRef {
+    let ctx_mut = ctx as *mut jsc::OpaqueJSContext;
+    #[cfg(target_os = "ios")]
+    {
+        return unsafe { jsc::JSBigIntCreateWithInt64(ctx_mut, value, ptr::null_mut()) };
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(f) = jsbigint_create_i64_sym() {
+            return unsafe { f(ctx_mut, value, ptr::null_mut()) };
+        }
+    }
+
+    unsafe { create_bigint_from_str(ctx, &value.to_string()) }
+}
+
+unsafe fn bigint_from_u64(ctx: *const jsc::OpaqueJSContext, value: u64) -> jsc::JSValueRef {
+    let ctx_mut = ctx as *mut jsc::OpaqueJSContext;
+    #[cfg(target_os = "ios")]
+    {
+        return unsafe { jsc::JSBigIntCreateWithUInt64(ctx_mut, value, ptr::null_mut()) };
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(f) = jsbigint_create_u64_sym() {
+            return unsafe { f(ctx_mut, value, ptr::null_mut()) };
+        }
+    }
+
+    unsafe { create_bigint_from_str(ctx, &value.to_string()) }
+}
+
+unsafe fn bigint_to_i64(
+    ctx: *const jsc::OpaqueJSContext,
+    value: jsc::JSValueRef,
+) -> Option<i64> {
+    let ctx_mut = ctx as *mut jsc::OpaqueJSContext;
+    #[cfg(target_os = "ios")]
+    {
+        let mut exception: jsc::JSValueRef = ptr::null_mut();
+        let v = unsafe { jsc::JSValueToInt64(ctx_mut, value, &mut exception) };
+        return if exception.is_null() { Some(v) } else { None };
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(f) = jsvalue_to_i64_sym() {
+            let mut exception: jsc::JSValueRef = ptr::null_mut();
+            let v = unsafe { f(ctx_mut, value, &mut exception) };
+            return if exception.is_null() { Some(v) } else { None };
+        }
+    }
+
+    unsafe { bigint_to_string(ctx, value)?.parse::<i64>().ok() }
+}
+
+unsafe fn bigint_to_u64(
+    ctx: *const jsc::OpaqueJSContext,
+    value: jsc::JSValueRef,
+) -> Option<u64> {
+    let ctx_mut = ctx as *mut jsc::OpaqueJSContext;
+    #[cfg(target_os = "ios")]
+    {
+        let mut exception: jsc::JSValueRef = ptr::null_mut();
+        let v = unsafe { jsc::JSValueToUInt64(ctx_mut, value, &mut exception) };
+        return if exception.is_null() { Some(v) } else { None };
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(f) = jsvalue_to_u64_sym() {
+            let mut exception: jsc::JSValueRef = ptr::null_mut();
+            let v = unsafe { f(ctx_mut, value, &mut exception) };
+            return if exception.is_null() { Some(v) } else { None };
+        }
+    }
+
+    unsafe { bigint_to_string(ctx, value)?.parse::<u64>().ok() }
+}
 
 mod array;
 mod array_buffer;
@@ -326,7 +595,7 @@ impl_js_converter!(
 impl_js_converter!(
     JSCValue,
     i64,
-    |ctx, value| unsafe {
+    |ctx, value: i64| unsafe {
         // For values that fit in JavaScript's safe integer range, use regular number
         // JavaScript safe integer range: -(2^53 - 1) to (2^53 - 1)
         const JS_MAX_SAFE_INTEGER: i64 = (1i64 << 53) - 1;
@@ -335,15 +604,17 @@ impl_js_converter!(
         if (JS_MIN_SAFE_INTEGER..=JS_MAX_SAFE_INTEGER).contains(&value) {
             jsc::JSValueMakeNumber(ctx, value as f64)
         } else {
-            jsc::JSBigIntCreateWithInt64(ctx, value, std::ptr::null_mut())
+            bigint_from_i64(ctx, value)
         }
     },
     |ctx, value, result: &mut i64| unsafe {
-        if jsc::JSValueIsBigInt(ctx, value) {
-            // It's a BigInt, extract as i64
-            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-            *result = jsc::JSValueToInt64(ctx, value, &mut exception);
-            if exception.is_null() { 0 } else { -1 }
+        if jsvalue_is_bigint(ctx, value) {
+            if let Some(v) = bigint_to_i64(ctx, value) {
+                *result = v;
+                0
+            } else {
+                -1
+            }
         } else if jsc::JSValueIsNumber(ctx, value) {
             // It's a regular number, convert to double first then to i64
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();
@@ -364,7 +635,7 @@ impl_js_converter!(
 impl_js_converter!(
     JSCValue,
     u64,
-    |ctx, value| unsafe {
+    |ctx, value: u64| unsafe {
         // For values that fit in JavaScript's safe integer range, use regular number
         // JavaScript safe integer range: 0 to (2^53 - 1) for unsigned
         const JS_MAX_SAFE_INTEGER: u64 = (1u64 << 53) - 1;
@@ -372,15 +643,17 @@ impl_js_converter!(
         if value <= JS_MAX_SAFE_INTEGER {
             jsc::JSValueMakeNumber(ctx, value as f64)
         } else {
-            jsc::JSBigIntCreateWithUInt64(ctx, value, std::ptr::null_mut())
+            bigint_from_u64(ctx, value)
         }
     },
     |ctx, value, result: &mut u64| unsafe {
-        if jsc::JSValueIsBigInt(ctx, value) {
-            // It's a BigInt, extract as u64
-            let mut exception: jsc::JSValueRef = std::ptr::null_mut();
-            *result = jsc::JSValueToUInt64(ctx, value, &mut exception);
-            if exception.is_null() { 0 } else { -1 }
+        if jsvalue_is_bigint(ctx, value) {
+            if let Some(v) = bigint_to_u64(ctx, value) {
+                *result = v;
+                0
+            } else {
+                -1
+            }
         } else if jsc::JSValueIsNumber(ctx, value) {
             // It's a regular number, convert to double first then to u64
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();

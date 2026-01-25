@@ -101,7 +101,7 @@ impl JSTypeOf for JSCValue {
     }
 
     fn is_bigint(&self) -> bool {
-        unsafe { jsc::JSValueIsBigInt(self.ctx, self.as_value()) }
+        unsafe { crate::value::jsvalue_is_bigint(self.ctx, self.as_value()) }
     }
 
     fn is_string(&self) -> bool {
