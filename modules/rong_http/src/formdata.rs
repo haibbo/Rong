@@ -344,15 +344,14 @@ impl FormData {
             let headers = parse_headers(&body[pos..header_end]);
             let content_start = header_end + 4;
 
-            let next_boundary = find_subslice(body, &delimiter_with_crlf, content_start).ok_or_else(
-                || {
+            let next_boundary = find_subslice(body, &delimiter_with_crlf, content_start)
+                .ok_or_else(|| {
                     HostError::new(
                         rong::error::E_INVALID_ARG,
                         "Invalid multipart body: missing boundary",
                     )
                     .with_name("TypeError")
-                },
-            )?;
+                })?;
 
             let content = &body[content_start..next_boundary];
 
@@ -381,7 +380,8 @@ impl FormData {
                 .unwrap_or_default();
 
             if let Some(filename) = filename {
-                let file = File::from_parts(content_type, content.to_vec(), filename.clone(), None)?;
+                let file =
+                    File::from_parts(content_type, content.to_vec(), filename.clone(), None)?;
                 entries.push((name, FormDataEntryValue::File(file), filename));
             } else {
                 let value = String::from_utf8_lossy(content).into_owned();
@@ -408,10 +408,7 @@ fn parse_headers(raw: &[u8]) -> HashMap<String, String> {
     let text = String::from_utf8_lossy(raw);
     for line in text.split("\r\n") {
         if let Some((name, value)) = line.split_once(':') {
-            headers.insert(
-                name.trim().to_ascii_lowercase(),
-                value.trim().to_string(),
-            );
+            headers.insert(name.trim().to_ascii_lowercase(), value.trim().to_string());
         }
     }
     headers

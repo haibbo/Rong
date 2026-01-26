@@ -242,8 +242,18 @@ async fn open_file(file: String, option: Optional<FileOpenOption>) -> JSResult<F
                 open_options.open(&resolved)
             })
             .await
-            .map_err(|e| HostError::new("FS_IO", format!("Failed to open file '{}': {}", file_name, e)))?
-            .map_err(|e| HostError::new("FS_IO", format!("Failed to open file '{}': {}", file_name, e)))?;
+            .map_err(|e| {
+                HostError::new(
+                    "FS_IO",
+                    format!("Failed to open file '{}': {}", file_name, e),
+                )
+            })?
+            .map_err(|e| {
+                HostError::new(
+                    "FS_IO",
+                    format!("Failed to open file '{}': {}", file_name, e),
+                )
+            })?;
             File::from_std(handle)
         }
         #[cfg(not(unix))]
@@ -260,10 +270,9 @@ async fn open_file(file: String, option: Optional<FileOpenOption>) -> JSResult<F
             .create(create)
             .create_new(create_new);
 
-        open_options
-            .open(&resolved)
-            .await
-            .map_err(|e| HostError::new("FS_IO", format!("Failed to open file '{}': {}", file, e)))?
+        open_options.open(&resolved).await.map_err(|e| {
+            HostError::new("FS_IO", format!("Failed to open file '{}': {}", file, e))
+        })?
     };
 
     Ok(FsFile {

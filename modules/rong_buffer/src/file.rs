@@ -12,14 +12,12 @@ pub struct File {
 #[js_class]
 impl File {
     fn now_ms() -> JSResult<i64> {
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| {
-                RongJSError::from(HostError::new(
-                    rong::error::E_INTERNAL,
-                    "Failed to get current time",
-                ))
-            })?;
+        let duration = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|_| {
+            RongJSError::from(HostError::new(
+                rong::error::E_INTERNAL,
+                "Failed to get current time",
+            ))
+        })?;
         Ok(duration.as_millis() as i64)
     }
 

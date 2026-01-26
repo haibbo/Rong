@@ -146,7 +146,14 @@ pub(crate) fn get_finalizer_by_constructor(constructor: ArkJSValue) -> arkjs::JS
         // In ArkJS, we store the finalizer function pointer instead of class ref
         if let Some(&finalizer_ptr) = map.get(&constructor_ptr) {
             unsafe {
-                return Some(std::mem::transmute::<usize, unsafe extern "C" fn(arkjs::JSVM_Env, *mut std::ffi::c_void, *mut std::ffi::c_void)>(finalizer_ptr));
+                return Some(std::mem::transmute::<
+                    usize,
+                    unsafe extern "C" fn(
+                        arkjs::JSVM_Env,
+                        *mut std::ffi::c_void,
+                        *mut std::ffi::c_void,
+                    ),
+                >(finalizer_ptr));
             }
         }
     }

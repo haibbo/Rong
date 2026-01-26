@@ -252,12 +252,8 @@ impl JSErrorFactory for ArkJSContext {
                 name.len(),
                 &mut name_value,
             );
-            let _ = arkjs::OH_JSVM_SetNamedProperty(
-                self.raw,
-                error,
-                c"name".as_ptr() as _,
-                name_value,
-            );
+            let _ =
+                arkjs::OH_JSVM_SetNamedProperty(self.raw, error, c"name".as_ptr() as _, name_value);
 
             if let Some(code) = code {
                 let code_cstr = CString::new(code).unwrap();

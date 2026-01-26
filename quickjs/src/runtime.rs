@@ -1,7 +1,7 @@
 use crate::{QJSContext, QJSValue, qjs};
 use rong_core::{JSEngine, JSRuntimeImpl};
-use std::collections::HashMap;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
 thread_local! {
@@ -100,9 +100,7 @@ impl JSRuntimeImpl for QJSRuntime {
     }
 }
 
-pub(crate) fn runtime_guard_from_ctx(
-    ctx: *mut qjs::JSContext,
-) -> Option<Rc<QJSRuntimeInner>> {
+pub(crate) fn runtime_guard_from_ctx(ctx: *mut qjs::JSContext) -> Option<Rc<QJSRuntimeInner>> {
     if ctx.is_null() {
         return None;
     }

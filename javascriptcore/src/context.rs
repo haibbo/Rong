@@ -146,15 +146,18 @@ impl JSContextImpl for JSCContext {
                 }
 
                 let prototype_key = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
-                let prototype_value =
-                    jsc::JSObjectGetProperty(self.raw, function_ctor, prototype_key, &mut exception);
+                let prototype_value = jsc::JSObjectGetProperty(
+                    self.raw,
+                    function_ctor,
+                    prototype_key,
+                    &mut exception,
+                );
                 jsc::JSStringRelease(prototype_key);
                 if !exception.is_null() {
                     return JSCValue::from_owned_raw(self.raw, exception).with_exception();
                 }
 
-                let prototype_obj =
-                    jsc::JSValueToObject(self.raw, prototype_value, &mut exception);
+                let prototype_obj = jsc::JSValueToObject(self.raw, prototype_value, &mut exception);
                 if !exception.is_null() {
                     return JSCValue::from_owned_raw(self.raw, exception).with_exception();
                 }

@@ -1,12 +1,12 @@
-use crate::{QJSContext, qjs};
 use crate::runtime::{QJSRuntimeInner, runtime_guard_from_ctx};
+use crate::{QJSContext, qjs};
 use rong_core::{
     JSContextImpl, JSRawContext, JSTypeOf, JSValueImpl, RongJSError, impl_js_converter,
 };
 use std::ffi::CString;
 use std::hash::Hash;
-use std::slice;
 use std::rc::Rc;
+use std::slice;
 
 mod array;
 mod array_buffer;
@@ -37,7 +37,11 @@ unsafe fn dup_value(
     }
 }
 
-unsafe fn free_value(ctx: *mut qjs::JSContext, rt_guard: &Option<Rc<QJSRuntimeInner>>, value: qjs::JSValue) {
+unsafe fn free_value(
+    ctx: *mut qjs::JSContext,
+    rt_guard: &Option<Rc<QJSRuntimeInner>>,
+    value: qjs::JSValue,
+) {
     if let Some(rt) = rt_guard {
         unsafe { qjs::JS_FreeValueRT(rt.rt, value) }
     } else if !ctx.is_null() {
