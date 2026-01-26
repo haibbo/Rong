@@ -5,14 +5,17 @@ use rong_core::{
 use std::ffi::CString;
 use std::hash::Hash;
 use std::ptr;
+#[cfg(target_os = "macos")]
 use std::sync::OnceLock;
 
 #[cfg(target_os = "macos")]
 unsafe fn dlsym(name: &'static [u8]) -> *mut std::ffi::c_void {
     debug_assert!(name.last() == Some(&0));
     unsafe extern "C" {
-        fn dlsym(handle: *mut std::ffi::c_void, symbol: *const std::ffi::c_char)
-            -> *mut std::ffi::c_void;
+        fn dlsym(
+            handle: *mut std::ffi::c_void,
+            symbol: *const std::ffi::c_char,
+        ) -> *mut std::ffi::c_void;
     }
     // `RTLD_DEFAULT` is `((void *) -2)` on macOS.
     let handle = (-2isize) as *mut std::ffi::c_void;
@@ -29,19 +32,18 @@ unsafe fn dlsym_fn<T: Copy>(name: &'static [u8]) -> Option<T> {
     }
 }
 
+#[cfg(target_os = "macos")]
 type JSIsBigIntFn = unsafe extern "C" fn(*mut jsc::OpaqueJSContext, jsc::JSValueRef) -> bool;
-type JSBigIntCreateI64Fn = unsafe extern "C" fn(
-    *mut jsc::OpaqueJSContext,
-    i64,
-    *mut jsc::JSValueRef,
-) -> jsc::JSValueRef;
-type JSBigIntCreateU64Fn = unsafe extern "C" fn(
-    *mut jsc::OpaqueJSContext,
-    u64,
-    *mut jsc::JSValueRef,
-) -> jsc::JSValueRef;
+#[cfg(target_os = "macos")]
+type JSBigIntCreateI64Fn =
+    unsafe extern "C" fn(*mut jsc::OpaqueJSContext, i64, *mut jsc::JSValueRef) -> jsc::JSValueRef;
+#[cfg(target_os = "macos")]
+type JSBigIntCreateU64Fn =
+    unsafe extern "C" fn(*mut jsc::OpaqueJSContext, u64, *mut jsc::JSValueRef) -> jsc::JSValueRef;
+#[cfg(target_os = "macos")]
 type JSToI64Fn =
     unsafe extern "C" fn(*mut jsc::OpaqueJSContext, jsc::JSValueRef, *mut jsc::JSValueRef) -> i64;
+#[cfg(target_os = "macos")]
 type JSToU64Fn =
     unsafe extern "C" fn(*mut jsc::OpaqueJSContext, jsc::JSValueRef, *mut jsc::JSValueRef) -> u64;
 
@@ -76,10 +78,7 @@ fn jsvalue_to_u64_sym() -> Option<JSToU64Fn> {
 }
 
 /// Create a BigInt from a decimal string by evaluating JS (works on older macOS).
-unsafe fn create_bigint_from_str(
-    ctx: *const jsc::OpaqueJSContext,
-    value: &str,
-) -> jsc::JSValueRef {
+unsafe fn create_bigint_from_str(ctx: *const jsc::OpaqueJSContext, value: &str) -> jsc::JSValueRef {
     let ctx = ctx as *mut jsc::OpaqueJSContext;
     let code = format!("BigInt(\"{}\")", value);
     let c_code = CString::new(code).unwrap();
@@ -121,32 +120,44 @@ pub(crate) unsafe fn jsvalue_is_bigint(
         }
     }
 
-    // Use JS typeof to check if it's a bigint (works everywhere).
-    let code = c"(function(v) { return typeof v === 'bigint'; })";
-    let js_str = unsafe { jsc::JSStringCreateWithUTF8CString(code.as_ptr()) };
-    let mut exception: jsc::JSValueRef = ptr::null_mut();
-    let func = unsafe {
-        jsc::JSEvaluateScript(ctx, js_str, ptr::null_mut(), ptr::null_mut(), 1, &mut exception)
-    };
-    unsafe { jsc::JSStringRelease(js_str) };
-
-    if exception.is_null() && unsafe { jsc::JSValueIsObject(ctx, func) } {
-        let func_obj = unsafe { jsc::JSValueToObject(ctx, func, ptr::null_mut()) };
-        let args = [value];
-        let result = unsafe {
-            jsc::JSObjectCallAsFunction(
+    #[cfg(not(target_os = "ios"))]
+    {
+        // Use JS typeof to check if it's a bigint (works everywhere).
+        let code = c"(function(v) { return typeof v === 'bigint'; })";
+        let js_str = unsafe { jsc::JSStringCreateWithUTF8CString(code.as_ptr()) };
+        let mut exception: jsc::JSValueRef = ptr::null_mut();
+        let func = unsafe {
+            jsc::JSEvaluateScript(
                 ctx,
-                func_obj,
+                js_str,
+                ptr::null_mut(),
                 ptr::null_mut(),
                 1,
-                args.as_ptr(),
                 &mut exception,
             )
         };
-        if exception.is_null() {
-            return unsafe { jsc::JSValueToBoolean(ctx, result) };
+        unsafe { jsc::JSStringRelease(js_str) };
+
+        if exception.is_null() && unsafe { jsc::JSValueIsObject(ctx, func) } {
+            let func_obj = unsafe { jsc::JSValueToObject(ctx, func, ptr::null_mut()) };
+            let args = [value];
+            let result = unsafe {
+                jsc::JSObjectCallAsFunction(
+                    ctx,
+                    func_obj,
+                    ptr::null_mut(),
+                    1,
+                    args.as_ptr(),
+                    &mut exception,
+                )
+            };
+            if exception.is_null() {
+                return unsafe { jsc::JSValueToBoolean(ctx, result) };
+            }
         }
     }
+
+    // Default fallback or if something failed
     false
 }
 
@@ -160,7 +171,14 @@ unsafe fn bigint_to_string(
     let js_str = unsafe { jsc::JSStringCreateWithUTF8CString(code.as_ptr()) };
     let mut exception: jsc::JSValueRef = ptr::null_mut();
     let func = unsafe {
-        jsc::JSEvaluateScript(ctx, js_str, ptr::null_mut(), ptr::null_mut(), 1, &mut exception)
+        jsc::JSEvaluateScript(
+            ctx,
+            js_str,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            1,
+            &mut exception,
+        )
     };
     unsafe { jsc::JSStringRelease(js_str) };
 
@@ -206,7 +224,19 @@ unsafe fn bigint_from_i64(ctx: *const jsc::OpaqueJSContext, value: i64) -> jsc::
         }
     }
 
-    unsafe { create_bigint_from_str(ctx, &value.to_string()) }
+    #[cfg(not(target_os = "ios"))]
+    unsafe {
+        create_bigint_from_str(ctx, &value.to_string())
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        // This path should be unreachable on iOS due to the specific API check above,
+        // but if we fall through, we return undefined or similar to avoid UB?
+        // Actually, the iOS block above returns, so this is logically unreachable.
+        // But to satisfy the compiler:
+        unreachable!("iOS should have returned early")
+    }
 }
 
 unsafe fn bigint_from_u64(ctx: *const jsc::OpaqueJSContext, value: u64) -> jsc::JSValueRef {
@@ -223,13 +253,16 @@ unsafe fn bigint_from_u64(ctx: *const jsc::OpaqueJSContext, value: u64) -> jsc::
         }
     }
 
-    unsafe { create_bigint_from_str(ctx, &value.to_string()) }
+    #[cfg(not(target_os = "ios"))]
+    unsafe {
+        create_bigint_from_str(ctx, &value.to_string())
+    }
+
+    #[cfg(target_os = "ios")]
+    unreachable!("iOS should have returned early")
 }
 
-unsafe fn bigint_to_i64(
-    ctx: *const jsc::OpaqueJSContext,
-    value: jsc::JSValueRef,
-) -> Option<i64> {
+unsafe fn bigint_to_i64(ctx: *const jsc::OpaqueJSContext, value: jsc::JSValueRef) -> Option<i64> {
     let ctx_mut = ctx as *mut jsc::OpaqueJSContext;
     #[cfg(target_os = "ios")]
     {
@@ -247,13 +280,18 @@ unsafe fn bigint_to_i64(
         }
     }
 
-    unsafe { bigint_to_string(ctx, value)?.parse::<i64>().ok() }
+    #[cfg(not(target_os = "ios"))]
+    unsafe {
+        bigint_to_string(ctx, value)?.parse::<i64>().ok()
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        None
+    }
 }
 
-unsafe fn bigint_to_u64(
-    ctx: *const jsc::OpaqueJSContext,
-    value: jsc::JSValueRef,
-) -> Option<u64> {
+unsafe fn bigint_to_u64(ctx: *const jsc::OpaqueJSContext, value: jsc::JSValueRef) -> Option<u64> {
     let ctx_mut = ctx as *mut jsc::OpaqueJSContext;
     #[cfg(target_os = "ios")]
     {
@@ -271,7 +309,15 @@ unsafe fn bigint_to_u64(
         }
     }
 
-    unsafe { bigint_to_string(ctx, value)?.parse::<u64>().ok() }
+    #[cfg(not(target_os = "ios"))]
+    unsafe {
+        bigint_to_string(ctx, value)?.parse::<u64>().ok()
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        None
+    }
 }
 
 mod array;
