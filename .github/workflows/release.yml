@@ -1,0 +1,206 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "New version number (e.g., 0.1.2, 0.2.0, 1.0.0)"
+        required: true
+        type: string
+      skip_tests:
+        description: "Skip running tests before release"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry run (don't actually publish to crates.io)"
+        type: boolean
+        default: false
+      no_verify:
+        description: "Skip build verification (faster but not recommended)"
+        type: boolean
+        default: false
+
+jobs:
+  test:
+    if: ${{ !inputs.skip_tests }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - engine: quickjs
+            os: macos-latest
+          - engine: jscore
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+
+      - name: Run tests
+        shell: bash
+        run: bash test.sh -e "${{ matrix.engine }}"
+
+  bump-and-publish:
+    runs-on: macos-latest
+    needs: test
+    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    permissions:
+      contents: write  # Need write permission to push commits and tags
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install system dependencies (macOS)
+        run: |
+          brew update
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+
+      - name: Validate version format
+        if: ${{ !inputs.dry_run }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$ ]]; then
+            echo "Error: Invalid version format: $VERSION"
+            echo "Expected format: X.Y.Z (e.g., 0.1.2, 1.0.0)"
+            exit 1
+          fi
+
+      - name: Check if version already exists
+        if: ${{ !inputs.dry_run }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Error: Tag v$VERSION already exists"
+            echo "Please use a different version number or delete the existing tag"
+            exit 1
+          fi
+
+      - name: Preflight (dry run)
+        if: ${{ inputs.dry_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo metadata --no-deps
+
+          chmod +x scripts/publish.sh
+          args=(--dry-run)
+          if [ "${{ inputs.no_verify }}" = "true" ]; then
+            args+=(--no-verify)
+          fi
+          ./scripts/publish.sh "${args[@]}"
+
+      - name: Bump version
+        if: ${{ !inputs.dry_run }}
+        run: |
+          chmod +x scripts/bump_version.sh
+          echo "yes" | ./scripts/bump_version.sh "${{ inputs.version }}" --commit-and-tag
+
+      - name: Push version bump
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git push origin HEAD:${{ github.ref_name }}
+          git push --tags
+
+      - name: Publish to crates.io
+        if: ${{ !inputs.dry_run }}
+        run: |
+          chmod +x scripts/publish.sh
+
+          args=()
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          if [ "${{ inputs.no_verify }}" = "true" ]; then
+            args+=(--no-verify)
+          fi
+
+          ./scripts/publish.sh "${args[@]}"
+
+      - name: Create GitHub Release
+        if: ${{ !inputs.dry_run }}
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ inputs.version }}
+          release_name: Release v${{ inputs.version }}
+          body: |
+            Release version ${{ inputs.version }}
+
+            ## Published Crates
+
+            All workspace crates have been published to crates.io with version ${{ inputs.version }}.
+
+            ## Installation
+
+            ```toml
+            [dependencies]
+            rong = "${{ inputs.version }}"
+            ```
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+          draft: false
+          prerelease: ${{ contains(inputs.version, '-') }}
+
+      - name: Summary
+        if: ${{ !inputs.dry_run }}
+        run: |
+          echo "## 🎉 Release Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version **${{ inputs.version }}** has been successfully released!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Version bumped and committed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Git tag \`v${{ inputs.version }}\` created and pushed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ All crates published to crates.io" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ GitHub Release created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "1. Update CHANGELOG.md with release notes" >> $GITHUB_STEP_SUMMARY
+          echo "2. Verify packages on https://crates.io/crates/rong" >> $GITHUB_STEP_SUMMARY
+          echo "3. Announce the release!" >> $GITHUB_STEP_SUMMARY
+
+      - name: Summary (Dry Run)
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "## 🏃 Dry Run Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version **${{ inputs.version }}** dry run completed successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Version would be bumped to ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ All packages validated" >> $GITHUB_STEP_SUMMARY
+          echo "- ℹ️ No actual publishing occurred (dry run mode)" >> $GITHUB_STEP_SUMMARY

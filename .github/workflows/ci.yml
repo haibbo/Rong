@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - engine: quickjs
+            os: macos-latest
+          - engine: jscore
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: bash test.sh -e "${{ matrix.engine }}"
