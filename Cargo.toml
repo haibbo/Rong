@@ -24,36 +24,36 @@ readme = "README.md"
 
 [workspace.dependencies]
 # Internal dependencies
-rong = { path = ".", default-features = false }
-rong_core = { path = "core" }
-rong_quickjs = { path = "quickjs" }
-rong_quickjs_sys = { path = "quickjs/sys" }
-rong_jscore = { path = "javascriptcore" }
-rong_jscore_sys = { path = "javascriptcore/sys" }
-rong_arkjs = { path = "arkjs" }
-rong_arkjs_sys = { path = "arkjs/sys" }
-rong_macro = { path = "macro" }
-rong_test = { path = "utils/rong_test" }
-rong_modules = { path = "rong_modules" }
+rong = { path = ".", default-features = false   , version = "0.1.1" }
+rong_core = { path = "core"   , version = "0.1.1" }
+rong_quickjs = { path = "quickjs"   , version = "0.1.1" }
+rong_quickjs_sys = { path = "quickjs/sys"   , version = "0.1.1" }
+rong_jscore = { path = "javascriptcore"   , version = "0.1.1" }
+rong_jscore_sys = { path = "javascriptcore/sys"   , version = "0.1.1" }
+rong_arkjs = { path = "arkjs"   , version = "0.1.1" }
+rong_arkjs_sys = { path = "arkjs/sys"   , version = "0.1.1" }
+rong_macro = { path = "macro"   , version = "0.1.1" }
+rong_test = { path = "utils/rong_test"   , version = "0.1.1" }
+rong_modules = { path = "rong_modules"   , version = "0.1.1" }
 
 # Module dependencies
-rong_timer = { path = "modules/rong_timer" }
-rong_console = { path = "modules/rong_console" }
-rong_assert = { path = "modules/rong_assert" }
-rong_fs = { path = "modules/rong_fs" }
-rong_http = { path = "modules/rong_http" }
-rong_encoding = { path = "modules/rong_encoding" }
-rong_event = { path = "modules/rong_event" }
-rong_exception = { path = "modules/rong_exception" }
-rong_abort = { path = "modules/rong_abort" }
-rong_url = { path = "modules/rong_url" }
-rong_buffer = { path = "modules/rong_buffer" }
-rong_stream = { path = "modules/rong_stream" }
-rong_navigator = { path = "modules/rong_navigator" }
-rong_path = { path = "modules/rong_path" }
-rong_storage = { path = "modules/rong_storage" }
-rong_process = { path = "modules/rong_process" }
-rong_child_process = { path = "modules/rong_child_process" }
+rong_timer = { path = "modules/rong_timer"   , version = "0.1.1" }
+rong_console = { path = "modules/rong_console"   , version = "0.1.1" }
+rong_assert = { path = "modules/rong_assert"   , version = "0.1.1" }
+rong_fs = { path = "modules/rong_fs"   , version = "0.1.1" }
+rong_http = { path = "modules/rong_http"   , version = "0.1.1" }
+rong_encoding = { path = "modules/rong_encoding"   , version = "0.1.1" }
+rong_event = { path = "modules/rong_event"   , version = "0.1.1" }
+rong_exception = { path = "modules/rong_exception"   , version = "0.1.1" }
+rong_abort = { path = "modules/rong_abort"   , version = "0.1.1" }
+rong_url = { path = "modules/rong_url"   , version = "0.1.1" }
+rong_buffer = { path = "modules/rong_buffer"   , version = "0.1.1" }
+rong_stream = { path = "modules/rong_stream"   , version = "0.1.1" }
+rong_navigator = { path = "modules/rong_navigator"   , version = "0.1.1" }
+rong_path = { path = "modules/rong_path"   , version = "0.1.1" }
+rong_storage = { path = "modules/rong_storage"   , version = "0.1.1" }
+rong_process = { path = "modules/rong_process"   , version = "0.1.1" }
+rong_child_process = { path = "modules/rong_child_process"   , version = "0.1.1" }
 
 # External dependencies
 tokio = { version = "1.49", features = ["rt", "rt-multi-thread", "time", "macros", "sync", "fs", "io-util", "process", "io-std"] }
