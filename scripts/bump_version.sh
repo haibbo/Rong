@@ -14,39 +14,34 @@ usage() {
   cat << EOF
 Usage: $0 <new-version> [OPTIONS]
 
-Bump workspace version and prepare for publishing.
+Bump workspace version by updating the root Cargo.toml.
+
+NOTE: This script is for manual maintenance only. The recommended release flow
+uses release-plz (Release PR -> merge -> CI publishes). This script does NOT
+create tags because release-plz uses per-package tags (see release-plz.toml).
 
 ARGUMENTS:
   <new-version>         New version number (e.g., 0.1.2, 0.2.0, 1.0.0)
 
 OPTIONS:
   --commit              Create git commit (disabled by default)
-  --tag                 Create git tag (disabled by default)
-  --commit-and-tag      Create both commit and tag (shortcut)
   -h, --help            Show this help message
 
 EXAMPLES:
-  # Dry run: just update Cargo.toml (default)
+  # Default: just update Cargo.toml (no git ops)
   $0 0.1.2
 
   # Update and commit
   $0 0.1.2 --commit
 
-  # Update, commit, and tag
-  $0 0.1.2 --commit-and-tag
-
-  # Update and tag (without commit)
-  $0 0.1.2 --tag
-
 WORKFLOW:
   1. Updates [workspace.package] version
   2. Syncs all [workspace.dependencies] versions
   3. Creates git commit (if --commit or --commit-and-tag)
-  4. Creates git tag v<version> (if --tag or --commit-and-tag)
 
 DEFAULT BEHAVIOR:
   By default, this script only updates Cargo.toml without git operations.
-  You must explicitly use --commit and/or --tag for git operations.
+  You must explicitly use --commit for git operations.
 EOF
   exit 0
 }
@@ -54,7 +49,6 @@ EOF
 # Parse arguments
 NEW_VERSION=""
 DO_COMMIT=false
-DO_TAG=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -63,15 +57,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --commit)
       DO_COMMIT=true
-      shift
-      ;;
-    --tag)
-      DO_TAG=true
-      shift
-      ;;
-    --commit-and-tag)
-      DO_COMMIT=true
-      DO_TAG=true
       shift
       ;;
     -*)
@@ -118,14 +103,13 @@ echo ""
 echo -e "Current version: ${YELLOW}${CURRENT_VERSION}${NC}"
 echo -e "New version:     ${GREEN}${NEW_VERSION}${NC}"
 echo ""
-if [ "$DO_COMMIT" = true ] || [ "$DO_TAG" = true ]; then
+if [ "$DO_COMMIT" = true ]; then
   echo -e "Git operations:"
   [ "$DO_COMMIT" = true ] && echo -e "  - ${GREEN}✓${NC} Create commit"
-  [ "$DO_TAG" = true ] && echo -e "  - ${GREEN}✓${NC} Create tag v${NEW_VERSION}"
 else
   echo -e "${YELLOW}⚠️  DRY RUN MODE${NC}"
   echo -e "   Only updating Cargo.toml, no git operations"
-  echo -e "   Use --commit-and-tag to commit and tag"
+  echo -e "   Use --commit to commit the change"
 fi
 echo ""
 
@@ -201,58 +185,20 @@ if [ "$DO_COMMIT" = true ]; then
   echo ""
 fi
 
-if [ "$DO_TAG" = true ]; then
-  echo -e "${BLUE}Step 4: Creating git tag${NC}"
-
-  TAG_NAME="v${NEW_VERSION}"
-
-  # Check if tag already exists
-  if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-    echo -e "${YELLOW}⚠️  Tag ${TAG_NAME} already exists${NC}"
-    read -p "Delete and recreate? (yes/no): " -r
-    echo
-    if [[ $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
-      git tag -d "$TAG_NAME"
-      git tag -a "$TAG_NAME" -m "Release ${NEW_VERSION}"
-      echo -e "${GREEN}✓ Recreated tag ${TAG_NAME}${NC}"
-    else
-      echo -e "${YELLOW}Skipped tag creation${NC}"
-    fi
-  else
-    git tag -a "$TAG_NAME" -m "Release ${NEW_VERSION}"
-    echo -e "${GREEN}✓ Created tag ${TAG_NAME}${NC}"
-  fi
-  echo ""
-fi
-
 echo -e "${GREEN}Version bump complete.${NC}"
 echo -e "Version bumped from ${YELLOW}${CURRENT_VERSION}${NC} to ${GREEN}${NEW_VERSION}${NC}"
 echo ""
 
-if [ "$DO_COMMIT" = true ] && [ "$DO_TAG" = true ]; then
-  echo -e "${YELLOW}Next steps:${NC}"
-  echo -e "  1. Review: ${BLUE}git show && git tag -l${NC}"
-  echo -e "  2. Push: ${BLUE}git push && git push --tags${NC}"
-  echo -e "  3. Publish: ${BLUE}./scripts/publish.sh${NC}"
-elif [ "$DO_COMMIT" = true ]; then
+if [ "$DO_COMMIT" = true ]; then
   echo -e "${YELLOW}Next steps:${NC}"
   echo -e "  1. Review: ${BLUE}git show${NC}"
-  echo -e "  2. Tag: ${BLUE}git tag -a v${NEW_VERSION} -m 'Release ${NEW_VERSION}'${NC}"
-  echo -e "  3. Push: ${BLUE}git push && git push --tags${NC}"
-  echo -e "  4. Publish: ${BLUE}./scripts/publish.sh${NC}"
-elif [ "$DO_TAG" = true ]; then
-  echo -e "${YELLOW}Next steps:${NC}"
-  echo -e "  1. Review: ${BLUE}git diff Cargo.toml && git tag -l${NC}"
-  echo -e "  2. Commit: ${BLUE}git add Cargo.toml && git commit -m 'chore: bump version to ${NEW_VERSION}'${NC}"
-  echo -e "  3. Push: ${BLUE}git push && git push --tags${NC}"
-  echo -e "  4. Publish: ${BLUE}./scripts/publish.sh${NC}"
+  echo -e "  2. Push: ${BLUE}git push${NC}"
+  echo -e "  3. Release: ${BLUE}merge the Release PR created by release-plz${NC}"
 else
   echo -e "${YELLOW}Next steps:${NC}"
   echo -e "  1. Review: ${BLUE}git diff Cargo.toml${NC}"
   echo -e "  2. Commit: ${BLUE}git add Cargo.toml && git commit -m 'chore: bump version to ${NEW_VERSION}'${NC}"
-  echo -e "  3. Tag: ${BLUE}git tag -a v${NEW_VERSION} -m 'Release ${NEW_VERSION}'${NC}"
-  echo -e "  4. Push: ${BLUE}git push && git push --tags${NC}"
-  echo -e "  5. Publish: ${BLUE}./scripts/publish.sh${NC}"
+  echo -e "  3. Push: ${BLUE}git push${NC}"
+  echo -e "  4. Release: ${BLUE}merge the Release PR created by release-plz${NC}"
   echo ""
-  echo -e "${BLUE}💡 Tip: Use ${GREEN}./scripts/bump_version.sh ${NEW_VERSION} --commit-and-tag${BLUE} for one-step bump${NC}"
 fi

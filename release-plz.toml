@@ -1,0 +1,12 @@
+[workspace]
+# Only release when a release PR (from release-plz) is merged.
+release_always = false
+
+# Add a visible label on release PRs.
+pr_labels = ["release"]
+
+# Keep v-prefixed tags and avoid collisions in multi-crate workspace.
+git_tag_name = "{{ package }}-v{{ version }}"
+
+# Match release name to tag name for consistency.
+git_release_name = "{{ package }}-v{{ version }}"

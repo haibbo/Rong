@@ -5,12 +5,16 @@
 - **Trigger:** push + pull_request
 - **Runs:** `test.sh` on macOS for `quickjs` and `jscore`
 
-## `release.yml` (manual)
+## `release-pr.yml` (release-plz)
 
-- **Trigger:** workflow_dispatch
-- **Inputs:** `version` (required), `skip_tests`, `dry_run`, `no_verify`
-- **Dry run:** preflight only (`cargo metadata` + `publish --dry-run`)
-- **Full release:** bump version, commit+tag, push, publish, create GitHub Release
+- **Trigger:** push to `master`
+- **Runs:** release-plz to open/update a Release PR based on Conventional Commits
+- **Labels:** applies `release` label to Release PRs (see `release-plz.toml`)
+
+## `release.yml` (release-plz)
+
+- **Trigger:** CI workflow success on `master` (push only)
+- **Runs:** publish workflow after Release PR merge (creates tag, publishes crates, creates GitHub Release)
 
 ## Secrets
 

@@ -7,6 +7,7 @@ description = "Test utilities for rong"
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
+publish = false
 [dependencies]
 rong = { workspace = true }
 tokio = { workspace = true }

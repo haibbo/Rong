@@ -7,6 +7,7 @@ description = "ArkJS backend for RongJS"
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
+publish = false
 [lib]
 test = false
 doctest = false
