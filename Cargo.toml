@@ -2,7 +2,9 @@
 members = [
     "core",
     "macro",
-    "quickjs", "javascriptcore", "arkjs",
+    "quickjs", "quickjs/sys",
+    "javascriptcore", "javascriptcore/sys",
+    "arkjs", "arkjs/sys",
     "utils/rong_test",
     "examples",
     "modules/rong_timer", "modules/rong_navigator", "modules/rong_path",
@@ -13,13 +15,23 @@ members = [
     "rong_modules", "rong_cli"
 ]
 
+[workspace.package]
+version = "0.1.1"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/LingXia-Dev/Rong"
+readme = "README.md"
+
 [workspace.dependencies]
 # Internal dependencies
-rong = { path = ".", default-features = false}
+rong = { path = ".", default-features = false }
 rong_core = { path = "core" }
 rong_quickjs = { path = "quickjs" }
+rong_quickjs_sys = { path = "quickjs/sys" }
 rong_jscore = { path = "javascriptcore" }
+rong_jscore_sys = { path = "javascriptcore/sys" }
 rong_arkjs = { path = "arkjs" }
+rong_arkjs_sys = { path = "arkjs/sys" }
 rong_macro = { path = "macro" }
 rong_test = { path = "utils/rong_test" }
 rong_modules = { path = "rong_modules" }
@@ -68,9 +80,13 @@ tokio-stream = "0.1.18"
 
 [package]
 name = "rong"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
+description = "RongJS runtime and embedding API"
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 [dependencies]
 rong_core = { workspace = true }
 rong_quickjs = { workspace = true, optional = true }

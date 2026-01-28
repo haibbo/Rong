@@ -1,16 +1,19 @@
 [package]
 name = "rong_cli"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+description = "Command-line interface for RongJS"
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 
 [[bin]]
 name = "rong"
 path = "src/main.rs"
-
 [dependencies]
 dirs = "6.0.0"
 rong = { workspace = true }
-rong_modules = { path = "../rong_modules", features = ["all"] }
+rong_modules = { workspace = true, features = ["all"] }
 rustyline = "17.0.2"
 
 [features]

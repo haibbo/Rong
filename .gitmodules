@@ -1,6 +1,3 @@
 [submodule "quickjs/sys/quickjs-ng"]
 	path = quickjs/sys/quickjs-ng
 	url = https://github.com/quickjs-ng/quickjs.git
-[submodule "v8/sys/v8"]
-	path = v8/sys/v8
-	url = https://github.com/v8/v8.git

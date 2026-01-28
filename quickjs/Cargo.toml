@@ -1,8 +1,12 @@
 [package]
 name = "rong_quickjs"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
+description = "QuickJS backend for RongJS"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
 [dependencies]
-rong_quickjs_sys={path="./sys/"}
+rong_quickjs_sys = { workspace = true }
 rong_core = { workspace = true }

@@ -1,8 +1,12 @@
 [package]
 name = "examples"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
+description = "Examples for RongJS"
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 [dependencies]
 rong = { workspace = true }
 rong_modules = { workspace = true }

@@ -1,12 +1,16 @@
 [package]
 name = "rong_arkjs"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
+description = "ArkJS backend for RongJS"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
 [lib]
 test = false
 doctest = false
 
 [dependencies]
-rong_arkjs_sys={path="./sys/"}
-rong_core = { path = "../core" }
+rong_arkjs_sys = { workspace = true }
+rong_core = { workspace = true }

@@ -1,8 +1,12 @@
 [package]
 name = "rong_event"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
+description = "Event module for RongJS"
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 [dependencies]
 rong = { workspace = true }
 
@@ -14,6 +18,6 @@ arkjs = ["rong/arkjs"]
 
 [dev-dependencies]
 rong_test = { workspace = true }
-rong_assert = { path="../../modules/rong_assert" }
-rong_timer = { path="../../modules/rong_timer" }
-rong_console = { path="../../modules/rong_console" }
+rong_assert = { workspace = true }
+rong_timer = { workspace = true }
+rong_console = { workspace = true }

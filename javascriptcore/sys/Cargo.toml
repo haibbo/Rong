@@ -1,7 +1,11 @@
 [package]
 name = "rong_jscore_sys"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
+description = "JavaScriptCore FFI bindings for RongJS"
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 [build-dependencies]
 bindgen = "0.72"

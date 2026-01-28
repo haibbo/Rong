@@ -1,8 +1,7 @@
 # Rong (融) - Multi-Engine JavaScript Runtime for Rust
 
-[![Rust](https://img.shields.io/badge/rust-1.80+-orange.svg)](https://www.rust-lang.org)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/your-org/rong)
+[![Rust](https://img.shields.io/badge/rust-1.90+-orange.svg)](https://www.rust-lang.org)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-APACHE)
 
 **Rong** (融, meaning "fusion" in Chinese) is a specialized JavaScript runtime for Rust designed for **LingXia App** and **microservices** in constrained environments. It provides a lightweight, secure JavaScript execution environment optimized for specific use cases rather than general-purpose Node.js replacement.
 
@@ -103,7 +102,8 @@ Comprehensive guides for working with Rong:
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under either the MIT License or the Apache License 2.0, at your option.
+See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE) for details.
 
 ## 🙏 Acknowledgments
 

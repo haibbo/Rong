@@ -1,8 +1,12 @@
 [package]
 name = "rong_buffer"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
+description = "Buffer module for RongJS"
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
 [dependencies]
 rong = { workspace = true }
 
@@ -14,6 +18,6 @@ arkjs = ["rong/arkjs"]
 
 [dev-dependencies]
 rong_test = { workspace = true }
-rong_console={path="../rong_console"}
-rong_assert={path="../rong_assert"}
-rong_encoding={path="../rong_encoding"}
+rong_console = { workspace = true }
+rong_assert = { workspace = true }
+rong_encoding = { workspace = true }
