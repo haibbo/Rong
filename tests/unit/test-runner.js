@@ -90,10 +90,13 @@ class TestRunner {
                 // If we're still pending, fail; if already settled, at least surface it.
                 if (!settled) {
                   settled = true;
-                  if (settleTimer && typeof clearTimeout === "function") clearTimeout(settleTimer);
+                  if (settleTimer && typeof clearTimeout === "function")
+                    clearTimeout(settleTimer);
                   reject(new Error("done() called multiple times"));
                 } else {
-                  console.error("done() called multiple times (after test already settled)");
+                  console.error(
+                    "done() called multiple times (after test already settled)",
+                  );
                 }
                 return;
               }
@@ -101,7 +104,8 @@ class TestRunner {
               if (error) {
                 if (!settled) {
                   settled = true;
-                  if (settleTimer && typeof clearTimeout === "function") clearTimeout(settleTimer);
+                  if (settleTimer && typeof clearTimeout === "function")
+                    clearTimeout(settleTimer);
                   reject(error);
                 }
                 return;
@@ -131,7 +135,8 @@ class TestRunner {
             if (result && typeof result.then === "function") {
               if (!settled) {
                 settled = true;
-                if (settleTimer && typeof clearTimeout === "function") clearTimeout(settleTimer);
+                if (settleTimer && typeof clearTimeout === "function")
+                  clearTimeout(settleTimer);
                 reject(new Error("Test uses both promise and done callback"));
               }
             }
@@ -150,15 +155,22 @@ class TestRunner {
 
       // Add timeout only if setTimeout is available
       if (typeof setTimeout === "function") {
-        await Promise.race([
-          testPromise,
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error(`Test timeout after 30 seconds: ${test.name}`)),
-              30000,
-            ),
-          ),
-        ]);
+        let timeoutId = null;
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(
+            () =>
+              reject(new Error(`Test timeout after 30 seconds: ${test.name}`)),
+            30000,
+          );
+        });
+
+        try {
+          await Promise.race([testPromise, timeoutPromise]);
+        } finally {
+          if (timeoutId != null && typeof clearTimeout === "function") {
+            clearTimeout(timeoutId);
+          }
+        }
       } else {
         await testPromise;
       }
