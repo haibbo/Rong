@@ -24,7 +24,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use tokio::sync::Notify;
 use tokio::sync::mpsc;
@@ -94,8 +94,10 @@ impl TimerCallbackQueue {
                     }
                 }
 
-                // Allow another pending tick to be queued (coalescing).
-                pending.store(false, Ordering::SeqCst);
+                // Mark one queued tick as processed.
+                let _ = pending.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
+                    Some(v.saturating_sub(1))
+                });
             }
         });
     }
@@ -113,7 +115,7 @@ struct TimerEntry {
     // even if the spawned timer task hasn't been polled/canceled yet.
     callback: Option<JSFunc>,
     repeat: bool,
-    pending: Arc<std::sync::atomic::AtomicBool>,
+    pending: Arc<AtomicU8>,
 }
 
 struct TimerRegistryInner {
@@ -152,7 +154,7 @@ impl TimerRegistry {
                 cancel,
                 callback: None,
                 repeat: false,
-                pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+                pending: Arc::new(AtomicU8::new(0)),
             },
         );
     }
@@ -161,7 +163,7 @@ impl TimerRegistry {
         &self,
         id: u32,
         cancel: Arc<Notify>,
-        pending: Arc<std::sync::atomic::AtomicBool>,
+        pending: Arc<AtomicU8>,
         callback: JSFunc,
         repeat: bool,
     ) {
@@ -182,10 +184,7 @@ impl TimerRegistry {
         }
     }
 
-    fn get_entry_for_bg(
-        &self,
-        id: u32,
-    ) -> Option<(Arc<Notify>, Arc<std::sync::atomic::AtomicBool>)> {
+    fn get_entry_for_bg(&self, id: u32) -> Option<(Arc<Notify>, Arc<AtomicU8>)> {
         let timers = lock_poison(&self.inner.timers);
         let entry = timers.get(&id)?;
         Some((entry.cancel.clone(), entry.pending.clone()))
@@ -215,9 +214,11 @@ fn set_timeout_with_repeat(
     delay: Optional<f64>,
     repeat: bool,
 ) -> u32 {
+    const MAX_QUEUED_TICKS: u8 = 8;
+
     let id = registry.next_id();
     let cancel = Arc::new(Notify::new());
-    let pending = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let pending = Arc::new(AtomicU8::new(0));
 
     registry.register_timer_with_callback(id, cancel.clone(), pending.clone(), callback, repeat);
     let delay = delay.unwrap_or(0.0).max(0.0) as u64;
@@ -229,14 +230,32 @@ fn set_timeout_with_repeat(
     };
 
     let run_timer = move |cancel: Arc<Notify>,
-                          pending: Arc<std::sync::atomic::AtomicBool>,
+                          pending: Arc<AtomicU8>,
                           tx: mpsc::UnboundedSender<u32>| async move {
         let send_tick = || {
-            // Coalesce: keep at most one queued tick per timer id.
-            if pending.swap(true, Ordering::SeqCst) {
-                return;
+            // Keep a small bounded backlog so intervals can "catch up" after brief stalls
+            // without letting unbounded channels grow forever.
+            let mut cur = pending.load(Ordering::SeqCst);
+            loop {
+                if cur >= MAX_QUEUED_TICKS {
+                    return;
+                }
+                match pending.compare_exchange(
+                    cur,
+                    cur.saturating_add(1),
+                    Ordering::SeqCst,
+                    Ordering::SeqCst,
+                ) {
+                    Ok(_) => break,
+                    Err(next) => cur = next,
+                }
             }
-            let _ = tx.send(id);
+            if tx.send(id).is_err() {
+                // Receiver dropped: balance the queued count so future timers don't stall.
+                let _ = pending.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
+                    Some(v.saturating_sub(1))
+                });
+            }
         };
 
         if repeat {
