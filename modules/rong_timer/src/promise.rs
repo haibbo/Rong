@@ -1,7 +1,7 @@
 use futures::Stream;
 use rong::{function::*, *};
 use std::pin::Pin;
-use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
 use std::time::Duration;
@@ -26,7 +26,7 @@ async fn set_timeout(ctx: JSContext, delay: Optional<f64>) -> JSResult<f64> {
     let delay = delay.0.unwrap_or(0.0).max(0.0) as u64;
 
     // Create a notifier for cancellation
-    let notifier = Rc::new(Notify::new());
+    let notifier = Arc::new(Notify::new());
     let notifier_clone = notifier.clone();
 
     // Register with registry (which will clean up on shutdown)
@@ -51,7 +51,7 @@ async fn set_timeout(ctx: JSContext, delay: Optional<f64>) -> JSResult<f64> {
 // Promise-based setImmediate - returns a Promise that resolves on next tick
 async fn set_immediate(ctx: JSContext) -> JSResult<f64> {
     // Create a notifier for cancellation
-    let notifier = Rc::new(Notify::new());
+    let notifier = Arc::new(Notify::new());
     let notifier_clone = notifier.clone();
 
     // Register with registry (which will clean up on shutdown)
@@ -131,7 +131,7 @@ pub fn set_interval(ctx: JSContext, delay: Optional<f64>) -> JSResult<JSObject> 
     let timer_id = registry.next_id();
 
     // Create a notifier and register it
-    let notifier = Rc::new(Notify::new());
+    let notifier = Arc::new(Notify::new());
     let notifier_clone = notifier.clone();
     registry.register_timer(timer_id, notifier);
 
