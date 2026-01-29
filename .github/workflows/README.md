@@ -10,13 +10,13 @@
 - **Trigger:** manual (`workflow_dispatch`)
 - **Runs:** release-plz to open/update a Release PR based on Conventional Commits
 - **Labels:** applies `release` label to Release PRs (see `release-plz.toml`)
-  - **Action:** `release-plz/action`
+  - **Action:** `release-plz/action@v0.5`
 
 ## `release.yml` (release-plz)
 
 - **Trigger:** manual (`workflow_dispatch`)
 - **Runs:** publish workflow after Release PR merge (creates tag, publishes crates, creates GitHub Release)
-  - **Action:** `release-plz/action`
+  - **Action:** `release-plz/action@v0.5`
 
 ## Secrets
 

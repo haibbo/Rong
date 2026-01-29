@@ -10,3 +10,11 @@ git_tag_name = "{{ package }}-v{{ version }}"
 
 # Match release name to tag name for consistency.
 git_release_name = "{{ package }}-v{{ version }}"
+
+# Enable changelog updates
+changelog_update = true
+
+# Disable semver compatibility check - packages not yet published to crates.io
+# cargo-semver-checks needs to download published versions for comparison,
+# which fails for unpublished packages
+semver_check = false

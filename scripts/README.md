@@ -27,13 +27,14 @@ Recommended path: use the **GitHub Actions** release-plz workflows. Local script
 ## GitHub release flow (recommended, manual)
 
 1. Land changes on `master` (prefer Conventional Commits: `fix: ...`, `feat: ...`, `feat!: ...`).
-2. GitHub → Actions → run workflow `Release PR` (select branch `master`).
+2. GitHub → Actions → run workflow `Release: Prepare PR` (select branch `master`).
 3. Review and merge the generated “Release PR” (this PR contains the version bumps + changelog updates).
-4. GitHub → Actions → run workflow `Release` (select branch `master`).
+4. GitHub → Actions → run workflow `Release: Publish` (select branch `master`).
 
 Notes:
 - The “version bump” is done by release-plz inside the Release PR; you generally do **not** run `bump_version.sh` for the GitHub-based flow.
-- `Release` requires `CARGO_REGISTRY_TOKEN` secret to publish to crates.io.
+- `Release: Publish` requires `CARGO_REGISTRY_TOKEN` secret to publish to crates.io.
+  - The GitHub workflows use `release-plz/action@v0.5` (latest v0.5.x).
 
 ## Local manual flow (not recommended)
 

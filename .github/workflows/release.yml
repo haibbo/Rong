@@ -1,4 +1,4 @@
-name: Release
+name: "Release: Publish"
 
 on:
   workflow_dispatch:
@@ -20,7 +20,6 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          ref: ${{ github.ref }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
