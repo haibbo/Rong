@@ -1,6 +1,6 @@
 [workspace]
-# Only release when a release PR (from release-plz) is merged.
-release_always = false
+# Always try to release unpublished packages when running release command.
+release_always = true
 
 # Add a visible label on release PRs.
 pr_labels = ["release"]
