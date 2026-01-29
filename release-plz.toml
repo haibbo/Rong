@@ -34,3 +34,10 @@ name = "rong_arkjs_sys"
 publish = false
 release = false
 changelog_update = false
+
+# Exclude test utilities from release (internal development tool)
+[[package]]
+name = "rong_test"
+publish = false
+release = false
+changelog_update = false

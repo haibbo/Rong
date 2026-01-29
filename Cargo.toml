@@ -33,7 +33,7 @@ rong_jscore_sys = { path = "javascriptcore/sys"   , version = "0.1.1" }
 rong_arkjs = { path = "arkjs"   , version = "0.1.1" }
 rong_arkjs_sys = { path = "arkjs/sys"   , version = "0.1.1" }
 rong_macro = { path = "macro"   , version = "0.1.1" }
-rong_test = { path = "utils/rong_test"   , version = "0.1.1" }
+rong_test = { path = "utils/rong_test" }
 rong_modules = { path = "rong_modules"   , version = "0.1.1" }
 
 # Module dependencies

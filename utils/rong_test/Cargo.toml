@@ -2,11 +2,10 @@
 name = "rong_test"
 version.workspace = true
 edition.workspace = true
-description = "Test utilities for rong"
+description = "Test utilities for RongJS runtime"
 
 license.workspace = true
 repository.workspace = true
-readme.workspace = true
 publish = false
 [dependencies]
 rong = { workspace = true }
