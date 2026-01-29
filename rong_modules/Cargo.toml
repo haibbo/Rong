@@ -29,6 +29,7 @@ rong_child_process = { workspace = true, optional = true }
 
 [features]
 default = [
+    "quickjs",
     "timer",
     "navigator",
     "path",
@@ -44,6 +45,10 @@ default = [
     "fs",
     "stream",
 ]
+
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+arkjs = ["rong/arkjs"]
 
 all = [
     "timer",

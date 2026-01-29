@@ -19,6 +19,7 @@ serde_json = "1.0"
 
 [features]
 # Forward JS engine features to the main rong crate
+default = ["quickjs"]
 quickjs = ["rong/quickjs"]
 jscore = ["rong/jscore"]
 arkjs = ["rong/arkjs"]

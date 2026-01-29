@@ -14,4 +14,8 @@ futures = { workspace = true }
 axum = { workspace = true, optional = true }
 
 [features]
+default = ["quickjs"]
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+arkjs = ["rong/arkjs"]
 http = ["dep:axum"]
