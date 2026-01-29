@@ -12,6 +12,7 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write
+      pull-requests: read
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:

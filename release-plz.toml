@@ -11,6 +11,9 @@ git_tag_name = "{{ package }}-v{{ version }}"
 # Match release name to tag name for consistency.
 git_release_name = "{{ package }}-v{{ version }}"
 
+# Repository URL (explicit to avoid inference issues)
+repo_url = "https://github.com/LingXia-Dev/Rong"
+
 # Enable changelog updates
 changelog_update = true
 
