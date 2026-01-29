@@ -1,8 +1,7 @@
 name: Release PR
 
 on:
-  push:
-    branches: [master]
+  workflow_dispatch:
 
 concurrency:
   group: release-pr-${{ github.ref_name }}
@@ -27,7 +26,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Release PR
-        uses: release-plz/release-plz-action@v0.5
+        uses: release-plz/action@v0.5
         with:
           command: release-pr
         env:

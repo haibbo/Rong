@@ -1,6 +1,6 @@
 # Publishing Scripts (Maintainer)
 
-Recommended path: merge the **Release PR** created by release-plz. Local scripts are here for manual use.
+Recommended path: use the **GitHub Actions** release-plz workflows. Local scripts are here for manual use / emergencies.
 
 ## bump_version.sh
 
@@ -24,14 +24,24 @@ Recommended path: merge the **Release PR** created by release-plz. Local scripts
 - Smart waiting: polls crates.io until each package is indexed
 - `--yes` skips the confirmation prompt (useful for CI)
 
-## Release flow (recommended)
+## GitHub release flow (recommended, manual)
 
-```bash
-# 1. Land Conventional Commits on master
-# 2. release-plz opens a Release PR
-# 3. Merge the Release PR
-# 4. GitHub Actions publishes automatically
-```
+1. Land changes on `master` (prefer Conventional Commits: `fix: ...`, `feat: ...`, `feat!: ...`).
+2. GitHub → Actions → run workflow `Release PR` (select branch `master`).
+3. Review and merge the generated “Release PR” (this PR contains the version bumps + changelog updates).
+4. GitHub → Actions → run workflow `Release` (select branch `master`).
+
+Notes:
+- The “version bump” is done by release-plz inside the Release PR; you generally do **not** run `bump_version.sh` for the GitHub-based flow.
+- `Release` requires `CARGO_REGISTRY_TOKEN` secret to publish to crates.io.
+
+## Local manual flow (not recommended)
+
+Use this only if you intentionally want to bypass release-plz automation:
+
+1. Run `./scripts/bump_version.sh <version>` and commit the changes.
+2. Run `./scripts/publish.sh` to publish crates.
+3. Create Git tags / GitHub Releases manually as needed.
 
 ## Troubleshooting
 

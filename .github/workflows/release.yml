@@ -1,23 +1,14 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
+  workflow_dispatch:
 
 concurrency:
-  group: release-${{ github.event.workflow_run.head_branch }}
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   release:
-    if: >-
-      ${{
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.head_branch == 'master' &&
-        github.event.workflow_run.event == 'push'
-      }}
     runs-on: macos-latest
     permissions:
       contents: write
@@ -29,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.ref }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -45,7 +36,7 @@ jobs:
           echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
 
       - name: Release
-        uses: release-plz/release-plz-action@v0.5
+        uses: release-plz/action@v0.5
         with:
           command: release
         env:
