@@ -91,7 +91,7 @@ readme.workspace = true
 rong_core = { workspace = true }
 rong_quickjs = { workspace = true, optional = true }
 rong_jscore = { workspace = true, optional = true }
-rong_arkjs = { workspace = true, optional = true }
+# rong_arkjs = { workspace = true, optional = true }  # uncomment when published to crates.io
 rong_macro = { workspace = true }
 tokio = { workspace = true }
 futures = { workspace = true }
@@ -100,7 +100,9 @@ futures = { workspace = true }
 default = ["quickjs"]
 quickjs = ["rong_quickjs"]
 jscore = ["rong_jscore"]
-arkjs = ["rong_arkjs"]
+# arkjs feature is a placeholder until rong_arkjs is published to crates.io
+# TODO: change to `arkjs = ["rong_arkjs"]` when ready
+arkjs = []
 
 [dev-dependencies]
 rong_test = { workspace = true }

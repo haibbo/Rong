@@ -21,3 +21,16 @@ changelog_update = true
 # cargo-semver-checks needs to download published versions for comparison,
 # which fails for unpublished packages
 semver_check = false
+
+# Exclude arkjs packages from release (not published to crates.io)
+[[package]]
+name = "rong_arkjs"
+publish = false
+release = false
+changelog_update = false
+
+[[package]]
+name = "rong_arkjs_sys"
+publish = false
+release = false
+changelog_update = false
