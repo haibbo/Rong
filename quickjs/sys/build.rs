@@ -43,7 +43,7 @@ fn android_setup() {
     } else {
         env::consts::OS
     };
-    let api = env::var("API").unwrap_or("23".to_string());
+    let api = env::var("ANDROID_API_LEVEL").unwrap_or("33".to_string());
 
     let target = env::var("TARGET").unwrap_or_default();
     let cc_target = if target.contains("armv7") {
@@ -200,7 +200,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=NUM_JOBS");
     println!("cargo:rerun-if-env-changed=OHOS_NDK_HOME");
     println!("cargo:rerun-if-env-changed=ANDROID_NDK_HOME");
-    println!("cargo:rerun-if-env-changed=API");
+    println!("cargo:rerun-if-env-changed=ANDROID_API_LEVEL");
 
     // where to find static library libquickjs
     println!("cargo:rustc-link-search=native={}", out_dir);
