@@ -7,11 +7,13 @@ use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use std::io::Error;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
 
 pub const DEFAULT_BLOCKING_BODY_LIMIT: usize = 512 * 1024;
 pub const DEFAULT_STREAM_COALESCE_TARGET: usize = 512 * 1024;
+pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const MIN_STREAM_COALESCE_TARGET: usize = 4 * 1024;
 const STREAM_CHAN_CAP: usize = 256;
 
@@ -27,6 +29,31 @@ compile_error!("Enable only one TLS backend feature: `tls-aws-lc` or `tls-ring`.
 compile_error!("One TLS backend feature is required: enable `tls-aws-lc` or `tls-ring`.");
 
 static CLIENT: OnceLock<HttpClient> = OnceLock::new();
+static REQUEST_TIMEOUT_MS: AtomicU64 = AtomicU64::new(DEFAULT_REQUEST_TIMEOUT.as_millis() as u64);
+
+pub fn set_request_timeout(timeout: Duration) {
+    // Keep timeout > 0; use default if caller passes zero.
+    let millis = timeout.as_millis() as u64;
+    REQUEST_TIMEOUT_MS.store(
+        if millis == 0 {
+            DEFAULT_REQUEST_TIMEOUT.as_millis() as u64
+        } else {
+            millis
+        },
+        Ordering::Relaxed,
+    );
+}
+
+pub fn get_request_timeout() -> Duration {
+    Duration::from_millis(REQUEST_TIMEOUT_MS.load(Ordering::Relaxed))
+}
+
+pub fn reset_request_timeout() {
+    REQUEST_TIMEOUT_MS.store(
+        DEFAULT_REQUEST_TIMEOUT.as_millis() as u64,
+        Ordering::Relaxed,
+    );
+}
 
 fn ensure_bg_started() -> Result<(), String> {
     if rong::bg::is_started() {
@@ -152,19 +179,22 @@ async fn process_request(
     mut abort_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<HttpResponse, String> {
     const READ_FRAME_TIMEOUT: Duration = Duration::from_secs(120);
+    let request_timeout = get_request_timeout();
 
     let resp = if let Some(rx) = abort_rx.as_mut() {
         tokio::select! {
-            res = client.request(req) => match res {
-                Ok(r) => r,
-                Err(e) => return Err(format!("request failed: {}", e)),
+            res = timeout(request_timeout, client.request(req)) => match res {
+                Ok(Ok(r)) => r,
+                Ok(Err(e)) => return Err(format!("request failed: {}", e)),
+                Err(_) => return Err("request timeout".to_string()),
             },
             _ = rx => return Err("aborted".to_string()),
         }
     } else {
-        match client.request(req).await {
-            Ok(r) => r,
-            Err(e) => return Err(format!("request failed: {}", e)),
+        match timeout(request_timeout, client.request(req)).await {
+            Ok(Ok(r)) => r,
+            Ok(Err(e)) => return Err(format!("request failed: {}", e)),
+            Err(_) => return Err("request timeout".to_string()),
         }
     };
     let (parts, mut body) = resp.into_parts();

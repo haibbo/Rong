@@ -81,6 +81,9 @@ Rong provides the global `fetch(...)` API (and `Headers`/`Request`/`Response` cl
 
 - There is **no** `http` namespace object.
 - There is **no** `download(...)` JavaScript API.
+- Default request timeout is **60000ms (60s)**.
+- `RequestInit` does not include a `timeout` option.
+- For per-request cancellation, use `AbortSignal`.
 
 Rong extension:
 

@@ -62,6 +62,12 @@ declare global {
   /**
    * Fetch API - Make HTTP requests
    *
+   * Timeout behavior:
+   * - Default request timeout is 60000ms (60s).
+   * - `RequestInit` does not support a `timeout` field.
+   * - Use `AbortSignal` for per-request cancellation, or configure runtime-level
+   *   HTTP timeout from Rust (`rong_http::set_request_timeout(...)`).
+   *
    * @example
    * ```typescript
    * const response = await fetch('https://api.example.com/data', {
