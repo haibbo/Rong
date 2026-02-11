@@ -72,7 +72,7 @@ rustls = { version = "0.23", default-features = false }
 flate2 = { version = "1.1.0" }
 uuid = { version = "1.19.0", features = ["v4"] }
 axum = { version = "0.8.8", features = ["http1"] }
-nix = { version = "0.30", features = ["user", "fs"] }
+nix = { version = "0.31", features = ["user", "fs"] }
 syn = { version = "2.0", features = ["full"] }
 bytes = "1.11.0"
 tokio-stream = "0.1.18"
