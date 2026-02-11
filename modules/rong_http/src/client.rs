@@ -1,13 +1,15 @@
 use bytes::Bytes;
 use http::Request as HttpRequest;
 use http::header;
-use http::{HeaderValue, header::HeaderName};
+use http::{HeaderValue, Uri, header::HeaderName};
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
+use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
+use hyper_util::client::legacy::connect::HttpConnector;
 use std::io::Error;
-use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock, RwLock};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
 
@@ -17,10 +19,19 @@ pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const MIN_STREAM_COALESCE_TARGET: usize = 4 * 1024;
 const STREAM_CHAN_CAP: usize = 256;
 
-type HttpClient = Client<
-    hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-    BoxBody<Bytes, Error>,
->;
+type HttpClient =
+    Client<hyper_rustls::HttpsConnector<ProxyConnector<HttpConnector>>, BoxBody<Bytes, Error>>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ProxyConfig {
+    uri: Uri,
+}
+
+#[derive(Clone)]
+struct CachedClient {
+    proxy: Option<ProxyConfig>,
+    client: HttpClient,
+}
 
 #[cfg(all(feature = "tls-aws-lc", feature = "tls-ring"))]
 compile_error!("Enable only one TLS backend feature: `tls-aws-lc` or `tls-ring`.");
@@ -28,8 +39,78 @@ compile_error!("Enable only one TLS backend feature: `tls-aws-lc` or `tls-ring`.
 #[cfg(not(any(feature = "tls-aws-lc", feature = "tls-ring")))]
 compile_error!("One TLS backend feature is required: enable `tls-aws-lc` or `tls-ring`.");
 
-static CLIENT: OnceLock<HttpClient> = OnceLock::new();
+static CLIENT: OnceLock<Mutex<Option<CachedClient>>> = OnceLock::new();
+static PROXY_CONFIG: OnceLock<RwLock<Option<ProxyConfig>>> = OnceLock::new();
 static REQUEST_TIMEOUT_MS: AtomicU64 = AtomicU64::new(DEFAULT_REQUEST_TIMEOUT.as_millis() as u64);
+
+fn client_cache() -> &'static Mutex<Option<CachedClient>> {
+    CLIENT.get_or_init(|| Mutex::new(None))
+}
+
+fn proxy_config_store() -> &'static RwLock<Option<ProxyConfig>> {
+    PROXY_CONFIG.get_or_init(|| RwLock::new(None))
+}
+
+fn invalidate_client_cache() {
+    if let Ok(mut slot) = client_cache().lock() {
+        *slot = None;
+    }
+}
+
+fn current_proxy() -> Option<ProxyConfig> {
+    proxy_config_store()
+        .read()
+        .ok()
+        .and_then(|g| g.as_ref().cloned())
+}
+
+fn parse_proxy_uri(proxy_url: &str) -> Result<Uri, String> {
+    let uri = proxy_url
+        .parse::<Uri>()
+        .map_err(|e| format!("invalid proxy URL: {}", e))?;
+
+    if uri.scheme_str() != Some("http") {
+        return Err("unsupported proxy URL scheme (only http:// is supported)".to_string());
+    }
+
+    uri.authority()
+        .ok_or_else(|| "proxy URL must include host[:port]".to_string())?;
+
+    if uri.host().is_none() {
+        return Err("proxy URL must include host".to_string());
+    }
+
+    Ok(uri)
+}
+
+/// Configure global HTTP proxy (no auth, no env fallback).
+/// Supported formats:
+/// - `http://host:port`
+/// - `http://username:password@host:port` (Basic proxy auth)
+pub fn set_proxy(proxy_url: &str) -> Result<(), String> {
+    let uri = parse_proxy_uri(proxy_url)?;
+    {
+        let mut proxy = proxy_config_store()
+            .write()
+            .map_err(|_| "proxy config lock poisoned".to_string())?;
+        *proxy = Some(ProxyConfig { uri });
+    }
+    invalidate_client_cache();
+    Ok(())
+}
+
+/// Clear global proxy configuration.
+pub fn clear_proxy() {
+    if let Ok(mut proxy) = proxy_config_store().write() {
+        *proxy = None;
+    }
+    invalidate_client_cache();
+}
+
+/// Read current proxy URL.
+pub fn get_proxy() -> Option<String> {
+    current_proxy().map(|p| p.uri.to_string())
+}
 
 pub fn set_request_timeout(timeout: Duration) {
     // Keep timeout > 0; use default if caller passes zero.
@@ -62,20 +143,56 @@ fn ensure_bg_started() -> Result<(), String> {
     Err("background task manager not started (call `Rong::builder().build()` or `rong::bg::start(...)` first)".to_string())
 }
 
-fn client() -> &'static HttpClient {
-    CLIENT.get_or_init(|| {
-        #[cfg(feature = "tls-aws-lc")]
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-        #[cfg(feature = "tls-ring")]
-        let _ = rustls::crypto::ring::default_provider().install_default();
+fn build_client(proxy: Option<ProxyConfig>) -> HttpClient {
+    #[cfg(feature = "tls-aws-lc")]
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    #[cfg(feature = "tls-ring")]
+    let _ = rustls::crypto::ring::default_provider().install_default();
 
-        let https = HttpsConnectorBuilder::new()
-            .with_webpki_roots()
-            .https_or_http()
-            .enable_http1()
-            .build();
-        Client::builder(hyper_util::rt::TokioExecutor::new()).build(https)
-    })
+    let mut connector = HttpConnector::new();
+    // Required when using wrap_connector and https URIs.
+    connector.enforce_http(false);
+
+    let mut proxy_connector = ProxyConnector::unsecured(connector);
+    if let Some(proxy_config) = proxy {
+        let mut proxy = build_proxy(proxy_config);
+        // Use CONNECT for both HTTP/HTTPS to keep request path handling simple.
+        proxy.force_connect();
+        proxy_connector.add_proxy(proxy);
+    }
+
+    let https = HttpsConnectorBuilder::new()
+        .with_webpki_roots()
+        .https_or_http()
+        .enable_http1()
+        .wrap_connector(proxy_connector);
+
+    Client::builder(hyper_util::rt::TokioExecutor::new()).build(https)
+}
+
+fn build_proxy(proxy_config: ProxyConfig) -> Proxy {
+    Proxy::new(Intercept::All, proxy_config.uri)
+}
+
+fn client() -> Result<HttpClient, String> {
+    let proxy = current_proxy();
+
+    if let Ok(slot) = client_cache().lock()
+        && let Some(cached) = slot.as_ref()
+        && cached.proxy == proxy
+    {
+        return Ok(cached.client.clone());
+    }
+
+    let built = build_client(proxy.clone());
+    let mut slot = client_cache()
+        .lock()
+        .map_err(|_| "client cache lock poisoned".to_string())?;
+    *slot = Some(CachedClient {
+        proxy,
+        client: built.clone(),
+    });
+    Ok(built)
 }
 
 pub struct HttpResponse {
@@ -154,7 +271,7 @@ pub async fn send_request_with_coalesce(
     stream_coalesce_target: usize,
 ) -> Result<HttpResponse, String> {
     ensure_bg_started()?;
-    let client = client().clone();
+    let client = client()?;
     let join = rong::bg::spawn(async move {
         process_request(
             client,
@@ -351,5 +468,43 @@ async fn collect_body_bytes(body: HttpBody) -> Result<Bytes, String> {
             }
             Ok(Bytes::from(buf))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn proxy_url_supports_basic_auth() {
+        let uri = parse_proxy_uri("http://bob:secret@127.0.0.1:8080").expect("valid proxy uri");
+        let proxy = build_proxy(ProxyConfig { uri });
+        let auth = proxy
+            .headers()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        let proxy_auth = proxy
+            .headers()
+            .get("proxy-authorization")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+
+        assert_eq!(auth, "Basic Ym9iOnNlY3JldA==");
+        assert_eq!(proxy_auth, "Basic Ym9iOnNlY3JldA==");
+    }
+
+    #[test]
+    fn proxy_url_without_auth_has_no_auth_headers() {
+        let uri = parse_proxy_uri("http://127.0.0.1:8080").expect("valid proxy uri");
+        let proxy = build_proxy(ProxyConfig { uri });
+        assert!(proxy.headers().get("authorization").is_none());
+        assert!(proxy.headers().get("proxy-authorization").is_none());
+    }
+
+    #[test]
+    fn proxy_only_supports_http_scheme() {
+        let err = parse_proxy_uri("https://127.0.0.1:8080").expect_err("must reject https");
+        assert!(err.contains("only http:// is supported"));
     }
 }
