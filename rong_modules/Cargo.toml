@@ -12,7 +12,7 @@ rong = { workspace = true }
 rong_timer = { workspace = true, optional = true }
 rong_navigator = { workspace = true, optional = true }
 rong_path = { workspace = true, optional = true }
-rong_http = { workspace = true, optional = true }
+rong_http = { workspace = true, optional = true, default-features = false }
 rong_encoding = { workspace = true, optional = true }
 rong_event = { workspace = true, optional = true }
 rong_assert = { workspace = true, optional = true }
@@ -30,6 +30,7 @@ rong_child_process = { workspace = true, optional = true }
 [features]
 default = [
     "quickjs",
+    "tls-aws-lc",
     "timer",
     "navigator",
     "path",
@@ -49,6 +50,8 @@ default = [
 quickjs = ["rong/quickjs"]
 jscore = ["rong/jscore"]
 arkjs = ["rong/arkjs"]
+tls-aws-lc = ["rong_http?/tls-aws-lc"]
+tls-ring = ["rong_http?/tls-ring"]
 
 all = [
     "timer",

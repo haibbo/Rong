@@ -20,6 +20,12 @@ type HttpClient = Client<
     BoxBody<Bytes, Error>,
 >;
 
+#[cfg(all(feature = "tls-aws-lc", feature = "tls-ring"))]
+compile_error!("Enable only one TLS backend feature: `tls-aws-lc` or `tls-ring`.");
+
+#[cfg(not(any(feature = "tls-aws-lc", feature = "tls-ring")))]
+compile_error!("One TLS backend feature is required: enable `tls-aws-lc` or `tls-ring`.");
+
 static CLIENT: OnceLock<HttpClient> = OnceLock::new();
 
 fn ensure_bg_started() -> Result<(), String> {
@@ -31,7 +37,11 @@ fn ensure_bg_started() -> Result<(), String> {
 
 fn client() -> &'static HttpClient {
     CLIENT.get_or_init(|| {
+        #[cfg(feature = "tls-aws-lc")]
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        #[cfg(feature = "tls-ring")]
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
         let https = HttpsConnectorBuilder::new()
             .with_webpki_roots()
             .https_or_http()

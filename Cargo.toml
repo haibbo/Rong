@@ -41,7 +41,7 @@ rong_timer = { path = "modules/rong_timer"   , version = "0.1.1" }
 rong_console = { path = "modules/rong_console"   , version = "0.1.1" }
 rong_assert = { path = "modules/rong_assert"   , version = "0.1.1" }
 rong_fs = { path = "modules/rong_fs"   , version = "0.1.1" }
-rong_http = { path = "modules/rong_http"   , version = "0.1.1" }
+rong_http = { path = "modules/rong_http"   , version = "0.1.1", default-features = false }
 rong_encoding = { path = "modules/rong_encoding"   , version = "0.1.1" }
 rong_event = { path = "modules/rong_event"   , version = "0.1.1" }
 rong_exception = { path = "modules/rong_exception"   , version = "0.1.1" }
@@ -67,7 +67,7 @@ http = { package = "http", version = "1.4" }
 http-body-util = "0.1.3"
 hyper = { version = "1.8.1", features = ["client", "http1"] }
 hyper-util = { version = "0.1.19", features = ["client", "http1", "tokio"] }
-hyper-rustls = { version = "0.27.7", features = ["webpki-roots", "http1", "aws-lc-rs"] }
+hyper-rustls = { version = "0.27.7", default-features = false, features = ["webpki-roots", "http1", "tls12"] }
 rustls = { version = "0.23", default-features = false }
 flate2 = { version = "1.1.0" }
 uuid = { version = "1.19.0", features = ["v4"] }
