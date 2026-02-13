@@ -14,14 +14,14 @@ rong_modules = { workspace = true }
 tokio = { workspace = true }
 
 [features]
-# Build examples out-of-the-box using QuickJS.
-# To build with JavaScriptCore/ArkJS instead, use:
-# - `cargo build -p examples --no-default-features --features jscore`
-# - `cargo build -p examples --no-default-features --features arkjs`
-default = ["quickjs"]
-quickjs = ["rong/quickjs"]
-jscore = ["rong/jscore"]
-arkjs = ["rong/arkjs"]
+# Out-of-the-box build uses QuickJS + aws-lc TLS.
+# Switching engine requires `--no-default-features`.
+default = ["quickjs", "tls-aws-lc"]
+quickjs = ["rong/quickjs", "rong_modules/quickjs", "rong_modules/all"]
+jscore = ["rong/jscore", "rong_modules/jscore", "rong_modules/all"]
+arkjs = ["rong/arkjs", "rong_modules/arkjs", "rong_modules/all"]
+tls-aws-lc = ["rong_modules/tls-aws-lc"]
+tls-ring = ["rong_modules/tls-ring"]
 
 [[example]]
 name = "worker"

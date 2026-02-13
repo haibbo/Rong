@@ -69,6 +69,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 For more examples including class bindings, async functions, and advanced features, see the [Module Development Guide](docs/module_development.md).
 
+### Engine Selection
+
+QuickJS is the default engine:
+
+```bash
+cargo run -p rong_cli
+```
+
+Switch to JavaScriptCore explicitly:
+
+```bash
+cargo run -p rong_cli --no-default-features --features jscore,tls-aws-lc
+```
+
+`quickjs` and `jscore` are mutually exclusive. If both are enabled, build fails fast.
+For TLS backend selection, use `tls-aws-lc` (default) or `tls-ring`.
+
 ## 📦 Built-in Modules
 
 Rong comes with a rich set of built-in modules:

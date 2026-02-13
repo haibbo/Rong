@@ -109,7 +109,7 @@ run_core_test() {
     log_info "Running core test: $test_name (engine: $engine)"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo test --test="$test_name" --features="$engine" --quiet; then
+    if cargo test --test="$test_name" --no-default-features --features="$engine" --quiet; then
         log_success "Core test $test_name passed on $engine"
         PASSED_TESTS=$((PASSED_TESTS + 1))
         return 0
@@ -133,7 +133,13 @@ run_module_test() {
     log_info "Running module test: $module_name (engine: $engine)"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo test -p "$module_name" --features="$engine" --quiet; then
+    local feature_set="$engine"
+    # rong_http requires an explicit TLS backend when default features are disabled.
+    if [[ "$module_name" == "rong_http" ]]; then
+        feature_set="$feature_set,tls-aws-lc"
+    fi
+
+    if cargo test -p "$module_name" --no-default-features --features="$feature_set" --quiet; then
         log_success "Module test $module_name passed on $engine"
         PASSED_TESTS=$((PASSED_TESTS + 1))
         return 0

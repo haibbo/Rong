@@ -1,17 +1,19 @@
 # Testing
 
 Rong is a multi-engine project. Most tests need an engine feature enabled.
+By default, `rong` uses QuickJS. To switch to JavaScriptCore, always use
+`--no-default-features --features jscore` to avoid enabling both engines.
 
 ## Cargo tests
 
 ### Running all tests
 
 ```bash
-# QuickJS (default feature on `rong`)
-cargo test --features quickjs
+# QuickJS (default on `rong`)
+cargo test
 
 # JavaScriptCore
-cargo test --features jscore
+cargo test --no-default-features --features jscore
 ```
 
 ### Testing a specific module
@@ -52,7 +54,7 @@ cargo test -p rong_fs --features quickjs
 
 ```bash
 # Test all workspace packages
-cargo test --workspace --features quickjs
+cargo test --workspace
 
 # Test specific modules
 cargo test -p rong_http -p rong_timer --features quickjs
@@ -91,4 +93,3 @@ This script is useful for:
 - Quick module testing during development
 - CI/CD integration
 - Testing across different engines
-
