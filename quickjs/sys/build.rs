@@ -36,7 +36,7 @@ fn harmony_setup() {
 }
 
 fn android_setup() {
-    let ndk = env::var("ANDROID_NDK_HOME").expect("ANDROID_NDK_HOME is not set!");
+    let ndk = env::var("ANDROID_NDK_ROOT").expect("ANDROID_NDK_ROOT is not set!");
     let arch = env::consts::ARCH;
     let os = if env::consts::OS == "macos" {
         "Darwin"
@@ -199,7 +199,7 @@ fn main() {
     println!("cargo:rerun-if-changed=quickjs-ng");
     println!("cargo:rerun-if-env-changed=NUM_JOBS");
     println!("cargo:rerun-if-env-changed=OHOS_NDK_HOME");
-    println!("cargo:rerun-if-env-changed=ANDROID_NDK_HOME");
+    println!("cargo:rerun-if-env-changed=ANDROID_NDK_ROOT");
     println!("cargo:rerun-if-env-changed=ANDROID_API_LEVEL");
 
     // where to find static library libquickjs
