@@ -20,10 +20,10 @@ nix = { workspace = true }
 
 [features]
 # Forward JS engine features to the main rong crate
-default = ["quickjs"]
-quickjs = ["rong/quickjs"]
-jscore = ["rong/jscore"]
-arkjs = ["rong/arkjs"]
+default = []
+quickjs = ["rong/quickjs", "rong_abort/quickjs", "rong_exception/quickjs", "rong_stream/quickjs"]
+jscore = ["rong/jscore", "rong_abort/jscore", "rong_exception/jscore", "rong_stream/jscore"]
+arkjs = ["rong/arkjs", "rong_abort/arkjs", "rong_exception/arkjs", "rong_stream/arkjs"]
 
 [dev-dependencies]
 rong_test = { path = "../../utils/rong_test" }

@@ -12,7 +12,7 @@ rong = { workspace = true }
 
 [features]
 # Forward JS engine features to the main rong crate
-default = ["quickjs"]
+default = []
 quickjs = ["rong/quickjs"]
 jscore = ["rong/jscore"]
 arkjs = ["rong/arkjs"]

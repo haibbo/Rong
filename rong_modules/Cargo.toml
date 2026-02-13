@@ -28,28 +28,68 @@ rong_process = { workspace = true, optional = true }
 rong_child_process = { workspace = true, optional = true }
 
 [features]
-default = [
-    "quickjs",
-    "tls-aws-lc",
-    "timer",
-    "navigator",
-    "path",
-    "http",
-    "encoding",
-    "event",
-    "assert",
-    "exception",
-    "abort",
-    "console",
-    "url",
-    "buffer",
-    "fs",
-    "stream",
-]
+default = []
 
-quickjs = ["rong/quickjs"]
-jscore = ["rong/jscore"]
-arkjs = ["rong/arkjs"]
+quickjs = [
+    "rong/quickjs",
+    "rong_timer?/quickjs",
+    "rong_navigator?/quickjs",
+    "rong_path?/quickjs",
+    "rong_http?/quickjs",
+    "rong_encoding?/quickjs",
+    "rong_event?/quickjs",
+    "rong_assert?/quickjs",
+    "rong_exception?/quickjs",
+    "rong_abort?/quickjs",
+    "rong_console?/quickjs",
+    "rong_url?/quickjs",
+    "rong_buffer?/quickjs",
+    "rong_fs?/quickjs",
+    "rong_storage?/quickjs",
+    "rong_stream?/quickjs",
+    "rong_process?/quickjs",
+    "rong_child_process?/quickjs",
+]
+jscore = [
+    "rong/jscore",
+    "rong_timer?/jscore",
+    "rong_navigator?/jscore",
+    "rong_path?/jscore",
+    "rong_http?/jscore",
+    "rong_encoding?/jscore",
+    "rong_event?/jscore",
+    "rong_assert?/jscore",
+    "rong_exception?/jscore",
+    "rong_abort?/jscore",
+    "rong_console?/jscore",
+    "rong_url?/jscore",
+    "rong_buffer?/jscore",
+    "rong_fs?/jscore",
+    "rong_storage?/jscore",
+    "rong_stream?/jscore",
+    "rong_process?/jscore",
+    "rong_child_process?/jscore",
+]
+arkjs = [
+    "rong/arkjs",
+    "rong_timer?/arkjs",
+    "rong_navigator?/arkjs",
+    "rong_path?/arkjs",
+    "rong_http?/arkjs",
+    "rong_encoding?/arkjs",
+    "rong_event?/arkjs",
+    "rong_assert?/arkjs",
+    "rong_exception?/arkjs",
+    "rong_abort?/arkjs",
+    "rong_console?/arkjs",
+    "rong_url?/arkjs",
+    "rong_buffer?/arkjs",
+    "rong_fs?/arkjs",
+    "rong_storage?/arkjs",
+    "rong_stream?/arkjs",
+    "rong_process?/arkjs",
+    "rong_child_process?/arkjs",
+]
 tls-aws-lc = ["rong_http?/tls-aws-lc"]
 tls-ring = ["rong_http?/tls-ring"]
 

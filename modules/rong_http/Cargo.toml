@@ -33,10 +33,34 @@ serde_json = { workspace = true }
 
 [features]
 # Forward JS engine features to the main rong crate
-default = ["quickjs", "tls-aws-lc"]
-quickjs = ["rong/quickjs"]
-jscore = ["rong/jscore"]
-arkjs = ["rong/arkjs"]
+default = ["tls-aws-lc"]
+quickjs = [
+    "rong/quickjs",
+    "rong_abort/quickjs",
+    "rong_exception/quickjs",
+    "rong_buffer/quickjs",
+    "rong_navigator/quickjs",
+    "rong_url/quickjs",
+    "rong_stream/quickjs",
+]
+jscore = [
+    "rong/jscore",
+    "rong_abort/jscore",
+    "rong_exception/jscore",
+    "rong_buffer/jscore",
+    "rong_navigator/jscore",
+    "rong_url/jscore",
+    "rong_stream/jscore",
+]
+arkjs = [
+    "rong/arkjs",
+    "rong_abort/arkjs",
+    "rong_exception/arkjs",
+    "rong_buffer/arkjs",
+    "rong_navigator/arkjs",
+    "rong_url/arkjs",
+    "rong_stream/arkjs",
+]
 tls-aws-lc = ["hyper-rustls/aws-lc-rs", "rustls/aws_lc_rs"]
 tls-ring = ["hyper-rustls/ring", "rustls/ring"]
 
