@@ -123,6 +123,34 @@ fn test_convert_from_js() {
     });
 }
 
+#[cfg(feature = "jscore")]
+#[test]
+fn test_jscore_i32_u32_conversion_semantics() {
+    run(|ctx| {
+        // JS ToInt32 semantics (wrap modulo 2^32, then signed).
+        let i32_over_max: i32 = ctx.eval(Source::from_bytes(b"2147483648"))?;
+        assert_eq!(i32::MIN, i32_over_max);
+
+        let i32_mod_zero: i32 = ctx.eval(Source::from_bytes(b"4294967296"))?;
+        assert_eq!(0, i32_mod_zero);
+
+        let i32_nan: i32 = ctx.eval(Source::from_bytes(b"NaN"))?;
+        assert_eq!(0, i32_nan);
+
+        // JS ToUint32 semantics (wrap modulo 2^32).
+        let u32_neg_one: u32 = ctx.eval(Source::from_bytes(b"-1"))?;
+        assert_eq!(u32::MAX, u32_neg_one);
+
+        let u32_over_mod: u32 = ctx.eval(Source::from_bytes(b"4294967297"))?;
+        assert_eq!(1, u32_over_mod);
+
+        let u32_nan: u32 = ctx.eval(Source::from_bytes(b"NaN"))?;
+        assert_eq!(0, u32_nan);
+
+        Ok(())
+    });
+}
+
 #[test]
 fn test_equal() {
     run(|ctx| {
