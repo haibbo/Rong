@@ -31,12 +31,13 @@ pub mod function {
     pub type ThisMut<T> = rong_core::function::ThisMut<T, ()>;
 }
 
-#[cfg(any(
-    all(feature = "quickjs", feature = "jscore"),
-))]
+#[cfg(all(feature = "quickjs", feature = "jscore"))]
 compile_error!(
     "`rong` engine features are mutually exclusive: enable exactly one of `quickjs` or `jscore`."
 );
+
+#[cfg(feature = "arkjs")]
+compile_error!("`arkjs` engine is not available on crates.io yet. Use `quickjs` or `jscore`.");
 
 #[cfg(feature = "quickjs")]
 mod engine {
@@ -50,13 +51,9 @@ mod engine {
     pub type RongJS = JavaScriptCore;
 }
 
-#[cfg(feature = "arkjs")]
-compile_error!("`arkjs` engine is not available yet in this workspace. Use `quickjs` or `jscore`.");
-
-#[cfg(all(not(any(feature = "quickjs", feature = "jscore")), not(feature = "arkjs")))]
-compile_error!("`rong` requires an engine feature: enable one of `quickjs` or `jscore`.");
-
-#[cfg(all(not(any(feature = "quickjs", feature = "jscore")), not(feature = "arkjs")))]
+// When no engine is selected, the engine types are not available
+// This allows the crate to compile for modules that don't use the engine directly
+#[cfg(all(not(feature = "quickjs"), not(feature = "jscore")))]
 mod engine {}
 
 #[cfg(any(feature = "quickjs", feature = "jscore"))]
