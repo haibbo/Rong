@@ -138,7 +138,7 @@ fi
 
 # Extract the expected version so we can wait for crates.io index to reflect the
 # publish we just did (not merely the crate's existence).
-EXPECTED_VERSION="$(grep -A 2 '^\[workspace.package\]' "$WORKSPACE_TOML" 2>/dev/null | grep '^version' | sed 's/version = \"\\(.*\\)\"/\\1/' || true)"
+EXPECTED_VERSION="$(grep -A 2 '^\[workspace.package\]' "$WORKSPACE_TOML" 2>/dev/null | grep '^version' | sed 's/version = "\(.*\)"/\1/' || true)"
 if [ -z "$EXPECTED_VERSION" ]; then
   echo -e "${YELLOW}⚠️  Could not read workspace.package.version from ${WORKSPACE_TOML}; crates.io sync waiting may be unreliable.${NC}"
 fi
@@ -175,6 +175,25 @@ else
     exit 1
   fi
 fi
+
+# Function to check if a crate version is already published
+is_crate_published() {
+  local crate=$1
+  local version=$2
+
+  if [ -z "$version" ]; then
+    # No version specified, just check if crate exists
+    if cargo search "$crate" --limit 1 2>/dev/null | grep -q "^$crate = "; then
+      return 0
+    fi
+  else
+    # Check for specific version
+    if cargo search "$crate" --limit 1 2>/dev/null | grep -q "^$crate = \"${version}\""; then
+      return 0
+    fi
+  fi
+  return 1
+}
 
 # Function to wait for crate to appear in crates.io index
 wait_for_crate() {
@@ -220,13 +239,21 @@ wait_for_crate() {
 
 # Publish each crate
 PUBLISHED=0
+SKIPPED=0
 FAILED=0
 
 for crate in "${CRATES[@]}"; do
   echo ""
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${BLUE}Publishing [$((PUBLISHED + 1))/${#CRATES[@]}]: ${GREEN}${crate}${NC}"
+  echo -e "${BLUE}Publishing [$((PUBLISHED + SKIPPED + 1))/${#CRATES[@]}]: ${GREEN}${crate}${NC}"
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+  # Check if crate is already published and skip it
+  if is_crate_published "$crate" "$EXPECTED_VERSION"; then
+    echo -e "${YELLOW}⊘ Skipping ${crate} ${EXPECTED_VERSION} (already published)${NC}"
+    SKIPPED=$((SKIPPED + 1))
+    continue
+  fi
 
   # Build cargo publish command
   cmd=(cargo publish -p "$crate")
@@ -247,7 +274,7 @@ for crate in "${CRATES[@]}"; do
     echo -e "${GREEN}✓ Successfully published ${crate}${NC}"
 
     # Wait for crates.io to sync (except for last crate)
-    if [ $PUBLISHED -lt ${#CRATES[@]} ]; then
+    if [ $((PUBLISHED + SKIPPED)) -lt ${#CRATES[@]} ]; then
       wait_for_crate "$crate" "$EXPECTED_VERSION" "$WAIT_TIMEOUT" "$POLL_INTERVAL"
     fi
   else
@@ -263,10 +290,17 @@ echo ""
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Publishing Summary${NC}"
 echo -e "${BLUE}========================================${NC}"
-echo -e "${GREEN}✓ Successfully published: ${PUBLISHED}/${#CRATES[@]}${NC}"
+echo -e "${GREEN}✓ Successfully published: ${PUBLISHED}${NC}"
+if [ $SKIPPED -gt 0 ]; then
+  echo -e "${YELLOW}⊘ Skipped (already published): ${SKIPPED}${NC}"
+fi
 if [ $FAILED -gt 0 ]; then
   echo -e "${RED}✗ Failed: ${FAILED}${NC}"
   exit 1
 else
-  echo -e "${GREEN}🎉 All crates published successfully!${NC}"
+  if [ $SKIPPED -gt 0 ]; then
+    echo -e "${GREEN}🎉 All crates processed! (${PUBLISHED} published, ${SKIPPED} skipped)${NC}"
+  else
+    echo -e "${GREEN}🎉 All crates published successfully!${NC}"
+  fi
 fi
