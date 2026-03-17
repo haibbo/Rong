@@ -212,6 +212,24 @@ pub async fn post_json(
     body: &[u8],
     extra_headers: Option<&[(&str, &str)]>,
 ) -> Result<(http::StatusCode, Bytes), String> {
+    post_json_inner(url, body, extra_headers, None).await
+}
+
+pub async fn post_json_with_timeout(
+    url: &str,
+    body: &[u8],
+    extra_headers: Option<&[(&str, &str)]>,
+    request_timeout: Duration,
+) -> Result<(http::StatusCode, Bytes), String> {
+    post_json_inner(url, body, extra_headers, Some(request_timeout)).await
+}
+
+async fn post_json_inner(
+    url: &str,
+    body: &[u8],
+    extra_headers: Option<&[(&str, &str)]>,
+    timeout_override: Option<Duration>,
+) -> Result<(http::StatusCode, Bytes), String> {
     let mut builder = HttpRequest::builder()
         .method("POST")
         .uri(url)
@@ -244,7 +262,9 @@ pub async fn post_json(
         .body(request_body)
         .map_err(|e| format!("build request: {}", e))?;
 
-    let response = send_request(request, DEFAULT_BLOCKING_BODY_LIMIT, None).await?;
+    let response =
+        send_request_with_timeout(request, DEFAULT_BLOCKING_BODY_LIMIT, None, timeout_override)
+            .await?;
     let status = response.status;
     let bytes = collect_body_bytes(response.body).await?;
     Ok((status, bytes))
@@ -255,11 +275,21 @@ pub async fn send_request(
     small_threshold: usize,
     abort_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<HttpResponse, String> {
+    send_request_with_timeout(request, small_threshold, abort_rx, None).await
+}
+
+pub async fn send_request_with_timeout(
+    request: HttpRequest<BoxBody<Bytes, Error>>,
+    small_threshold: usize,
+    abort_rx: Option<oneshot::Receiver<()>>,
+    timeout_override: Option<Duration>,
+) -> Result<HttpResponse, String> {
     send_request_with_coalesce(
         request,
         small_threshold,
         abort_rx,
         DEFAULT_STREAM_COALESCE_TARGET,
+        timeout_override,
     )
     .await
 }
@@ -269,6 +299,7 @@ pub async fn send_request_with_coalesce(
     small_threshold: usize,
     abort_rx: Option<oneshot::Receiver<()>>,
     stream_coalesce_target: usize,
+    timeout_override: Option<Duration>,
 ) -> Result<HttpResponse, String> {
     ensure_bg_started()?;
     let client = client()?;
@@ -279,6 +310,7 @@ pub async fn send_request_with_coalesce(
             small_threshold,
             stream_coalesce_target,
             abort_rx,
+            timeout_override,
         )
         .await
     })
@@ -294,9 +326,10 @@ async fn process_request(
     small: usize,
     stream_coalesce_target: usize,
     mut abort_rx: Option<oneshot::Receiver<()>>,
+    timeout_override: Option<Duration>,
 ) -> Result<HttpResponse, String> {
     const READ_FRAME_TIMEOUT: Duration = Duration::from_secs(120);
-    let request_timeout = get_request_timeout();
+    let request_timeout = timeout_override.unwrap_or_else(get_request_timeout);
 
     let resp = if let Some(rx) = abort_rx.as_mut() {
         tokio::select! {
@@ -506,5 +539,106 @@ mod tests {
     fn proxy_only_supports_http_scheme() {
         let err = parse_proxy_uri("https://127.0.0.1:8080").expect_err("must reject https");
         assert!(err.contains("only http:// is supported"));
+    }
+
+    fn ensure_started() {
+        crate::start(1);
+    }
+
+    async fn spawn_echo_server() -> std::net::SocketAddr {
+        use axum::Router;
+        use axum::body::Bytes as AxumBytes;
+        use axum::http::HeaderMap;
+        use axum::response::IntoResponse;
+        use axum::routing::post;
+
+        async fn echo(headers: HeaderMap, body: AxumBytes) -> impl IntoResponse {
+            (headers, body)
+        }
+
+        let app = Router::new().route("/echo", post(echo));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        addr
+    }
+
+    async fn spawn_slow_server(delay_ms: u64) -> std::net::SocketAddr {
+        use axum::Router;
+        use axum::routing::post;
+        use std::sync::Arc;
+
+        let delay = Arc::new(delay_ms);
+        let app = Router::new().route(
+            "/slow",
+            post({
+                let delay = delay.clone();
+                move || {
+                    let d = *delay;
+                    async move {
+                        sleep(Duration::from_millis(d)).await;
+                        "ok"
+                    }
+                }
+            }),
+        );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        addr
+    }
+
+    #[test]
+    fn post_json_with_timeout_succeeds() {
+        ensure_started();
+        let handle = crate::handle().unwrap();
+        handle.block_on(async {
+            let addr = spawn_echo_server().await;
+            let url = format!("http://{}/echo", addr);
+            let body = br#"{"hello":"world"}"#;
+            let (status, bytes) = post_json_with_timeout(&url, body, None, Duration::from_secs(5))
+                .await
+                .expect("request should succeed");
+            assert_eq!(status, http::StatusCode::OK);
+            assert_eq!(bytes.as_ref(), body);
+        });
+    }
+
+    #[test]
+    fn post_json_with_timeout_expires() {
+        ensure_started();
+        let handle = crate::handle().unwrap();
+        handle.block_on(async {
+            let addr = spawn_slow_server(300).await;
+            let url = format!("http://{}/slow", addr);
+            let err = post_json_with_timeout(&url, b"{}", None, Duration::from_millis(10))
+                .await
+                .expect_err("should time out");
+            assert!(
+                err.contains("timeout"),
+                "expected timeout error, got: {}",
+                err
+            );
+        });
+    }
+
+    #[test]
+    fn post_json_uses_global_timeout_by_default() {
+        // Verify the original post_json still respects the global timeout.
+        ensure_started();
+        let handle = crate::handle().unwrap();
+        handle.block_on(async {
+            let addr = spawn_echo_server().await;
+            let url = format!("http://{}/echo", addr);
+            let (status, _) = post_json(&url, b"{}", None)
+                .await
+                .expect("request should succeed");
+            assert_eq!(status, http::StatusCode::OK);
+        });
     }
 }

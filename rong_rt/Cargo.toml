@@ -19,6 +19,11 @@ hyper-rustls = { workspace = true, default-features = false }
 hyper-util = { workspace = true }
 rustls = { workspace = true }
 
+[dev-dependencies]
+axum = { workspace = true }
+tokio = { workspace = true, features = ["net"] }
+tempfile = "3"
+
 [features]
 default = ["tls-aws-lc"]
 tls-aws-lc = ["hyper-rustls/aws-lc-rs", "rustls/aws_lc_rs"]

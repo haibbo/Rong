@@ -6,7 +6,8 @@ use std::io::Error;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::oneshot;
 
-use crate::client::{HttpBody, send_request};
+use crate::client::{HttpBody, send_request_with_timeout};
+use tokio::time::Duration;
 
 const DEFAULT_DOWNLOAD_SMALL_THRESHOLD: usize = 64 * 1024;
 
@@ -21,6 +22,26 @@ pub fn request_download(
     abort_rx: Option<oneshot::Receiver<()>>,
     sink: Option<Box<dyn BodySink>>,
 ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
+    request_download_inner(url, dest, abort_rx, sink, None)
+}
+
+pub fn request_download_with_timeout(
+    url: impl Into<String>,
+    dest: impl Into<std::path::PathBuf>,
+    abort_rx: Option<oneshot::Receiver<()>>,
+    sink: Option<Box<dyn BodySink>>,
+    request_timeout: Duration,
+) -> Result<oneshot::Receiver<Result<(), String>>, String> {
+    request_download_inner(url, dest, abort_rx, sink, Some(request_timeout))
+}
+
+fn request_download_inner(
+    url: impl Into<String>,
+    dest: impl Into<std::path::PathBuf>,
+    abort_rx: Option<oneshot::Receiver<()>>,
+    sink: Option<Box<dyn BodySink>>,
+    timeout_override: Option<Duration>,
+) -> Result<oneshot::Receiver<Result<(), String>>, String> {
     let (completion_tx, completion_rx) = oneshot::channel();
 
     if !crate::is_started() {
@@ -33,7 +54,7 @@ pub fn request_download(
     let url = url.into();
     let dest = dest.into();
     crate::spawn(async move {
-        let res = download_resource(&url, &dest, abort_rx, sink).await;
+        let res = download_resource(&url, &dest, abort_rx, sink, timeout_override).await;
         let _ = completion_tx.send(res);
     })
     .map_err(|e| e.to_string())?;
@@ -46,6 +67,7 @@ async fn download_resource(
     dest: &std::path::PathBuf,
     abort_rx: Option<oneshot::Receiver<()>>,
     sink: Option<Box<dyn BodySink>>,
+    timeout_override: Option<Duration>,
 ) -> Result<(), String> {
     let mut sink_opt = sink;
 
@@ -88,7 +110,14 @@ async fn download_resource(
 
     let small_threshold = DEFAULT_DOWNLOAD_SMALL_THRESHOLD;
     let mut abort_rx_opt = abort_rx;
-    let resp = match send_request(request, small_threshold, abort_rx_opt.take()).await {
+    let resp = match send_request_with_timeout(
+        request,
+        small_threshold,
+        abort_rx_opt.take(),
+        timeout_override,
+    )
+    .await
+    {
         Ok(r) => r,
         Err(e) => return finalize_sink(sink_opt, Err(e)),
     };
@@ -153,4 +182,98 @@ fn finalize_sink(
         sink.close(&res);
     }
     res
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ensure_started() {
+        crate::start(1);
+    }
+
+    async fn spawn_file_server(content: &'static [u8]) -> std::net::SocketAddr {
+        use axum::Router;
+        use axum::routing::get;
+
+        let app = Router::new().route("/file", get(move || async move { content }));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        addr
+    }
+
+    async fn spawn_slow_server(delay_ms: u64) -> std::net::SocketAddr {
+        use axum::Router;
+        use axum::routing::get;
+
+        let app = Router::new().route(
+            "/slow",
+            get(move || async move {
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                "data"
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        addr
+    }
+
+    #[test]
+    fn download_with_timeout_succeeds() {
+        ensure_started();
+        let handle = crate::handle().unwrap();
+        handle.block_on(async {
+            let content = b"hello download";
+            let addr = spawn_file_server(content).await;
+            let url = format!("http://{}/file", addr);
+
+            let dest = std::env::temp_dir().join(format!(
+                "rong_dl_test_{}.bin",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .subsec_nanos()
+            ));
+
+            let rx = request_download_with_timeout(&url, &dest, None, None, Duration::from_secs(5))
+                .expect("should queue download");
+            rx.await
+                .expect("channel dropped")
+                .expect("download should succeed");
+
+            let written = tokio::fs::read(&dest).await.expect("file should exist");
+            assert_eq!(written, content);
+            let _ = tokio::fs::remove_file(&dest).await;
+        });
+    }
+
+    #[test]
+    fn download_with_timeout_expires() {
+        ensure_started();
+        let handle = crate::handle().unwrap();
+        handle.block_on(async {
+            let addr = spawn_slow_server(300).await;
+            let url = format!("http://{}/slow", addr);
+            let dest = std::env::temp_dir().join("rong_dl_timeout_test.bin");
+
+            let rx =
+                request_download_with_timeout(&url, &dest, None, None, Duration::from_millis(10))
+                    .expect("should queue download");
+            let err = rx
+                .await
+                .expect("channel dropped")
+                .expect_err("should time out");
+            assert!(
+                err.contains("timeout"),
+                "expected timeout error, got: {}",
+                err
+            );
+        });
+    }
 }
