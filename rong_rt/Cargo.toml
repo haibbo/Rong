@@ -1,0 +1,25 @@
+[package]
+name = "rong_rt"
+version.workspace = true
+edition.workspace = true
+
+description = "Async runtime, HTTP client, and platform services for RongJS"
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+http = { workspace = true }
+bytes = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-http-proxy = { version = "1.1.0", default-features = false }
+hyper-rustls = { workspace = true, default-features = false }
+hyper-util = { workspace = true }
+rustls = { workspace = true }
+
+[features]
+default = ["tls-aws-lc"]
+tls-aws-lc = ["hyper-rustls/aws-lc-rs", "rustls/aws_lc_rs"]
+tls-ring = ["hyper-rustls/ring", "rustls/ring"]

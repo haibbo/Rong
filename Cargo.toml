@@ -10,6 +10,7 @@ members = [
     "modules/rong_timer", "modules/rong_navigator", "modules/rong_path",
     "modules/rong_http", "modules/rong_encoding", "modules/rong_event",
     "modules/rong_assert", "modules/rong_exception", "modules/rong_storage",
+    "rong_rt",
     "modules/rong_abort", "modules/rong_console", "modules/rong_url", "modules/rong_buffer",
     "modules/rong_fs", "modules/rong_stream", "modules/rong_process", "modules/rong_child_process",
     "rong_modules", "rong_cli"
@@ -35,6 +36,7 @@ rong_arkjs_sys = { path = "arkjs/sys"   , version = "0.2.0" }
 rong_macro = { path = "macro"   , version = "0.2.0" }
 rong_test = { path = "utils/rong_test", default-features = false }
 rong_modules = { path = "rong_modules"   , version = "0.2.0" }
+rong_rt = { path = "rong_rt"   , version = "0.2.0" }
 
 # Module dependencies
 rong_timer = { path = "modules/rong_timer"   , version = "0.2.0", default-features = false }
@@ -89,6 +91,7 @@ repository.workspace = true
 readme.workspace = true
 [dependencies]
 rong_core = { workspace = true }
+rong_rt = { workspace = true }
 rong_quickjs = { workspace = true, optional = true }
 rong_jscore = { workspace = true, optional = true }
 # rong_arkjs = { workspace = true, optional = true }  # Not published to crates.io yet

@@ -456,7 +456,7 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
     /// ```
     pub fn build(self) -> Arc<Rong<E>> {
         // Initialize the shared service runtime with configured threads (idempotent)
-        crate::bg::start(self.service_worker_threads);
+        rong_rt::start(self.service_worker_threads);
 
         let rong = Arc::new(Rong {
             workers: Arc::new(TokioMutex::new(Vec::with_capacity(self.worker_count))),

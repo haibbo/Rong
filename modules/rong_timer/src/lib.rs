@@ -18,7 +18,7 @@
 //!   to the callback function. Only the callback function and delay are supported.
 //! - Delay is in milliseconds and should be a positive number.
 
-use rong::{JSContext, JSFunc, JSResult, JSRuntimeService, JSValue, bg, function::Optional, spawn};
+use rong::{JSContext, JSFunc, JSResult, JSRuntimeService, JSValue, function::Optional, spawn};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -287,7 +287,7 @@ fn set_timeout_with_repeat(
 
     // Prefer background runtime for reliable timing; fall back to local if not started.
     let bg_fut = run_timer(cancel_bg.clone(), pending_bg.clone(), callback_tx.clone());
-    if bg::spawn(bg_fut).is_err() {
+    if rong_rt::spawn(bg_fut).is_err() {
         spawn(run_timer(cancel_bg, pending_bg, callback_tx));
     }
 

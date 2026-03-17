@@ -9,6 +9,7 @@ repository.workspace = true
 readme.workspace = true
 [dependencies]
 rong = { workspace = true }
+rong_rt = { workspace = true }
 tokio = { workspace = true }
 bytes = { workspace = true }
 rong_abort = { workspace = true }
@@ -19,10 +20,6 @@ http = { workspace = true }
 http-body-util = { workspace = true }
 http-body = "1.0"
 hyper = { workspace = true }
-hyper-rustls = { workspace = true, default-features = false }
-hyper-http-proxy = { version = "1.1.0", default-features = false }
-hyper-util = { workspace = true }
-rustls = { workspace = true }
 rong_navigator = { workspace = true }
 rong_url = { workspace = true }
 url = "2.5.4"
@@ -61,8 +58,8 @@ arkjs = [
     "rong_url/arkjs",
     "rong_stream/arkjs",
 ]
-tls-aws-lc = ["hyper-rustls/aws-lc-rs", "rustls/aws_lc_rs"]
-tls-ring = ["hyper-rustls/ring", "rustls/ring"]
+tls-aws-lc = ["rong_rt/tls-aws-lc"]
+tls-ring = ["rong_rt/tls-ring"]
 
 [dev-dependencies]
 rong_test = { path = "../../utils/rong_test", features = ["http"] }

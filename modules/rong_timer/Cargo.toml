@@ -9,6 +9,7 @@ repository.workspace = true
 readme.workspace = true
 [dependencies]
 rong = { workspace = true }
+rong_rt = { workspace = true }
 tokio = { workspace = true }
 futures = { workspace = true }
 

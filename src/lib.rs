@@ -12,9 +12,8 @@ pub use rong_core::{
 // Re-export selected runtime API from rong_core::rong so downstream crates use `rong::...`
 pub use rong_core::rong::{Rong, Worker, WorkerMessage, spawn};
 
-// Re-export background runtime and user-agent helpers.
-pub use rong_core::bg;
-pub use rong_core::user_agent::{DEFAULT_USER_AGENT, get_user_agent, set_user_agent};
+// Re-export user-agent helpers.
+pub use rong_rt::{DEFAULT_USER_AGENT, get_user_agent, set_user_agent};
 // Re-export selected scheduler APIs (module remains internal to core)
 pub use rong_core::{JsInvokePriority, enqueue_js_invoke};
 
