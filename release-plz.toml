@@ -14,8 +14,8 @@ git_release_name = "{{ package }}-v{{ version }}"
 # Repository URL (explicit to avoid inference issues)
 repo_url = "https://github.com/LingXia-Dev/Rong"
 
-# Enable changelog updates
-changelog_update = true
+# Disable changelog updates
+changelog_update = false
 
 # Disable semver compatibility check - packages not yet published to crates.io
 # cargo-semver-checks needs to download published versions for comparison,
