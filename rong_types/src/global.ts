@@ -57,12 +57,10 @@ declare global {
     // Storage
     readonly Storage: StorageConstructor;
     readonly storage: StorageModule;
-  };
 
-  /**
-   * EventSource - Server-Sent Events (SSE) client
-   */
-  const EventSource: EventSourceConstructor;
+    // Database / cache clients
+    readonly Database: typeof import('./sqlite').Database;
+  };
 
   /**
    * Process object - Access to process information and environment
@@ -94,6 +92,11 @@ declare global {
    */
   const assert: AssertFunction;
 
+
+  /**
+   * Database - SQLite database (sync API)
+   */
+  const Database: typeof import('./sqlite').Database;
 
   /**
    * SSE - Server-Sent Events async iterator client

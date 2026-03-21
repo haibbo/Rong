@@ -56,6 +56,9 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     #[cfg(feature = "child_process")]
     rong_child_process::init(ctx)?;
 
+    #[cfg(feature = "sqlite")]
+    rong_sqlite::init(ctx)?;
+
     #[cfg(feature = "worker")]
     rong_worker::init(ctx)?;
 

@@ -63,6 +63,7 @@ export * from './timer';
 export * from './path';
 export * from './assert';
 export * from './console';
+export * from './sqlite';
 
 // Error types
 export * from './error';
