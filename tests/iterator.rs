@@ -65,3 +65,38 @@ fn iterator_async() {
         Ok(())
     });
 }
+
+#[test]
+fn iterator_async_rejects_with_error_object() {
+    async_run!(async |ctx: JSContext| {
+        let bad_iterator = JSFunc::new(&ctx, move |ctx: JSContext| {
+            stream::iter(vec![Err::<i32, _>(rong::RongJSError::from(
+                rong::HostError::new(rong::error::E_INTERNAL, "boom"),
+            ))])
+            .to_js_async_iter(&ctx)
+        })?;
+
+        ctx.global().set("badIterator", bad_iterator)?;
+        let result: bool = ctx
+            .eval_async(Source::from_bytes(
+                r#"
+                (async function () {
+                    try {
+                        await badIterator().next();
+                        return false;
+                    } catch (e) {
+                        return (
+                            typeof e === "object" &&
+                            e !== null &&
+                            e.message === "boom" &&
+                            e.code === "E_INTERNAL"
+                        );
+                    }
+                })()
+                "#,
+            ))
+            .await?;
+        assert!(result);
+        Ok(())
+    });
+}

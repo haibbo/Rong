@@ -1,5 +1,8 @@
 use crate::rong::spawn;
-use crate::{IntoJSValue, JSContext, JSFunc, JSObject, JSObjectOps, JSResult, JSSymbol, JSValue};
+use crate::{
+    IntoJSValue, JSArrayOps, JSContext, JSErrorFactory, JSFunc, JSObject, JSObjectOps, JSResult,
+    JSSymbol, JSTypeOf, JSValue, RongJSError,
+};
 use futures::{Stream, StreamExt};
 use std::cell::RefCell;
 use std::pin::Pin;
@@ -26,7 +29,7 @@ where
     T: IntoJSValue<V> + 'static,
 {
     inner: Rc<RefCell<Box<dyn Iterator<Item = T> + 'static>>>,
-    result: JSObject<V>,
+    ctx: JSContext<V::Context>,
 }
 
 impl<V, T> JSIterator<V, T>
@@ -34,49 +37,68 @@ where
     V: JSObjectOps + 'static,
     T: IntoJSValue<V> + 'static,
 {
-    pub fn from<I>(iterable: I, ctx: &JSContext<V::Context>) -> Self
+    pub fn new<I>(iterable: I, ctx: &JSContext<V::Context>) -> Self
     where
         I: IntoIterator<Item = T> + 'static,
         I::IntoIter: 'static,
     {
         Self {
             inner: Rc::new(RefCell::new(Box::new(iterable.into_iter()))),
-            result: JSObject::new(ctx),
+            ctx: ctx.clone(),
         }
     }
 
-    pub fn next(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
-        let result = self.result.clone();
+    pub fn next(&self) -> JSResult<JSObject<V>> {
+        let result = JSObject::new(&self.ctx);
         let mut iter = self.inner.borrow_mut();
 
         match iter.next() {
             Some(item) => {
                 result.set("done", false)?;
-                let value = <T as IntoJSValue<V>>::into_js_value(item, ctx);
+                let value = <T as IntoJSValue<V>>::into_js_value(item, &self.ctx);
                 result.set("value", value)?;
             }
             None => {
                 result.set("done", true)?;
-                result.set("value", JSValue::undefined(ctx))?;
+                result.set("value", JSValue::undefined(&self.ctx))?;
             }
         }
 
         Ok(result)
     }
 
-    /// Install `next()` and `[Symbol.iterator]` on an existing JS object.
+    /// Install `next()`, `return()`, and `[Symbol.iterator]` on an existing JS object.
+    ///
+    /// `return()` signals early termination (e.g. `break` in `for...of`)
+    /// by replacing the underlying iterator with an empty one.
     pub fn install_on(&self, ctx: &JSContext<V::Context>, obj: &JSObject<V>) -> JSResult<()> {
+        // next()
         let iterator_instance = self.clone();
-        let next_fn = JSFunc::new(ctx, move |ctx: JSContext<V::Context>| -> JSObject<V> {
-            iterator_instance.next(&ctx).unwrap_or_else(|_| {
-                let result = JSObject::new(&ctx);
+        let next_fn = JSFunc::new(ctx, move |_ctx: JSContext<V::Context>| -> JSObject<V> {
+            iterator_instance.next().unwrap_or_else(|_| {
+                let result = JSObject::new(&iterator_instance.ctx);
                 result.set("done", true).ok();
-                result.set("value", JSValue::undefined(&ctx)).ok();
+                result
+                    .set("value", JSValue::undefined(&iterator_instance.ctx))
+                    .ok();
                 result
             })
         })?;
         obj.set("next", next_fn)?;
 
+        // return() — for early termination (break in for-of)
+        let inner_handle = self.inner.clone();
+        let return_fn = JSFunc::new(ctx, move |ctx: JSContext<V::Context>| -> JSObject<V> {
+            // Replace with an empty iterator to release resources
+            *inner_handle.borrow_mut() = Box::new(std::iter::empty());
+            let result = JSObject::new(&ctx);
+            result.set("done", true).ok();
+            result.set("value", JSValue::undefined(&ctx)).ok();
+            result
+        })?;
+        obj.set("return", return_fn)?;
+
+        // [Symbol.iterator] = () => this
         let symbol = ctx
             .global()
             .get::<_, JSObject<V>>("Symbol")?
@@ -102,7 +124,7 @@ where
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            result: self.result.clone(),
+            ctx: self.ctx.clone(),
         }
     }
 }
@@ -126,37 +148,41 @@ where
     T: IntoJSValue<V> + 'static,
 {
     stream: Rc<Mutex<Pin<Box<dyn Stream<Item = T> + 'static>>>>,
-    result: JSObject<V>,
+    ctx: JSContext<V::Context>,
 }
 
 impl<V, T> JSAsyncIterator<V, T>
 where
-    V: JSObjectOps + 'static,
+    V: JSObjectOps + JSArrayOps + JSTypeOf + 'static,
     T: IntoJSValue<V> + 'static,
+    V::Context: JSErrorFactory,
 {
-    pub fn from<S>(stream: S, ctx: &JSContext<V::Context>) -> Self
+    pub fn new<S>(stream: S, ctx: &JSContext<V::Context>) -> Self
     where
         S: Stream<Item = T> + 'static,
     {
         Self {
             stream: Rc::new(Mutex::new(Box::pin(stream))),
-            result: JSObject::new(ctx),
+            ctx: ctx.clone(),
         }
     }
 
-    pub async fn next(&self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
-        let result = self.result.clone();
+    pub async fn next(&self) -> JSResult<JSObject<V>> {
+        let result = JSObject::new(&self.ctx);
         let mut stream = self.stream.lock().await;
 
         match stream.next().await {
             Some(item) => {
                 result.set("done", false)?;
-                let value = <T as IntoJSValue<V>>::into_js_value(item, ctx);
+                let value = <T as IntoJSValue<V>>::into_js_value(item, &self.ctx);
+                if value.is_exception() {
+                    return Err(RongJSError::from_thrown_value(value));
+                }
                 result.set("value", value)?;
             }
             None => {
                 result.set("done", true)?;
-                result.set("value", JSValue::undefined(ctx))?;
+                result.set("value", JSValue::undefined(&self.ctx))?;
             }
         }
 
@@ -172,18 +198,16 @@ where
         let iterator_instance = self.clone();
         let next_fn = JSFunc::new(ctx, move |ctx: JSContext<V::Context>| -> JSObject<V> {
             match ctx.promise() {
-                Ok((promise, resolve, _reject)) => {
+                Ok((promise, resolve, reject)) => {
                     let iter = iterator_instance.clone();
                     spawn(async move {
-                        match iter.next(&ctx).await {
+                        match iter.next().await {
                             Ok(result) => {
                                 let _ = resolve.call::<_, ()>(None, (result,));
                             }
-                            Err(_) => {
-                                let result = JSObject::new(&ctx);
-                                result.set("done", true).ok();
-                                result.set("value", JSValue::undefined(&ctx)).ok();
-                                let _ = resolve.call::<_, ()>(None, (result,));
+                            Err(e) => {
+                                let err = e.into_catch_value(&ctx);
+                                let _ = reject.call::<_, ()>(None, (err,));
                             }
                         }
                     });
@@ -202,7 +226,6 @@ where
         // return() — for early termination (break in for-await-of)
         let stream_handle = self.stream.clone();
         let return_fn = JSFunc::new(ctx, move |ctx: JSContext<V::Context>| -> JSObject<V> {
-            // Drop the stream to release resources
             let stream = stream_handle.clone();
             match ctx.promise() {
                 Ok((promise, resolve, _reject)) => {
@@ -253,7 +276,7 @@ where
     fn clone(&self) -> Self {
         Self {
             stream: self.stream.clone(),
-            result: self.result.clone(),
+            ctx: self.ctx.clone(),
         }
     }
 }
@@ -266,7 +289,7 @@ where
     /// Create a new JS iterator/iterable object from this Rust iterator.
     fn to_js_iter(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>>;
 
-    /// Install `next()` and `[Symbol.iterator]` on an existing JS object.
+    /// Install `next()`, `return()`, and `[Symbol.iterator]` on an existing JS object.
     fn install_js_iter(self, ctx: &JSContext<V::Context>, obj: &JSObject<V>) -> JSResult<()>;
 }
 
@@ -278,12 +301,12 @@ where
     I::IntoIter: 'static,
 {
     fn to_js_iter(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
-        let js_iter = JSIterator::from(self, ctx);
+        let js_iter = JSIterator::new(self, ctx);
         js_iter.to_js_iterable(ctx)
     }
 
     fn install_js_iter(self, ctx: &JSContext<V::Context>, obj: &JSObject<V>) -> JSResult<()> {
-        let js_iter = JSIterator::from(self, ctx);
+        let js_iter = JSIterator::new(self, ctx);
         js_iter.install_on(ctx, obj)
     }
 }
@@ -302,17 +325,18 @@ where
 
 impl<V, T, S> IntoJSAsyncIteratorExt<V, T> for S
 where
-    V: JSObjectOps + 'static,
+    V: JSObjectOps + JSArrayOps + JSTypeOf + 'static,
     T: IntoJSValue<V> + 'static,
     S: Stream<Item = T> + 'static,
+    V::Context: JSErrorFactory,
 {
     fn to_js_async_iter(self, ctx: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
-        let js_iter = JSAsyncIterator::from(self, ctx);
+        let js_iter = JSAsyncIterator::new(self, ctx);
         js_iter.to_js_async_iterable(ctx)
     }
 
     fn install_js_async_iter(self, ctx: &JSContext<V::Context>, obj: &JSObject<V>) -> JSResult<()> {
-        let js_iter = JSAsyncIterator::from(self, ctx);
+        let js_iter = JSAsyncIterator::new(self, ctx);
         js_iter.install_on(ctx, obj)
     }
 }
