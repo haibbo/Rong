@@ -4,21 +4,21 @@ use rong_test::*;
 fn test_array_buffer_creation() {
     run(|ctx| {
         // Test empty buffer
-        let empty_buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes(ctx, &[])?;
+        let empty_buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &[])?;
         assert_eq!(empty_buffer.len(), 0);
         assert!(empty_buffer.is_empty());
 
         // Test normal buffer
         let data = vec![1, 2, 3, 4, 5];
-        let buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes(ctx, &data)?;
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &data)?;
         assert_eq!(buffer.len(), 5);
         assert!(!buffer.is_empty());
 
         // Test buffer with different element types
         let data = vec![1, 0, 2, 0]; // Two 16-bit integers: [1, 2]
-        let buffer: JSArrayBuffer<i16> = JSArrayBuffer::from_bytes(ctx, &data)?;
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &data)?;
         assert_eq!(buffer.len(), 4);
-        assert_eq!(buffer.element_count(), 2);
+        assert_eq!(buffer.element_count::<i16>()?, 2);
         Ok(())
     });
 }
@@ -27,10 +27,10 @@ fn test_array_buffer_creation() {
 fn test_array_buffer_empty() {
     run(|ctx| {
         // Test empty buffer creation
-        let buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes(ctx, &[])?;
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &[])?;
         assert_eq!(buffer.len(), 0);
         assert!(buffer.is_empty());
-        assert_eq!(buffer.element_count(), 0);
+        assert_eq!(buffer.element_count::<u8>()?, 0);
         assert_eq!(buffer.as_slice(), &[] as &[u8]);
         assert_eq!(buffer.to_vec(), Vec::<u8>::new());
         Ok(())
@@ -41,11 +41,11 @@ fn test_array_buffer_empty() {
 fn test_array_buffer_mutations() {
     run(|ctx| {
         // Test mutable access and modifications
-        let mut buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes(ctx, &[1, 2, 3])?;
+        let mut buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &[1, 2, 3])?;
 
         // Test initial state
         assert_eq!(buffer.as_slice(), &[1, 2, 3]);
-        assert_eq!(buffer.element_count(), 3);
+        assert_eq!(buffer.element_count::<u8>()?, 3);
 
         // Modify through mutable slice
         {
@@ -71,20 +71,20 @@ fn test_array_buffer_alignment() {
         let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
 
         // u8 alignment (should always work)
-        let buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes(ctx, &data)?;
-        assert!(buffer.validate_alignment(0));
-        assert!(buffer.validate_alignment(1));
-        assert!(buffer.validate_alignment(2));
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &data)?;
+        assert!(buffer.validate_alignment::<u8>(0));
+        assert!(buffer.validate_alignment::<u8>(1));
+        assert!(buffer.validate_alignment::<u8>(2));
 
         // i16 alignment (must be multiple of 2)
-        let buffer: JSArrayBuffer<i16> = JSArrayBuffer::from_bytes(ctx, &data)?;
-        assert!(buffer.validate_alignment(0));
-        assert!(!buffer.validate_alignment(1));
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &data)?;
+        assert!(buffer.validate_alignment::<i16>(0));
+        assert!(!buffer.validate_alignment::<i16>(1));
 
         // i32 alignment (must be multiple of 4)
-        let buffer: JSArrayBuffer<i32> = JSArrayBuffer::from_bytes(ctx, &data)?;
-        assert!(buffer.validate_alignment(0));
-        assert!(!buffer.validate_alignment(1));
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &data)?;
+        assert!(buffer.validate_alignment::<i32>(0));
+        assert!(!buffer.validate_alignment::<i32>(1));
         Ok(())
     });
 }
@@ -93,14 +93,14 @@ fn test_array_buffer_alignment() {
 fn test_array_buffer_slice() {
     run(|ctx| {
         let data = vec![1, 2, 3, 4, 5, 6, 7, 8];
-        let buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes(ctx, &data)?;
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &data)?;
 
         // Test slicing
         let slice = buffer.as_slice();
         assert_eq!(slice, &data[..]);
 
         // Test bytes
-        let bytes = buffer.as_bytes().unwrap();
+        let bytes = buffer.as_bytes();
         assert_eq!(bytes, &data[..]);
         Ok(())
     });
@@ -111,7 +111,7 @@ fn test_array_buffer_js_interop() {
     run(|ctx| {
         // Create buffer in Rust
         let data = vec![1, 2, 3, 4];
-        let buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes(ctx, &data)?;
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &data)?;
 
         // Set it as a global variable
         let global = ctx.global();
@@ -123,7 +123,7 @@ fn test_array_buffer_js_interop() {
         ))?;
 
         // Get it back in Rust and verify the modification
-        let modified_buffer: JSArrayBuffer<u8> = ctx.global().get("testBuffer")?;
+        let modified_buffer: JSArrayBuffer = ctx.global().get("testBuffer")?;
         let slice = modified_buffer.as_slice();
         assert_eq!(slice[0], 100);
         Ok(())
@@ -135,13 +135,13 @@ fn test_array_buffer_zero_copy() {
     run(|ctx| {
         // Create buffer using zero-copy from Vec
         let data = vec![1, 2, 3, 4, 5];
-        let buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes_owned(ctx, data)?;
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes_owned(ctx, data)?;
 
         assert_eq!(buffer.len(), 5);
 
         // Test with Box<[u8]>
         let boxed_data = vec![6, 7, 8, 9, 10].into_boxed_slice();
-        let buffer: JSArrayBuffer<u8> = JSArrayBuffer::from_bytes_owned(ctx, boxed_data)?;
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes_owned(ctx, boxed_data)?;
 
         assert_eq!(buffer.len(), 5);
         Ok(())
@@ -151,19 +151,18 @@ fn test_array_buffer_zero_copy() {
 #[test]
 fn test_array_buffer_error_cases() {
     run(|ctx| {
-        // Test misaligned data for i16
+        // Buffer creation itself is untyped; alignment only matters when reinterpreting.
         let data = vec![1, 2, 3]; // 3 bytes is not aligned for i16
-        let result: Result<JSArrayBuffer<i16>, _> = JSArrayBuffer::from_bytes(ctx, &data);
-        assert!(result.is_err());
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &data)?;
+        assert!(buffer.element_count::<i16>().is_err());
 
-        // Test misaligned data for i32
         let data = vec![1, 2, 3, 4, 5, 6]; // 6 bytes is not aligned for i32
-        let result: Result<JSArrayBuffer<i32>, _> = JSArrayBuffer::from_bytes(ctx, &data);
-        assert!(result.is_err());
+        let buffer: JSArrayBuffer = JSArrayBuffer::from_bytes(ctx, &data)?;
+        assert!(buffer.element_count::<i32>().is_err());
 
         // Test from_object with non-ArrayBuffer
         let obj = JSObject::new(ctx);
-        assert!(JSArrayBuffer::<u8>::from_object(obj).is_none());
+        assert!(JSArrayBuffer::from_object(obj).is_none());
         Ok(())
     });
 }

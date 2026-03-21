@@ -370,6 +370,21 @@ impl RongJSError {
         .into()
     }
 
+    pub fn TypedArrayKindMismatch(
+        expected: crate::JSTypedArrayKind,
+        actual: crate::JSTypedArrayKind,
+    ) -> Self {
+        HostError::new(
+            E_TYPE,
+            format!(
+                "TypedArray kind mismatch: expected {:?}, got {:?}",
+                expected, actual
+            ),
+        )
+        .with_name("TypeError")
+        .into()
+    }
+
     pub fn NotJSExcep() -> Self {
         HostError::new(E_NOT_EXCEPTION, "Not JS Exception Object")
             .with_name("TypeError")

@@ -9,18 +9,18 @@ fn test_array_basic_operations() {
             .unwrap();
 
         // Test length
-        assert_eq!(array.len(), 3);
+        assert_eq!(array.len().unwrap(), 3);
 
         // Test get
-        assert_eq!(array.get::<i32>(0).unwrap(), Some(1));
-        assert_eq!(array.get::<i32>(10).unwrap(), None); // Out of bounds
+        assert_eq!(array.get_opt::<i32>(0).unwrap(), Some(1));
+        assert_eq!(array.get_opt::<i32>(10).unwrap(), None); // Out of bounds
 
         // Test set
         array.set(0, 10).unwrap();
-        assert_eq!(array.get::<i32>(0).unwrap(), Some(10));
+        assert_eq!(array.get_opt::<i32>(0).unwrap(), Some(10));
 
         // Test is_empty
-        assert!(!array.is_empty());
+        assert!(!array.is_empty().unwrap());
         Ok(())
     });
 }
@@ -35,18 +35,17 @@ fn test_array_iteration() {
 
         // Test iterator
         let mut sum = 0;
-        for item in array.iter::<i32>() {
+        for item in array.iter_present::<i32>().unwrap() {
             sum += item.unwrap();
         }
         assert_eq!(sum, 60);
 
-        // Test exact size iterator
-        let iter = array.iter::<i32>();
+        let iter = array.iter_values().unwrap();
         assert_eq!(iter.len(), 3);
 
         // Test empty iterator
         let empty_array = JSArray::new(ctx).unwrap();
-        let mut empty_iter = empty_array.iter::<i32>();
+        let mut empty_iter = empty_array.iter_values().unwrap();
         assert_eq!(empty_iter.len(), 0);
         assert!(empty_iter.next().is_none());
         Ok(())
@@ -58,7 +57,7 @@ fn test_array_creation() {
     run(|ctx| {
         // Create empty array from Rust
         let array = JSArray::new(ctx).unwrap();
-        assert!(array.is_empty());
+        assert!(array.is_empty().unwrap());
 
         // Push elements
         array.push(1).unwrap();
@@ -66,10 +65,10 @@ fn test_array_creation() {
         array.push(3).unwrap();
 
         // Verify contents
-        assert_eq!(array.len(), 3);
-        assert_eq!(array.get::<i32>(0).unwrap(), Some(1));
-        assert_eq!(array.get::<i32>(1).unwrap(), Some(2));
-        assert_eq!(array.get::<i32>(2).unwrap(), Some(3));
+        assert_eq!(array.len().unwrap(), 3);
+        assert_eq!(array.get_opt::<i32>(0).unwrap(), Some(1));
+        assert_eq!(array.get_opt::<i32>(1).unwrap(), Some(2));
+        assert_eq!(array.get_opt::<i32>(2).unwrap(), Some(3));
         Ok(())
     });
 }
@@ -83,15 +82,15 @@ fn test_array_pop() {
             .unwrap();
 
         // Test pop
-        assert_eq!(array.pop::<i32>().unwrap(), Some(3));
-        assert_eq!(array.len(), 2);
+        assert_eq!(array.pop_opt::<i32>().unwrap(), Some(3));
+        assert_eq!(array.len().unwrap(), 2);
 
         // Pop remaining elements
-        assert_eq!(array.pop::<i32>().unwrap(), Some(2));
-        assert_eq!(array.pop::<i32>().unwrap(), Some(1));
+        assert_eq!(array.pop_opt::<i32>().unwrap(), Some(2));
+        assert_eq!(array.pop_opt::<i32>().unwrap(), Some(1));
 
         // Test pop on empty array
-        assert!(array.pop::<i32>().unwrap().is_none());
+        assert!(array.pop_opt::<i32>().unwrap().is_none());
         Ok(())
     });
 }
@@ -126,7 +125,7 @@ fn test_array_iterator_edge_cases() {
     run(|ctx| {
         // Test empty array
         let empty_array = JSArray::new(ctx).unwrap();
-        let mut empty_iter = empty_array.iter::<i32>();
+        let mut empty_iter = empty_array.iter_values().unwrap();
         assert_eq!(empty_iter.len(), 0);
         assert!(empty_iter.next().is_none());
 
@@ -136,12 +135,12 @@ fn test_array_iterator_edge_cases() {
             .unwrap();
 
         // Test iteration with concrete types
-        assert_eq!(mixed_array.get::<i32>(0).unwrap(), Some(1));
+        assert_eq!(mixed_array.get_opt::<i32>(0).unwrap(), Some(1));
         assert_eq!(
-            mixed_array.get::<String>(1).unwrap(),
+            mixed_array.get_opt::<String>(1).unwrap(),
             Some("two".to_string())
         );
-        assert_eq!(mixed_array.get::<bool>(2).unwrap(), Some(true));
+        assert_eq!(mixed_array.get_opt::<bool>(2).unwrap(), Some(true));
         Ok(())
     });
 }
@@ -152,7 +151,7 @@ fn test_vec_to_js_array() {
         let vec = vec![1, 2, 3];
         let js_array = JSArray::from_js_value(ctx, vec.into_js_value(ctx))?;
         assert!(js_array.is_array());
-        assert_eq!(js_array.len(), 3);
+        assert_eq!(js_array.len()?, 3);
         Ok(())
     });
 }

@@ -18,7 +18,9 @@ impl JSTypedArrayOps for JSCValue {
 
             // Calculate element size based on type
             let element_size = match kind {
-                JSTypedArrayKind::Int8 | JSTypedArrayKind::Uint8 => 1,
+                JSTypedArrayKind::Int8
+                | JSTypedArrayKind::Uint8
+                | JSTypedArrayKind::Uint8Clamped => 1,
                 JSTypedArrayKind::Int16 | JSTypedArrayKind::Uint16 => 2,
                 JSTypedArrayKind::Int32 | JSTypedArrayKind::Uint32 | JSTypedArrayKind::Float32 => 4,
                 JSTypedArrayKind::BigInt64
@@ -65,6 +67,9 @@ impl JSTypedArrayOps for JSCValue {
                 JSTypedArrayKind::Int16 => jsc::JSTypedArrayType_kJSTypedArrayTypeInt16Array,
                 JSTypedArrayKind::Int32 => jsc::JSTypedArrayType_kJSTypedArrayTypeInt32Array,
                 JSTypedArrayKind::Uint8 => jsc::JSTypedArrayType_kJSTypedArrayTypeUint8Array,
+                JSTypedArrayKind::Uint8Clamped => {
+                    jsc::JSTypedArrayType_kJSTypedArrayTypeUint8ClampedArray
+                }
                 JSTypedArrayKind::Uint16 => jsc::JSTypedArrayType_kJSTypedArrayTypeUint16Array,
                 JSTypedArrayKind::Uint32 => jsc::JSTypedArrayType_kJSTypedArrayTypeUint32Array,
                 JSTypedArrayKind::Float32 => jsc::JSTypedArrayType_kJSTypedArrayTypeFloat32Array,
@@ -112,6 +117,9 @@ impl JSTypedArrayOps for JSCValue {
                     }
                     jsc::JSTypedArrayType_kJSTypedArrayTypeUint8Array => {
                         Some(JSTypedArrayKind::Uint8)
+                    }
+                    jsc::JSTypedArrayType_kJSTypedArrayTypeUint8ClampedArray => {
+                        Some(JSTypedArrayKind::Uint8Clamped)
                     }
                     jsc::JSTypedArrayType_kJSTypedArrayTypeUint16Array => {
                         Some(JSTypedArrayKind::Uint16)

@@ -1,6 +1,6 @@
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue,
-    JSValueConversion, JSValueImpl, JSValueMapper, RongJSError,
+    JSValueImpl, JSValueMapper, RongJSError,
 };
 use std::fmt;
 use std::marker::PhantomData;
@@ -43,151 +43,171 @@ where
     }
 }
 
-/// Trait for JavaScript array operations
+/// Trait for primitive JavaScript array index operations.
 pub trait JSArrayOps: JSValueImpl {
-    /// Create a new empty array
-    fn new(ctx: &Self::Context) -> Self;
+    /// Create a new empty array.
+    fn new_array(ctx: &Self::Context) -> Self;
 
-    /// Get element at index
+    /// Get element at index.
     ///
-    /// # Returns
-    /// Returns the element at the specified index, or an `exception` if failed.
-    /// Caller should check if the result is an exception.
-    fn get(&self, index: u32) -> Self;
+    /// Returns the element value or an exception.
+    fn get_index(&self, index: u32) -> Self;
 
-    /// Set element at index
+    /// Set element at index.
     ///
-    /// # Returns
-    /// Returns `UNDEFINED` if successful, or an `exception` if failed.
-    /// Both are of type `Self`. Caller should check if the result is an exception.
-    fn set(&self, index: u32, value: Self) -> Self;
+    /// Returns `undefined` on success or an exception.
+    fn set_index(&self, index: u32, value: Self) -> Self;
 }
 
 impl<V> JSArray<V>
 where
     V: JSObjectOps + JSArrayOps,
 {
-    /// Create a new empty JavaScript array
+    /// Create a new empty JavaScript array.
     pub fn new(ctx: &JSContext<V::Context>) -> JSResult<Self> {
-        let value = V::new(ctx.as_ref());
-        value.try_map(|v| Self::from_js_value(ctx, JSValue::from_raw(ctx, v)))?
+        let value = V::new_array(ctx.as_ref());
+        value.try_map(|value| Self::from_js_value(ctx, JSValue::from_raw(ctx, value)))?
     }
 
-    /// Get the length of the JavaScript array
-    pub fn len(&self) -> u32 {
-        self.0.get::<_, u32>("length").unwrap_or(0)
+    /// Get the JavaScript `length` property.
+    pub fn len(&self) -> JSResult<u32> {
+        self.0.get::<_, u32>("length")
     }
 
-    /// Check if the JavaScript array is empty
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    /// Check whether the array is empty.
+    pub fn is_empty(&self) -> JSResult<bool> {
+        self.len().map(|len| len == 0)
     }
 
-    /// Get element at index
-    ///
-    /// # Returns
-    /// - `Ok(Some(value))` if element exists and can be converted
-    /// - `Ok(None)` if index is out of bounds
-    /// - `Err(_)` if type conversion fails or an exception occurred
-    pub fn get<T>(&self, index: u32) -> JSResult<Option<T>>
+    /// Get the raw JS value at the given index.
+    pub fn get_value(&self, index: u32) -> JSResult<JSValue<V>> {
+        let ctx = self.get_ctx();
+        self.as_value()
+            .get_index(index)
+            .try_map(|value| JSValue::from_raw(&ctx, value))
+    }
+
+    /// Set the raw JS value at the given index.
+    pub fn set_value(&self, index: u32, value: JSValue<V>) -> JSResult<()> {
+        self.as_value()
+            .set_index(index, value.into_value())
+            .try_map(|_| ())
+    }
+
+    /// Get an optionally-present element with Rust conversion semantics.
+    pub fn get_opt<T>(&self, index: u32) -> JSResult<Option<T>>
     where
         T: FromJSValue<V>,
     {
-        if index >= self.len() {
+        if index >= self.len()? {
             return Ok(None);
         }
-        let value = self.as_value().get(index);
-        let ctx = &self.get_ctx();
-        value.try_map(|v| T::from_js_value(ctx, JSValue::from_raw(ctx, v)).map(Some))?
+
+        let ctx = self.get_ctx();
+        let value = self.get_value(index)?;
+        T::from_js_value(&ctx, value).map(Some)
     }
 
-    /// Set element at specified index
-    ///
-    /// # Arguments
-    /// * `index` - The array index to set
-    /// * `value` - The value to set at the index
-    ///
-    /// # Returns
-    /// - `Ok(&Self)` if successful, allowing method chaining
-    /// - `Err(RongJSError)` if an exception occurred
-    pub fn set<T>(&self, index: u32, value: T) -> JSResult<&Self>
+    /// Set an element after Rust-to-JS conversion.
+    pub fn set<T>(&self, index: u32, value: T) -> JSResult<()>
     where
         T: IntoJSValue<V>,
     {
         let ctx = self.get_ctx();
-        let value = <T as IntoJSValue<V>>::into_js_value(value, &ctx);
-        let result = self.as_value().set(index, value.into_value());
-        result.try_map(|_| self)
+        self.set_value(index, value.into_js_value(&ctx))
     }
 
-    /// Create an iterator over the array elements
-    ///
-    /// # Returns
-    /// `ArrayIter` that yields elements of type `T`
-    pub fn iter<T>(&self) -> ArrayIter<V, T>
+    /// Delete an array index using primitive object semantics.
+    pub fn delete(&self, index: u32) -> bool {
+        self.0.del(index)
+    }
+
+    /// Check whether an index is present using primitive object semantics.
+    pub fn has_index(&self, index: u32) -> bool {
+        self.0.has(index)
+    }
+
+    /// Push a raw JS value using primitive index writes.
+    pub fn push_value(&self, value: JSValue<V>) -> JSResult<u32> {
+        let index = self.len()?;
+        self.set_value(index, value)?;
+        Ok(index + 1)
+    }
+
+    /// Push a Rust value and return the new array length.
+    pub fn push<T>(&self, value: T) -> JSResult<u32>
+    where
+        T: IntoJSValue<V>,
+    {
+        let ctx = self.get_ctx();
+        self.push_value(value.into_js_value(&ctx))
+    }
+
+    /// Pop a raw JS value using primitive index operations.
+    pub fn pop_value(&self) -> JSResult<JSValue<V>> {
+        let len = self.len()?;
+        let ctx = self.get_ctx();
+        if len == 0 {
+            return Ok(JSValue::undefined(&ctx));
+        }
+
+        let index = len - 1;
+        let value = self.get_value(index)?;
+        self.delete(index);
+        self.0.set("length", index)?;
+        Ok(value)
+    }
+
+    /// Pop an optionally-present element with Rust conversion semantics.
+    pub fn pop_opt<T>(&self) -> JSResult<Option<T>>
     where
         T: FromJSValue<V>,
     {
-        let count = self.len();
-        ArrayIter {
+        if self.is_empty()? {
+            return Ok(None);
+        }
+
+        let ctx = self.get_ctx();
+        let value = self.pop_value()?;
+        T::from_js_value(&ctx, value).map(Some)
+    }
+
+    /// Iterate over typed values in `[0, length)`.
+    pub fn iter<T>(&self) -> JSResult<ArrayIter<V, T>>
+    where
+        T: FromJSValue<V>,
+    {
+        Ok(ArrayIter {
             array: self.clone(),
             index: 0,
-            count,
+            count: self.len()?,
             marker: PhantomData,
-        }
+        })
     }
 
-    /// Push a value to the end of the array
-    ///
-    /// # Arguments
-    /// * `value` - The value to push
-    ///
-    /// # Returns
-    /// `JSResult<()>` indicating success or failure
-    pub fn push<T>(&self, value: T) -> JSResult<()>
-    where
-        T: IntoJSValue<V>,
-    {
-        let ctx = self.get_ctx();
-        let value = <T as IntoJSValue<V>>::into_js_value(value, &ctx);
-        let index = self.len();
-        self.as_value().set(index, value.into_value());
-        Ok(())
+    /// Iterate over raw values in `[0, length)`.
+    pub fn iter_values(&self) -> JSResult<ArrayValueIter<V>> {
+        Ok(ArrayValueIter {
+            array: self.clone(),
+            index: 0,
+            count: self.len()?,
+        })
     }
 
-    /// Pop element from end of array
-    ///
-    /// # Returns
-    /// - `Ok(Some(value))` if array not empty and value can be converted
-    /// - `Ok(None)` if array is empty
-    /// - `Err(_)` if type conversion fails
-    pub fn pop<T>(&self) -> JSResult<Option<T>>
+    /// Iterate over present values only, skipping holes.
+    pub fn iter_present<T>(&self) -> JSResult<ArrayPresentIter<V, T>>
     where
         T: FromJSValue<V>,
     {
-        if self.is_empty() {
-            return Ok(None);
-        }
-
-        let index = self.len() - 1;
-        let value = self.as_value().get(index);
-
-        // delete the element and update its length
-        self.0.del(index);
-        self.0.set("length", index)?;
-
-        let ctx = self.get_ctx();
-        T::from_js_value(&ctx, JSValue::from_raw(&ctx, value)).map(Some)
+        Ok(ArrayPresentIter {
+            array: self.clone(),
+            index: 0,
+            count: self.len()?,
+            marker: PhantomData,
+        })
     }
 
-    /// Construct a JSArray from a JSObject if it is an array
-    ///
-    /// # Arguments
-    /// * `obj` - The JSObject to check and convert
-    ///
-    /// # Returns
-    /// - `Some(JSArray)` if the object is an array
-    /// - `None` if the object is not an array
+    /// Construct a JSArray from a JSObject if it is an array.
     pub fn from_object(obj: JSObject<V>) -> Option<Self> {
         if obj.as_value().is_array() {
             Some(Self(obj))
@@ -197,7 +217,7 @@ where
     }
 }
 
-/// The iterator for JS Array
+/// Iterator over typed JavaScript values in an array.
 pub struct ArrayIter<V, T>
 where
     V: JSObjectOps + JSArrayOps,
@@ -218,11 +238,13 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.count {
-            let v = self.array.as_value().get(self.index);
             let ctx = self.array.get_ctx();
-            let res = T::from_js_value(&ctx, JSValue::from_raw(&ctx, v));
+            let result = self
+                .array
+                .get_value(self.index)
+                .and_then(|value| T::from_js_value(&ctx, value));
             self.index += 1;
-            Some(res)
+            Some(result)
         } else {
             None
         }
@@ -244,7 +266,86 @@ where
     }
 }
 
-/// Converts a Rust Vec into a JavaScript array
+/// Iterator over raw JavaScript values in an array.
+pub struct ArrayValueIter<V>
+where
+    V: JSObjectOps + JSArrayOps,
+{
+    array: JSArray<V>,
+    index: u32,
+    count: u32,
+}
+
+impl<V> Iterator for ArrayValueIter<V>
+where
+    V: JSObjectOps + JSArrayOps,
+{
+    type Item = JSResult<JSValue<V>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.count {
+            let result = self.array.get_value(self.index);
+            self.index += 1;
+            Some(result)
+        } else {
+            None
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.len();
+        (len, Some(len))
+    }
+}
+
+impl<V> ExactSizeIterator for ArrayValueIter<V>
+where
+    V: JSObjectOps + JSArrayOps,
+{
+    fn len(&self) -> usize {
+        (self.count - self.index) as usize
+    }
+}
+
+/// Iterator over present JavaScript array entries converted into Rust values.
+pub struct ArrayPresentIter<V, T>
+where
+    V: JSObjectOps + JSArrayOps,
+    T: FromJSValue<V>,
+{
+    array: JSArray<V>,
+    index: u32,
+    count: u32,
+    marker: PhantomData<T>,
+}
+
+impl<V, T> Iterator for ArrayPresentIter<V, T>
+where
+    V: JSObjectOps + JSArrayOps,
+    T: FromJSValue<V>,
+{
+    type Item = JSResult<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.index < self.count {
+            let index = self.index;
+            self.index += 1;
+
+            if self.array.has_index(index) {
+                let ctx = self.array.get_ctx();
+                let value = match self.array.get_value(index) {
+                    Ok(value) => value,
+                    Err(err) => return Some(Err(err)),
+                };
+                return Some(T::from_js_value(&ctx, value));
+            }
+        }
+
+        None
+    }
+}
+
+/// Converts a Rust Vec into a JavaScript array.
 impl<V, T> IntoJSValue<V> for Vec<T>
 where
     V: JSObjectOps + JSArrayOps,
@@ -253,13 +354,13 @@ where
     fn into_js_value(self, ctx: &JSContext<V::Context>) -> JSValue<V> {
         let array = JSArray::new(ctx).unwrap();
         for item in self {
-            array.push(item).expect("Failed to set value in array");
+            array.push(item).expect("Failed to push value into array");
         }
         <JSArray<V> as IntoJSValue<V>>::into_js_value(array, ctx)
     }
 }
 
-/// Converts a JavaScript array to a Rust Vec
+/// Converts a JavaScript array to a Rust Vec using dense array semantics.
 impl<V, T> FromJSValue<V> for Vec<T>
 where
     V: JSTypeOf,
@@ -269,8 +370,7 @@ where
     fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
         if value.is_array() {
             let array = JSArray::from_js_value(ctx, value)?;
-            let vec = array.iter::<T>().collect::<JSResult<Vec<_>>>()?;
-            Ok(vec)
+            array.iter::<T>()?.collect::<JSResult<Vec<_>>>()
         } else {
             Err(RongJSError::NotJSArray())
         }
@@ -278,22 +378,20 @@ where
 }
 
 // blanket implementing.
-// Type JSArray can be as parameter of JS callback of rust function
 impl<V: JSValueImpl> crate::function::JSParameterType for JSArray<V> {}
 
 impl<V> fmt::Display for JSArray<V>
 where
-    V: JSTypeOf + JSValueConversion,
+    V: JSTypeOf + crate::JSValueConversion,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Delegate to JSValue's Display implementation through Deref
         self.0.deref().fmt(f)
     }
 }
 
 impl<V> fmt::Debug for JSArray<V>
 where
-    V: JSTypeOf + JSValueConversion,
+    V: JSTypeOf + crate::JSValueConversion,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "JSArray({})", self)

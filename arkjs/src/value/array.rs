@@ -3,7 +3,7 @@ use crate::arkjs;
 use rong_core::{JSArrayOps, JSValueImpl};
 
 impl JSArrayOps for ArkJSValue {
-    fn new(ctx: &Self::Context) -> Self {
+    fn new_array(ctx: &Self::Context) -> Self {
         unsafe {
             let mut array: arkjs::JSVM_Value = std::ptr::null_mut();
             let status = arkjs::OH_JSVM_CreateArray(ctx.to_raw(), &mut array);
@@ -15,7 +15,7 @@ impl JSArrayOps for ArkJSValue {
         }
     }
 
-    fn get(&self, index: u32) -> Self {
+    fn get_index(&self, index: u32) -> Self {
         unsafe {
             let mut result: arkjs::JSVM_Value = std::ptr::null_mut();
             let status = arkjs::OH_JSVM_GetElement(self.env, self.value, index, &mut result);
@@ -30,7 +30,7 @@ impl JSArrayOps for ArkJSValue {
         }
     }
 
-    fn set(&self, index: u32, value: Self) -> Self {
+    fn set_index(&self, index: u32, value: Self) -> Self {
         unsafe {
             let status =
                 arkjs::OH_JSVM_SetElement(self.env, self.value, index, *value.as_raw_value());

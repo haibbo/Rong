@@ -3,7 +3,7 @@ use crate::qjs;
 use rong_core::{JSArrayOps, JSValueImpl};
 
 impl JSArrayOps for QJSValue {
-    fn new(ctx: &Self::Context) -> Self {
+    fn new_array(ctx: &Self::Context) -> Self {
         let ctx = ctx.to_raw();
         unsafe {
             let v = qjs::JS_NewArray(ctx);
@@ -16,7 +16,7 @@ impl JSArrayOps for QJSValue {
         }
     }
 
-    fn get(&self, index: u32) -> Self {
+    fn get_index(&self, index: u32) -> Self {
         let ctx = self.ctx;
         unsafe {
             let v = qjs::JS_GetPropertyUint32(ctx, self.value, index);
@@ -29,7 +29,7 @@ impl JSArrayOps for QJSValue {
         }
     }
 
-    fn set(&self, index: u32, value: Self) -> Self {
+    fn set_index(&self, index: u32, value: Self) -> Self {
         let ctx = self.ctx;
         unsafe {
             let status = qjs::JS_SetPropertyUint32(ctx, self.value, index, value.into_raw_value());

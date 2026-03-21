@@ -15,6 +15,7 @@ impl JSTypedArrayOps for QJSValue {
             let array_type = match kind {
                 JSTypedArrayKind::Int8 => qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT8,
                 JSTypedArrayKind::Uint8 => qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8,
+                JSTypedArrayKind::Uint8Clamped => qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C,
                 JSTypedArrayKind::Int16 => qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT16,
                 JSTypedArrayKind::Uint16 => qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT16,
                 JSTypedArrayKind::Int32 => qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT32,
@@ -55,6 +56,7 @@ impl JSTypedArrayOps for QJSValue {
 
             // Now convert to u32 since we know it's non-negative
             match array_type as u32 {
+                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C => Some(JSTypedArrayKind::Uint8Clamped),
                 qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT8 => Some(JSTypedArrayKind::Int8),
                 qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8 => Some(JSTypedArrayKind::Uint8),
                 qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT16 => Some(JSTypedArrayKind::Int16),

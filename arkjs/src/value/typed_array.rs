@@ -17,6 +17,9 @@ impl JSTypedArrayOps for ArkJSValue {
             let ark_type = match kind {
                 JSTypedArrayKind::Int8 => arkjs::JSVM_TypedarrayType_JSVM_INT8_ARRAY,
                 JSTypedArrayKind::Uint8 => arkjs::JSVM_TypedarrayType_JSVM_UINT8_ARRAY,
+                JSTypedArrayKind::Uint8Clamped => {
+                    arkjs::JSVM_TypedarrayType_JSVM_UINT8_CLAMPED_ARRAY
+                }
                 JSTypedArrayKind::Int16 => arkjs::JSVM_TypedarrayType_JSVM_INT16_ARRAY,
                 JSTypedArrayKind::Uint16 => arkjs::JSVM_TypedarrayType_JSVM_UINT16_ARRAY,
                 JSTypedArrayKind::Int32 => arkjs::JSVM_TypedarrayType_JSVM_INT32_ARRAY,
@@ -68,7 +71,9 @@ impl JSTypedArrayOps for ArkJSValue {
                 let kind = match array_type {
                     arkjs::JSVM_TypedarrayType_JSVM_INT8_ARRAY => JSTypedArrayKind::Int8,
                     arkjs::JSVM_TypedarrayType_JSVM_UINT8_ARRAY => JSTypedArrayKind::Uint8,
-                    arkjs::JSVM_TypedarrayType_JSVM_UINT8_CLAMPED_ARRAY => JSTypedArrayKind::Uint8, // Map to Uint8
+                    arkjs::JSVM_TypedarrayType_JSVM_UINT8_CLAMPED_ARRAY => {
+                        JSTypedArrayKind::Uint8Clamped
+                    }
                     arkjs::JSVM_TypedarrayType_JSVM_INT16_ARRAY => JSTypedArrayKind::Int16,
                     arkjs::JSVM_TypedarrayType_JSVM_UINT16_ARRAY => JSTypedArrayKind::Uint16,
                     arkjs::JSVM_TypedarrayType_JSVM_INT32_ARRAY => JSTypedArrayKind::Int32,
@@ -170,7 +175,9 @@ impl JSTypedArrayOps for ArkJSValue {
     fn get_byte_length(&self) -> usize {
         let length = self.get_length();
         let element_size = match self.get_kind() {
-            Some(JSTypedArrayKind::Int8) | Some(JSTypedArrayKind::Uint8) => 1,
+            Some(JSTypedArrayKind::Int8)
+            | Some(JSTypedArrayKind::Uint8)
+            | Some(JSTypedArrayKind::Uint8Clamped) => 1,
             Some(JSTypedArrayKind::Int16) | Some(JSTypedArrayKind::Uint16) => 2,
             Some(JSTypedArrayKind::Int32)
             | Some(JSTypedArrayKind::Uint32)

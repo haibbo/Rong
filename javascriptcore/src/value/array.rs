@@ -3,7 +3,7 @@ use crate::jsc;
 use rong_core::{JSArrayOps, JSValueImpl};
 
 impl JSArrayOps for JSCValue {
-    fn new(ctx: &Self::Context) -> Self {
+    fn new_array(ctx: &Self::Context) -> Self {
         unsafe {
             let array = jsc::JSObjectMakeArray(
                 ctx.to_raw(),
@@ -15,7 +15,7 @@ impl JSArrayOps for JSCValue {
         }
     }
 
-    fn get(&self, index: u32) -> Self {
+    fn get_index(&self, index: u32) -> Self {
         unsafe {
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();
             let value =
@@ -28,7 +28,7 @@ impl JSArrayOps for JSCValue {
         }
     }
 
-    fn set(&self, index: u32, value: Self) -> Self {
+    fn set_index(&self, index: u32, value: Self) -> Self {
         unsafe {
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();
             jsc::JSObjectSetPropertyAtIndex(
