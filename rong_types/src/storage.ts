@@ -27,7 +27,7 @@ export interface Storage {
   /** Clear all items */
   clear(): Promise<void>;
 
-  /** Get all keys (returns async iterator) */
+  /** Get all keys (returns a synchronous iterator wrapped in a Promise) */
   list(prefix?: string): Promise<IterableIterator<string>>;
 
   /** Get storage info */
@@ -53,7 +53,7 @@ export interface StorageModule {
    *
    * @example
    * ```typescript
-   * const storage = Rong.storage.open('/path/to/db.sqlite');
+   * const storage = await Rong.storage.open('/path/to/db.sqlite');
    * await storage.set('key', 'value');
    * ```
    */

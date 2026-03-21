@@ -46,6 +46,7 @@ export * from './encoding';
 export * from './storage';
 export * from './http';
 export * from './sse';
+export * from './worker';
 
 // File system
 export * from './fs';

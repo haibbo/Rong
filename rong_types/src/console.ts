@@ -26,11 +26,6 @@ export interface Console {
   clear(): void;
 }
 
-export interface ConsoleConstructor {
-  new(): Console;
-  prototype: Console;
-}
-
 // Note: console is a global object provided by the runtime
 // The standard Web Console API is available globally
 // This module documents Rong-specific console features
@@ -45,9 +40,5 @@ export interface ConsoleConstructor {
  * Example:
  * console.log("Name: %s, Age: %d", "Alice", 30);
  */
-
-declare global {
-  const Console: ConsoleConstructor;
-}
 
 export {};
