@@ -26,6 +26,7 @@ rong_storage = { workspace = true, optional = true }
 rong_stream = { workspace = true, optional = true }
 rong_process = { workspace = true, optional = true }
 rong_child_process = { workspace = true, optional = true }
+rong_worker = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -49,6 +50,7 @@ quickjs = [
     "rong_stream?/quickjs",
     "rong_process?/quickjs",
     "rong_child_process?/quickjs",
+    "rong_worker?/quickjs",
 ]
 jscore = [
     "rong/jscore",
@@ -69,6 +71,7 @@ jscore = [
     "rong_stream?/jscore",
     "rong_process?/jscore",
     "rong_child_process?/jscore",
+    "rong_worker?/jscore",
 ]
 arkjs = [
     "rong/arkjs",
@@ -89,6 +92,7 @@ arkjs = [
     "rong_stream?/arkjs",
     "rong_process?/arkjs",
     "rong_child_process?/arkjs",
+    "rong_worker?/arkjs",
 ]
 tls-aws-lc = ["rong_http?/tls-aws-lc"]
 tls-ring = ["rong_http?/tls-ring"]
@@ -111,6 +115,7 @@ all = [
     "stream",
     "process",
     "child_process",
+    "worker",
 ]
 
 timer = ["rong_timer"]
@@ -130,3 +135,4 @@ storage = ["rong_storage"]
 stream = ["rong_stream"]
 process = ["rong_process"]
 child_process = ["rong_child_process"]
+worker = ["rong_worker"]

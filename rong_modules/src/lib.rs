@@ -1,5 +1,8 @@
 use rong::*;
 
+#[cfg(feature = "worker")]
+pub use rong_worker as worker;
+
 /// Initialize all enabled modules in the JavaScript context
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     #[cfg(feature = "timer")]
@@ -52,6 +55,9 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 
     #[cfg(feature = "child_process")]
     rong_child_process::init(ctx)?;
+
+    #[cfg(feature = "worker")]
+    rong_worker::init(ctx)?;
 
     Ok(())
 }
