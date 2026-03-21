@@ -9,3 +9,4 @@ repository.workspace = true
 readme.workspace = true
 [build-dependencies]
 bindgen = "0.72"
+cc = "1"

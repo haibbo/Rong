@@ -1,5 +1,5 @@
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn checkout_submodule() {
@@ -17,17 +17,15 @@ fn checkout_submodule() {
     }
 }
 
-fn harmony_setup() {
+fn harmony_setup(build: &mut cc::Build) {
     let ndk = env::var("OHOS_NDK_HOME").expect("OHOS_NDK_HOME is not set!");
+
+    build.compiler(format!(
+        "{ndk}/native/llvm/bin/aarch64-unknown-linux-ohos-clang"
+    ));
+    build.archiver(format!("{ndk}/native/llvm/bin/llvm-ar"));
+
     unsafe {
-        env::set_var(
-            "CC",
-            format!("{ndk}/native/llvm/bin/aarch64-unknown-linux-ohos-clang"),
-        );
-
-        env::set_var("AR", format!("{ndk}/native/llvm/bin/llvm-ar"));
-
-        // for bindgen
         env::set_var(
             "BINDGEN_EXTRA_CLANG_ARGS",
             format!("--sysroot {ndk}/native/sysroot"),
@@ -35,7 +33,7 @@ fn harmony_setup() {
     }
 }
 
-fn android_setup() {
+fn android_setup(build: &mut cc::Build) {
     let ndk = env::var("ANDROID_NDK_ROOT").expect("ANDROID_NDK_ROOT is not set!");
     let arch = env::consts::ARCH;
     let os = if env::consts::OS == "macos" {
@@ -52,20 +50,16 @@ fn android_setup() {
         "aarch64-linux-android"
     };
 
+    build.compiler(format!(
+        "{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/clang"
+    ));
+    build.archiver(format!(
+        "{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/llvm-ar"
+    ));
+    build.flag(&format!("-target"));
+    build.flag(&format!("{cc_target}{api}"));
+
     unsafe {
-        env::set_var(
-            "CC",
-            format!(
-                "{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/clang -target {cc_target}{api}"
-            ),
-        );
-
-        env::set_var(
-            "AR",
-            format!("{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/llvm-ar"),
-        );
-
-        // for bindgen
         env::set_var(
             "BINDGEN_EXTRA_CLANG_ARGS",
             format!("--sysroot {ndk}/toolchains/llvm/prebuilt/{os}-{arch}/sysroot"),
@@ -73,8 +67,7 @@ fn android_setup() {
     }
 }
 
-// use utility xcrun to get path of sdk and clang
-fn ios_setup() {
+fn ios_setup(build: &mut cc::Build) {
     let sdk = Command::new("xcrun")
         .args(["--show-sdk-path", "--sdk", "iphoneos"])
         .output()
@@ -89,24 +82,22 @@ fn ios_setup() {
         .stdout;
     let clang_path = String::from_utf8_lossy(&clang).trim().to_string();
 
+    build.compiler(&clang_path);
+    build.flag("-isysroot");
+    build.flag(&sdk_path);
+    build.flag("-arch");
+    build.flag("arm64");
+    build.flag("-mios-version-min=11.0");
+
+    let ar = Command::new("xcrun")
+        .args(["--find", "ar"])
+        .output()
+        .expect("failed to find ar")
+        .stdout;
+    let ar_path = String::from_utf8_lossy(&ar).trim().to_string();
+    build.archiver(&ar_path);
+
     unsafe {
-        env::set_var(
-            "CC",
-            format!(
-                "{} -isysroot {} -arch arm64 -mios-version-min=11.0",
-                clang_path, sdk_path
-            ),
-        );
-
-        let ar = Command::new("xcrun")
-            .args(["--find", "ar"])
-            .output()
-            .expect("failed to find ar")
-            .stdout;
-        let ar_path = String::from_utf8_lossy(&ar).trim().to_string();
-        env::set_var("AR", ar_path);
-
-        // extra args for bindgen
         env::set_var(
             "BINDGEN_EXTRA_CLANG_ARGS",
             format!("-isysroot {}", sdk_path),
@@ -114,40 +105,67 @@ fn ios_setup() {
     }
 }
 
-fn build_static_archive(out_dir: &str) {
-    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+/// Merge quickjs.c + extra.c into a single file
+/// extra.c accesses quickjs internals so it must be compiled in the same translation unit.
+fn merge_quickjs_source(out_dir: &Path) -> PathBuf {
+    let quickjs_c = std::fs::read_to_string("quickjs-ng/quickjs.c")
+        .expect("Failed to read quickjs-ng/quickjs.c");
+    let extra_c = std::fs::read_to_string("patch/extra.c").expect("Failed to read patch/extra.c");
 
+    let merged_path = out_dir.join("new_quickjs.c");
+    std::fs::write(&merged_path, format!("{quickjs_c}\n{extra_c}"))
+        .expect("Failed to write merged quickjs source");
+    merged_path
+}
+
+fn build_quickjs(out_dir: &Path) {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let profile = env::var("PROFILE").unwrap();
+
+    let mut build = cc::Build::new();
+
+    // Platform-specific setup
     match target_os.as_str() {
         "linux" => {
             if env::var("CARGO_CFG_TARGET_ENV").unwrap() == "ohos" {
-                harmony_setup()
+                harmony_setup(&mut build);
             }
         }
-        "android" => android_setup(),
-        "ios" => ios_setup(),
-        _ => {} // do nothing for other os, like masosx
+        "android" => android_setup(&mut build),
+        "ios" => ios_setup(&mut build),
+        _ => {} // macOS, Windows, etc. — cc crate auto-detects
     }
 
-    // PROFILE(debug or release) is set automatically by cargo
-    let profile = env::var("PROFILE").unwrap();
-    let jobs = env::var("NUM_JOBS").unwrap_or_else(|_| "4".to_string());
+    // Include paths
+    build.include("quickjs-ng");
+    build.include("patch");
 
-    let output = Command::new("make")
-        .args([
-            &format!("-j{jobs}"),
-            &format!("PROFILE={profile}"),
-            // Ensure build artifacts stay inside Cargo's OUT_DIR to avoid polluting the repo and
-            // triggering unnecessary rebuilds.
-            &format!("OUT_DIR={out_dir}"),
-        ])
-        .output()
-        .expect("Failed to execute make");
+    // Optimization
+    if profile == "release" {
+        build.opt_level(2);
+        build.define("NDEBUG", None);
+    } else {
+        build.opt_level(0);
+        build.debug(true);
+    }
 
-    assert!(
-        output.status.success(),
-        "Make failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    // Warnings
+    build.warnings(true);
+
+    // Merge quickjs.c + extra.c (extra.c accesses quickjs internals)
+    let merged = merge_quickjs_source(out_dir);
+
+    // Source files
+    build.file(&merged); // quickjs.c + extra.c merged
+    build.file("quickjs-ng/libregexp.c");
+    build.file("quickjs-ng/libunicode.c");
+    build.file("quickjs-ng/cutils.c");
+    build.file("quickjs-ng/dtoa.c");
+    build.file("patch/qjs.c");
+    build.file("patch/inline.c");
+
+    // Build static library named "quickjs"
+    build.compile("quickjs");
 }
 
 fn generate_binding(out_dir: &str) {
@@ -188,11 +206,10 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
 
     checkout_submodule();
-    build_static_archive(&out_dir);
+    build_quickjs(Path::new(&out_dir));
     generate_binding(&out_dir);
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=Makefile");
     println!("cargo:rerun-if-changed=quickjs.wrapper.h");
     // Watch directories so edits/additions don't require updating this list.
     println!("cargo:rerun-if-changed=patch");
@@ -201,8 +218,4 @@ fn main() {
     println!("cargo:rerun-if-env-changed=OHOS_NDK_HOME");
     println!("cargo:rerun-if-env-changed=ANDROID_NDK_ROOT");
     println!("cargo:rerun-if-env-changed=ANDROID_API_LEVEL");
-
-    // where to find static library libquickjs
-    println!("cargo:rustc-link-search=native={}", out_dir);
-    println!("cargo:rustc-link-lib=static=quickjs");
 }
