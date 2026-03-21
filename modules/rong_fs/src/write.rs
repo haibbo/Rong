@@ -60,7 +60,7 @@ async fn rong_write(_ctx: JSContext, dest: JSValue, data: JSValue) -> JSResult<f
 
     if data.is_array_buffer() {
         // Write ArrayBuffer
-        let ab: JSArrayBuffer<u8> = data.try_into()?;
+        let ab: JSArrayBuffer = data.try_into()?;
         let bytes = ab.as_slice();
         let len = bytes.len();
 
@@ -92,7 +92,7 @@ async fn rong_write(_ctx: JSContext, dest: JSValue, data: JSValue) -> JSResult<f
         }
 
         // Try as TypedArray (Uint8Array, etc.)
-        if let Some(ta) = JSTypedArray::from_object(obj) {
+        if let Some(ta) = AnyJSTypedArray::from_object(obj) {
             if let Some(bytes) = ta.as_bytes() {
                 let len = bytes.len();
 

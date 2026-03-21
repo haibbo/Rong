@@ -124,7 +124,7 @@ impl TextDecoder {
 
         // Get the bytes from input
         let bytes = if let Some(input) = input.0 {
-            if let Some(typed_array) = JSTypedArray::from_object(input.clone()) {
+            if let Some(typed_array) = AnyJSTypedArray::from_object(input.clone()) {
                 // Get bytes from TypedArray
                 if let Some(bytes) = typed_array.as_bytes() {
                     bytes.to_vec()
@@ -135,17 +135,9 @@ impl TextDecoder {
                             .into(),
                     );
                 }
-            } else if let Some(buffer) = JSArrayBuffer::<u8>::from_object(input) {
+            } else if let Some(buffer) = JSArrayBuffer::from_object(input) {
                 // Get bytes from ArrayBuffer
-                if let Some(bytes) = buffer.as_bytes() {
-                    bytes.to_vec()
-                } else {
-                    return Err(
-                        HostError::new(rong::error::E_INVALID_ARG, "Invalid ArrayBuffer")
-                            .with_name("TypeError")
-                            .into(),
-                    );
-                }
+                buffer.as_bytes().to_vec()
             } else {
                 return Err(HostError::new(
                     rong::error::E_INVALID_ARG,

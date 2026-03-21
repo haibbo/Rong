@@ -84,7 +84,7 @@ impl FileSink {
 
         // ArrayBuffer
         if data.is_array_buffer() {
-            let ab: JSArrayBuffer<u8> = data.try_into()?;
+            let ab: JSArrayBuffer = data.try_into()?;
             let bytes = ab.as_slice();
             let len = bytes.len();
             let mut file = self.file.lock().await;
@@ -99,7 +99,7 @@ impl FileSink {
 
         // TypedArray (Uint8Array etc.)
         if let Some(obj) = data.into_object() {
-            if let Some(ta) = JSTypedArray::from_object(obj) {
+            if let Some(ta) = AnyJSTypedArray::from_object(obj) {
                 let bytes = ta.as_bytes().ok_or_else(|| {
                     HostError::new(rong::error::E_INVALID_ARG, "Invalid TypedArray data")
                         .with_name("TypeError")

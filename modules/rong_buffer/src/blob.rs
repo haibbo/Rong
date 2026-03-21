@@ -78,7 +78,7 @@ impl Blob {
 
     /// Returns a promise that resolves with an ArrayBuffer containing the blob's data
     #[js_method(rename = "arrayBuffer")]
-    pub async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
+    pub async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer> {
         JSArrayBuffer::from_bytes(&ctx, &self.data)
     }
 
@@ -146,7 +146,7 @@ impl Blob {
     #[js_method]
     pub async fn bytes(&self, ctx: JSContext) -> JSResult<JSTypedArray> {
         let buffer = JSArrayBuffer::from_bytes(&ctx, &self.data)?;
-        JSTypedArray::from_array_buffer::<u8>(&ctx, buffer, 0, None)
+        JSTypedArray::<u8>::from_array_buffer(&ctx, buffer, 0, None)
     }
 }
 
@@ -169,25 +169,23 @@ impl Blob {
 fn process_blob_part(array: &JSArray, options: &BlobOptions) -> JSResult<Vec<u8>> {
     let mut data = Vec::new();
 
-    if array.is_empty() {
+    if array.is_empty()? {
         return Ok(data);
     }
 
-    for elem in array.iter::<JSValue>() {
+    for elem in array.iter_values()? {
         let elem = elem?;
 
         if let Some(object) = elem.clone().into_object() {
-            if let Some(typed_array) = JSTypedArray::from_object(object.clone()) {
+            if let Some(typed_array) = AnyJSTypedArray::from_object(object.clone()) {
                 if let Some(bytes) = typed_array.as_bytes() {
                     data.extend_from_slice(bytes);
                 }
                 continue;
             }
 
-            if let Some(buffer) = JSArrayBuffer::<u8>::from_object(object.clone()) {
-                if let Some(bytes) = buffer.as_bytes() {
-                    data.extend_from_slice(bytes);
-                }
+            if let Some(buffer) = JSArrayBuffer::from_object(object.clone()) {
+                data.extend_from_slice(buffer.as_bytes());
                 continue;
             }
 

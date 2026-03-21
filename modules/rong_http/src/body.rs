@@ -46,17 +46,15 @@ impl HttpBody {
             }
 
             // Handle TypedArray
-            if let Some(typed_array) = JSTypedArray::from_object(obj.clone())
+            if let Some(typed_array) = AnyJSTypedArray::from_object(obj.clone())
                 && let Some(bytes) = typed_array.as_bytes()
             {
                 return Ok((Bytes::from(bytes.to_vec()), None));
             }
 
             // Handle ArrayBuffer
-            if let Some(buffer) = JSArrayBuffer::<u8>::from_object(obj.clone())
-                && let Some(bytes) = buffer.as_bytes()
-            {
-                return Ok((Bytes::from(bytes.to_vec()), None));
+            if let Some(buffer) = JSArrayBuffer::from_object(obj.clone()) {
+                return Ok((Bytes::from(buffer.as_bytes().to_vec()), None));
             }
 
             // Handle Blob

@@ -360,7 +360,7 @@ impl Response {
     }
 
     #[js_method(rename = "arrayBuffer")]
-    async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
+    async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer> {
         if self.body_used() {
             return Err(HostError::new(
                 rong::error::E_INVALID_STATE,

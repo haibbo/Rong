@@ -417,7 +417,7 @@ impl ReadableStreamDefaultReader {
             Some(Ok(bytes)) => {
                 let out = JSObject::new(&ctx);
                 out.set("done", false)?;
-                let ab = JSArrayBuffer::<u8>::from_bytes_owned(&ctx, bytes.to_vec())?;
+                let ab = JSArrayBuffer::from_bytes_owned(&ctx, bytes.to_vec())?;
                 out.set("value", ab)?;
                 Ok(out)
             }
@@ -483,7 +483,7 @@ impl ReadableStreamDefaultController {
     fn enqueue(&mut self, chunk: JSValue) -> JSResult<()> {
         // Support Uint8Array or ArrayBuffer
         let bytes: Bytes = if let Some(obj) = chunk.clone().into_object() {
-            if let Some(ta) = JSTypedArray::from_object(obj.clone()) {
+            if let Some(ta) = AnyJSTypedArray::from_object(obj.clone()) {
                 if let Some(b) = ta.as_bytes() {
                     Bytes::copy_from_slice(b)
                 } else {
@@ -493,16 +493,8 @@ impl ReadableStreamDefaultController {
                             .into(),
                     );
                 }
-            } else if let Some(ab) = JSArrayBuffer::<u8>::from_object(obj) {
-                if let Some(b) = ab.as_bytes() {
-                    Bytes::copy_from_slice(b)
-                } else {
-                    return Err(
-                        HostError::new(rong::error::E_INVALID_ARG, "Invalid ArrayBuffer")
-                            .with_name("TypeError")
-                            .into(),
-                    );
-                }
+            } else if let Some(ab) = JSArrayBuffer::from_object(obj) {
+                Bytes::copy_from_slice(ab.as_bytes())
             } else {
                 return Err(HostError::new(
                     rong::error::E_INVALID_ARG,
@@ -612,7 +604,7 @@ fn install_instance_async_iter(ctx: &JSContext, obj: &JSObject) -> JSResult<()> 
                     }
                     let out = JSObject::new(&ctx);
                     out.set("done", false).ok();
-                    if let Ok(ab) = JSArrayBuffer::<u8>::from_bytes(&ctx, &bytes) {
+                    if let Ok(ab) = JSArrayBuffer::from_bytes(&ctx, &bytes) {
                         out.set("value", ab).ok();
                     }
                     Ok(out)

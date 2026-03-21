@@ -167,9 +167,9 @@ impl AbortSignal {
     fn any(ctx: JSContext, signals: JSArray) -> JSResult<JSObject> {
         let new_signal = AbortSignal::new(&ctx);
         let class = Class::get::<AbortSignal>(&ctx)?;
-        let mut unaborted_signals = Vec::with_capacity(signals.len() as _);
+        let mut unaborted_signals = Vec::with_capacity(signals.len()? as usize);
 
-        for item in signals.iter::<JSObject>() {
+        for item in signals.iter::<JSObject>()? {
             let signal = item?;
             let borrow = signal.borrow_mut::<AbortSignal>()?;
 

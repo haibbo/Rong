@@ -60,17 +60,17 @@ impl RongFile {
             .map_err(|e| HostError::new("FS_IO", format!("Failed to read file: {}", e)))?;
 
         let len = data.len();
-        let ab = JSArrayBuffer::<u8>::from_bytes_owned(&ctx, data)?;
-        JSTypedArray::from_array_buffer::<u8>(&ctx, ab, 0, Some(len))
+        let ab = JSArrayBuffer::from_bytes_owned(&ctx, data)?;
+        JSTypedArray::from_array_buffer(&ctx, ab, 0, Some(len))
     }
 
     #[js_method(rename = "arrayBuffer")]
-    async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
+    async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer> {
         let data = tokio::fs::read(&self.resolved)
             .await
             .map_err(|e| HostError::new("FS_IO", format!("Failed to read file: {}", e)))?;
 
-        JSArrayBuffer::<u8>::from_bytes_owned(&ctx, data)
+        JSArrayBuffer::from_bytes_owned(&ctx, data)
     }
 
     #[js_method]

@@ -418,18 +418,20 @@ fn format_array(
     depth: usize,
     max_items: usize,
 ) {
-    let total = array.len() as usize;
+    let total = array.len().unwrap_or(0) as usize;
     let mut written = 0usize;
     result.push_str("[ ");
-    for item in array.iter::<JSValue>().flatten() {
-        if written >= max_items {
-            break;
+    if let Ok(iter) = array.iter_values() {
+        for item in iter.flatten() {
+            if written >= max_items {
+                break;
+            }
+            if written > 0 {
+                result.push_str(", ");
+            }
+            format_raw_inner(result, item, visited, depth + 1);
+            written += 1;
         }
-        if written > 0 {
-            result.push_str(", ");
-        }
-        format_raw_inner(result, item, visited, depth + 1);
-        written += 1;
     }
     if total > written {
         result.push_str(", ... ");
@@ -487,7 +489,7 @@ fn format_object(
 }
 
 fn format_array_buffer(result: &mut String, obj: JSObject) {
-    if let Some(buffer) = JSArrayBuffer::<u8>::from_object(obj.clone()) {
+    if let Some(buffer) = JSArrayBuffer::from_object(obj.clone()) {
         let len = buffer.len();
 
         // For small ArrayBuffer, display its content
@@ -496,18 +498,17 @@ fn format_array_buffer(result: &mut String, obj: JSObject) {
             result.push_str(&format!("byteLength: {}", len));
 
             // Try to get and display the byte content
-            if let Some(bytes) = buffer.as_bytes() {
-                result.push_str(", bytes: [");
+            let bytes = buffer.as_bytes();
+            result.push_str(", bytes: [");
 
-                for (i, byte) in bytes.iter().enumerate() {
-                    if i > 0 {
-                        result.push_str(", ");
-                    }
-                    result.push_str(&format!("0x{:02x}", byte));
+            for (i, byte) in bytes.iter().enumerate() {
+                if i > 0 {
+                    result.push_str(", ");
                 }
-
-                result.push(']');
+                result.push_str(&format!("0x{:02x}", byte));
             }
+
+            result.push(']');
 
             result.push_str(" }");
         } else {

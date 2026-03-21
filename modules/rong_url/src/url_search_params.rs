@@ -37,11 +37,11 @@ impl URLSearchParams {
                 let obj: JSObject = init.into();
                 if let Some(arr) = JSArray::from_object(obj.clone()) {
                     // Initialize from key-value pair array [[k1,v1], [k2,v2]]
-                    for pair in arr.iter::<JSArray>() {
+                    for pair in arr.iter_present::<JSArray>()? {
                         let pair = pair?;
-                        if pair.len() >= 2
-                            && let Some(key) = pair.get::<String>(0)?
-                            && let Some(value) = pair.get::<String>(1)?
+                        if pair.len()? >= 2
+                            && let Some(key) = pair.get_opt::<String>(0)?
+                            && let Some(value) = pair.get_opt::<String>(1)?
                         {
                             params.push((key, value));
                         }

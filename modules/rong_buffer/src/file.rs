@@ -113,7 +113,7 @@ impl File {
     }
 
     #[js_method(rename = "arrayBuffer")]
-    pub async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer<u8>> {
+    pub async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer> {
         self.blob.array_buffer(ctx).await
     }
 

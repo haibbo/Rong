@@ -357,9 +357,9 @@ fn parse_args(args: &Optional<JSValue>) -> JSResult<Vec<String>> {
             .and_then(JSArray::from_object)
         {
             let mut result = Vec::new();
-            for i in 0..arr.len() {
+            for i in 0..arr.len()? {
                 let val = arr
-                    .get::<String>(i)?
+                    .get_opt::<String>(i)?
                     .ok_or_else(|| type_error("args must be an array of strings"))?;
                 result.push(val);
             }

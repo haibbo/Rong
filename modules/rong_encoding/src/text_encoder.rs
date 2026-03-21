@@ -58,7 +58,7 @@ impl TextEncoder {
 
         // Create a buffer with the bytes and create a Uint8Array from it
         let buffer = JSArrayBuffer::from_bytes(&ctx, bytes)?;
-        JSTypedArray::from_array_buffer::<u8>(&ctx, buffer, 0, Some(bytes.len()))
+        JSTypedArray::<u8>::from_array_buffer(&ctx, buffer, 0, Some(bytes.len()))
     }
 
     /// Encodes a string into a provided `Uint8Array`, returning the number of bytes read and written.
@@ -74,7 +74,7 @@ impl TextEncoder {
     #[js_method(rename = "encodeInto")]
     pub fn encode_into(&self, ctx: JSContext, input: String, dest: JSObject) -> JSResult<JSObject> {
         // First, check if dest can be converted to JSTypedArray
-        if let Some(typed_array) = JSTypedArray::from_object(dest) {
+        if let Some(typed_array) = AnyJSTypedArray::from_object(dest) {
             // Then, check if the typed array is Uint8Array
             if typed_array.kind() == JSTypedArrayKind::Uint8 {
                 // Get the underlying buffer and its length

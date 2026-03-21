@@ -213,7 +213,7 @@ impl WritableStreamDefaultWriter {
 
         // Channel mode
         let bytes: Bytes = if let Some(obj) = chunk.clone().into_object() {
-            if let Some(ta) = JSTypedArray::from_object(obj.clone()) {
+            if let Some(ta) = AnyJSTypedArray::from_object(obj.clone()) {
                 if let Some(b) = ta.as_bytes() {
                     Bytes::copy_from_slice(b)
                 } else {
@@ -223,16 +223,8 @@ impl WritableStreamDefaultWriter {
                             .into(),
                     );
                 }
-            } else if let Some(ab) = JSArrayBuffer::<u8>::from_object(obj) {
-                if let Some(b) = ab.as_bytes() {
-                    Bytes::copy_from_slice(b)
-                } else {
-                    return Err(
-                        HostError::new(rong::error::E_INVALID_ARG, "Invalid ArrayBuffer")
-                            .with_name("TypeError")
-                            .into(),
-                    );
-                }
+            } else if let Some(ab) = JSArrayBuffer::from_object(obj) {
+                Bytes::copy_from_slice(ab.as_bytes())
             } else {
                 return Err(HostError::new(
                     rong::error::E_INVALID_ARG,

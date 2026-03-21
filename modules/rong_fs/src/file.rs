@@ -50,7 +50,7 @@ impl FileHandle {
     }
 
     #[js_method]
-    async fn read(&self, buffer: JSArrayBuffer<u8>) -> JSResult<Option<usize>> {
+    async fn read(&self, buffer: JSArrayBuffer) -> JSResult<Option<usize>> {
         let buf_len = buffer.len();
         if buf_len == 0 {
             return Ok(Some(0));
@@ -71,7 +71,7 @@ impl FileHandle {
     }
 
     #[js_method]
-    async fn write(&self, buffer: JSArrayBuffer<u8>) -> JSResult<usize> {
+    async fn write(&self, buffer: JSArrayBuffer) -> JSResult<usize> {
         let buf = buffer.as_slice();
 
         let mut file = self.file.lock().await;

@@ -39,10 +39,10 @@ impl Headers {
                             .map(|(k, v)| (k.clone(), v.clone())),
                     );
                 } else if let Some(array) = JSArray::from_object(obj.clone()) {
-                    for item in array.iter::<JSValue>() {
+                    for item in array.iter_values()? {
                         let item = item?;
                         if let Some(pair) = item.into_object().and_then(JSArray::from_object) {
-                            if pair.len() != 2 {
+                            if pair.len()? != 2 {
                                 return Err(HostError::new(
                                     rong::error::E_INVALID_ARG,
                                     "Each header must be an array of [name, value]",
@@ -51,14 +51,14 @@ impl Headers {
                                 .into());
                             }
 
-                            let key: String = pair.get(0)?.ok_or_else(|| {
+                            let key: String = pair.get_opt(0)?.ok_or_else(|| {
                                 HostError::new(
                                     rong::error::E_INVALID_ARG,
                                     "Header name is required",
                                 )
                                 .with_name("TypeError")
                             })?;
-                            let value: String = pair.get(1)?.ok_or_else(|| {
+                            let value: String = pair.get_opt(1)?.ok_or_else(|| {
                                 HostError::new(
                                     rong::error::E_INVALID_ARG,
                                     "Header value is required",
