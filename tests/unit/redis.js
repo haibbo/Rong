@@ -12,17 +12,23 @@ describe("RedisClient — connection", () => {
   });
   afterEach(() => client.close());
 
-  it("construct with default URL", () => {
-    const c = new RedisClient();
-    assert.equal(c.connected, false);
-    c.close();
-  });
-
   it("is exposed on Rong namespace", () => {
     assert.equal(Rong.RedisClient, RedisClient);
     const c = new Rong.RedisClient(REDIS_URL);
     assert.equal(c.connected, false);
     c.close();
+  });
+
+  it("requires an explicit URL", () => {
+    let threw = false;
+    try {
+      new RedisClient();
+    } catch (e) {
+      threw = true;
+      assert.equal(e.name, "TypeError");
+      assert(e.message.includes("explicit Redis URL"));
+    }
+    assert(threw, "constructor should require an explicit url");
   });
 
   it("connect explicitly", async () => {

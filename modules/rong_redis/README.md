@@ -5,7 +5,7 @@ Async Redis client following Bun's `RedisClient` API design. Exposed as both glo
 ## JS APIs
 
 - `RedisClient` — global Redis client class
-  - `new RedisClient(url?)` — create a client (defaults to `REDIS_URL` env or `redis://127.0.0.1:6379`)
+  - `new RedisClient(url)` — create a client with an explicit Redis URL
   - `connect()` — explicitly connect (optional, commands auto-connect)
   - `close()` — close the connection
   - `connected` — whether a connection is currently held
