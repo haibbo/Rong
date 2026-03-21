@@ -134,6 +134,9 @@ fn main() -> Result<(), RongJSError> {
             _ => unreachable!(),
         }
     } else {
+        // Give workers the same module set as the main context
+        rong_modules::worker::set_initializer(|ctx| rong_modules::init(ctx));
+
         // For commands that need JS execution, use a single Rong instance
         Rong::<RongJS>::builder()
             .build()
