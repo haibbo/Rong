@@ -16,7 +16,6 @@ import type {
   SeekMode,
   UTimeOptions,
 } from './fs';
-import type { PathModule } from './path';
 import type { Process } from './process';
 import type { RedisClientConstructor } from './redis';
 import type { SSEConstructor } from './sse';
@@ -74,11 +73,6 @@ declare global {
    * Child Process module - Node.js compatible child process spawning (globalThis.child_process)
    */
   const child_process: ChildProcessModule;
-
-  /**
-   * Path module - Path manipulation utilities (Node.js compatible)
-   */
-  const path: PathModule;
 
   /**
    * Base64 decode - Decode base64 string to binary string

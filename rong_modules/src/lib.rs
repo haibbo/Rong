@@ -8,12 +8,6 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     #[cfg(feature = "timer")]
     rong_timer::init(ctx)?;
 
-    #[cfg(feature = "navigator")]
-    rong_navigator::init(ctx)?;
-
-    #[cfg(feature = "path")]
-    rong_path::init(ctx)?;
-
     #[cfg(feature = "stream")]
     rong_stream::init(ctx)?;
 

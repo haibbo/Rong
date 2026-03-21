@@ -59,9 +59,7 @@ export * from './abort';
 export * from './exception';
 
 // Utility modules
-export * from './navigator';
 export * from './timer';
-export * from './path';
 export * from './assert';
 export * from './console';
 export * from './sqlite';
