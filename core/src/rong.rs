@@ -597,10 +597,19 @@ impl<E: JSEngine + 'static> Rong<E> {
 
                                 // Only start the microtask polling runner for engines
                                 // that need it (run_pending_jobs returns -1 when not needed).
+                                //
+                                // QuickJS does not autonomously pump pending jobs; it needs the
+                                // host to drive microtasks. The hot paths should trigger
+                                // run_pending_jobs() directly when promises are resolved or host
+                                // messages are delivered. This interval remains only as a low-
+                                // frequency safety net for internal JS async work that is not
+                                // otherwise observed by the host.
                                 if js_runtime.run_pending_jobs() >= 0 {
                                     let rt_clone = js_runtime.clone();
                                     let microtask_handle = spawn(async move {
-                                        let mut interval = tokio::time::interval(std::time::Duration::from_millis(5));
+                                        let mut interval = tokio::time::interval(
+                                            std::time::Duration::from_millis(50),
+                                        );
                                         loop {
                                             interval.tick().await;
                                             rt_clone.run_pending_jobs();

@@ -160,16 +160,26 @@ pub trait PromiseResolver<V: JSValueImpl> {
     fn resolve_promise(self, resolve: JSFunc<V>, reject: JSFunc<V>);
 }
 
+fn drain_microtasks<V>(ctx: &JSContext<V::Context>)
+where
+    V: JSValueImpl,
+    <V::Context as crate::JSContextImpl>::Runtime: 'static,
+{
+    let _ = ctx.runtime().run_pending_jobs();
+}
+
 // Implement for RongJSError types
 impl<V> PromiseResolver<V> for RongJSError
 where
     V: JSObjectOps + crate::JSArrayOps,
     V::Context: JSErrorFactory,
+    <V::Context as crate::JSContextImpl>::Runtime: 'static,
 {
     fn resolve_promise(self, _resolve: JSFunc<V>, reject: JSFunc<V>) {
         let ctx = reject.get_ctx();
         let js_err = self.into_catch_value(&ctx);
         let _ = reject.call::<_, ()>(None, (js_err,));
+        drain_microtasks::<V>(&ctx);
     }
 }
 
@@ -178,9 +188,12 @@ impl<V, T> PromiseResolver<V> for T
 where
     T: IntoJSValue<V> + JSParameterType,
     V: JSObjectOps,
+    <V::Context as crate::JSContextImpl>::Runtime: 'static,
 {
     fn resolve_promise(self, resolve: JSFunc<V>, _reject: JSFunc<V>) {
+        let ctx = resolve.get_ctx();
         let _ = resolve.call::<_, ()>(None, (self,));
+        drain_microtasks::<V>(&ctx);
     }
 }
 
@@ -189,12 +202,14 @@ impl<V, T> PromiseResolver<V> for Vec<T>
 where
     V: JSObjectOps + JSTypeOf + crate::JSArrayOps + 'static,
     T: IntoJSValue<V>,
+    <V::Context as crate::JSContextImpl>::Runtime: 'static,
 {
     fn resolve_promise(self, resolve: JSFunc<V>, _reject: JSFunc<V>) {
         let ctx = resolve.get_ctx();
         let arg = <Vec<T> as IntoJSValue<V>>::into_js_value(self, &ctx).into_value();
         let this = V::create_undefined(ctx.as_ref());
         let _ = ctx.as_ref().call(resolve.as_value(), this, vec![arg]);
+        drain_microtasks::<V>(&ctx);
     }
 }
 
@@ -204,6 +219,7 @@ where
     T: IntoJSValue<V>,
     V: JSObjectOps + crate::JSArrayOps,
     V::Context: JSErrorFactory,
+    <V::Context as crate::JSContextImpl>::Runtime: 'static,
 {
     fn resolve_promise(self, resolve: JSFunc<V>, reject: JSFunc<V>) {
         match self {
@@ -212,6 +228,7 @@ where
                 let arg = <T as IntoJSValue<V>>::into_js_value(value, &ctx).into_value();
                 let this = V::create_undefined(ctx.as_ref());
                 let _ = ctx.as_ref().call(resolve.as_value(), this, vec![arg]);
+                drain_microtasks::<V>(&ctx);
             }
             Err(err) => {
                 let ctx = reject.get_ctx();
@@ -220,6 +237,7 @@ where
                 let _ = ctx
                     .as_ref()
                     .call(reject.as_value(), this, vec![js_error_value]);
+                drain_microtasks::<V>(&ctx);
             }
         }
     }
