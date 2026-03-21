@@ -30,7 +30,7 @@ Rong provides two main approaches for exposing Rust to JavaScript:
 
 | Approach        | Use Case                              | Example                    |
 | :---            | :---                                  | :---                       |
-| **Functions**   | Standalone utilities, module APIs     | `Rong.readFile()`          |
+| **Functions**   | Standalone utilities, module APIs     | `Rong.write()`             |
 | **Classes**     | Stateful objects with methods         | `new Point2D(10, 20)`      |
 
 **Key macros:**
@@ -72,7 +72,7 @@ async fn read_file(path: String) -> JSResult<String> {
 ```javascript
 // These return Promises automatically
 await Rong.rename("old.txt", "new.txt");
-const content = await Rong.readFile("data.txt");
+const content = await Rong.file("data.txt").text();
 ```
 
 ### Sync Functions
@@ -147,9 +147,9 @@ async fn read_file_with_encoding(
 **JavaScript usage:**
 
 ```javascript
-// Both calls work
-await Rong.readFile("file.txt");
-await Rong.readFile("file.txt", "utf-16");
+// New FS API examples
+await Rong.file("file.txt").text();
+await Rong.file("file.txt").arrayBuffer();
 ```
 
 ---
@@ -479,6 +479,141 @@ console.log(Object.keys(info)); // ['currentSize', 'limitSize', 'keyCount']
 - `Option<T>` fields are omitted if `None`
 - Supports nested structs and common types (`String`, `i32`, `f64`, `bool`, etc.)
 
+### Flexible Parameter Types (Union Types)
+
+Many Web APIs accept multiple input shapes for a single parameter. For example, `fetch()` accepts both a string URL and a `Request` object. In TypeScript these appear as union types like `string | Request | URL`.
+
+In Rong, there are two patterns for handling this:
+
+#### Pattern 1: Accept `JSValue` and dispatch by type
+
+Accept `JSValue` as the parameter type, then check what was actually passed using sequential type probing.
+
+**Example:** `Request` constructor accepts `string | Request | URL`
+
+```rust
+#[js_method(constructor)]
+fn new(input: JSValue, init: Optional<RequestInit>) -> JSResult<Self> {
+    // Try string first
+    if let Ok(url_str) = input.clone().try_into::<String>() {
+        let url = Uri::try_from(url_str.as_str())?;
+        return Ok(Self { url, ..Default::default() });
+    }
+
+    // Try object types
+    if let Some(obj) = input.into_object() {
+        // Existing Request — clone it
+        if let Ok(req) = obj.borrow::<Request>() {
+            return Ok(req.clone());
+        }
+        // URL object — convert to string
+        if let Ok(url) = obj.borrow::<URL>() {
+            let uri = Uri::try_from(url.to_string().as_str())?;
+            return Ok(Self { url: uri, ..Default::default() });
+        }
+    }
+
+    Err(HostError::new(E_TYPE, "input must be a string, Request, or URL")
+        .with_name("TypeError").into())
+}
+```
+
+See: `modules/rong_http/src/request.rs`
+
+**Example:** `Headers` constructor accepts `Headers | [string, string][] | Record<string, string>`
+
+```rust
+#[js_method(constructor)]
+pub fn new(init: Optional<JSValue>) -> JSResult<Self> {
+    let mut headers = HeaderMap::new();
+    if let Some(init) = init.0 {
+        if let Some(obj) = init.into_object() {
+            // Existing Headers instance
+            if let Ok(other) = obj.borrow::<Headers>() {
+                headers.extend(other.headers.iter().map(|(k, v)| (k.clone(), v.clone())));
+            }
+            // Array of [name, value] pairs
+            else if let Some(array) = JSArray::from_object(obj.clone()) {
+                for item in array.iter::<JSValue>() {
+                    let pair = item?.into_object()
+                        .and_then(JSArray::from_object)
+                        .ok_or_else(|| type_error("each header must be [name, value]"))?;
+                    let key: String = pair.get(0)?.unwrap();
+                    let value: String = pair.get(1)?.unwrap();
+                    headers.append(
+                        HeaderName::try_from(key.as_str())?,
+                        HeaderValue::try_from(value.as_str())?,
+                    );
+                }
+            }
+            // Plain object { key: value }
+            else {
+                for (key, value) in obj.entries_as::<String, String>()? {
+                    headers.append(
+                        HeaderName::try_from(key.as_str())?,
+                        HeaderValue::try_from(value.as_str())?,
+                    );
+                }
+            }
+        }
+    }
+    Ok(Self { headers })
+}
+```
+
+See: `modules/rong_http/src/header.rs`
+
+**Probe order matters:** Check the most specific types first (native structs via `borrow`), then arrays, then plain objects, then strings last.
+
+#### Pattern 2: Custom enum with `FromJSValue`
+
+When the same union type appears in multiple APIs, define an enum and implement `FromJSValue` for automatic conversion.
+
+**Example:** `EventKey` accepts `string | symbol`
+
+```rust
+#[derive(Clone)]
+pub enum EventKey {
+    String(String),
+    Symbol(JSSymbol),
+}
+
+impl FromJSValue<JSEngineValue> for EventKey {
+    fn from_js_value(ctx: &JSContext, value: JSValue) -> JSResult<Self> {
+        if let Ok(key) = String::from_js_value(ctx, value.clone()) {
+            return Ok(EventKey::String(key));
+        }
+        if let Ok(symbol) = JSSymbol::from_js_value(ctx, value) {
+            return Ok(EventKey::Symbol(symbol));
+        }
+        Err(HostError::new(E_INVALID_ARG, "must be string or symbol")
+            .with_name("TypeError").into())
+    }
+}
+
+// Now EventKey works directly as a parameter type:
+#[js_method]
+fn emit(&self, event: EventKey, data: JSValue) -> JSResult<()> {
+    // event is already parsed — no manual type checking needed
+    // ...
+}
+```
+
+See: `modules/rong_event/src/event_emitter.rs`
+
+#### Type-checking helpers
+
+| Method | Checks |
+|--------|--------|
+| `value.is_string()` | JS string |
+| `value.is_array_buffer()` | ArrayBuffer |
+| `value.is_undefined()` / `value.is_null()` | undefined / null |
+| `value.into_object()` | Any object (returns `Option<JSObject>`) |
+| `obj.borrow::<T>()` | Native Rust struct `T` inside a JS object |
+| `JSArray::from_object(obj)` | Check if object is an Array |
+| `JSTypedArray::from_object(obj)` | Check if object is a TypedArray |
+| `value.try_into::<T>()` | Attempt conversion to Rust type `T` |
+
 ### Attribute Reference
 
 #### `#[js_export]`
@@ -571,13 +706,13 @@ pub fn init_fs(ctx: &JSContext) -> JSResult<()> {
 
 ```javascript
 // All async operations return Promises
-const exists = await Rong.exists("data.txt");
+const exists = await Rong.file("data.txt").exists();
 if (exists) {
-    const content = await Rong.readFile("data.txt");
+    const content = await Rong.file("data.txt").text();
     console.log(content);
 }
 
-await Rong.writeFile("output.txt", "Hello, World!");
+await Rong.write("output.txt", "Hello, World!");
 ```
 
 ### Example 2: Point Class (Complete)

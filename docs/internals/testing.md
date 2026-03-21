@@ -32,7 +32,7 @@ cargo test -p rong_fs --features quickjs
 ```
 
 **Available modules**:
-- `rong_http` - HTTP client/server
+- `rong_http` - HTTP client (fetch)
 - `rong_timer` - setTimeout/setInterval
 - `rong_fs` - File system operations
 - `rong_console` - Console logging
@@ -49,6 +49,9 @@ cargo test -p rong_fs --features quickjs
 - `rong_assert` - Assertion utilities
 - `rong_exception` - Exception handling
 - `rong_navigator` - Navigator APIs
+- `rong_redis` - Redis client
+- `rong_sqlite` - SQLite database
+- `rong_s3` - S3 object storage
 
 ### Testing multiple modules
 
