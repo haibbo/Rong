@@ -1,6 +1,7 @@
 use rong::{
     JSFunc, JSResult, JsInvokePriority, Rong, RongJS, Source, WorkerMessage, enqueue_js_invoke,
 };
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -244,5 +245,116 @@ async fn test_enqueue_js_invoke_queue() -> JSResult<()> {
 
         Ok(())
     })?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_get_worker_wait_eventually_returns_free_worker() -> JSResult<()> {
+    let rong = Rong::<RongJS>::builder().with_num_workers(1).build();
+
+    for _ in 0..32 {
+        let worker = rong.get_worker().await?;
+        worker.spawn_future::<_, _, ()>(async move |_runtime, _receiver| {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            Ok(())
+        })?;
+
+        assert!(
+            rong.get_worker().await.is_err(),
+            "worker should still be busy"
+        );
+
+        let waited_worker = tokio::time::timeout(Duration::from_secs(1), rong.get_worker_wait())
+            .await
+            .expect("get_worker_wait timed out")?;
+        assert_eq!(waited_worker.id(), worker.id());
+
+        waited_worker.spawn_future::<_, _, ()>(async move |_runtime, _receiver| Ok(()))?;
+        rong.join_all().await?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_block_on_reentrant_inside_worker_returns_error() -> JSResult<()> {
+    let rong = Rong::<RongJS>::builder().with_num_workers(1).build();
+    let rong_clone = rong.clone();
+
+    let nested_error = Arc::new(Mutex::new(None::<String>));
+    let nested_error_clone = nested_error.clone();
+
+    rong.block_on(move |_runtime, _receiver| async move {
+        let err = rong_clone
+            .block_on(|_runtime, _receiver| async move { Ok::<_, rong::RongJSError>(123) })
+            .expect_err("reentrant block_on should fail");
+        *nested_error_clone.lock().unwrap() = Some(err.to_string());
+        Ok(())
+    })?;
+
+    let message = nested_error.lock().unwrap().clone().unwrap_or_default();
+    assert!(
+        message.contains("reentrant block_on") || message.contains("inside a worker thread"),
+        "unexpected reentrant error: {message}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_scheduler_makes_progress_under_burst_enqueue() -> JSResult<()> {
+    let rong = Rong::<RongJS>::builder().build();
+    let observed = Arc::new(AtomicUsize::new(0));
+    let observed_clone = observed.clone();
+
+    rong.block_on(|runtime, _receiver| async move {
+        let ctx = runtime.context();
+        let script = r#"(() => {
+            globalThis.__burst_counter = 0;
+            return function () {
+                globalThis.__burst_counter += 1;
+                return globalThis.__burst_counter;
+            };
+        })()"#;
+        let js_fn: JSFunc = ctx.eval(Source::from_bytes(script))?;
+
+        for _ in 0..256 {
+            enqueue_js_invoke(
+                &ctx,
+                js_fn.clone(),
+                None,
+                None,
+                JsInvokePriority::Normal,
+                None,
+                false,
+            )
+            .await?;
+        }
+
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            enqueue_js_invoke(
+                &ctx,
+                js_fn.clone(),
+                None,
+                None,
+                JsInvokePriority::High,
+                None,
+                true,
+            ),
+        )
+        .await
+        .expect("high-priority invoke timed out")?;
+
+        let value: i32 = ctx.global().get("__burst_counter")?;
+        observed_clone.store(value as usize, Ordering::SeqCst);
+        Ok(())
+    })?;
+
+    assert!(
+        observed.load(Ordering::SeqCst) > 0,
+        "scheduler failed to make progress during burst enqueue"
+    );
+
     Ok(())
 }

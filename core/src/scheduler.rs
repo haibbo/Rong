@@ -244,3 +244,120 @@ where
         None => func.call_async::<_, R>(this_obj, ()).await,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn noop_item(priority: JsInvokePriority, dedup_key: Option<&str>) -> QueueItem {
+        QueueItem {
+            priority,
+            dedup_key: dedup_key.map(str::to_string),
+            generation: 0,
+            cb: Box::new(|| Box::pin(async { Ok(()) })),
+            reply: None,
+        }
+    }
+
+    #[test]
+    fn dequeue_prefers_high_then_normal_then_latest_event() {
+        let mut q_high = VecDeque::new();
+        let mut q_norm = VecDeque::new();
+        let mut q_event = VecDeque::new();
+        let mut event_gen = HashMap::new();
+        let mut next_gen = 1;
+
+        JsInvokeQueue::enqueue_item(
+            noop_item(JsInvokePriority::Event, Some("view:update")),
+            &mut q_high,
+            &mut q_norm,
+            &mut q_event,
+            &mut event_gen,
+            &mut next_gen,
+        );
+        JsInvokeQueue::enqueue_item(
+            noop_item(JsInvokePriority::Normal, None),
+            &mut q_high,
+            &mut q_norm,
+            &mut q_event,
+            &mut event_gen,
+            &mut next_gen,
+        );
+        JsInvokeQueue::enqueue_item(
+            noop_item(JsInvokePriority::Event, Some("view:update")),
+            &mut q_high,
+            &mut q_norm,
+            &mut q_event,
+            &mut event_gen,
+            &mut next_gen,
+        );
+        JsInvokeQueue::enqueue_item(
+            noop_item(JsInvokePriority::High, None),
+            &mut q_high,
+            &mut q_norm,
+            &mut q_event,
+            &mut event_gen,
+            &mut next_gen,
+        );
+
+        let high = JsInvokeQueue::dequeue_item(&mut q_high, &mut q_norm, &mut q_event, &event_gen)
+            .expect("high-priority item");
+        assert_eq!(high.priority, JsInvokePriority::High);
+
+        let normal =
+            JsInvokeQueue::dequeue_item(&mut q_high, &mut q_norm, &mut q_event, &event_gen)
+                .expect("normal item");
+        assert_eq!(normal.priority, JsInvokePriority::Normal);
+
+        let event = JsInvokeQueue::dequeue_item(&mut q_high, &mut q_norm, &mut q_event, &event_gen)
+            .expect("latest event item");
+        assert_eq!(event.priority, JsInvokePriority::Event);
+        assert_eq!(event.dedup_key.as_deref(), Some("view:update"));
+        assert_eq!(event.generation, 2);
+
+        assert!(
+            JsInvokeQueue::dequeue_item(&mut q_high, &mut q_norm, &mut q_event, &event_gen)
+                .is_none(),
+            "stale event should have been skipped"
+        );
+    }
+
+    #[test]
+    fn enqueue_event_updates_generation_per_key() {
+        let mut q_high = VecDeque::new();
+        let mut q_norm = VecDeque::new();
+        let mut q_event = VecDeque::new();
+        let mut event_gen = HashMap::new();
+        let mut next_gen = 1;
+
+        JsInvokeQueue::enqueue_item(
+            noop_item(JsInvokePriority::Event, Some("same-key")),
+            &mut q_high,
+            &mut q_norm,
+            &mut q_event,
+            &mut event_gen,
+            &mut next_gen,
+        );
+        JsInvokeQueue::enqueue_item(
+            noop_item(JsInvokePriority::Event, Some("same-key")),
+            &mut q_high,
+            &mut q_norm,
+            &mut q_event,
+            &mut event_gen,
+            &mut next_gen,
+        );
+        JsInvokeQueue::enqueue_item(
+            noop_item(JsInvokePriority::Event, Some("other-key")),
+            &mut q_high,
+            &mut q_norm,
+            &mut q_event,
+            &mut event_gen,
+            &mut next_gen,
+        );
+
+        assert_eq!(event_gen.get("same-key"), Some(&2));
+        assert_eq!(event_gen.get("other-key"), Some(&3));
+        assert_eq!(next_gen, 4);
+        assert_eq!(q_event.len(), 3);
+    }
+}
