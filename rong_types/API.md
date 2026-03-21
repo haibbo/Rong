@@ -22,13 +22,14 @@ Notes:
 
 Key APIs:
 
-- `Rong.readTextFile(path, options?) -> Promise<string>`
-- `Rong.readFile(path, options?) -> Promise<ArrayBuffer>`
-- `Rong.writeTextFile(path, text, options?) -> Promise<void>`
-- `Rong.writeFile(path, data, options?) -> Promise<void>`
-- `Rong.open(path, options?) -> Promise<FsFile>`
+- `Rong.file(path) -> RongFile`
+- `Rong.write(dest, data) -> Promise<number>`
+- `await Rong.file(path).text() / .json() / .bytes() / .arrayBuffer()`
+- `await Rong.file(path).open(options?) -> Promise<FileHandle>`
+- `await Rong.file(path).writer(options?) -> Promise<FileSink>`
 - `Rong.readDir(path) -> Promise<AsyncIterableIterator<DirEntry>>`
-- `Rong.stat(path) -> Promise<FileInfo>` / `Rong.lstat(path) -> Promise<FileInfo>`
+- `await Rong.file(path).stat() -> Promise<FileInfo>`
+- `await Rong.file(path).lstat() -> Promise<FileInfo>`
 
 Iteration example (async iterator):
 

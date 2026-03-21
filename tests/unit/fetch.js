@@ -139,7 +139,7 @@ describe("fetch", () => {
     const outPath = `${tmpDir}/fetch_download_stream.txt`;
 
     // Open file and get writable stream
-    const file = await Rong.open(outPath, {
+    const file = await Rong.file(outPath).open({
       write: true,
       create: true,
       truncate: true,
@@ -163,7 +163,7 @@ describe("fetch", () => {
     await file.close();
 
     // Verify file content contains streamed markers
-    const data = new Uint8Array(await Rong.readFile(outPath));
+    const data = await Rong.file(outPath).bytes();
     const text = new TextDecoder().decode(data);
     assert(text.includes("chunk_0000"));
     assert(text.includes("chunk_0099"));
@@ -179,7 +179,7 @@ describe("fetch", () => {
     } catch {}
     const outPath = `${tmpDir}/fetch_download_pipeTo.txt`;
 
-    const file = await Rong.open(outPath, {
+    const file = await Rong.file(outPath).open({
       write: true,
       create: true,
       truncate: true,
@@ -193,7 +193,7 @@ describe("fetch", () => {
     await response.body.pipeTo(ws);
     await file.close();
 
-    const data = new Uint8Array(await Rong.readFile(outPath));
+    const data = await Rong.file(outPath).bytes();
     const text = new TextDecoder().decode(data);
     assert(text.includes("chunk_0000"));
     assert(text.includes("chunk_0099"));

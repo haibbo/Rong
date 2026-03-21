@@ -17,7 +17,7 @@ async function headProbeOffset(serverUrl) {
 
 async function loadLocalResume(resumePath) {
   try {
-    const txt = await Rong.readTextFile(resumePath);
+    const txt = await Rong.file(resumePath).text();
     const obj = JSON.parse(txt);
     return Number(obj.offset) || 0;
   } catch {
@@ -27,7 +27,7 @@ async function loadLocalResume(resumePath) {
 
 async function saveLocalResume(resumePath, offset) {
   try {
-    await Rong.writeTextFile(resumePath, JSON.stringify({ offset }));
+    await Rong.write(resumePath, JSON.stringify({ offset }));
   } catch {}
 }
 
@@ -61,7 +61,7 @@ async function uploadFile(localPath, serverUrl) {
     console.log(`Uploading file (resumable): ${localPath}`);
     console.log(`To server: ${serverUrl}`);
 
-    const stat = await Rong.stat(localPath);
+    const stat = await Rong.file(localPath).stat();
     const total = Number(stat.size) || 0;
     if (!total) throw new Error("File size is zero or unknown");
 
@@ -73,7 +73,7 @@ async function uploadFile(localPath, serverUrl) {
     let offset = Math.max(serverOffset, localOffset);
     if (offset > total) offset = 0;
 
-    file = await Rong.open(localPath, { read: true });
+    file = await Rong.file(localPath).open({ read: true });
     console.log(
       `Starting upload at offset ${offset}/${total} (chunk=${CHUNK_SIZE} bytes)`,
     );

@@ -18,8 +18,8 @@
  * Then use the global APIs:
  * ```typescript
  * // File system
- * const text = await Rong.readTextFile('/path/to/file.txt');
- * await Rong.writeTextFile('/output.txt', 'Hello World');
+ * const text = await Rong.file('/path/to/file.txt').text();
+ * await Rong.write('/output.txt', 'Hello World');
  *
  * // Process
  * console.log(process.pid);

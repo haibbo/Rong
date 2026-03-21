@@ -13,7 +13,7 @@
  * Usage:
  * ```typescript
  * // From file
- * const file = await Rong.open('/path/to/file.txt', { read: true });
+ * const file = await Rong.file('/path/to/file.txt').open({ read: true });
  * const readable = file.readable;
  *
  * // Read from stream
@@ -31,7 +31,7 @@
  * Usage:
  * ```typescript
  * // To file
- * const file = await Rong.open('/path/to/output.txt', { write: true, create: true });
+ * const file = await Rong.file('/path/to/output.txt').open({ write: true, create: true });
  * const writable = file.writable;
  *
  * // Write to stream
@@ -64,14 +64,14 @@
  * await process.stdin.pipeTo(process.stdout);
  *
  * // Pipe file to file
- * const source = await Rong.open('/source.txt', { read: true });
- * const dest = await Rong.open('/dest.txt', { write: true, create: true });
+ * const source = await Rong.file('/source.txt').open({ read: true });
+ * const dest = await Rong.file('/dest.txt').open({ write: true, create: true });
  * await source.readable.pipeTo(dest.writable);
  * ```
  *
  * ### Process data in chunks
  * ```typescript
- * const file = await Rong.open('/large-file.txt', { read: true });
+ * const file = await Rong.file('/large-file.txt').open({ read: true });
  * const reader = file.readable.getReader();
  *
  * let totalBytes = 0;

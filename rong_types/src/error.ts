@@ -48,7 +48,7 @@ export interface RongError extends Error {
  * setTimeout(() => controller.abort(), 1000);
  *
  * try {
- *   await Rong.readTextFile('/large-file.txt', {
+ *   await fetch('https://api.example.com/slow', {
  *     signal: controller.signal
  *   });
  * } catch (error) {
@@ -77,7 +77,7 @@ export interface NetworkError extends RongError {
  * @example
  * ```typescript
  * try {
- *   await Rong.readTextFile('/file.txt');
+ *   await Rong.file('/file.txt').text();
  * } catch (error) {
  *   if (isRongError(error)) {
  *     console.error(`Rong error [${error.name}]: ${error.message}`);

@@ -1,3 +1,17 @@
+//! `rong_fs` exposes a layered filesystem API:
+//!
+//! - `Rong.file(path)` returns a `RongFile`, which is a lazy path reference for
+//!   high-level whole-file operations such as `text()`, `json()`, `bytes()`,
+//!   `stat()`, and `exists()`.
+//! - `RongFile.open()` returns a `FileHandle`, which represents an opened file
+//!   descriptor for random access, seek/truncate, and readable/writable streams.
+//! - `RongFile.writer()` returns a `FileSink`, which is a write-only sink for
+//!   append and incremental streaming writes when full handle semantics are not
+//!   needed.
+//!
+//! `Rong.write(...)` is the convenience entry point for one-shot writes, while
+//! directory/path operations stay on the top-level `Rong` namespace.
+
 use rong::*;
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -5,7 +19,8 @@ use std::path::PathBuf;
 mod dir;
 mod file;
 mod misc;
-mod read;
+mod rong_file;
+mod sink;
 mod stat;
 mod write;
 
@@ -52,14 +67,15 @@ fn grant_file_access(path: &str) -> JSResult<PathBuf> {
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    // Ensure stream classes are registered for fs.readable support
+    // Ensure stream classes are registered for readable/writable support
     rong_stream::init(ctx)?;
-    read::init(ctx)?;
+    stat::init(ctx)?;
+    sink::init(ctx)?;
+    file::init(ctx)?;
+    rong_file::init(ctx)?;
     write::init(ctx)?;
     dir::init(ctx)?;
-    stat::init(ctx)?;
     misc::init(ctx)?;
-    file::init(ctx)?;
 
     Ok(())
 }
@@ -108,6 +124,4 @@ mod tests {
             Ok(())
         });
     }
-
-    // Note: FsFile.readable tests live in tests/unit/filesystem.js
 }

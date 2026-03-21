@@ -1,7 +1,5 @@
-use crate::grant_file_access;
 use rong::*;
 use std::{fs, time::SystemTime};
-use tokio::fs as tokio_fs;
 
 #[js_export]
 pub(crate) struct FileInfo {
@@ -102,32 +100,7 @@ impl FileInfo {
     }
 }
 
-async fn stat(path: String) -> JSResult<FileInfo> {
-    let resolved = grant_file_access(&path)?;
-    tokio_fs::metadata(&resolved)
-        .await
-        .map(FileInfo::from_metadata)
-        .map_err(|e| HostError::new("FS_IO", format!("Failed to get file info: {}", e)).into())
-}
-
-async fn lstat(path: String) -> JSResult<FileInfo> {
-    let resolved = grant_file_access(&path)?;
-    tokio_fs::symlink_metadata(&resolved)
-        .await
-        .map(FileInfo::from_metadata)
-        .map_err(|e| HostError::new("FS_IO", format!("Failed to get file info: {}", e)).into())
-}
-
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    let rong = ctx.rong();
-
     ctx.register_class::<FileInfo>()?;
-
-    let stat_fn = JSFunc::new(ctx, stat)?.name("stat")?;
-    rong.set("stat", stat_fn)?;
-
-    let lstat_fn = JSFunc::new(ctx, lstat)?.name("lstat")?;
-    rong.set("lstat", lstat_fn)?;
-
     Ok(())
 }

@@ -18,7 +18,7 @@ async function downloadFile(url, outputPath) {
     const contentLength = Number(response.headers.get("content-length")) || 0;
 
     // Prepare output file + writable stream
-    file = await Rong.open(outputPath, {
+    file = await Rong.file(outputPath).open({
       write: true,
       create: true,
       truncate: true,

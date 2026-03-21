@@ -9,15 +9,12 @@ import type { AssertFunction } from './assert';
 import type { ChildProcessModule } from './child_process';
 import type {
   DirEntry,
-  FileInfo,
   FileOpenOptions,
-  FsFile,
   MkdirOptions,
-  ReadFileOptions,
   RemoveOptions,
+  RongFile,
   SeekMode,
   UTimeOptions,
-  WriteFileOptions,
 } from './fs';
 import type { PathModule } from './path';
 import type { Process } from './process';
@@ -28,33 +25,30 @@ declare global {
    * Rong runtime namespace - Core APIs for file system and storage
    */
   const Rong: {
-    // File System APIs
-    readTextFile(path: string, options?: ReadFileOptions): Promise<string>;
-    readFile(path: string, options?: ReadFileOptions): Promise<ArrayBuffer>;
-    writeTextFile(path: string, text: string, options?: WriteFileOptions): Promise<void>;
-    writeFile(path: string, data: ArrayBufferView, options?: WriteFileOptions): Promise<void>;
-    copyFile(from: string, to: string): Promise<void>;
-    truncate(path: string, len?: number): Promise<void>;
-    open(path: string, options?: FileOpenOptions): Promise<FsFile>;
+    // Core file API
+    file(path: string): RongFile;
+    write(
+      dest: string | RongFile,
+      data: string | ArrayBufferView | ArrayBuffer | RongFile
+    ): Promise<number>;
+
+    // Directory operations
     mkdir(path: string, options?: MkdirOptions): Promise<void>;
     readDir(path: string): Promise<AsyncIterableIterator<DirEntry>>;
-    stat(path: string): Promise<FileInfo>;
-    lstat(path: string): Promise<FileInfo>;
     remove(path: string, options?: RemoveOptions): Promise<void>;
     chdir(path: string): Promise<void>;
+
+    // Symlink operations
     symlink(target: string, path: string): Promise<void>;
     readlink(path: string): Promise<string>;
-    /**
-     * Change file permissions (Unix only)
-     * @platform unix
-     */
+
+    /** Change file permissions (Unix only) @platform unix */
     chmod(path: string, mode: number): Promise<void>;
-    /**
-     * Change file ownership (Unix only)
-     * @platform unix
-     */
+    /** Change file ownership (Unix only) @platform unix */
     chown(path: string, uid: number, gid: number): Promise<void>;
     utime(path: string, options: UTimeOptions): Promise<void>;
+
+    // Path operations
     rename(oldPath: string, newPath: string): Promise<void>;
     realPath(path: string): Promise<string>;
     readonly SeekMode: typeof SeekMode;
