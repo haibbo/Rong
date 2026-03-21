@@ -1,5 +1,8 @@
 use crate::function::RustFunc;
-use crate::{JSContext, JSContextImpl, JSObjectOps, JSResult, JSValueImpl};
+use crate::{
+    JSArrayOps, JSBytesData, JSContext, JSContextImpl, JSErrorFactory, JSExceptionThrower,
+    JSObjectOps, JSResult, JSTypeOf, JSValueConversion, JSValueImpl,
+};
 use std::any::TypeId;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -79,7 +82,9 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
     pub fn context(&self) -> JSContext<R::Context>
     where
         R::Context: JSContextImpl<Runtime = R>,
-        <R::Context as JSContextImpl>::Value: JSObjectOps + 'static,
+        <R::Context as JSContextImpl>::Value:
+            JSObjectOps + JSTypeOf + JSValueConversion + JSArrayOps + 'static,
+        R::Context: JSErrorFactory + JSExceptionThrower,
     {
         let ctx = JSContext::<R::Context>::new(self);
         ctx.register_builtin_class()
@@ -141,9 +146,12 @@ impl<C: JSContextImpl> JSContext<C> {
     /// used to create object instance as function
     pub(crate) fn register_builtin_class(&self) -> JSResult<()>
     where
-        C::Value: JSObjectOps + 'static,
+        C::Value: JSObjectOps + JSTypeOf + JSValueConversion + JSArrayOps + 'static,
+        C: JSErrorFactory + JSExceptionThrower,
     {
-        self.register_class::<RustFunc<C::Value>>()
+        self.register_class::<RustFunc<C::Value>>()?;
+        self.register_class::<JSBytesData>()?;
+        Ok(())
     }
 }
 

@@ -2,10 +2,10 @@ pub use rong_core::err_data;
 pub use rong_core::{
     AnyJSTypedArray as CoreAnyJSTypedArray, Class as CoreClass, ClassSetup, FromJSValue, HostError,
     IntoJSAsyncIteratorExt, IntoJSIteratorExt, IntoJSValue, JSArray as CoreJSArray,
-    JSArrayBuffer as CoreJSArrayBuffer, JSAsyncIterator, JSClass, JSContext as CoreJSContext,
-    JSContextService, JSDate as CoreJSDate, JSEngine, JSException as CoreJSException,
-    JSFunc as CoreJSFunc, JSIterator, JSObject as CoreJSObject, JSResult,
-    JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
+    JSArrayBuffer as CoreJSArrayBuffer, JSAsyncIterator, JSBytes as CoreJSBytes, JSClass,
+    JSContext as CoreJSContext, JSContextService, JSDate as CoreJSDate, JSEngine,
+    JSException as CoreJSException, JSFunc as CoreJSFunc, JSIterator, JSObject as CoreJSObject,
+    JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
     JSTypedArray as CoreJSTypedArray, JSTypedArrayKind, JSValue as CoreJSValue, JSValueType,
     JsonToJSValue, Promise as CorePromise, PropertyDescriptor as CorePropertyDescriptor,
     RongJSError, Source, SourceKind, Uint8Clamped, error, install_async_iterator_symbol,
@@ -92,6 +92,8 @@ pub type JSException = CoreJSException<JSEngineValue>;
 pub type JSArray = CoreJSArray<JSEngineValue>;
 #[cfg(any(feature = "quickjs", feature = "jscore"))]
 pub type JSArrayBuffer = CoreJSArrayBuffer<JSEngineValue>;
+#[cfg(any(feature = "quickjs", feature = "jscore"))]
+pub type JSBytes = CoreJSBytes<JSEngineValue>;
 #[cfg(any(feature = "quickjs", feature = "jscore"))]
 pub type AnyJSTypedArray = CoreAnyJSTypedArray<JSEngineValue>;
 #[cfg(any(feature = "quickjs", feature = "jscore"))]

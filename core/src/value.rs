@@ -23,6 +23,10 @@ pub use array::*;
 mod array_buffer;
 pub use array_buffer::*;
 
+mod bytes;
+pub(crate) use bytes::JSBytesData;
+pub use bytes::*;
+
 mod typed_array;
 pub use typed_array::*;
 
