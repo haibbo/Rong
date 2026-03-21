@@ -400,11 +400,20 @@ async fn process_request(
 
     let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(STREAM_CHAN_CAP);
     let mut abort = abort_rx.take();
-    let coalesce_target = stream_coalesce_target.max(MIN_STREAM_COALESCE_TARGET);
+    // `0` disables response-body coalescing and forwards frames as they arrive.
+    let coalesce_target = if stream_coalesce_target == 0 {
+        0
+    } else {
+        stream_coalesce_target.max(MIN_STREAM_COALESCE_TARGET)
+    };
     let tx_monitor = tx.clone();
     let stream_task = tokio::task::spawn(async move {
         let mut body = body;
-        let mut buf: bytes::BytesMut = bytes::BytesMut::with_capacity(coalesce_target);
+        let mut buf: bytes::BytesMut = if coalesce_target == 0 {
+            bytes::BytesMut::new()
+        } else {
+            bytes::BytesMut::with_capacity(coalesce_target)
+        };
         let has_abort = abort.is_some();
         let mut aborted = false;
         loop {
@@ -414,7 +423,9 @@ async fn process_request(
                         match maybe {
                             Ok(Some(Ok(frame))) => {
                                 if let Ok(data) = frame.into_data() {
-                                    if buf.is_empty() && data.len() >= coalesce_target {
+                                    if coalesce_target == 0 {
+                                        if tx.send(Ok(data)).await.is_err() { break; }
+                                    } else if buf.is_empty() && data.len() >= coalesce_target {
                                         if tx.send(Ok(data)).await.is_err() { break; }
                                     } else {
                                         buf.extend_from_slice(&data);
@@ -436,7 +447,11 @@ async fn process_request(
                 match timeout(READ_FRAME_TIMEOUT, body.frame()).await {
                     Ok(Some(Ok(frame))) => {
                         if let Ok(data) = frame.into_data() {
-                            if buf.is_empty() && data.len() >= coalesce_target {
+                            if coalesce_target == 0 {
+                                if tx.send(Ok(data)).await.is_err() {
+                                    break;
+                                }
+                            } else if buf.is_empty() && data.len() >= coalesce_target {
                                 if tx.send(Ok(data)).await.is_err() {
                                     break;
                                 }
@@ -507,6 +522,7 @@ async fn collect_body_bytes(body: HttpBody) -> Result<Bytes, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::time::sleep;
 
     #[test]
     fn proxy_url_supports_basic_auth() {

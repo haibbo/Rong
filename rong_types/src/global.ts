@@ -18,6 +18,7 @@ import type {
 } from './fs';
 import type { PathModule } from './path';
 import type { Process } from './process';
+import type { EventSourceConstructor } from './sse';
 import type { StorageConstructor, StorageModule } from './storage';
 
 declare global {
@@ -57,6 +58,11 @@ declare global {
     readonly Storage: StorageConstructor;
     readonly storage: StorageModule;
   };
+
+  /**
+   * EventSource - Server-Sent Events (SSE) client
+   */
+  const EventSource: EventSourceConstructor;
 
   /**
    * Process object - Access to process information and environment

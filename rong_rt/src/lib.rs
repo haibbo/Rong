@@ -1,6 +1,7 @@
 pub mod client;
 pub mod download;
 mod executor;
+pub mod sse;
 pub mod user_agent;
 
 pub use executor::*;

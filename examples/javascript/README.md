@@ -6,6 +6,7 @@ This directory contains JavaScript examples demonstrating how to use the Rong Ja
 
 - `downloader.js` - Streaming downloader that saves response body directly to file (low memory)
 - `uploader.js` - Streaming uploader that sends file as request body (PUT)
+- `sse.js` - Server-Sent Events demo with formatted event output
 
 ## Running Examples
 
@@ -18,6 +19,9 @@ cargo run -p rong_cli -- examples/javascript/downloader.js https://example.com/f
 # Upload a file (streaming PUT)
 cargo run -p rong_cli -- examples/javascript/uploader.js path/to/local/file.txt https://httpbin.org/upload
 
+# Watch an SSE endpoint for 15 seconds
+cargo run -p rong_cli -- examples/javascript/sse.js https://sse.dev/test 15
+
 # Or if you have built the binary
 ./target/debug/rong examples/javascript/downloader.js https://example.com/file.txt downloaded.txt
 ```
@@ -28,6 +32,7 @@ The examples expect command-line arguments after the script name:
 
 - For `downloader.js`: `<url> <output-filename>`
 - For `uploader.js`: `<file-path> <server-url>` (server should accept raw body via PUT; script sets Content-Length + application/octet-stream)
+- For `sse.js`: `[url] [duration-seconds]`
 
 These arguments are accessible in the scripts via the `Rong.args` array.
 

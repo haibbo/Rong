@@ -488,6 +488,109 @@ mod tests {
             .unwrap()
     }
 
+    async fn test_sse_basic() -> impl IntoResponse {
+        let stream = stream::iter(vec![
+            Ok::<_, Infallible>("id: 1\nevent: message\ndata: hello\n\n".to_string()),
+            Ok::<_, Infallible>("id: 2\ndata: world\n\n".to_string()),
+        ]);
+
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "text/event-stream")
+            .header(header::CACHE_CONTROL, "no-cache")
+            .body(Body::from_stream(stream))
+            .unwrap()
+    }
+
+    async fn test_sse_reconnect(headers: HeaderMap) -> impl IntoResponse {
+        let last_event_id = headers
+            .get("last-event-id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+
+        let payload = if last_event_id == "1" {
+            "id: 2\ndata: second\n\n".to_string()
+        } else {
+            "retry: 20\nid: 1\ndata: first\n\n".to_string()
+        };
+
+        let stream = stream::iter(vec![Ok::<_, Infallible>(payload)]);
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "text/event-stream")
+            .header(header::CACHE_CONTROL, "no-cache")
+            .body(Body::from_stream(stream))
+            .unwrap()
+    }
+
+    async fn test_sse_custom_events() -> impl IntoResponse {
+        let stream = stream::iter(vec![
+            Ok::<_, Infallible>("event: status\ndata: connected\n\n".to_string()),
+            Ok::<_, Infallible>("event: progress\ndata: 50%\n\n".to_string()),
+            Ok::<_, Infallible>("id: 3\ndata: default message\n\n".to_string()),
+        ]);
+
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "text/event-stream")
+            .header(header::CACHE_CONTROL, "no-cache")
+            .body(Body::from_stream(stream))
+            .unwrap()
+    }
+
+    async fn test_sse_many() -> impl IntoResponse {
+        let events: Vec<Result<String, Infallible>> = (1..=5)
+            .map(|i| Ok(format!("id: {i}\ndata: msg-{i}\n\n")))
+            .collect();
+
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "text/event-stream")
+            .header(header::CACHE_CONTROL, "no-cache")
+            .body(Body::from_stream(stream::iter(events)))
+            .unwrap()
+    }
+
+    async fn test_sse_live_small() -> impl IntoResponse {
+        let initial =
+            stream::once(async { Ok::<_, Infallible>("data: live-small\n\n".to_string()) });
+        let keepalive = stream::once(async {
+            sleep(Duration::from_millis(800)).await;
+            Ok::<_, Infallible>(": keep-alive\n\n".to_string())
+        });
+
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "text/event-stream")
+            .header(header::CACHE_CONTROL, "no-cache")
+            .body(Body::from_stream(FuturesStreamExt::chain(
+                initial, keepalive,
+            )))
+            .unwrap()
+    }
+
+    async fn test_sse_retry_control(headers: HeaderMap) -> impl IntoResponse {
+        let last_event_id = headers
+            .get("last-event-id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+
+        let payload = if last_event_id == "1" {
+            "id: 2\ndata: second\n\n".to_string()
+        } else {
+            "retry: 250\n\nid: 1\ndata: first\n\n".to_string()
+        };
+
+        let stream = stream::iter(vec![Ok::<_, Infallible>(payload)]);
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "text/event-stream")
+            .header(header::CACHE_CONTROL, "no-cache")
+            .body(Body::from_stream(stream))
+            .unwrap()
+    }
+
+    async fn test_sse_not_event_stream() -> impl IntoResponse {
+        AxumResponse::builder()
+            .header(header::CONTENT_TYPE, "text/plain")
+            .body(Body::from("not an event stream"))
+            .unwrap()
+    }
+
     async fn start_test_server() -> std::io::Result<SocketAddr> {
         let app = Router::new()
             .route("/ip", get(test_ip))
@@ -497,6 +600,13 @@ mod tests {
             .route("/headers", get(test_headers))
             .route("/redirect", get(test_redirect))
             .route("/303", put(test_303)) // PUT request receiving 303 -> GET /ip
+            .route("/sse/basic", get(test_sse_basic))
+            .route("/sse/reconnect", get(test_sse_reconnect))
+            .route("/sse/custom", get(test_sse_custom_events))
+            .route("/sse/many", get(test_sse_many))
+            .route("/sse/live-small", get(test_sse_live_small))
+            .route("/sse/retry-control", get(test_sse_retry_control))
+            .route("/sse/not-event-stream", get(test_sse_not_event_stream))
             .route(
                 "/upload",
                 put(|bytes: AxumBytes| async move {
@@ -530,7 +640,7 @@ mod tests {
             crate::header::init(&ctx)?;
             crate::request::init(&ctx)?;
             crate::response::init(&ctx)?;
-            init(&ctx)?;
+            crate::init(&ctx)?;
 
             // Start test server
             let addr = match start_test_server().await {
@@ -573,6 +683,53 @@ mod tests {
             ctx.global().set("WORKSPACE_ROOT", workspace_root)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "fetch.js")
+                .await?
+                .run()
+                .await?;
+            assert!(passed);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_sse() {
+        async_run!(|ctx: JSContext| async move {
+            rong_assert::init(&ctx)?;
+            rong_console::init(&ctx)?;
+            rong_encoding::init(&ctx)?;
+            rong_url::init(&ctx)?;
+            rong_timer::init(&ctx)?;
+            rong_abort::init(&ctx)?;
+            rong_exception::init(&ctx)?;
+            rong_stream::init(&ctx)?;
+            rong_event::init(&ctx)?;
+
+            crate::init(&ctx)?;
+
+            let addr = match start_test_server().await {
+                Ok(addr) => addr,
+                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                    eprintln!(
+                        "skipping rong_http sse tests: cannot bind local TCP listener: {}",
+                        e
+                    );
+                    return Ok(());
+                }
+                Err(e) => {
+                    return Err(HostError::new(
+                        rong::error::E_INTERNAL,
+                        format!("failed to start test server: {}", e),
+                    )
+                    .into());
+                }
+            };
+            let base_url = format!("http://{}", addr);
+            ctx.global().set("TEST_SERVER_URL", base_url)?;
+            let has_es: bool = ctx.eval(Source::from_bytes("typeof EventSource === 'function'"))?;
+            assert!(has_es, "EventSource should be initialized");
+
+            let passed = UnitJSRunner::load_script(&ctx, "sse.js")
                 .await?
                 .run()
                 .await?;

@@ -9,6 +9,7 @@ mod header;
 mod request;
 mod response;
 mod security;
+mod sse;
 
 pub use client::*;
 pub use download::*;
@@ -22,6 +23,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     response::init(ctx)?;
     request::init(ctx)?;
     fetch::init(ctx)?;
+    sse::init(ctx)?;
 
     Ok(())
 }
