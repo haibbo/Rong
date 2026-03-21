@@ -1,0 +1,28 @@
+[package]
+name = "rong_redis"
+version.workspace = true
+edition.workspace = true
+
+description = "Redis client module for RongJS"
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[dependencies]
+rong = { workspace = true }
+rong_abort = { workspace = true }
+tokio = { workspace = true }
+redis = { workspace = true }
+futures = { workspace = true }
+
+[features]
+# Forward JS engine features to the main rong crate
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+arkjs = ["rong/arkjs"]
+
+[dev-dependencies]
+rong_test = { workspace = true }
+rong_assert = { path = "../rong_assert", version = "0.2.0" }
+rong_console = { path = "../rong_console", version = "0.2.0" }
+rong_timer = { path = "../rong_timer", version = "0.2.0" }

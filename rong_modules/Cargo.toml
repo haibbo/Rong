@@ -26,6 +26,7 @@ rong_storage = { workspace = true, optional = true }
 rong_stream = { workspace = true, optional = true }
 rong_process = { workspace = true, optional = true }
 rong_child_process = { workspace = true, optional = true }
+rong_redis = { workspace = true, optional = true }
 rong_sqlite = { workspace = true, optional = true }
 rong_worker = { workspace = true, optional = true }
 
@@ -51,6 +52,7 @@ quickjs = [
     "rong_stream?/quickjs",
     "rong_process?/quickjs",
     "rong_child_process?/quickjs",
+    "rong_redis?/quickjs",
     "rong_sqlite?/quickjs",
     "rong_worker?/quickjs",
 ]
@@ -73,6 +75,7 @@ jscore = [
     "rong_stream?/jscore",
     "rong_process?/jscore",
     "rong_child_process?/jscore",
+    "rong_redis?/jscore",
     "rong_sqlite?/jscore",
     "rong_worker?/jscore",
 ]
@@ -95,6 +98,7 @@ arkjs = [
     "rong_stream?/arkjs",
     "rong_process?/arkjs",
     "rong_child_process?/arkjs",
+    "rong_redis?/arkjs",
     "rong_sqlite?/arkjs",
     "rong_worker?/arkjs",
 ]
@@ -119,6 +123,7 @@ all = [
     "stream",
     "process",
     "child_process",
+    "redis",
     "sqlite",
     "worker",
 ]
@@ -140,5 +145,6 @@ storage = ["rong_storage"]
 stream = ["rong_stream"]
 process = ["rong_process"]
 child_process = ["rong_child_process"]
+redis = ["rong_redis"]
 sqlite = ["rong_sqlite"]
 worker = ["rong_worker"]

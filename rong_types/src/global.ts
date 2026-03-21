@@ -18,6 +18,7 @@ import type {
 } from './fs';
 import type { PathModule } from './path';
 import type { Process } from './process';
+import type { RedisClientConstructor } from './redis';
 import type { SSEConstructor } from './sse';
 import type { StorageConstructor, StorageModule } from './storage';
 
@@ -60,6 +61,8 @@ declare global {
 
     // Database / cache clients
     readonly Database: typeof import('./sqlite').Database;
+    readonly RedisClient: RedisClientConstructor;
+
   };
 
   /**
@@ -92,6 +95,10 @@ declare global {
    */
   const assert: AssertFunction;
 
+  /**
+   * RedisClient - Async Redis client
+   */
+  const RedisClient: RedisClientConstructor;
 
   /**
    * Database - SQLite database (sync API)

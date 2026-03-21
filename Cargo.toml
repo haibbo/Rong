@@ -14,6 +14,7 @@ members = [
     "modules/rong_abort", "modules/rong_console", "modules/rong_url", "modules/rong_buffer",
     "modules/rong_fs", "modules/rong_stream", "modules/rong_process", "modules/rong_child_process",
     "modules/rong_worker",
+    "modules/rong_redis",
     "rong_modules", "rong_cli"
 ]
 
@@ -58,6 +59,7 @@ rong_storage = { path = "modules/rong_storage"   , version = "0.2.0", default-fe
 rong_worker = { path = "modules/rong_worker"   , version = "0.2.0", default-features = false }
 rong_process = { path = "modules/rong_process"   , version = "0.2.0", default-features = false }
 rong_child_process = { path = "modules/rong_child_process"   , version = "0.2.0", default-features = false }
+rong_redis = { path = "modules/rong_redis"   , version = "0.2.0", default-features = false }
 rong_sqlite = { path = "modules/rong_sqlite"   , version = "0.2.0", default-features = false }
 
 # External dependencies
@@ -81,6 +83,7 @@ nix = { version = "0.31", features = ["user", "fs"] }
 syn = { version = "2.0", features = ["full"] }
 bytes = "1.11.0"
 tokio-stream = "0.1.18"
+redis = { version = "1.0", features = ["tokio-comp", "aio"] }
 
 
 [package]
