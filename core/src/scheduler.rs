@@ -38,51 +38,115 @@ impl JsInvokeQueue {
             let mut event_gen: HashMap<String, u64> = HashMap::new();
             let mut next_gen: u64 = 1;
 
+            const DRAIN_BATCH_LIMIT: usize = 64;
+
             loop {
-                tokio::select! {
-                    Some(mut item) = rx.recv() => {
-                        match item.priority {
-                            JsInvokePriority::High => q_high.push_back(item),
-                            JsInvokePriority::Normal => q_norm.push_back(item),
-                            JsInvokePriority::Event => {
-                                if let Some(key) = item.dedup_key.clone() {
-                                    let r#gen = next_gen; next_gen += 1;
-                                    event_gen.insert(key, r#gen);
-                                    item.generation = r#gen;
-                                }
-                                q_event.push_back(item);
+                // Phase 1: Drain available incoming items (non-blocking, capped).
+                // Cap prevents starvation of Phase 2 under sustained high throughput.
+                for _ in 0..DRAIN_BATCH_LIMIT {
+                    match rx.try_recv() {
+                        Ok(item) => Self::enqueue_item(
+                            item,
+                            &mut q_high,
+                            &mut q_norm,
+                            &mut q_event,
+                            &mut event_gen,
+                            &mut next_gen,
+                        ),
+                        Err(mpsc::error::TryRecvError::Empty) => break,
+                        Err(mpsc::error::TryRecvError::Disconnected) => return,
+                    }
+                }
+
+                // Phase 2: Process one item from priority queues.
+                if let Some(item) =
+                    Self::dequeue_item(&mut q_high, &mut q_norm, &mut q_event, &event_gen)
+                {
+                    // Clean up the generation entry now that the event is consumed.
+                    if let Some(key) = &item.dedup_key {
+                        if let Some(&latest) = event_gen.get(key) {
+                            if latest == item.generation {
+                                event_gen.remove(key);
                             }
                         }
                     }
-                    else => break,
-                }
 
-                // Drain one item per tick: High -> Normal -> Event (last-wins for events)
-                let mut next = q_high.pop_front().or_else(|| q_norm.pop_front());
-                if next.is_none() {
-                    while let Some(ev) = q_event.pop_front() {
-                        if let Some(key) = &ev.dedup_key
-                            && let Some(&latest) = event_gen.get(key)
-                            && ev.generation != latest
-                        {
-                            continue;
-                        }
-                        next = Some(ev);
-                        break;
-                    }
-                }
-
-                if let Some(item) = next {
                     let fut = (item.cb)();
                     let res = fut.await;
                     if let Some(tx) = item.reply {
                         let _ = tx.send(res);
                     }
+                    // After processing, loop back to drain more incoming + process more.
+                    continue;
+                }
+
+                // Phase 3: Nothing queued — wait for the next incoming item.
+                match rx.recv().await {
+                    Some(item) => Self::enqueue_item(
+                        item,
+                        &mut q_high,
+                        &mut q_norm,
+                        &mut q_event,
+                        &mut event_gen,
+                        &mut next_gen,
+                    ),
+                    None => break, // Channel closed.
                 }
             }
         });
 
         Self { tx }
+    }
+
+    /// Route an item into the correct priority queue.
+    fn enqueue_item(
+        mut item: QueueItem,
+        q_high: &mut VecDeque<QueueItem>,
+        q_norm: &mut VecDeque<QueueItem>,
+        q_event: &mut VecDeque<QueueItem>,
+        event_gen: &mut HashMap<String, u64>,
+        next_gen: &mut u64,
+    ) {
+        match item.priority {
+            JsInvokePriority::High => q_high.push_back(item),
+            JsInvokePriority::Normal => q_norm.push_back(item),
+            JsInvokePriority::Event => {
+                if let Some(key) = item.dedup_key.clone() {
+                    let generation = *next_gen;
+                    *next_gen += 1;
+                    event_gen.insert(key, generation);
+                    item.generation = generation;
+                }
+                q_event.push_back(item);
+            }
+        }
+    }
+
+    /// Pop the highest-priority ready item. Events use last-wins dedup.
+    fn dequeue_item(
+        q_high: &mut VecDeque<QueueItem>,
+        q_norm: &mut VecDeque<QueueItem>,
+        q_event: &mut VecDeque<QueueItem>,
+        event_gen: &HashMap<String, u64>,
+    ) -> Option<QueueItem> {
+        if let item @ Some(_) = q_high.pop_front() {
+            return item;
+        }
+        if let item @ Some(_) = q_norm.pop_front() {
+            return item;
+        }
+        // For events, skip stale entries (superseded by newer same-key events).
+        while let Some(ev) = q_event.pop_front() {
+            if let Some(key) = &ev.dedup_key {
+                if let Some(&latest) = event_gen.get(key) {
+                    if ev.generation != latest {
+                        continue; // Stale — skip.
+                    }
+                }
+            }
+            return Some(ev);
+        }
+        None
     }
 }
 impl JSRuntimeService for JsInvokeQueue {}
@@ -121,7 +185,6 @@ where
     C::Value: JSValueImpl + JSObjectOps + 'static,
     C::Runtime: 'static,
 {
-    // Get runtime-level services via context user_data (bound at context creation)
     let queue = ctx.runtime().get_or_init_service::<JsInvokeQueue>().clone();
 
     let (reply_tx, reply_rx) = if must_reply {
@@ -173,7 +236,6 @@ where
     C::Runtime: 'static,
     R: crate::FromJSValue<C::Value> + 'static,
 {
-    // Acquire runtime-level gate (shared across all contexts in this runtime)
     let gate = ctx.runtime().get_or_init_service::<JsInvokeGate>().clone();
     let _guard = gate.0.lock().await;
 
