@@ -128,7 +128,7 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
         let orig_uri = hyper_request.uri().clone();
 
         // Send via dedicated net service.
-        // Note: `client::send_request` treats oneshot sender-drop as "aborted", so the abort sender
+        // Note: transport treats oneshot sender-drop as "aborted", so the abort sender
         // must remain alive for the whole response stream lifetime. We keep it in a task, and only
         // stop it explicitly when we discard a redirect response and continue the loop.
         let (abort_bridge, abort_bridge_stop) = if let Some(r) = &mut abort_receiver {
@@ -153,7 +153,7 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
         let small_threshold = 256 * 1024; // 256KB
 
         // Race the network request with an early abort. If the abort wins, reject with its reason.
-        let net_fut = client::send_request(hyper_request, small_threshold, abort_bridge);
+        let net_fut = client::send_fetch_request(hyper_request, small_threshold, abort_bridge);
         let net_resp = if let Some(early_abort) = &mut abort_receiver {
             tokio::select! {
                 biased;

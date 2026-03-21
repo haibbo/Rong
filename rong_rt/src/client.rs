@@ -1,8 +1,8 @@
 use bytes::Bytes;
 use http::Request as HttpRequest;
 use http::header;
-use http::{HeaderValue, Uri, header::HeaderName};
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
+use http::Uri;
+use http_body_util::{BodyExt, combinators::BoxBody};
 use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
@@ -205,77 +205,6 @@ pub enum HttpBody {
     Empty,
     Small(Bytes),
     Stream(mpsc::Receiver<Result<Bytes, String>>),
-}
-
-pub async fn post_json(
-    url: &str,
-    body: &[u8],
-    extra_headers: Option<&[(&str, &str)]>,
-) -> Result<(http::StatusCode, Bytes), String> {
-    post_json_inner(url, body, extra_headers, None).await
-}
-
-pub async fn post_json_with_timeout(
-    url: &str,
-    body: &[u8],
-    extra_headers: Option<&[(&str, &str)]>,
-    request_timeout: Duration,
-) -> Result<(http::StatusCode, Bytes), String> {
-    post_json_inner(url, body, extra_headers, Some(request_timeout)).await
-}
-
-async fn post_json_inner(
-    url: &str,
-    body: &[u8],
-    extra_headers: Option<&[(&str, &str)]>,
-    timeout_override: Option<Duration>,
-) -> Result<(http::StatusCode, Bytes), String> {
-    let mut builder = HttpRequest::builder()
-        .method("POST")
-        .uri(url)
-        .header(header::CONTENT_TYPE, "application/json")
-        .header(header::ACCEPT, "application/json");
-
-    if let Some(h) = builder.headers_mut() {
-        let ua = crate::get_user_agent();
-        let ua_val =
-            HeaderValue::from_str(&ua).map_err(|e| format!("invalid user agent header: {}", e))?;
-        h.insert(header::USER_AGENT, ua_val);
-
-        if let Some(extras) = extra_headers {
-            for (key, value) in extras {
-                let name = HeaderName::from_bytes(key.as_bytes())
-                    .map_err(|e| format!("invalid header name '{}': {}", key, e))?;
-                let val = HeaderValue::from_str(value)
-                    .map_err(|e| format!("invalid header '{}' value: {}", key, e))?;
-                h.insert(name, val);
-            }
-        }
-    }
-
-    let body_bytes = Bytes::copy_from_slice(body);
-    let request_body: BoxBody<Bytes, Error> = Full::new(body_bytes)
-        .map_err(|_| Error::other("body error"))
-        .boxed();
-
-    let request = builder
-        .body(request_body)
-        .map_err(|e| format!("build request: {}", e))?;
-
-    let response =
-        send_request_with_timeout(request, DEFAULT_BLOCKING_BODY_LIMIT, None, timeout_override)
-            .await?;
-    let status = response.status;
-    let bytes = collect_body_bytes(response.body).await?;
-    Ok((status, bytes))
-}
-
-pub async fn send_request(
-    request: HttpRequest<BoxBody<Bytes, Error>>,
-    small_threshold: usize,
-    abort_rx: Option<oneshot::Receiver<()>>,
-) -> Result<HttpResponse, String> {
-    send_request_with_timeout(request, small_threshold, abort_rx, None).await
 }
 
 pub async fn send_request_with_timeout(
@@ -504,25 +433,9 @@ async fn process_request(
     })
 }
 
-async fn collect_body_bytes(body: HttpBody) -> Result<Bytes, String> {
-    match body {
-        HttpBody::Empty => Ok(Bytes::new()),
-        HttpBody::Small(bytes) => Ok(bytes),
-        HttpBody::Stream(mut rx) => {
-            let mut buf = Vec::new();
-            while let Some(chunk_res) = rx.recv().await {
-                let chunk = chunk_res?;
-                buf.extend_from_slice(&chunk);
-            }
-            Ok(Bytes::from(buf))
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::time::sleep;
 
     #[test]
     fn proxy_url_supports_basic_auth() {
@@ -557,104 +470,4 @@ mod tests {
         assert!(err.contains("only http:// is supported"));
     }
 
-    fn ensure_started() {
-        crate::start(1);
-    }
-
-    async fn spawn_echo_server() -> std::net::SocketAddr {
-        use axum::Router;
-        use axum::body::Bytes as AxumBytes;
-        use axum::http::HeaderMap;
-        use axum::response::IntoResponse;
-        use axum::routing::post;
-
-        async fn echo(headers: HeaderMap, body: AxumBytes) -> impl IntoResponse {
-            (headers, body)
-        }
-
-        let app = Router::new().route("/echo", post(echo));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
-        addr
-    }
-
-    async fn spawn_slow_server(delay_ms: u64) -> std::net::SocketAddr {
-        use axum::Router;
-        use axum::routing::post;
-        use std::sync::Arc;
-
-        let delay = Arc::new(delay_ms);
-        let app = Router::new().route(
-            "/slow",
-            post({
-                let delay = delay.clone();
-                move || {
-                    let d = *delay;
-                    async move {
-                        sleep(Duration::from_millis(d)).await;
-                        "ok"
-                    }
-                }
-            }),
-        );
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
-        });
-        addr
-    }
-
-    #[test]
-    fn post_json_with_timeout_succeeds() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
-        handle.block_on(async {
-            let addr = spawn_echo_server().await;
-            let url = format!("http://{}/echo", addr);
-            let body = br#"{"hello":"world"}"#;
-            let (status, bytes) = post_json_with_timeout(&url, body, None, Duration::from_secs(5))
-                .await
-                .expect("request should succeed");
-            assert_eq!(status, http::StatusCode::OK);
-            assert_eq!(bytes.as_ref(), body);
-        });
-    }
-
-    #[test]
-    fn post_json_with_timeout_expires() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
-        handle.block_on(async {
-            let addr = spawn_slow_server(300).await;
-            let url = format!("http://{}/slow", addr);
-            let err = post_json_with_timeout(&url, b"{}", None, Duration::from_millis(10))
-                .await
-                .expect_err("should time out");
-            assert!(
-                err.contains("timeout"),
-                "expected timeout error, got: {}",
-                err
-            );
-        });
-    }
-
-    #[test]
-    fn post_json_uses_global_timeout_by_default() {
-        // Verify the original post_json still respects the global timeout.
-        ensure_started();
-        let handle = crate::handle().unwrap();
-        handle.block_on(async {
-            let addr = spawn_echo_server().await;
-            let url = format!("http://{}/echo", addr);
-            let (status, _) = post_json(&url, b"{}", None)
-                .await
-                .expect("request should succeed");
-            assert_eq!(status, http::StatusCode::OK);
-        });
-    }
 }

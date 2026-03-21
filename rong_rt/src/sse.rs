@@ -32,6 +32,7 @@ impl SseScheme {
     }
 }
 
+/// Parsed destination for an SSE connection.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SseDestination {
     pub scheme: SseScheme,
@@ -66,6 +67,7 @@ impl SseDestination {
     }
 }
 
+/// Reconnect behavior for SSE connections.
 #[derive(Clone, Debug)]
 pub struct SseReconnectOptions {
     pub enabled: bool,
@@ -85,6 +87,7 @@ impl Default for SseReconnectOptions {
     }
 }
 
+/// Connection options for a new SSE session.
 #[derive(Clone, Debug)]
 pub struct SseConnectOptions {
     pub destination: SseDestination,
@@ -94,6 +97,45 @@ pub struct SseConnectOptions {
     pub request_timeout: Option<Duration>,
 }
 
+impl SseConnectOptions {
+    /// Build SSE options from a full `http://` or `https://` URL.
+    pub fn new(url: impl AsRef<str>) -> Result<Self, String> {
+        let destination = parse_destination(url.as_ref())?;
+        Ok(Self {
+            destination,
+            headers: Vec::new(),
+            last_event_id: None,
+            reconnect: SseReconnectOptions::default(),
+            request_timeout: None,
+        })
+    }
+
+    /// Add a request header sent during the SSE handshake.
+    pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.headers.push((name.into(), value.into()));
+        self
+    }
+
+    /// Set the initial `Last-Event-ID` header.
+    pub fn with_last_event_id(mut self, last_event_id: impl Into<String>) -> Self {
+        self.last_event_id = Some(last_event_id.into());
+        self
+    }
+
+    /// Override the reconnect policy for this connection.
+    pub fn with_reconnect(mut self, reconnect: SseReconnectOptions) -> Self {
+        self.reconnect = reconnect;
+        self
+    }
+
+    /// Override the request timeout used for the SSE handshake and stream.
+    pub fn with_request_timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = Some(timeout);
+        self
+    }
+}
+
+/// One parsed SSE event.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SseEvent {
     pub event: String,
@@ -103,6 +145,7 @@ pub struct SseEvent {
     pub origin: String,
 }
 
+/// Active SSE connection with an event receiver and lifecycle controls.
 pub struct SseConnection {
     pub events: mpsc::Receiver<Result<SseEvent, String>>,
     close_tx: Option<oneshot::Sender<()>>,
@@ -110,6 +153,16 @@ pub struct SseConnection {
 }
 
 impl SseConnection {
+    /// Wait for the initial handshake result and return the connection origin.
+    pub async fn opened(&mut self) -> Result<String, String> {
+        match self.opened_rx.take() {
+            Some(rx) => rx
+                .await
+                .map_err(|_| "sse open channel dropped".to_string())?,
+            None => Err("sse open state already consumed".to_string()),
+        }
+    }
+
     pub fn close(&mut self) {
         if let Some(tx) = self.close_tx.take() {
             let _ = tx.send(());
@@ -195,6 +248,7 @@ struct PendingEvent {
     retry_ms: Option<u64>,
 }
 
+/// Establish a new SSE connection from explicit options.
 pub fn connect_sse(
     options: SseConnectOptions,
     abort_rx: Option<oneshot::Receiver<()>>,
@@ -213,6 +267,14 @@ pub fn connect_sse(
         close_tx: Some(close_tx),
         opened_rx: Some(opened_rx),
     })
+}
+
+/// Establish a new SSE connection from a URL string.
+pub fn connect(
+    url: impl AsRef<str>,
+    abort_rx: Option<oneshot::Receiver<()>>,
+) -> Result<SseConnection, String> {
+    connect_sse(SseConnectOptions::new(url)?, abort_rx)
 }
 
 async fn run_sse_worker(
@@ -494,6 +556,31 @@ fn build_sse_request(
         .map_err(|e| format!("failed to build sse request: {}", e))
 }
 
+fn parse_destination(url: &str) -> Result<SseDestination, String> {
+    let parsed = url::Url::parse(url).map_err(|e| format!("invalid sse url: {}", e))?;
+
+    let scheme = match parsed.scheme() {
+        "http" => SseScheme::Http,
+        "https" => SseScheme::Https,
+        other => return Err(format!("unsupported sse url scheme: {}", other)),
+    };
+
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "sse url must contain a host".to_string())?;
+    let target = match parsed.port() {
+        Some(port) => format!("{}:{}", host, port),
+        None => host.to_string(),
+    };
+
+    Ok(SseDestination {
+        scheme,
+        target,
+        path: parsed.path().to_string(),
+        query: parsed.query().map(|q| q.to_string()),
+    })
+}
+
 async fn parse_available_events(
     line_buf: &mut Vec<u8>,
     pending: &mut PendingEvent,
@@ -601,5 +688,130 @@ fn complete_initial_open(
 ) {
     if let Some(tx) = opened_tx.take() {
         let _ = tx.send(result);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::HeaderMap;
+    use axum::response::IntoResponse;
+    use axum::routing::get;
+    use axum::{Router, response::Response as AxumResponse};
+    use std::convert::Infallible;
+    use tokio::sync::mpsc;
+    use tokio_stream::{self as stream, wrappers::ReceiverStream};
+
+    fn ensure_started() {
+        crate::start(1);
+    }
+
+    async fn spawn_sse_server() -> std::net::SocketAddr {
+        async fn live_small() -> impl IntoResponse {
+            let (tx, rx) = mpsc::channel(2);
+            tokio::spawn(async move {
+                let _ = tx
+                    .send(Ok::<_, Infallible>("data: live-small\n\n".to_string()))
+                    .await;
+                tokio::time::sleep(Duration::from_millis(800)).await;
+                let _ = tx
+                    .send(Ok::<_, Infallible>(": keep-alive\n\n".to_string()))
+                    .await;
+            });
+
+            AxumResponse::builder()
+                .header(header::CONTENT_TYPE, "text/event-stream")
+                .header(header::CACHE_CONTROL, "no-cache")
+                .body(Body::from_stream(ReceiverStream::new(rx)))
+                .unwrap()
+        }
+
+        async fn header_echo(headers: HeaderMap) -> impl IntoResponse {
+            let tag = headers
+                .get("x-test")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("-");
+            let last_event_id = headers
+                .get("last-event-id")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("-");
+            let payload = format!("data: {}|{}\n\n", tag, last_event_id);
+            let stream = stream::iter(vec![Ok::<_, Infallible>(payload)]);
+
+            AxumResponse::builder()
+                .header(header::CONTENT_TYPE, "text/event-stream")
+                .header(header::CACHE_CONTROL, "no-cache")
+                .body(Body::from_stream(stream))
+                .unwrap()
+        }
+
+        let app = Router::new()
+            .route("/live-small", get(live_small))
+            .route("/headers", get(header_echo));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        addr
+    }
+
+    #[test]
+    fn connect_convenience_opens_and_receives_small_event() {
+        ensure_started();
+        let handle = crate::handle().unwrap();
+        handle.block_on(async {
+            let addr = spawn_sse_server().await;
+            let url = format!("http://{}/live-small", addr);
+
+            let mut connection = connect(&url, None).expect("sse connection should start");
+            let opened = connection.opened().await.expect("sse should open");
+            assert_eq!(opened, format!("http://{}", addr));
+
+            let event = tokio::time::timeout(Duration::from_millis(600), connection.events.recv())
+                .await
+                .expect("event should arrive before timeout")
+                .expect("event channel should stay open")
+                .expect("event should be ok");
+            assert_eq!(event.event, "message");
+            assert_eq!(event.data, "live-small");
+
+            let second_open = connection
+                .opened()
+                .await
+                .expect_err("open state is one-shot");
+            assert!(second_open.contains("already consumed"));
+            connection.close();
+        });
+    }
+
+    #[test]
+    fn connect_options_builder_sends_headers_and_last_event_id() {
+        ensure_started();
+        let handle = crate::handle().unwrap();
+        handle.block_on(async {
+            let addr = spawn_sse_server().await;
+            let url = format!("http://{}/headers", addr);
+            let options = SseConnectOptions::new(&url)
+                .expect("valid url")
+                .with_header("x-test", "builder")
+                .with_last_event_id("41")
+                .with_request_timeout(Duration::from_secs(1))
+                .with_reconnect(SseReconnectOptions {
+                    enabled: false,
+                    ..Default::default()
+                });
+
+            let mut connection = connect_sse(options, None).expect("sse connection should start");
+            let event = connection
+                .events
+                .recv()
+                .await
+                .expect("event channel should stay open")
+                .expect("event should be ok");
+            assert_eq!(event.data, "builder|41");
+            connection.close();
+        });
     }
 }

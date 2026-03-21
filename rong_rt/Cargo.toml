@@ -20,6 +20,9 @@ hyper-rustls = { workspace = true, default-features = false }
 hyper-util = { workspace = true }
 rustls = { workspace = true }
 tokio-stream = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+url = "2.5"
 
 [dev-dependencies]
 axum = { workspace = true }

@@ -11,9 +11,69 @@ use tokio::time::Duration;
 
 const DEFAULT_DOWNLOAD_SMALL_THRESHOLD: usize = 64 * 1024;
 
+pub struct DownloadOptions {
+    pub url: String,
+    pub dest: std::path::PathBuf,
+    pub sink: Option<Box<dyn BodySink>>,
+    pub request_timeout: Option<Duration>,
+}
+
+impl DownloadOptions {
+    /// Build download options for a target URL and destination file path.
+    pub fn new(url: impl Into<String>, dest: impl Into<std::path::PathBuf>) -> Self {
+        Self {
+            url: url.into(),
+            dest: dest.into(),
+            sink: None,
+            request_timeout: None,
+        }
+    }
+
+    /// Mirror each downloaded chunk into an additional sink.
+    pub fn with_sink(mut self, sink: Box<dyn BodySink>) -> Self {
+        self.sink = Some(sink);
+        self
+    }
+
+    /// Override the request timeout for this download.
+    pub fn with_request_timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = Some(timeout);
+        self
+    }
+}
+
 pub trait BodySink: Send {
     fn write(&mut self, chunk: &[u8]) -> Result<(), String>;
     fn close(&mut self, result: &Result<(), String>);
+}
+
+/// Download a resource directly on the current task.
+pub async fn download(
+    options: DownloadOptions,
+    abort_rx: Option<oneshot::Receiver<()>>,
+) -> Result<(), String> {
+    download_resource(
+        &options.url,
+        &options.dest,
+        abort_rx,
+        options.sink,
+        options.request_timeout,
+    )
+    .await
+}
+
+/// Spawn a background download and receive completion through a oneshot channel.
+pub fn spawn_download(
+    options: DownloadOptions,
+    abort_rx: Option<oneshot::Receiver<()>>,
+) -> Result<oneshot::Receiver<Result<(), String>>, String> {
+    request_download_inner(
+        options.url,
+        options.dest,
+        abort_rx,
+        options.sink,
+        options.request_timeout,
+    )
 }
 
 pub fn request_download(
@@ -225,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    fn download_with_timeout_succeeds() {
+    fn spawn_download_with_options_succeeds() {
         ensure_started();
         let handle = crate::handle().unwrap();
         handle.block_on(async {
@@ -241,10 +301,39 @@ mod tests {
                     .subsec_nanos()
             ));
 
-            let rx = request_download_with_timeout(&url, &dest, None, None, Duration::from_secs(5))
-                .expect("should queue download");
+            let rx = spawn_download(
+                DownloadOptions::new(&url, &dest).with_request_timeout(Duration::from_secs(5)),
+                None,
+            )
+            .expect("should queue download");
             rx.await
                 .expect("channel dropped")
+                .expect("download should succeed");
+
+            let written = tokio::fs::read(&dest).await.expect("file should exist");
+            assert_eq!(written, content);
+            let _ = tokio::fs::remove_file(&dest).await;
+        });
+    }
+
+    #[test]
+    fn download_convenience_succeeds() {
+        ensure_started();
+        let handle = crate::handle().unwrap();
+        handle.block_on(async {
+            let content = b"hello direct download";
+            let addr = spawn_file_server(content).await;
+            let url = format!("http://{}/file", addr);
+            let dest = std::env::temp_dir().join(format!(
+                "rong_dl_direct_test_{}.bin",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .subsec_nanos()
+            ));
+
+            download(DownloadOptions::new(&url, &dest), None)
+                .await
                 .expect("download should succeed");
 
             let written = tokio::fs::read(&dest).await.expect("file should exist");
