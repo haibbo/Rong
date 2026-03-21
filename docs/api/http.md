@@ -1,4 +1,4 @@
-# HTTP — fetch / Request / Response / EventSource
+# HTTP — fetch / Request / Response / SSE
 
 Web-standard Fetch API and Server-Sent Events.
 
@@ -144,11 +144,12 @@ for (const [name, value] of h.entries()) {
 
 ---
 
-## EventSource (Server-Sent Events)
+## SSE (Server-Sent Events)
 
 ```javascript
-const es = new EventSource("https://api.example.com/events", {
+const sse = new SSE("https://api.example.com/events", {
   headers: { Authorization: "Bearer token" },
+  signal: AbortSignal.timeout(60000),
   reconnect: {
     enabled: true,
     baseDelayMs: 1000,
@@ -158,19 +159,13 @@ const es = new EventSource("https://api.example.com/events", {
   requestTimeoutMs: 60000,
 });
 
-es.addEventListener("message", (event) => {
-  console.log(event.data);
-});
+for await (const event of sse) {
+  console.log(event.type, event.data);
+  if (done) break; // triggers close + cleanup
+}
 
-es.addEventListener("open", () => {
-  console.log("connected");
-});
-
-es.addEventListener("error", (event) => {
-  console.log("error:", event.message);
-});
-
-es.close();
+// Manual close
+sse.close();
 ```
 
 ### Properties
@@ -178,31 +173,27 @@ es.close();
 | Property | Type | Description |
 |----------|------|-------------|
 | `url` | `string` | Connection URL |
-| `readyState` | `number` | `CONNECTING=0`, `OPEN=1`, `CLOSED=2` |
-| `lastEventId` | `string` | Last event ID |
 
 ### Methods
 
 | Method | Description |
 |--------|-------------|
 | `close()` | Close connection |
-| `addEventListener(type, listener)` | Listen for events |
-| `removeEventListener(type, listener)` | Remove listener |
 
-### Event objects
+### Options
 
-`message` events carry payload data:
+| Option | Type | Description |
+|--------|------|-------------|
+| `headers` | `Record<string, string>` | Custom request headers |
+| `signal` | `AbortSignal` | Cancellation signal |
+| `requestTimeoutMs` | `number` | Request timeout in milliseconds |
+| `reconnect` | `object` | Reconnect policy (`enabled`, `maxRetries`, `baseDelayMs`, `maxDelayMs`) |
+
+### Yielded event shape
 
 | Property | Type |
 |----------|------|
 | `type` | `string` |
 | `data` | `string` |
-| `lastEventId` | `string` |
+| `id` | `string` |
 | `origin` | `string` |
-
-`error` events carry:
-
-| Property | Type |
-|----------|------|
-| `type` | `string` |
-| `message` | `string` |

@@ -28,48 +28,34 @@ console.log("SSE Demo");
 hr();
 console.log(`URL      : ${url}`);
 console.log(`Duration : ${(durationMs / 1000).toFixed(1)}s`);
-console.log("Handlers : onopen / onmessage / onerror");
+console.log("Pattern  : for await...of");
 hr();
 
 const startedAt = Date.now();
 let messageCount = 0;
-let closed = false;
 
-const evtSource = new EventSource(url);
+const sse = new SSE(url);
 
-function closeSource() {
-  if (closed) return;
-  closed = true;
-  evtSource.close();
-}
+// Auto-close after duration
+const timer = setTimeout(() => sse.close(), durationMs);
 
-await new Promise((resolve, reject) => {
-  evtSource.onopen = function() {
-    console.log(`[${elapsedSince(startedAt)}] connected`);
-  };
+try {
+  console.log(`[${elapsedSince(startedAt)}] connected`);
 
-  evtSource.onmessage = function(event) {
+  for await (const event of sse) {
     messageCount += 1;
 
     console.log("");
     console.log(`[event ${messageCount}]`);
     console.log(`type   : ${event.type}`);
-    console.log(`id     : ${event.lastEventId || "-"}`);
+    console.log(`id     : ${event.id || "-"}`);
     console.log(`origin : ${event.origin || "-"}`);
     console.log("data   :");
     console.log(prettyPayload(event.data));
-  };
-
-  evtSource.onerror = function(event) {
-    closeSource();
-    reject(new Error(event.message || "SSE error"));
-  };
-
-  setTimeout(() => {
-    closeSource();
-    resolve();
-  }, durationMs);
-});
+  }
+} catch (e) {
+  console.log(`[${elapsedSince(startedAt)}] error: ${e.message}`);
+}
 
 hr();
 console.log(`Finished after ${elapsedSince(startedAt)}`);

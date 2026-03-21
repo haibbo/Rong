@@ -1,15 +1,12 @@
+use futures::Stream;
 use rong::function::*;
 use rong::*;
-use rong_event::{Emitter, EmitterExt, EventEmitter, EventKey};
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::security::grant_network_access;
-
-const CONNECTING: u8 = 0;
-const OPEN: u8 = 1;
-const CLOSED: u8 = 2;
 
 fn type_error(message: impl Into<String>) -> RongJSError {
     HostError::new(rong::error::E_TYPE, message)
@@ -17,38 +14,17 @@ fn type_error(message: impl Into<String>) -> RongJSError {
         .into()
 }
 
-#[derive(Clone)]
-struct PropertyHandler {
-    original: JSFunc,
-    listener: JSFunc,
-}
-
 #[js_export]
-pub struct EventSource {
-    events: EventEmitter,
+pub struct SSE {
     url: String,
-    ready_state: Arc<AtomicU8>,
-    on_open: Arc<Mutex<Option<PropertyHandler>>>,
-    on_message: Arc<Mutex<Option<PropertyHandler>>>,
-    on_error: Arc<Mutex<Option<PropertyHandler>>>,
-    /// Our own close sender (used by `close()` to signal abort to rong_rt).
     close_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
-    /// The internal close sender from rong_rt::sse::SseConnection.
-    /// Must be kept alive to prevent the worker from shutting down.
     _rt_close_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
-    last_event_id: Arc<Mutex<String>>,
-    opened_rx: Arc<Mutex<Option<oneshot::Receiver<Result<String, String>>>>>,
     rx: Arc<Mutex<Option<mpsc::Receiver<Result<rong_rt::sse::SseEvent, String>>>>>,
-}
-
-impl Emitter for EventSource {
-    fn get_event_emitter(&self) -> EventEmitter {
-        self.events.clone()
-    }
+    opened_rx: Arc<Mutex<Option<oneshot::Receiver<Result<String, String>>>>>,
 }
 
 #[js_class]
-impl EventSource {
+impl SSE {
     #[js_method(constructor)]
     fn new(_ctx: JSContext, url: String, options: Optional<JSObject>) -> JSResult<Self> {
         let parsed =
@@ -63,6 +39,7 @@ impl EventSource {
         let mut headers = Vec::new();
         let mut reconnect_opts = rong_rt::sse::SseReconnectOptions::default();
         let mut request_timeout = None;
+        let mut abort_rx: Option<oneshot::Receiver<()>> = None;
 
         if let Some(opts) = options.0 {
             if opts.has("headers") {
@@ -105,6 +82,26 @@ impl EventSource {
                     request_timeout = Some(std::time::Duration::from_millis(v as u64));
                 }
             }
+
+            // AbortSignal support
+            if opts.has("signal") {
+                let signal_val = opts.get::<_, JSValue>("signal")?;
+                if !signal_val.is_undefined() && !signal_val.is_null() {
+                    let signal_obj = signal_val
+                        .into_object()
+                        .ok_or_else(|| type_error("options.signal must be an AbortSignal"))?;
+                    let signal = signal_obj
+                        .borrow::<rong_abort::AbortSignal>()
+                        .map_err(|_| type_error("options.signal must be an AbortSignal"))?;
+                    let mut receiver = signal.subscribe();
+                    let (tx, rx) = oneshot::channel::<()>();
+                    abort_rx = Some(rx);
+                    tokio::task::spawn_local(async move {
+                        receiver.recv().await;
+                        let _ = tx.send(());
+                    });
+                }
+            }
         }
 
         let rt_options = rong_rt::sse::SseConnectOptions {
@@ -117,22 +114,31 @@ impl EventSource {
 
         let (close_tx, close_rx) = oneshot::channel::<()>();
 
-        let rt_conn = rong_rt::sse::connect_sse(rt_options, Some(close_rx)).map_err(|e| {
+        // Merge abort_rx and close_rx into a single signal for rong_rt
+        let merged_abort_rx = if let Some(abort_rx) = abort_rx {
+            let (merged_tx, merged_rx) = oneshot::channel::<()>();
+            tokio::task::spawn_local(async move {
+                tokio::select! {
+                    _ = close_rx => {}
+                    _ = abort_rx => {}
+                }
+                let _ = merged_tx.send(());
+            });
+            Some(merged_rx)
+        } else {
+            Some(close_rx)
+        };
+
+        let rt_conn = rong_rt::sse::connect_sse(rt_options, merged_abort_rx).map_err(|e| {
             HostError::new(rong::error::E_IO, format!("failed to connect SSE: {}", e))
                 .with_name("TypeError")
         })?;
         let (rx, rt_close_tx, opened_rx) = rt_conn.into_parts_with_open();
 
         Ok(Self {
-            events: EventEmitter::new(),
             url,
-            ready_state: Arc::new(AtomicU8::new(CONNECTING)),
-            on_open: Arc::new(Mutex::new(None)),
-            on_message: Arc::new(Mutex::new(None)),
-            on_error: Arc::new(Mutex::new(None)),
             close_tx: Arc::new(Mutex::new(Some(close_tx))),
             _rt_close_tx: Arc::new(Mutex::new(rt_close_tx)),
-            last_event_id: Arc::new(Mutex::new(String::new())),
             opened_rx: Arc::new(Mutex::new(Some(opened_rx))),
             rx: Arc::new(Mutex::new(Some(rx))),
         })
@@ -140,22 +146,14 @@ impl EventSource {
 
     #[js_method]
     fn close(&self) {
-        self.ready_state.store(CLOSED, Ordering::Relaxed);
-        // Signal abort to rong_rt worker
         if let Ok(mut guard) = self.close_tx.lock() {
             if let Some(tx) = guard.take() {
                 let _ = tx.send(());
             }
         }
-        // Drop the internal close sender to stop the worker
         if let Ok(mut guard) = self._rt_close_tx.lock() {
             guard.take();
         }
-    }
-
-    #[js_method(getter, rename = "readyState")]
-    fn ready_state(&self) -> u8 {
-        self.ready_state.load(Ordering::Relaxed)
     }
 
     #[js_method(getter)]
@@ -163,226 +161,106 @@ impl EventSource {
         self.url.clone()
     }
 
-    #[js_method(getter, rename = "lastEventId")]
-    fn last_event_id(&self) -> String {
-        self.last_event_id
-            .lock()
-            .map(|s| s.clone())
-            .unwrap_or_default()
-    }
+    /// Internal method called by JS wrapper to install the async iterator.
+    #[js_method(rename = "_iter")]
+    fn iter(&self, this: This<JSObject>, ctx: JSContext) {
+        let opened_rx = self.opened_rx.lock().ok().and_then(|mut g| g.take());
+        let rx = self.rx.lock().ok().and_then(|mut g| g.take());
 
-    #[js_method(getter, enumerable, rename = "onopen")]
-    fn get_on_open(&self, ctx: JSContext) -> JSValue {
-        Self::get_handler_value(&self.on_open, &ctx)
-    }
-
-    #[js_method(setter, rename = "onopen")]
-    fn set_on_open(&self, this: This<JSObject>, value: JSValue) -> JSResult<()> {
-        Self::set_event_handler(this, "open", &self.on_open, value)
-    }
-
-    #[js_method(getter, enumerable, rename = "onmessage")]
-    fn get_on_message(&self, ctx: JSContext) -> JSValue {
-        Self::get_handler_value(&self.on_message, &ctx)
-    }
-
-    #[js_method(setter, rename = "onmessage")]
-    fn set_on_message(&self, this: This<JSObject>, value: JSValue) -> JSResult<()> {
-        Self::set_event_handler(this, "message", &self.on_message, value)
-    }
-
-    #[js_method(getter, enumerable, rename = "onerror")]
-    fn get_on_error(&self, ctx: JSContext) -> JSValue {
-        Self::get_handler_value(&self.on_error, &ctx)
-    }
-
-    #[js_method(setter, rename = "onerror")]
-    fn set_on_error(&self, this: This<JSObject>, value: JSValue) -> JSResult<()> {
-        Self::set_event_handler(this, "error", &self.on_error, value)
-    }
-
-    /// Internal method called by JS wrapper to start the event pump.
-    /// Needs `this` (the JSObject) to dispatch events on.
-    #[js_method(rename = "_start")]
-    fn start(&self, this: This<JSObject>, ctx: JSContext) {
-        let mut rx = match self.rx.lock() {
-            Ok(mut guard) => match guard.take() {
-                Some(rx) => rx,
-                None => return,
-            },
-            Err(_) => return,
+        let stream = SseEventStream {
+            ctx: ctx.clone(),
+            origin: String::new(),
+            state: SseStreamState::Opening,
+            opened_rx,
+            rx,
         };
 
-        let ctx = ctx.clone();
-        let es_obj = this.0.clone();
-        let rs = self.ready_state.clone();
-        let last_event_id = self.last_event_id.clone();
-        let opened_rx = match self.opened_rx.lock() {
-            Ok(mut guard) => match guard.take() {
-                Some(rx) => rx,
-                None => return,
-            },
-            Err(_) => return,
-        };
-
-        spawn(async move {
-            match opened_rx.await {
-                Ok(Ok(origin)) => {
-                    if rs.load(Ordering::Relaxed) == CLOSED {
-                        return;
-                    }
-                    rs.store(OPEN, Ordering::Relaxed);
-
-                    let open_obj = JSObject::new(&ctx);
-                    let _ = open_obj.set("type", "open");
-                    let _ = open_obj.set("origin", origin);
-                    let _ = EventSource::do_emit(
-                        This(es_obj.clone()),
-                        EventKey::from("open"),
-                        Rest(vec![JSValue::from(&ctx, open_obj)]),
-                    );
-                }
-                Ok(Err(message)) => {
-                    if rs.load(Ordering::Relaxed) != CLOSED {
-                        let err_obj = JSObject::new(&ctx);
-                        let _ = err_obj.set("type", "error");
-                        let _ = err_obj.set("message", message.as_str());
-                        let err_val = JSValue::from(&ctx, err_obj);
-
-                        let _ = EventSource::do_emit(
-                            This(es_obj.clone()),
-                            EventKey::from("error"),
-                            Rest(vec![err_val]),
-                        );
-                        rs.store(CLOSED, Ordering::Relaxed);
-                    }
-                    return;
-                }
-                Err(_) => {
-                    if rs.load(Ordering::Relaxed) != CLOSED {
-                        rs.store(CLOSED, Ordering::Relaxed);
-                    }
-                    return;
-                }
-            }
-
-            while let Some(result) = rx.recv().await {
-                if rs.load(Ordering::Relaxed) == CLOSED {
-                    break;
-                }
-
-                match result {
-                    Ok(evt) => {
-                        if let Some(ref id) = evt.id {
-                            if let Ok(mut last_id) = last_event_id.lock() {
-                                *last_id = id.clone();
-                            }
-                        }
-
-                        let event_obj = JSObject::new(&ctx);
-                        let _ = event_obj.set("type", evt.event.as_str());
-                        let _ = event_obj.set("data", evt.data.as_str());
-                        let _ = event_obj.set("lastEventId", evt.id.as_deref().unwrap_or(""));
-                        let _ = event_obj.set("origin", evt.origin.as_str());
-
-                        let event_val = JSValue::from(&ctx, event_obj);
-
-                        let _ = EventSource::do_emit(
-                            This(es_obj.clone()),
-                            EventKey::from(evt.event.as_str()),
-                            Rest(vec![event_val]),
-                        );
-                    }
-                    Err(e) => {
-                        let err_obj = JSObject::new(&ctx);
-                        let _ = err_obj.set("type", "error");
-                        let _ = err_obj.set("message", e.as_str());
-                        let err_val = JSValue::from(&ctx, err_obj);
-
-                        let _ = EventSource::do_emit(
-                            This(es_obj.clone()),
-                            EventKey::from("error"),
-                            Rest(vec![err_val]),
-                        );
-                        break;
-                    }
-                }
-            }
-
-            rs.store(CLOSED, Ordering::Relaxed);
-        });
-    }
-
-    #[js_method(gc_mark)]
-    fn gc_mark_with<F>(&self, mark_fn: F)
-    where
-        F: FnMut(&JSValue),
-    {
-        let mut mark_fn = mark_fn;
-        self.events.gc_mark_with(|value| mark_fn(value));
-
-        for slot in [&self.on_open, &self.on_message, &self.on_error] {
-            if let Some(handler) = slot.lock().unwrap_or_else(|e| e.into_inner()).clone() {
-                for func in [handler.original, handler.listener] {
-                    let value = func.clone().into_js_value(&func.get_ctx());
-                    mark_fn(&value);
-                }
-            }
-        }
+        let _ = stream.install_js_async_iter(&ctx, &this.0);
     }
 }
 
-impl EventSource {
-    fn get_handler_value(slot: &Arc<Mutex<Option<PropertyHandler>>>, ctx: &JSContext) -> JSValue {
-        slot.lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
-            .map(|handler| handler.original.into_js_value(ctx))
-            .unwrap_or_else(|| JSValue::null(ctx))
-    }
+enum SseStreamState {
+    Opening,
+    Streaming,
+    Done,
+}
 
-    fn set_event_handler(
-        this: This<JSObject>,
-        event_name: &str,
-        slot: &Arc<Mutex<Option<PropertyHandler>>>,
-        value: JSValue,
-    ) -> JSResult<()> {
-        let key = EventKey::from(event_name);
-        let next = if value.is_null() || value.is_undefined() {
-            None
-        } else {
-            Some(Self::create_property_handler(&this.0, value.try_into()?)?)
-        };
+struct SseEventStream {
+    ctx: JSContext,
+    origin: String,
+    state: SseStreamState,
+    opened_rx: Option<oneshot::Receiver<Result<String, String>>>,
+    rx: Option<mpsc::Receiver<Result<rong_rt::sse::SseEvent, String>>>,
+}
 
-        let prev = {
-            let mut guard = slot.lock().unwrap_or_else(|e| e.into_inner());
-            let prev = guard.take();
-            *guard = next.clone();
-            prev
-        };
+impl Stream for SseEventStream {
+    type Item = JSResult<JSObject>;
 
-        if let Some(prev) = prev {
-            Self::remove_event_listener(This(this.0.clone()), key.clone(), prev.listener)?;
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let this = self.get_mut();
+
+        loop {
+            match this.state {
+                SseStreamState::Opening => {
+                    if let Some(ref mut opened_rx) = this.opened_rx {
+                        match Pin::new(opened_rx).poll(cx) {
+                            Poll::Ready(Ok(Ok(origin))) => {
+                                this.origin = origin;
+                                this.opened_rx = None;
+                                this.state = SseStreamState::Streaming;
+                                continue;
+                            }
+                            Poll::Ready(Ok(Err(message))) => {
+                                this.state = SseStreamState::Done;
+                                let err: RongJSError =
+                                    HostError::new(rong::error::E_IO, message).into();
+                                return Poll::Ready(Some(Err(err)));
+                            }
+                            Poll::Ready(Err(_)) => {
+                                this.state = SseStreamState::Done;
+                                let err: RongJSError =
+                                    HostError::new(rong::error::E_IO, "SSE connection failed")
+                                        .into();
+                                return Poll::Ready(Some(Err(err)));
+                            }
+                            Poll::Pending => return Poll::Pending,
+                        }
+                    } else {
+                        this.state = SseStreamState::Done;
+                        return Poll::Ready(None);
+                    }
+                }
+                SseStreamState::Streaming => {
+                    if let Some(ref mut rx) = this.rx {
+                        match rx.poll_recv(cx) {
+                            Poll::Ready(Some(Ok(evt))) => {
+                                let obj = JSObject::new(&this.ctx);
+                                let _ = obj.set("type", evt.event.as_str());
+                                let _ = obj.set("data", evt.data.as_str());
+                                let _ = obj.set("id", evt.id.as_deref().unwrap_or(""));
+                                let _ = obj.set("origin", this.origin.as_str());
+                                return Poll::Ready(Some(Ok(obj)));
+                            }
+                            Poll::Ready(Some(Err(message))) => {
+                                this.state = SseStreamState::Done;
+                                let err: RongJSError =
+                                    HostError::new(rong::error::E_IO, message).into();
+                                return Poll::Ready(Some(Err(err)));
+                            }
+                            Poll::Ready(None) => {
+                                this.state = SseStreamState::Done;
+                                return Poll::Ready(None);
+                            }
+                            Poll::Pending => return Poll::Pending,
+                        }
+                    } else {
+                        this.state = SseStreamState::Done;
+                        return Poll::Ready(None);
+                    }
+                }
+                SseStreamState::Done => return Poll::Ready(None),
+            }
         }
-
-        if let Some(next) = next {
-            Self::add_event_listener(this, key, next.listener.clone(), false, false)?;
-        }
-
-        Ok(())
-    }
-
-    fn create_property_handler(target: &JSObject, original: JSFunc) -> JSResult<PropertyHandler> {
-        let ctx = target.get_ctx();
-        let original_for_listener = original.clone();
-        let listener = JSFunc::new(
-            &ctx,
-            move |this: This<JSObject>, args: Rest<JSValue>| -> JSResult<()> {
-                original_for_listener.call::<_, ()>(Some(this.0.clone()), (args.0.clone(),))
-            },
-        )?;
-
-        Ok(PropertyHandler { original, listener })
     }
 }
 
@@ -407,35 +285,20 @@ fn url_to_destination(parsed: &url::Url) -> JSResult<rong_rt::sse::SseDestinatio
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<EventSource>()?;
-    EventSource::add_web_event_target_prototype(ctx)?;
+    ctx.register_class::<SSE>()?;
 
-    let ctor = Class::get::<EventSource>(ctx)?;
-    ctor.set("CONNECTING", CONNECTING as u32)?;
-    ctor.set("OPEN", OPEN as u32)?;
-    ctor.set("CLOSED", CLOSED as u32)?;
-
-    let proto: JSObject = ctor.get("prototype")?;
-    proto.set("CONNECTING", CONNECTING as u32)?;
-    proto.set("OPEN", OPEN as u32)?;
-    proto.set("CLOSED", CLOSED as u32)?;
-
-    // Wrap the constructor so that _start() is called automatically after construction.
-    // This is needed because _start() requires `this` (the JSObject), which is not
-    // available inside the Rust constructor.
+    // Wrap the constructor so that _iter() is called automatically after construction.
+    // _iter() requires `this` (the JSObject), which is not available inside the Rust constructor.
     ctx.eval::<()>(Source::from_bytes(
         r#"(function() {
-            const _ES = EventSource;
-            const _proto = _ES.prototype;
-            globalThis.EventSource = function EventSource(url, opts) {
-                const es = opts !== undefined ? new _ES(url, opts) : new _ES(url);
-                es._start();
-                return es;
+            const _SSE = SSE;
+            const _proto = _SSE.prototype;
+            globalThis.SSE = function SSE(url, opts) {
+                const sse = opts !== undefined ? new _SSE(url, opts) : new _SSE(url);
+                sse._iter();
+                return sse;
             };
-            globalThis.EventSource.prototype = _proto;
-            globalThis.EventSource.CONNECTING = 0;
-            globalThis.EventSource.OPEN = 1;
-            globalThis.EventSource.CLOSED = 2;
+            globalThis.SSE.prototype = _proto;
         })();"#,
     ))?;
 

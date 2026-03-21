@@ -10,6 +10,7 @@ readme.workspace = true
 [dependencies]
 rong = { workspace = true }
 rong_rt = { workspace = true }
+futures = { workspace = true }
 tokio = { workspace = true }
 bytes = { workspace = true }
 rong_abort = { workspace = true }
@@ -24,7 +25,6 @@ rong_navigator = { workspace = true }
 rong_url = { workspace = true }
 url = "2.5.4"
 uuid = { workspace = true }
-rong_event = { path = "../rong_event" }
 rong_stream = { workspace = true }
 tokio-stream = { workspace = true }
 serde_json = { workspace = true }
@@ -35,7 +35,6 @@ default = ["tls-aws-lc"]
 quickjs = [
     "rong/quickjs",
     "rong_abort/quickjs",
-    "rong_event/quickjs",
     "rong_exception/quickjs",
     "rong_buffer/quickjs",
     "rong_navigator/quickjs",
@@ -45,7 +44,6 @@ quickjs = [
 jscore = [
     "rong/jscore",
     "rong_abort/jscore",
-    "rong_event/jscore",
     "rong_exception/jscore",
     "rong_buffer/jscore",
     "rong_navigator/jscore",
@@ -55,7 +53,6 @@ jscore = [
 arkjs = [
     "rong/arkjs",
     "rong_abort/arkjs",
-    "rong_event/arkjs",
     "rong_exception/arkjs",
     "rong_buffer/arkjs",
     "rong_navigator/arkjs",
@@ -71,7 +68,6 @@ rong_encoding = { path = "../rong_encoding" }
 rong_console = { path = "../rong_console" }
 rong_assert = { path = "../rong_assert" }
 rong_timer = { path = "../rong_timer" }
-futures = { workspace = true }
 tokio-stream = { workspace = true }
 serde_json = { workspace = true }
 rong_fs = { path = "../rong_fs" }

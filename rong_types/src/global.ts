@@ -18,7 +18,7 @@ import type {
 } from './fs';
 import type { PathModule } from './path';
 import type { Process } from './process';
-import type { EventSourceConstructor } from './sse';
+import type { SSEConstructor } from './sse';
 import type { StorageConstructor, StorageModule } from './storage';
 
 declare global {
@@ -93,6 +93,12 @@ declare global {
    * Assert function - Test assertions (Node.js compatible)
    */
   const assert: AssertFunction;
+
+
+  /**
+   * SSE - Server-Sent Events async iterator client
+   */
+  const SSE: SSEConstructor;
 }
 
 export {};

@@ -12,10 +12,9 @@ HTTP client providing the standard Fetch API and Server-Sent Events.
   - `get()`, `set()`, `append()`, `delete()`, `has()`, `forEach()`, `entries()`, `keys()`, `values()`, `getSetCookie()`
 - `Request` — HTTP request class
   - `method`, `headers`, `url`, `signal`, `redirect`, `clone()`, plus body mixin methods
-- `EventSource` — Server-Sent Events client
-  - `new EventSource(url, options?)` — connect to an SSE endpoint
-  - `addEventListener(type, listener)` — listen for events (`open`, `message`, `error`)
-  - `removeEventListener(type, listener)` — remove a listener
+- `SSE` — Server-Sent Events async iterator client
+  - `new SSE(url, options?)` — connect to an SSE endpoint, returns an `AsyncIterable<SSEEvent>`
+  - `for await (const event of sse)` — iterate events (`{ type, data, id, origin }`)
   - `close()` — close the connection
-  - `url`, `readyState`, `lastEventId`
-  - Options: `headers`, `requestTimeoutMs`, `reconnect` (with `enabled`, `maxRetries`, `baseDelayMs`, `maxDelayMs`)
+  - `url` — the connection URL
+  - Options: `headers`, `signal`, `requestTimeoutMs`, `reconnect` (with `enabled`, `maxRetries`, `baseDelayMs`, `maxDelayMs`)

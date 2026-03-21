@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use http::Request as HttpRequest;
-use http::header;
 use http::Uri;
+use http::header;
 use http_body_util::{BodyExt, combinators::BoxBody};
 use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_rustls::HttpsConnectorBuilder;
@@ -469,5 +469,4 @@ mod tests {
         let err = parse_proxy_uri("https://127.0.0.1:8080").expect_err("must reject https");
         assert!(err.contains("only http:// is supported"));
     }
-
 }

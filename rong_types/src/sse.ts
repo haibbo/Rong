@@ -1,12 +1,7 @@
-export interface EventSourceEventMap {
-  open: Event;
-  message: MessageEvent;
-  error: Event;
-}
-
-export interface EventSourceInit {
+export interface SSEOptions {
   headers?: Record<string, string>;
   requestTimeoutMs?: number;
+  signal?: AbortSignal;
   reconnect?: {
     enabled?: boolean;
     maxRetries?: number;
@@ -15,31 +10,19 @@ export interface EventSourceInit {
   };
 }
 
-export interface MessageEvent {
+export interface SSEEvent {
   readonly type: string;
   readonly data: string;
-  readonly lastEventId: string;
+  readonly id: string;
   readonly origin: string;
 }
 
-export interface EventSource {
+export interface SSE extends AsyncIterable<SSEEvent> {
   readonly url: string;
-  readonly readyState: number;
-  readonly lastEventId: string;
-  readonly CONNECTING: 0;
-  readonly OPEN: 1;
-  readonly CLOSED: 2;
-  onopen: ((event: Event) => void) | null;
-  onmessage: ((event: MessageEvent) => void) | null;
-  onerror: ((event: Event) => void) | null;
   close(): void;
-  addEventListener(type: string, listener: (event: MessageEvent) => void): void;
-  removeEventListener(type: string, listener: (event: MessageEvent) => void): void;
+  [Symbol.asyncIterator](): AsyncIterator<SSEEvent>;
 }
 
-export interface EventSourceConstructor {
-  new (url: string, options?: EventSourceInit): EventSource;
-  readonly CONNECTING: 0;
-  readonly OPEN: 1;
-  readonly CLOSED: 2;
+export interface SSEConstructor {
+  new (url: string, options?: SSEOptions): SSE;
 }

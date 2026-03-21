@@ -703,7 +703,6 @@ mod tests {
             rong_abort::init(&ctx)?;
             rong_exception::init(&ctx)?;
             rong_stream::init(&ctx)?;
-            rong_event::init(&ctx)?;
 
             crate::init(&ctx)?;
 
@@ -726,8 +725,8 @@ mod tests {
             };
             let base_url = format!("http://{}", addr);
             ctx.global().set("TEST_SERVER_URL", base_url)?;
-            let has_es: bool = ctx.eval(Source::from_bytes("typeof EventSource === 'function'"))?;
-            assert!(has_es, "EventSource should be initialized");
+            let has_sse: bool = ctx.eval(Source::from_bytes("typeof SSE === 'function'"))?;
+            assert!(has_sse, "SSE should be initialized");
 
             let passed = UnitJSRunner::load_script(&ctx, "sse.js")
                 .await?
