@@ -575,7 +575,7 @@ pub fn readable_stream_is_locked(rs: &ReadableStream) -> bool {
 
 // Install instance-level async iterator: stream implements next() and [Symbol.asyncIterator]
 fn install_instance_async_iter(ctx: &JSContext, obj: &JSObject) -> JSResult<()> {
-    // next() method on the instance (use `this` to borrow the underlying Rust object)
+    // Custom next() that borrows `this` to access ReadableStream's internal rx_slot
     let next_fn = JSFunc::new(
         ctx,
         move |ctx: JSContext, this: This<JSObject>| async move {
@@ -629,14 +629,7 @@ fn install_instance_async_iter(ctx: &JSContext, obj: &JSObject) -> JSResult<()> 
     )?;
     obj.set("next", next_fn)?;
 
-    // [Symbol.asyncIterator] = () => this (as host function; inherits Function.prototype)
-    let symbol = ctx
-        .global()
-        .get::<_, JSObject>("Symbol")?
-        .get::<_, JSSymbol>("asyncIterator")?;
-    let return_this = JSFunc::new(ctx, move |this: This<JSObject>| (*this).clone())?;
-    obj.set(symbol, return_this)?;
-    Ok(())
+    rong::install_async_iterator_symbol(ctx, obj)
 }
 
 // Wrapper helper for clearer semantics
