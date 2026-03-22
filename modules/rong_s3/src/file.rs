@@ -1,0 +1,247 @@
+use crate::config::S3Config;
+use rong::function::*;
+use rong::*;
+use std::rc::Rc;
+
+fn s3_error(msg: impl Into<String>) -> RongJSError {
+    HostError::new("ERR_S3", msg).with_name("S3Error").into()
+}
+
+fn type_error(msg: impl Into<String>) -> RongJSError {
+    HostError::new(rong::error::E_TYPE, msg)
+        .with_name("TypeError")
+        .into()
+}
+
+/// Lazy reference to an S3 object. No network request on creation.
+#[js_export]
+pub struct S3File {
+    config: Rc<S3Config>,
+    key: String,
+    range_start: Option<u64>,
+    range_end: Option<u64>,
+}
+
+#[js_class]
+impl S3File {
+    #[js_method(constructor)]
+    fn new() -> JSResult<Self> {
+        Err(type_error(
+            "S3File cannot be constructed directly. Use S3Client.file() instead.",
+        ))
+    }
+
+    pub(crate) fn create(config: Rc<S3Config>, key: String) -> Self {
+        Self {
+            config,
+            key,
+            range_start: None,
+            range_end: None,
+        }
+    }
+
+    #[js_method(getter)]
+    fn name(&self) -> String {
+        self.key.clone()
+    }
+
+    /// S3 objects don't have synchronous size — use stat() instead.
+    #[js_method(getter)]
+    fn size(&self) -> f64 {
+        f64::NAN
+    }
+
+    #[js_method]
+    async fn text(&self) -> JSResult<String> {
+        let bucket = self.config.create_bucket()?;
+        let response = bucket
+            .get_object(&self.key)
+            .await
+            .map_err(|e| s3_error(format!("GET {}: {}", self.key, e)))?;
+
+        let bytes = self.apply_range(response.bytes());
+        String::from_utf8(bytes.to_vec()).map_err(|e| s3_error(format!("invalid UTF-8: {}", e)))
+    }
+
+    #[js_method]
+    async fn json(&self, ctx: JSContext) -> JSResult<JSValue> {
+        let text = Self::text(self).await?;
+        let obj = JSObject::from_json_string(&ctx, &text)?;
+        Ok(JSValue::from(&ctx, obj))
+    }
+
+    #[js_method]
+    async fn bytes(&self, ctx: JSContext) -> JSResult<JSValue> {
+        let bucket = self.config.create_bucket()?;
+        let response = bucket
+            .get_object(&self.key)
+            .await
+            .map_err(|e| s3_error(format!("GET {}: {}", self.key, e)))?;
+
+        let data = self.apply_range(response.bytes());
+        let ab = JSArrayBuffer::from_bytes(&ctx, data)
+            .map_err(|e| s3_error(format!("ArrayBuffer: {}", e)))?;
+        Ok(JSValue::from(&ctx, ab))
+    }
+
+    #[js_method(rename = "arrayBuffer")]
+    async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSValue> {
+        Self::bytes(self, ctx).await
+    }
+
+    /// Write data to this S3 object.
+    #[js_method]
+    async fn write(&self, data: JSValue, options: Optional<JSObject>) -> JSResult<f64> {
+        let bucket = self.config.create_bucket()?;
+        let (content_bytes, content_type) = resolve_body(&data)?;
+        let ct = if let Some(opts) = options.0 {
+            opts.get::<_, String>("type").ok().or(content_type)
+        } else {
+            content_type
+        };
+        let ct_str = ct.as_deref().unwrap_or("application/octet-stream");
+
+        bucket
+            .put_object_with_content_type(&self.key, &content_bytes, ct_str)
+            .await
+            .map_err(|e| s3_error(format!("PUT {}: {}", self.key, e)))?;
+
+        Ok(content_bytes.len() as f64)
+    }
+
+    #[js_method]
+    async fn delete(&self) -> JSResult<()> {
+        let bucket = self.config.create_bucket()?;
+        bucket
+            .delete_object(&self.key)
+            .await
+            .map_err(|e| s3_error(format!("DELETE {}: {}", self.key, e)))?;
+        Ok(())
+    }
+
+    #[js_method]
+    async fn unlink(&self) -> JSResult<()> {
+        Self::delete(self).await
+    }
+
+    #[js_method]
+    async fn exists(&self) -> JSResult<bool> {
+        let bucket = self.config.create_bucket()?;
+        match bucket.head_object(&self.key).await {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    }
+
+    #[js_method]
+    async fn stat(&self, ctx: JSContext) -> JSResult<JSObject> {
+        let bucket = self.config.create_bucket()?;
+        let (head, _status) = bucket
+            .head_object(&self.key)
+            .await
+            .map_err(|e| s3_error(format!("HEAD {}: {}", self.key, e)))?;
+
+        let result = JSObject::new(&ctx);
+        if let Some(etag) = head.e_tag {
+            result.set("etag", etag)?;
+        }
+        if let Some(last_modified) = head.last_modified {
+            result.set("lastModified", last_modified)?;
+        }
+        if let Some(ct) = head.content_type {
+            result.set("type", ct)?;
+        }
+        result.set("size", head.content_length.unwrap_or(0) as f64)?;
+        Ok(result)
+    }
+
+    /// Generate a presigned URL (async in rust-s3).
+    #[js_method]
+    async fn presign(&self, options: Optional<JSObject>) -> JSResult<String> {
+        let bucket = self.config.create_bucket()?;
+        let expires_in = options
+            .0
+            .as_ref()
+            .and_then(|o| o.get::<_, f64>("expiresIn").ok())
+            .map(|v| v as u32)
+            .unwrap_or(86400);
+
+        let method = options
+            .0
+            .as_ref()
+            .and_then(|o| o.get::<_, String>("method").ok())
+            .unwrap_or_else(|| "GET".to_string());
+
+        match method.to_uppercase().as_str() {
+            "GET" => bucket
+                .presign_get(&self.key, expires_in, None)
+                .await
+                .map_err(|e| s3_error(format!("presign GET: {}", e)).into()),
+            "PUT" => bucket
+                .presign_put(&self.key, expires_in, None, None)
+                .await
+                .map_err(|e| s3_error(format!("presign PUT: {}", e)).into()),
+            "DELETE" => bucket
+                .presign_delete(&self.key, expires_in)
+                .await
+                .map_err(|e| s3_error(format!("presign DELETE: {}", e)).into()),
+            other => Err(HostError::new(
+                "ERR_S3_INVALID_METHOD",
+                format!("Unsupported presign method: {}", other),
+            )
+            .into()),
+        }
+    }
+
+    #[js_method]
+    fn slice(&self, ctx: JSContext, start: f64, end: Optional<f64>) -> JSResult<JSObject> {
+        let file = S3File {
+            config: self.config.clone(),
+            key: self.key.clone(),
+            range_start: Some(start as u64),
+            range_end: end.0.map(|v| v as u64),
+        };
+        let obj = Class::get::<S3File>(&ctx)?.instance(file);
+        Ok(obj)
+    }
+
+    fn apply_range<'a>(&self, data: &'a [u8]) -> &'a [u8] {
+        let start = self.range_start.unwrap_or(0) as usize;
+        let end = self
+            .range_end
+            .map(|e| (e as usize).min(data.len()))
+            .unwrap_or(data.len());
+        if start >= data.len() {
+            return &[];
+        }
+        &data[start..end]
+    }
+}
+
+/// Resolve a JS value to bytes + optional content type.
+pub(crate) fn resolve_body(data: &JSValue) -> JSResult<(Vec<u8>, Option<String>)> {
+    if data.is_string() {
+        let s: String = data
+            .clone()
+            .try_into()
+            .map_err(|_| type_error("invalid string"))?;
+        return Ok((s.into_bytes(), Some("text/plain;charset=utf-8".to_string())));
+    }
+    if data.is_array_buffer() {
+        let ab: JSArrayBuffer = data
+            .clone()
+            .try_into()
+            .map_err(|_| type_error("invalid ArrayBuffer"))?;
+        return Ok((ab.as_bytes().to_vec(), None));
+    }
+    if let Some(obj) = data.clone().into_object() {
+        if let Some(ta) = AnyJSTypedArray::from_object(obj) {
+            if let Some(bytes) = ta.as_bytes() {
+                return Ok((bytes.to_vec(), None));
+            }
+        }
+    }
+    Err(type_error(
+        "data must be a string, ArrayBuffer, or Uint8Array",
+    ))
+}
