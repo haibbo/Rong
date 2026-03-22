@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 mod completer;
 mod extension;
+mod logging;
 mod repl;
 
 #[derive(Debug)]
@@ -112,6 +113,8 @@ async fn compile_file(ctx: &JSContext, input: PathBuf, output: PathBuf) -> Resul
 }
 
 fn main() -> Result<(), RongJSError> {
+    logging::init_tracing();
+
     let command = match parse_args() {
         Ok(cmd) => cmd,
         Err(err) => {
