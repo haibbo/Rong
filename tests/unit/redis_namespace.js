@@ -69,4 +69,16 @@ describe("Redis namespace prefix", () => {
     assert.equal(items[0], "first");
     assert.equal(items[1], "second");
   });
+
+  it("send is disabled on namespaced injected clients", async () => {
+    let threw = false;
+    try {
+      await redis.send("SET", ["unsafe", "value"]);
+    } catch (e) {
+      threw = true;
+      assert.equal(e.name, "TypeError");
+      assert(e.message.includes("disabled"), e.message);
+    }
+    assert(threw, "send should be blocked");
+  });
 });

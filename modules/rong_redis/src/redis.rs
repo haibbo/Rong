@@ -145,6 +145,22 @@ impl RedisClient {
         }
     }
 
+    fn namespaced(&self) -> bool {
+        matches!(self.namespace_prefix.as_deref(), Some(prefix) if !prefix.is_empty())
+    }
+
+    fn ensure_raw_command_allowed(&self) -> JSResult<()> {
+        if self.namespaced() {
+            return Err(HostError::new(
+                "E_INVALID_STATE",
+                "RedisClient.send() is disabled on namespaced injected clients",
+            )
+            .with_name("TypeError")
+            .into());
+        }
+        Ok(())
+    }
+
     /// Create a new `RedisClient` from Rust.
     ///
     /// This is the primary Rust-side API for creating pre-configured clients,
@@ -642,6 +658,7 @@ impl RedisClient {
         command: String,
         args: Vec<String>,
     ) -> JSResult<JSValue> {
+        self.ensure_raw_command_allowed()?;
         let mut conn = self.ensure_conn().await?;
         let mut redis_cmd = redis::cmd(&command);
         for arg in &args {
