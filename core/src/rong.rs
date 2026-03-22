@@ -477,6 +477,8 @@ impl<E: JSEngine + 'static> Rong<E> {
 
     /// Initialize the worker pool
     fn initialize_workers(self: &Arc<Self>) {
+        let mut ready_receivers = Vec::with_capacity(self.worker_count);
+
         futures::executor::block_on(async {
             let mut workers_guard = self.workers.lock().await;
 
@@ -506,6 +508,9 @@ impl<E: JSEngine + 'static> Rong<E> {
                 let any_free_clone = self.any_worker_free.clone();
                 let worker_span = info_span!("rong.worker", worker_id = i);
 
+                let (ready_tx, ready_rx) = oneshot::channel::<()>();
+                ready_receivers.push(ready_rx);
+
                 std::thread::spawn(move || {
                     let _worker_entered = worker_span.enter();
                     info!(target: "rong", "worker thread started");
@@ -527,6 +532,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                             free_signal_clone,
                             any_free_clone,
                             worker_span.clone(),
+                            ready_tx,
                         )
                         .await;
                     });
@@ -534,6 +540,12 @@ impl<E: JSEngine + 'static> Rong<E> {
                 });
             }
         });
+
+        // Wait for all worker threads to finish JS runtime initialization
+        // before returning, so workers are truly ready to accept tasks.
+        for rx in ready_receivers {
+            let _ = futures::executor::block_on(rx);
+        }
     }
 
     /// Core processing loop for a worker thread.
@@ -546,6 +558,7 @@ impl<E: JSEngine + 'static> Rong<E> {
         free_signal: Arc<Notify>,
         any_worker_free: Arc<Notify>,
         worker_span: Span,
+        ready_tx: oneshot::Sender<()>,
     ) {
         let local = tokio::task::LocalSet::new();
 
@@ -553,14 +566,47 @@ impl<E: JSEngine + 'static> Rong<E> {
             .run_until(async move {
                 let mut should_terminate = false;
 
+                // Create the JS runtime once per worker thread and reuse it
+                // across all tasks. This avoids the expensive per-task runtime
+                // creation (e.g. JSContextGroupCreate can take seconds in debug
+                // builds for JavaScriptCore).
+                let js_runtime = E::runtime();
+
+                // Signal that this worker is ready to accept tasks.
+                let _ = ready_tx.send(());
+
+                // Start the microtask polling runner for engines that need it.
+                // The runner lives for the lifetime of the worker, not per-task.
+                let _microtask_runner_handle: Option<tokio::task::JoinHandle<()>> =
+                    if js_runtime.run_pending_jobs() >= 0 {
+                        let rt_clone = js_runtime.clone();
+                        let microtask_span = info_span!(
+                            parent: &worker_span,
+                            "rong.microtasks",
+                            worker_id = worker_id
+                        );
+                        Some(spawn(
+                            async move {
+                                let mut interval = tokio::time::interval(
+                                    std::time::Duration::from_millis(50),
+                                );
+                                loop {
+                                    interval.tick().await;
+                                    rt_clone.run_pending_jobs();
+                                }
+                            }
+                            .instrument(microtask_span),
+                        ))
+                    } else {
+                        None
+                    };
+
                 type TaskJoinHandle = tokio::task::JoinHandle<
                     Result<JSResult<Box<dyn Any + Send>>, futures::future::Aborted>,
                 >;
                 let mut current_task_join_handle: Option<TaskJoinHandle> = None;
                 let mut current_task_abort_handle: Option<futures::future::AbortHandle> = None;
-                let mut current_microtask_runner_handle: Option<tokio::task::JoinHandle<()>> = None;
                 let mut current_task_message_tx: Option<mpsc::Sender<WorkerMessage>> = None;
-                let mut current_js_runtime: Option<JSRuntime<E::Runtime>> = None;
                 let mut current_task_result_callback: Option<BlockOnCallback> = None;
                 let mut current_task_span: Option<Span> = None;
 
@@ -571,9 +617,6 @@ impl<E: JSEngine + 'static> Rong<E> {
                         // Process termination signal
                         _ = terminate_signal.notified() => {
                             if let Some(handle) = current_task_abort_handle.take() {
-                                handle.abort();
-                            }
-                            if let Some(handle) = current_microtask_runner_handle.take() {
                                 handle.abort();
                             }
                             should_terminate = true;
@@ -594,9 +637,6 @@ impl<E: JSEngine + 'static> Rong<E> {
                                 );
                                 debug!(target: "rong", parent: &task_span, "worker task started");
                                 current_task_span = Some(task_span.clone());
-
-                                let js_runtime = E::runtime();
-                                current_js_runtime = Some(js_runtime.clone());
 
                                 current_task_message_tx = Some(user_async_task.task_message_tx);
                                 match user_async_task.return_type {
@@ -619,37 +659,6 @@ impl<E: JSEngine + 'static> Rong<E> {
                                 let task_handle = spawn(abortable_future.instrument(task_span.clone()));
                                 current_task_join_handle = Some(task_handle);
 
-                                // Only start the microtask polling runner for engines
-                                // that need it (run_pending_jobs returns -1 when not needed).
-                                //
-                                // QuickJS does not autonomously pump pending jobs; it needs the
-                                // host to drive microtasks. The hot paths should trigger
-                                // run_pending_jobs() directly when promises are resolved or host
-                                // messages are delivered. This interval remains only as a low-
-                                // frequency safety net for internal JS async work that is not
-                                // otherwise observed by the host.
-                                if js_runtime.run_pending_jobs() >= 0 {
-                                    let rt_clone = js_runtime.clone();
-                                    let microtask_span = info_span!(
-                                        parent: &task_span,
-                                        "rong.microtasks",
-                                        worker_id = worker_id
-                                    );
-                                    let microtask_handle = spawn(
-                                        async move {
-                                            let mut interval = tokio::time::interval(
-                                                std::time::Duration::from_millis(50),
-                                            );
-                                            loop {
-                                                interval.tick().await;
-                                                rt_clone.run_pending_jobs();
-                                            }
-                                        }
-                                        .instrument(microtask_span),
-                                    );
-                                    current_microtask_runner_handle = Some(microtask_handle);
-                                }
-
                             } else {
                                 // task_rx closed
                                 should_terminate = true;
@@ -660,10 +669,8 @@ impl<E: JSEngine + 'static> Rong<E> {
                         maybe_message = worker_message_rx.recv(), if current_task_message_tx.is_some() => {
                              if let Some(message) = maybe_message {
                                 if let Some(tx) = &current_task_message_tx {
-                                    if tx.send(message).await.is_ok()
-                                        && let Some(rt) = &current_js_runtime
-                                    {
-                                        rt.run_pending_jobs();
+                                    if tx.send(message).await.is_ok() {
+                                        js_runtime.run_pending_jobs();
                                     }
                                 }
                              }
@@ -701,12 +708,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                             current_task_join_handle = None;
                             current_task_abort_handle = None;
                             current_task_message_tx = None;
-                            current_js_runtime = None;
                             current_task_span = None;
-
-                            if let Some(handle) = current_microtask_runner_handle.take() {
-                                handle.abort();
-                            }
 
                             // Set worker state back to Free
                             {
@@ -723,7 +725,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                 if let Some(handle) = current_task_abort_handle.take() {
                      handle.abort();
                 }
-                if let Some(handle) = current_microtask_runner_handle.take() {
+                if let Some(handle) = _microtask_runner_handle {
                      handle.abort();
                 }
 
