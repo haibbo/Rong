@@ -67,4 +67,14 @@ impl CustomEvent {
     pub fn composed(&self) -> bool {
         self.event.composed()
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, mut mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        if let Some(detail) = self.detail.as_ref() {
+            mark_fn(detail);
+        }
+    }
 }

@@ -218,6 +218,13 @@ impl URLSearchParams {
             .extend_pairs(params.iter())
             .finish()
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 impl URLSearchParams {

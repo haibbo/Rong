@@ -98,6 +98,13 @@ impl FileInfo {
     fn mode(&self) -> Option<u32> {
         self.mode
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {

@@ -216,6 +216,13 @@ impl S3File {
         }
         &data[start..end]
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 /// Resolve a JS value to bytes + optional content type.

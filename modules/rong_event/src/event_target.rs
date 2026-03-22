@@ -15,6 +15,14 @@ impl EventTarget {
             events: EventEmitter::new(),
         }
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        self.events.gc_mark_with(mark_fn);
+    }
 }
 
 impl Default for EventTarget {

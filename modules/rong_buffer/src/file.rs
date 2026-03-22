@@ -121,4 +121,11 @@ impl File {
     pub async fn bytes(&self, ctx: JSContext) -> JSResult<JSTypedArray> {
         self.blob.bytes(ctx).await
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }

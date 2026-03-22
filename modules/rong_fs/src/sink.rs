@@ -147,6 +147,13 @@ impl FileSink {
             .await
             .map_err(|e| HostError::new("FS_IO", format!("Sync failed: {}", e)).into())
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {

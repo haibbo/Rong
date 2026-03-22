@@ -148,6 +148,13 @@ impl Blob {
         let buffer = JSArrayBuffer::from_bytes(&ctx, &self.data)?;
         JSTypedArray::<u8>::from_array_buffer(&ctx, buffer, 0, None)
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 /// Process a single Blob part according to the specification

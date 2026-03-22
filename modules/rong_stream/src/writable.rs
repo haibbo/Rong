@@ -176,6 +176,18 @@ impl WritableStream {
         *guard = None;
         Ok(())
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, mut mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        if let Ok(sink_slot) = self.sink_slot.lock()
+            && let Some(sink) = sink_slot.as_ref()
+        {
+            mark_fn(sink.as_js_value());
+        }
+    }
 }
 
 #[js_class]
@@ -341,6 +353,21 @@ impl WritableStreamDefaultWriter {
             }
         }
         Ok(())
+    }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, mut mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+        if let Some(sink_obj) = self.sink_obj.borrow().as_ref() {
+            mark_fn(sink_obj.as_js_value());
+        }
+        if let Ok(sink_slot) = self.sink_slot_ref.lock()
+            && let Some(sink_obj) = sink_slot.as_ref()
+        {
+            mark_fn(sink_obj.as_js_value());
+        }
     }
 }
 

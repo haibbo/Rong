@@ -118,6 +118,13 @@ impl RedisSubscription {
         self.close_internal();
         Self::done_result(&ctx)
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 #[js_export]
@@ -637,6 +644,13 @@ impl RedisClient {
         }
         let result: RedisValue = redis_cmd.query_async(&mut conn).await.map_err(redis_err)?;
         redis_value_to_js(&ctx, result)
+    }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
     }
 }
 

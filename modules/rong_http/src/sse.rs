@@ -177,6 +177,13 @@ impl SSE {
 
         let _ = stream.install_js_async_iter(&ctx, &this.0);
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 enum SseStreamState {

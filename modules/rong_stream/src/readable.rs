@@ -358,6 +358,13 @@ impl ReadableStream {
         arr.set(1, b2)?;
         Ok(arr)
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 #[js_class]
@@ -466,6 +473,13 @@ impl ReadableStreamDefaultReader {
         *slot = None; // if a read is in-flight, it will observe `canceled` and drop on restore
         Ok(())
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 #[js_class]
@@ -550,6 +564,13 @@ impl ReadableStreamDefaultController {
         }
         *slot = None;
         Ok(())
+    }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
     }
 }
 

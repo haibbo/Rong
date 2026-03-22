@@ -211,6 +211,13 @@ impl FileHandle {
             tx, done_rx,
         ))
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 /// Internal helper used by RongFile.open()

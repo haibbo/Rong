@@ -148,6 +148,13 @@ impl RongFile {
     async fn writer(&self, option: Optional<FileSinkOptions>) -> JSResult<FileSink> {
         FileSink::create(&self.resolved, &self.path, option.0).await
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 fn file(path: String) -> JSResult<RongFile> {

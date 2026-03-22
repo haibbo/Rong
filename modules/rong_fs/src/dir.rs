@@ -42,6 +42,13 @@ impl DirEntry {
     fn is_symlink(&self) -> bool {
         self.is_symlink
     }
+
+    #[js_method(gc_mark)]
+    fn gc_mark_with<F>(&self, _mark_fn: F)
+    where
+        F: FnMut(&JSValue),
+    {
+    }
 }
 
 #[derive(FromJSObj, Default)]
