@@ -4,8 +4,7 @@ Key-value storage backed by a local database file.
 
 ## JS APIs
 
-- `Rong.storage.open(path, options?)` — open a storage database, returns a `Storage` instance
-- `new Rong.Storage(path, options?)` — construct a storage instance directly
+- `new Storage(path, options?)` — construct a storage instance directly
   - Options: `maxKeySize`, `maxValueSize`, `maxDataSize`
 - `Storage` instance methods:
   - `set(key, value)` — store a key-value pair
@@ -14,3 +13,14 @@ Key-value storage backed by a local database file.
   - `clear()` — remove all entries
   - `list(prefix?)` — list keys, optionally filtered by prefix
   - `info()` — get storage info (`currentSize`, `limitSize`, `keyCount`)
+
+## Rust API
+
+- `Storage::new(path, options)` — create a pre-configured instance from Rust, useful for environments that inject instances via a platform namespace instead of exposing the JS constructor.
+
+To hide the JS constructor after init:
+
+```rust
+rong_storage::init(&ctx)?;
+ctx.global().delete("Storage")?;
+```

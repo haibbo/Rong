@@ -25,8 +25,7 @@
 //! - Maximum total storage (including redb overhead): ~21.5MB
 
 use redb::TableDefinition;
-use rong::{function::Optional, *};
-use std::path::PathBuf;
+use rong::*;
 
 mod storage;
 pub use storage::*;
@@ -52,31 +51,9 @@ pub struct StorageInfo {
     pub(crate) key_count: u32,
 }
 
-/// Open a new storage instance at the provided path.
-async fn storage_open(
-    ctx: JSContext,
-    path: String,
-    options: Optional<StorageOptionsInput>,
-) -> JSResult<JSObject> {
-    let opts = options.0.map(StorageOptions::from).unwrap_or_default();
-    let storage = Storage::open_with_options(PathBuf::from(path), opts)?;
-    Ok(Class::get::<Storage>(&ctx)?.instance(storage))
-}
-
 /// Initialize the Storage module
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<Storage>()?;
-
-    let constructor = Class::get::<Storage>(ctx)?;
-    let rong = ctx.rong();
-
-    // Expose the class as Rong.Storage
-    rong.set("Storage", constructor.clone())?;
-
-    // Provide Rong.storage.open(path) helper for ergonomic access
-    let storage_ns = JSObject::new(ctx);
-    storage_ns.set("open", JSFunc::new(ctx, storage_open)?.name("open")?)?;
-    rong.set("storage", storage_ns)?;
 
     Ok(())
 }
@@ -87,27 +64,20 @@ mod tests {
     use rong_test::*;
     use std::env;
 
+    fn workspace_root() -> std::path::PathBuf {
+        env::current_dir()
+            .expect("cwd")
+            .parent()
+            .and_then(|p| p.parent())
+            .expect("workspace root")
+            .to_path_buf()
+    }
+
     #[test]
     fn test_storage() {
         async_run!(|ctx: JSContext| async move {
-            // Get workspace root dynamically
-            let workspace_root = env::current_dir()
-                .map_err(|e| {
-                    HostError::new(
-                        rong::error::E_INTERNAL,
-                        format!("Failed to get current dir: {}", e),
-                    )
-                })?
-                .parent()
-                .and_then(|p| p.parent()) // Go up two levels
-                .ok_or_else(|| {
-                    HostError::new(rong::error::E_INTERNAL, "Failed to get workspace root")
-                })?
-                .to_string_lossy()
-                .into_owned();
-
-            // Provide test storage path to JS
-            let storage_path = format!("{}/target/test-tmp/test_storage.db", workspace_root);
+            let root = workspace_root();
+            let storage_path = format!("{}/target/test-tmp/test_storage.db", root.display());
             ctx.global().set("TEST_STORAGE_DB_PATH", storage_path)?;
 
             rong_assert::init(&ctx)?;
@@ -125,43 +95,66 @@ mod tests {
     }
 
     #[test]
+    fn test_storage_injected() {
+        async_run!(|ctx: JSContext| async move {
+            let root = workspace_root();
+            let db_path = root.join("target/test-tmp/test_storage_injected.db");
+
+            rong_assert::init(&ctx)?;
+            rong_console::init(&ctx)?;
+            init(&ctx)?;
+
+            // Create a pre-configured Storage from Rust with custom limits,
+            // then inject it as a global `storage` — JS never calls `new Storage`.
+            let storage = Storage::new(
+                db_path,
+                StorageOptions {
+                    max_data_size: Some(10 * 1024 * 1024),
+                    ..Default::default()
+                },
+            )?;
+            let js_storage = Class::get::<Storage>(&ctx)?.instance(storage);
+            ctx.global().set("storage", js_storage)?;
+
+            let passed = UnitJSRunner::load_script(&ctx, "storage_injected.js")
+                .await?
+                .run()
+                .await?;
+            assert!(passed);
+
+            Ok(())
+        });
+    }
+
+    #[test]
     fn rust_open_api_provides_handles() {
-        let workspace_root = env::current_dir()
-            .expect("cwd")
-            .parent()
-            .and_then(|p| p.parent())
-            .expect("workspace root")
-            .to_path_buf();
+        let root = workspace_root();
 
-        let default_path = workspace_root.join("target/test-tmp/rust_storage_default.db");
-        Storage::open(default_path).expect("default open should succeed");
+        let default_path = root.join("target/test-tmp/rust_storage_default.db");
+        Storage::new(default_path, StorageOptions::default()).expect("default open should succeed");
 
-        let custom_path = workspace_root.join("target/test-tmp/rust_storage_custom.db");
+        let custom_path = root.join("target/test-tmp/rust_storage_custom.db");
         let options = StorageOptions {
             max_key_size: Some(16),
             ..Default::default()
         };
-        Storage::open_with_options(custom_path, options).expect("custom open should succeed");
+        Storage::new(custom_path, options).expect("custom open should succeed");
     }
 
     #[test]
     fn close_allows_reopen_same_path() {
-        let workspace_root = env::current_dir()
-            .expect("cwd")
-            .parent()
-            .and_then(|p| p.parent())
-            .expect("workspace root")
-            .to_path_buf();
+        let root = workspace_root();
 
-        let path = workspace_root.join("target/test-tmp/rust_storage_reopen.db");
+        let path = root.join("target/test-tmp/rust_storage_reopen.db");
 
         // First open and immediately close the database.
-        let storage = Storage::open(&path).expect("initial open should succeed");
+        let storage =
+            Storage::new(&path, StorageOptions::default()).expect("initial open should succeed");
         storage.close();
 
         // After close, reopening the same path in the same process should succeed
         // without hitting redb's "Database already open. Cannot acquire lock" error.
-        let _storage2 =
-            Storage::open(&path).expect("reopen after close should succeed without lock error");
+        let _storage2 = Storage::new(&path, StorageOptions::default())
+            .expect("reopen after close should succeed without lock error");
     }
 }

@@ -101,16 +101,18 @@ pub struct Storage {
 }
 
 impl Storage {
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn open<P: Into<PathBuf>>(path: P) -> JSResult<Self> {
-        Self::open_with_options(path, StorageOptions::default())
-    }
-
-    pub fn open_with_options<P: Into<PathBuf>>(path: P, options: StorageOptions) -> JSResult<Self> {
+    /// Create a new `Storage` instance at the given path with custom options.
+    ///
+    /// This is the primary Rust-side API for creating `Storage` instances,
+    /// used by both the JS constructor and environments that inject
+    /// pre-configured instances via a platform namespace.
+    ///
+    /// Pass `StorageOptions::default()` for default limits.
+    pub fn new<P: Into<PathBuf>>(path: P, options: StorageOptions) -> JSResult<Self> {
         Self::open_with_path(path.into(), options)
     }
 
-    pub(crate) fn open_with_path(path: PathBuf, options: StorageOptions) -> JSResult<Self> {
+    fn open_with_path(path: PathBuf, options: StorageOptions) -> JSResult<Self> {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).map_err(|e| {
                 HostError::new(
@@ -194,9 +196,9 @@ impl Storage {
 #[js_class]
 impl Storage {
     #[js_method(constructor)]
-    pub fn new(path: String, options: Optional<StorageOptionsInput>) -> JSResult<Self> {
+    pub fn js_new(path: String, options: Optional<StorageOptionsInput>) -> JSResult<Self> {
         let opts = options.0.map(StorageOptions::from).unwrap_or_default();
-        Self::open_with_options(PathBuf::from(path), opts)
+        Self::new(PathBuf::from(path), opts)
     }
 
     /// Set a key-value pair in storage

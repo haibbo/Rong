@@ -9,20 +9,20 @@ describe("Storage API", () => {
 
   beforeEach(async () => {
     if (!storage) {
-      storage = await Rong.storage.open(STORAGE_DB_PATH);
+      storage = new Storage(STORAGE_DB_PATH);
     }
     await storage.clear();
   });
 
   it("should allow direct class construction with path", async () => {
-    const direct = new Rong.Storage(`${STORAGE_DB_PATH}.direct`);
+    const direct = new Storage(`${STORAGE_DB_PATH}.direct`);
     await direct.clear();
     await direct.set("direct_key", "direct_value");
     assert.equal(await direct.get("direct_key"), "direct_value");
   });
 
   it("should honor custom limit options", async () => {
-    const strict = await Rong.storage.open(`${STORAGE_DB_PATH}.strict`, {
+    const strict = new Storage(`${STORAGE_DB_PATH}.strict`, {
       maxKeySize: 4,
     });
     await strict.clear();
