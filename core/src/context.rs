@@ -10,6 +10,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 use std::sync::{LazyLock, RwLock};
+use tracing::debug;
 
 pub(crate) mod thrown_store;
 
@@ -426,7 +427,7 @@ impl<C: JSContextImpl> JSContext<C> {
         let context_id = C::context_id(self.as_ref().as_raw());
 
         #[cfg(debug_assertions)]
-        eprintln!("[JSContext] Capturing thrown value for ctx: {}", context_id);
+        debug!(target: "rong", context_id, "capturing thrown JS value");
 
         let mut store = unsafe { (*data).thrown.try_borrow_mut() }
             .expect("[JSContext] Fatal: ThrownValueStore already borrowed. Recursive error handling detected.");

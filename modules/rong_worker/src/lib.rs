@@ -23,6 +23,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 use tokio::sync::mpsc;
+use tracing::{error, warn};
 
 type WorkerInitializer = Box<dyn Fn(&JSContext) -> JSResult<()> + Send + Sync>;
 
@@ -238,13 +239,13 @@ impl Worker {
                                                 .call_async::<_, ()>(None, (err_event,))
                                                 .await;
                                         } else {
-                                            eprintln!("[Worker] onmessage handler error: {:?}", e);
+                                            error!(target: "rong", error = ?e, "worker onmessage handler failed");
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
-                                eprintln!("[Worker] JSON deserialization failed: {:?}", e);
+                                warn!(target: "rong", error = ?e, "worker failed to deserialize JSON message");
                             }
                         }
                     }
@@ -254,7 +255,7 @@ impl Worker {
                             let err_event = worker_error_event(&ctx, &message);
                             let _ = err_fn.call_async::<_, ()>(None, (err_event,)).await;
                         } else {
-                            eprintln!("[Worker] {}", message);
+                            error!(target: "rong", message = %message, "worker emitted error event without handler");
                         }
                     }
                     None => break,

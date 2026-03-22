@@ -1,13 +1,16 @@
 use rong::{function::*, *};
-use std::cell::RefCell;
 use std::collections::HashSet;
-use std::fmt;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{self, IsTerminal, Write};
 
-thread_local! {
-    static CONSOLE_WRITER: RefCell<Option<Box<dyn ConsoleWriter>>> = RefCell::new(None);
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ConsoleTraceContext {
+    pub namespace: Option<String>,
+    pub scope: Option<String>,
 }
+
+#[derive(Clone, Debug, Default)]
+struct StoredConsoleTraceContext(Option<ConsoleTraceContext>);
 
 #[derive(Debug)]
 pub enum LogLevel {
@@ -18,16 +21,84 @@ pub enum LogLevel {
     Debug,
 }
 
-pub trait ConsoleWriter: Send + Sync + fmt::Debug {
-    fn write(&self, level: LogLevel, message: String);
-    fn is_tty(&self) -> bool;
+pub fn set_trace_context(ctx: &JSContext, trace_context: ConsoleTraceContext) {
+    ctx.set_state(StoredConsoleTraceContext(Some(trace_context)));
 }
 
-#[derive(Debug)]
-struct DefaultWriter;
+pub fn clear_trace_context(ctx: &JSContext) {
+    ctx.set_state(StoredConsoleTraceContext(None));
+}
 
-impl ConsoleWriter for DefaultWriter {
-    fn write(&self, level: LogLevel, message: String) {
+pub fn trace_context(ctx: &JSContext) -> Option<&ConsoleTraceContext> {
+    ctx.get_state::<StoredConsoleTraceContext>()
+        .and_then(|trace| trace.0.as_ref())
+}
+
+fn emit_console_trace(level: tracing::Level, ctx: &JSContext, message: &str) {
+    macro_rules! emit_with_level {
+        ($level:expr) => {
+            match trace_context(ctx) {
+                Some(trace) => match (trace.namespace.as_deref(), trace.scope.as_deref()) {
+                    (Some(namespace), Some(scope)) => tracing::event!(
+                        target: "rong.js.console",
+                        $level,
+                        namespace,
+                        scope,
+                        message = message
+                    ),
+                    (Some(namespace), None) => tracing::event!(
+                        target: "rong.js.console",
+                        $level,
+                        namespace,
+                        message = message
+                    ),
+                    (None, Some(scope)) => tracing::event!(
+                        target: "rong.js.console",
+                        $level,
+                        scope,
+                        message = message
+                    ),
+                    (None, None) => tracing::event!(
+                        target: "rong.js.console",
+                        $level,
+                        message = message
+                    ),
+                },
+                None => tracing::event!(
+                    target: "rong.js.console",
+                    $level,
+                    message = message
+                ),
+            }
+        };
+    }
+
+    match level {
+        tracing::Level::ERROR => emit_with_level!(tracing::Level::ERROR),
+        tracing::Level::WARN => emit_with_level!(tracing::Level::WARN),
+        tracing::Level::INFO => emit_with_level!(tracing::Level::INFO),
+        tracing::Level::DEBUG => emit_with_level!(tracing::Level::DEBUG),
+        tracing::Level::TRACE => emit_with_level!(tracing::Level::TRACE),
+    }
+}
+
+fn write_console(ctx: &JSContext, level: LogLevel, message: String) {
+    if tracing::dispatcher::has_been_set() {
+        match level {
+            LogLevel::Verbose | LogLevel::Info => {
+                emit_console_trace(tracing::Level::INFO, ctx, &message);
+            }
+            LogLevel::Debug => {
+                emit_console_trace(tracing::Level::DEBUG, ctx, &message);
+            }
+            LogLevel::Error => {
+                emit_console_trace(tracing::Level::ERROR, ctx, &message);
+            }
+            LogLevel::Warn => {
+                emit_console_trace(tracing::Level::WARN, ctx, &message);
+            }
+        }
+    } else {
         match level {
             LogLevel::Verbose | LogLevel::Info => {
                 println!("{}", message);
@@ -43,41 +114,10 @@ impl ConsoleWriter for DefaultWriter {
             }
         }
     }
-
-    fn is_tty(&self) -> bool {
-        io::stdout().is_terminal()
-    }
 }
 
-/// Set a custom console writer for the current thread.
-pub fn set_writer(writer: Box<dyn ConsoleWriter>) {
-    CONSOLE_WRITER.with(|w| {
-        *w.borrow_mut() = Some(writer);
-    });
-}
-
-/// Write a message using the thread-local console writer
-fn write_console(level: LogLevel, message: String) {
-    CONSOLE_WRITER.with(|w| {
-        let mut writer = w.borrow_mut();
-        if writer.is_none() {
-            *writer = Some(Box::new(DefaultWriter));
-        }
-        if let Some(writer) = writer.as_ref() {
-            writer.write(level, message);
-        }
-    });
-}
-
-/// Check if the console writer is a TTY
 fn console_writer_is_tty() -> bool {
-    CONSOLE_WRITER.with(|w| {
-        let mut writer = w.borrow_mut();
-        if writer.is_none() {
-            *writer = Some(Box::new(DefaultWriter));
-        }
-        writer.as_ref().is_some_and(|writer| writer.is_tty())
-    })
+    io::stdout().is_terminal()
 }
 
 /// Initialize the console module
@@ -97,8 +137,8 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     Ok(())
 }
 
-fn log_message(level: LogLevel, message: String) {
-    write_console(level, message);
+fn log_message(ctx: &JSContext, level: LogLevel, message: String) {
+    write_console(ctx, level, message);
 }
 
 fn clear() {
@@ -115,27 +155,27 @@ fn clear() {
 
 fn verbose(ctx: JSContext, args: Rest<JSValue>) {
     let message = format_args(&ctx, args);
-    log_message(LogLevel::Info, message);
+    log_message(&ctx, LogLevel::Info, message);
 }
 
 fn error(ctx: JSContext, args: Rest<JSValue>) {
     let message = format_args(&ctx, args);
-    log_message(LogLevel::Error, message);
+    log_message(&ctx, LogLevel::Error, message);
 }
 
 fn warn(ctx: JSContext, args: Rest<JSValue>) {
     let message = format_args(&ctx, args);
-    log_message(LogLevel::Warn, message);
+    log_message(&ctx, LogLevel::Warn, message);
 }
 
 fn info(ctx: JSContext, args: Rest<JSValue>) {
     let message = format_args(&ctx, args);
-    log_message(LogLevel::Info, message);
+    log_message(&ctx, LogLevel::Info, message);
 }
 
 fn debug(ctx: JSContext, args: Rest<JSValue>) {
     let message = format_args(&ctx, args);
-    log_message(LogLevel::Debug, message);
+    log_message(&ctx, LogLevel::Debug, message);
 }
 
 fn format_args(_ctx: &JSContext, args: Rest<JSValue>) -> String {
@@ -604,56 +644,95 @@ pub fn default_hash<T: Hash + ?Sized>(v: &T) -> usize {
 mod tests {
     use super::*;
     use rong_test::run;
+    use std::sync::{Arc, Mutex};
+    use tracing::{Event, Subscriber, field::Field, field::Visit};
+    use tracing_subscriber::{
+        Registry,
+        layer::{Context, Layer, SubscriberExt},
+    };
 
-    // Use thread-local buffer to avoid cross-test interleaving when tests run in parallel
-    thread_local! {
-        static TEST_OUTPUT: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+    #[derive(Default)]
+    struct EventVisitor {
+        message: Option<String>,
+        namespace: Option<String>,
+        scope: Option<String>,
     }
 
-    fn clear_test_output() {
-        TEST_OUTPUT.with(|s| s.borrow_mut().clear());
+    impl Visit for EventVisitor {
+        fn record_str(&mut self, field: &Field, value: &str) {
+            match field.name() {
+                "message" => self.message = Some(value.to_string()),
+                "namespace" => self.namespace = Some(value.to_string()),
+                "scope" => self.scope = Some(value.to_string()),
+                _ => {}
+            }
+        }
+
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            if field.name() == "message" && self.message.is_none() {
+                self.message = Some(format!("{value:?}"));
+            }
+        }
     }
 
-    fn get_test_output() -> String {
-        TEST_OUTPUT.with(|s| s.borrow().clone())
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct CapturedConsoleEvent {
+        message: String,
+        namespace: Option<String>,
+        scope: Option<String>,
     }
 
-    fn append_test_output(message: &str) {
-        TEST_OUTPUT.with(|s| {
-            let mut buf = s.borrow_mut();
-            buf.push_str(message);
-            buf.push('\n');
+    #[derive(Clone)]
+    struct CaptureConsoleLayer {
+        events: Arc<Mutex<Vec<CapturedConsoleEvent>>>,
+    }
+
+    impl<S> Layer<S> for CaptureConsoleLayer
+    where
+        S: Subscriber,
+    {
+        fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+            if event.metadata().target() != "rong.js.console" {
+                return;
+            }
+
+            let mut visitor = EventVisitor::default();
+            event.record(&mut visitor);
+            if let Some(message) = visitor.message {
+                self.events.lock().unwrap().push(CapturedConsoleEvent {
+                    message,
+                    namespace: visitor.namespace,
+                    scope: visitor.scope,
+                });
+            }
+        }
+    }
+
+    fn capture_console_events<F>(f: F) -> JSResult<Vec<CapturedConsoleEvent>>
+    where
+        F: FnOnce() -> JSResult<()>,
+    {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = Registry::default().with(CaptureConsoleLayer {
+            events: events.clone(),
         });
-    }
-
-    #[derive(Debug)]
-    struct TestConsoleWriter;
-
-    impl ConsoleWriter for TestConsoleWriter {
-        fn write(&self, _level: LogLevel, message: String) {
-            append_test_output(&message);
-        }
-
-        fn is_tty(&self) -> bool {
-            false
-        }
+        tracing::subscriber::with_default(subscriber, f)?;
+        Ok(events.lock().unwrap().clone())
     }
 
     #[test]
     fn test_console_log_formatted_string() {
         run(|ctx| {
-            clear_test_output();
-            // Reset thread-local storage
-            CONSOLE_WRITER.with(|w| {
-                *w.borrow_mut() = None;
-            });
             init(ctx)?;
-            set_writer(Box::new(TestConsoleWriter));
-
-            let js_code = r#"console.log("Name: %s, Age: %d", "Alice", 30);"#;
-            ctx.eval::<()>(Source::from_bytes(js_code))?;
-
-            let output = get_test_output().trim().to_string();
+            let output = capture_console_events(|| {
+                ctx.eval::<()>(Source::from_bytes(
+                    r#"console.log("Name: %s, Age: %d", "Alice", 30);"#,
+                ))
+            })?
+            .into_iter()
+            .map(|event| event.message)
+            .collect::<Vec<_>>()
+            .join("\n");
             assert_eq!(
                 output, "Name: Alice, Age: 30",
                 "Output should match formatted string"
@@ -665,17 +744,14 @@ mod tests {
     #[test]
     fn test_console_log_unknown_formatter_keeps_literal_and_appends_args() {
         run(|ctx| {
-            clear_test_output();
-            CONSOLE_WRITER.with(|w| {
-                *w.borrow_mut() = None;
-            });
             init(ctx)?;
-            set_writer(Box::new(TestConsoleWriter));
-
-            let js_code = r#"console.log("Hello %x", 42);"#;
-            ctx.eval::<()>(Source::from_bytes(js_code))?;
-
-            let output = get_test_output().trim().to_string();
+            let output = capture_console_events(|| {
+                ctx.eval::<()>(Source::from_bytes(r#"console.log("Hello %x", 42);"#))
+            })?
+            .into_iter()
+            .map(|event| event.message)
+            .collect::<Vec<_>>()
+            .join("\n");
             assert_eq!(output, "Hello %x 42");
             Ok(())
         });
@@ -684,18 +760,14 @@ mod tests {
     #[test]
     fn test_console_log_formatter_fallback_on_type_mismatch() {
         run(|ctx| {
-            clear_test_output();
-            CONSOLE_WRITER.with(|w| {
-                *w.borrow_mut() = None;
-            });
             init(ctx)?;
-            set_writer(Box::new(TestConsoleWriter));
-
-            // If number formatting fails, fall back to raw formatting for that arg.
-            let js_code = r#"console.log("Value=%d", { a: 1 });"#;
-            ctx.eval::<()>(Source::from_bytes(js_code))?;
-
-            let output = get_test_output().trim().to_string();
+            let output = capture_console_events(|| {
+                ctx.eval::<()>(Source::from_bytes(r#"console.log("Value=%d", { a: 1 });"#))
+            })?
+            .into_iter()
+            .map(|event| event.message)
+            .collect::<Vec<_>>()
+            .join("\n");
             assert!(output.starts_with("Value="));
             assert!(output.contains("{"));
             Ok(())
@@ -705,24 +777,20 @@ mod tests {
     #[test]
     fn test_console_log_circular_reference() {
         run(|ctx| {
-            clear_test_output();
-            // Reset thread-local storage
-            CONSOLE_WRITER.with(|w| {
-                *w.borrow_mut() = None;
-            });
             init(ctx)?;
-            set_writer(Box::new(TestConsoleWriter));
-
-            let js_code = r#"
-                // Create an object with circular reference
-                const obj = { name: "Circular Object" };
-                obj.self = obj;
-
-                console.log("Circular object:", obj);
-            "#;
-            ctx.eval::<()>(Source::from_bytes(js_code))?;
-
-            let output = get_test_output().trim().to_string();
+            let output = capture_console_events(|| {
+                ctx.eval::<()>(Source::from_bytes(
+                    r#"
+                    const obj = { name: "Circular Object" };
+                    obj.self = obj;
+                    console.log("Circular object:", obj);
+                "#,
+                ))
+            })?
+            .into_iter()
+            .map(|event| event.message)
+            .collect::<Vec<_>>()
+            .join("\n");
             assert!(
                 output.contains("[Circular]"),
                 "Output '{}' should contain circular reference marker",
@@ -735,34 +803,74 @@ mod tests {
     #[test]
     fn test_console_log_max_depth() {
         run(|ctx| {
-            clear_test_output();
-            // Reset thread-local storage
-            CONSOLE_WRITER.with(|w| {
-                *w.borrow_mut() = None;
-            });
             init(ctx)?;
-            set_writer(Box::new(TestConsoleWriter));
-
-            let js_code = r#"
-                // Function to create a deeply nested object
-                function createDeepObject(depth) {
-                    if (depth <= 0) return {};
-                    return { child: createDeepObject(depth - 1) };
-                }
-
-                // Create an object that exceeds maximum recursion depth
-                const deepObj = createDeepObject(15);
-
-                console.log("Deep object:", deepObj);
-            "#;
-            ctx.eval::<()>(Source::from_bytes(js_code))?;
-
-            let output = get_test_output().trim().to_string();
+            let output = capture_console_events(|| {
+                ctx.eval::<()>(Source::from_bytes(
+                    r#"
+                    function createDeepObject(depth) {
+                        if (depth <= 0) return {};
+                        return { child: createDeepObject(depth - 1) };
+                    }
+                    const deepObj = createDeepObject(15);
+                    console.log("Deep object:", deepObj);
+                "#,
+                ))
+            })?
+            .into_iter()
+            .map(|event| event.message)
+            .collect::<Vec<_>>()
+            .join("\n");
             assert!(
                 output.contains("[Maximum recursion depth exceeded]"),
                 "Output '{}' should contain recursion depth warning",
                 output
             );
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_console_can_forward_to_tracing() {
+        run(|ctx| {
+            init(ctx)?;
+            let events = capture_console_events(|| {
+                ctx.eval::<()>(Source::from_bytes(r#"console.info("hello tracing")"#))
+            })?;
+            assert_eq!(
+                events,
+                vec![CapturedConsoleEvent {
+                    message: "hello tracing".to_string(),
+                    namespace: None,
+                    scope: None,
+                }]
+            );
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_console_can_emit_trace_context_fields() {
+        run(|ctx| {
+            init(ctx)?;
+            set_trace_context(
+                ctx,
+                ConsoleTraceContext {
+                    namespace: Some("miniapp".to_string()),
+                    scope: Some("page".to_string()),
+                },
+            );
+            let events = capture_console_events(|| {
+                ctx.eval::<()>(Source::from_bytes(r#"console.info("hello context")"#))
+            })?;
+            assert_eq!(
+                events,
+                vec![CapturedConsoleEvent {
+                    message: "hello context".to_string(),
+                    namespace: Some("miniapp".to_string()),
+                    scope: Some("page".to_string()),
+                }]
+            );
+            clear_trace_context(ctx);
             Ok(())
         });
     }

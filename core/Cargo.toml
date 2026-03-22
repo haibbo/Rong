@@ -13,3 +13,4 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 rong_rt = { workspace = true }
 bytes = { workspace = true }
+tracing = { workspace = true }

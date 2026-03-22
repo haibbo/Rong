@@ -9,6 +9,7 @@ repository.workspace = true
 readme.workspace = true
 [dependencies]
 rong = { workspace = true }
+tracing = { workspace = true }
 
 [features]
 # Forward JS engine features to the main rong crate
@@ -19,3 +20,4 @@ arkjs = ["rong/arkjs"]
 
 [dev-dependencies]
 rong_test = { path = "../../utils/rong_test" }
+tracing-subscriber = { workspace = true }

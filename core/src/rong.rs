@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::{Mutex as TokioMutex, Notify, mpsc, oneshot};
+use tracing::{Instrument, Span, debug, error, info, info_span, warn};
 
 thread_local! {
     /// Set to `true` on worker threads to detect reentrant `block_on` / `get_worker_wait`.
@@ -83,6 +84,7 @@ struct UserAsyncTask<E: JSEngine + 'static> {
     // The closure produces the boxed Any result type expected by result_tx
     future_fn: BoxedFutureFn<E>,
     message_receiver: MessageReceiver,
+    parent_span: Span,
 
     /// Channel for the worker loop to forward post_message messages to this user's async function.
     task_message_tx: mpsc::Sender<WorkerMessage>,
@@ -186,13 +188,14 @@ impl<E: JSEngine + 'static> Worker<E> {
         let task = UserAsyncTask {
             future_fn: boxed_fn,
             message_receiver,
+            parent_span: Span::current(),
             task_message_tx,
             return_type: UserAsyncReturnType::Spawn,
         };
 
         // Send task (non-blocking)
         if let Err(e) = self.task_tx.try_send(task) {
-            eprintln!("[Worker {}] Failed to send task: {:?}", self.id, e);
+            error!(target: "rong", worker_id = self.id, error = ?e, "failed to queue worker task");
             return Err(HostError::new(
                 crate::error::E_INTERNAL,
                 format!(
@@ -256,6 +259,7 @@ impl<E: JSEngine + 'static> Worker<E> {
         let task = UserAsyncTask {
             future_fn: boxed_fn,
             message_receiver,
+            parent_span: Span::current(),
             task_message_tx,
             return_type,
         };
@@ -321,9 +325,13 @@ impl<E: JSEngine + 'static> Worker<E> {
     pub fn post_message(&self, message: WorkerMessage) -> JSResult<()> {
         self.message_tx.try_send(message).map_err(|e| {
             if matches!(e, mpsc::error::TrySendError::Full(_)) {
-                eprintln!("[Worker {}] message channel full, message dropped", self.id);
+                warn!(
+                    target: "rong",
+                    worker_id = self.id,
+                    "worker message channel full; dropping message"
+                );
             } else if matches!(e, mpsc::error::TrySendError::Closed(_)) {
-                eprintln!("[Worker {}] message channel closed", self.id);
+                warn!(target: "rong", worker_id = self.id, "worker message channel closed");
             }
             HostError::new(
                 crate::error::E_INTERNAL,
@@ -496,8 +504,11 @@ impl<E: JSEngine + 'static> Rong<E> {
                 let state_clone = state.clone();
                 let free_signal_clone = free_signal.clone();
                 let any_free_clone = self.any_worker_free.clone();
+                let worker_span = info_span!("rong.worker", worker_id = i);
 
                 std::thread::spawn(move || {
+                    let _worker_entered = worker_span.enter();
+                    info!(target: "rong", "worker thread started");
                     INSIDE_WORKER.with(|flag| flag.set(true));
 
                     let rt = tokio::runtime::Builder::new_current_thread()
@@ -515,9 +526,11 @@ impl<E: JSEngine + 'static> Rong<E> {
                             state_clone,
                             free_signal_clone,
                             any_free_clone,
+                            worker_span.clone(),
                         )
                         .await;
                     });
+                    info!(target: "rong", "worker thread stopped");
                 });
             }
         });
@@ -532,6 +545,7 @@ impl<E: JSEngine + 'static> Rong<E> {
         state: Arc<TokioMutex<WorkerState>>,
         free_signal: Arc<Notify>,
         any_worker_free: Arc<Notify>,
+        worker_span: Span,
     ) {
         let local = tokio::task::LocalSet::new();
 
@@ -548,6 +562,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                 let mut current_task_message_tx: Option<mpsc::Sender<WorkerMessage>> = None;
                 let mut current_js_runtime: Option<JSRuntime<E::Runtime>> = None;
                 let mut current_task_result_callback: Option<BlockOnCallback> = None;
+                let mut current_task_span: Option<Span> = None;
 
                 while !should_terminate {
                     tokio::select! {
@@ -572,6 +587,14 @@ impl<E: JSEngine + 'static> Rong<E> {
                                     *state_guard = WorkerState::Busy;
                                 }
 
+                                let task_span = info_span!(
+                                    parent: &user_async_task.parent_span,
+                                    "rong.task",
+                                    worker_id = worker_id
+                                );
+                                debug!(target: "rong", parent: &task_span, "worker task started");
+                                current_task_span = Some(task_span.clone());
+
                                 let js_runtime = E::runtime();
                                 current_js_runtime = Some(js_runtime.clone());
 
@@ -587,12 +610,13 @@ impl<E: JSEngine + 'static> Rong<E> {
 
                                 let user_fn = user_async_task.future_fn;
                                 let message_receiver = user_async_task.message_receiver;
-                                let user_future = user_fn(js_runtime.clone(), message_receiver);
+                                let user_future =
+                                    user_fn(js_runtime.clone(), message_receiver).instrument(task_span.clone());
 
                                 let (abortable_future, abort_handle) = futures::future::abortable(user_future);
                                 current_task_abort_handle = Some(abort_handle);
 
-                                let task_handle = spawn(abortable_future);
+                                let task_handle = spawn(abortable_future.instrument(task_span.clone()));
                                 current_task_join_handle = Some(task_handle);
 
                                 // Only start the microtask polling runner for engines
@@ -606,15 +630,23 @@ impl<E: JSEngine + 'static> Rong<E> {
                                 // otherwise observed by the host.
                                 if js_runtime.run_pending_jobs() >= 0 {
                                     let rt_clone = js_runtime.clone();
-                                    let microtask_handle = spawn(async move {
-                                        let mut interval = tokio::time::interval(
-                                            std::time::Duration::from_millis(50),
-                                        );
-                                        loop {
-                                            interval.tick().await;
-                                            rt_clone.run_pending_jobs();
+                                    let microtask_span = info_span!(
+                                        parent: &task_span,
+                                        "rong.microtasks",
+                                        worker_id = worker_id
+                                    );
+                                    let microtask_handle = spawn(
+                                        async move {
+                                            let mut interval = tokio::time::interval(
+                                                std::time::Duration::from_millis(50),
+                                            );
+                                            loop {
+                                                interval.tick().await;
+                                                rt_clone.run_pending_jobs();
+                                            }
                                         }
-                                    });
+                                        .instrument(microtask_span),
+                                    );
                                     current_microtask_runner_handle = Some(microtask_handle);
                                 }
 
@@ -644,7 +676,11 @@ impl<E: JSEngine + 'static> Rong<E> {
                                 Ok(Ok(inner_result)) => inner_result,
                                 Ok(Err(_aborted)) => Err(HostError::aborted(None).into()),
                                 Err(join_error) => {
-                                     eprintln!("[Worker {}] User task panicked or runtime dropped: {:?}", worker_id, join_error);
+                                     if let Some(task_span) = current_task_span.as_ref() {
+                                         error!(target: "rong", parent: task_span, worker_id = worker_id, error = ?join_error, "user task panicked or runtime dropped");
+                                     } else {
+                                         error!(target: "rong", parent: &worker_span, worker_id = worker_id, error = ?join_error, "user task panicked or runtime dropped");
+                                     }
                                      Err(HostError::new(crate::error::E_INTERNAL, format!("User task panicked or runtime dropped: {}", join_error)).into())
                                 }
                             };
@@ -652,7 +688,13 @@ impl<E: JSEngine + 'static> Rong<E> {
                             if let Some(callback) = current_task_result_callback.take() {
                                  callback(final_result);
                             } else if let Err(e) = final_result {
-                                 eprintln!("[Worker {}] Spawned task failed: {:?}", worker_id, e);
+                                 if let Some(task_span) = current_task_span.as_ref() {
+                                     error!(target: "rong", parent: task_span, worker_id = worker_id, error = ?e, "spawned task failed");
+                                 } else {
+                                     error!(target: "rong", parent: &worker_span, worker_id = worker_id, error = ?e, "spawned task failed");
+                                 }
+                            } else if let Some(task_span) = current_task_span.as_ref() {
+                                 debug!(target: "rong", parent: task_span, "worker task completed");
                             }
 
                             // Clean up task state
@@ -660,6 +702,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                             current_task_abort_handle = None;
                             current_task_message_tx = None;
                             current_js_runtime = None;
+                            current_task_span = None;
 
                             if let Some(handle) = current_microtask_runner_handle.take() {
                                 handle.abort();
@@ -785,7 +828,7 @@ impl<E: JSEngine + 'static> Rong<E> {
             let workers = self.workers.lock().await;
             for worker in workers.iter() {
                 if let Err(e) = worker.terminate() {
-                    eprintln!("[Rong] Error terminating worker {}: {:?}", worker.id, e);
+                    warn!(target: "rong", worker_id = worker.id, error = ?e, "failed to terminate worker");
                 }
             }
         });
