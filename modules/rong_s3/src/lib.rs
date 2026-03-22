@@ -69,6 +69,29 @@ mod tests {
         format!("http://127.0.0.1:{}", addr.port())
     }
 
+    fn setup_s3_env(ctx: &JSContext, endpoint: &str) -> JSResult<()> {
+        ctx.global().set("TEST_S3_ENDPOINT", endpoint)?;
+        ctx.global().set("TEST_S3_ACCESS_KEY", "minioadmin")?;
+        ctx.global().set("TEST_S3_SECRET_KEY", "minioadmin")?;
+        ctx.global().set("TEST_S3_BUCKET", "test-bucket")?;
+
+        rong_console::init(ctx)?;
+        rong_assert::init(ctx)?;
+        init(ctx)?;
+
+        Ok(())
+    }
+
+    fn test_s3_config(endpoint: &str) -> S3Config {
+        S3Config {
+            access_key_id: "minioadmin".to_string(),
+            secret_access_key: "minioadmin".to_string(),
+            bucket: "test-bucket".to_string(),
+            endpoint: Some(endpoint.to_string()),
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn test_s3() {
         let workspace_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -78,25 +101,46 @@ mod tests {
         std::env::set_current_dir(&workspace_root).expect("set cwd");
 
         async_run!(|ctx: JSContext| async move {
-            // Bypass any system proxy for local connections
             unsafe {
                 std::env::set_var("NO_PROXY", "127.0.0.1,localhost");
             }
 
-            // Start local mock S3 server
             let endpoint = spawn_s3_server().await;
-
-            // Pass test config as JS globals (like redis does with TEST_REDIS_URL)
-            ctx.global().set("TEST_S3_ENDPOINT", endpoint.as_str())?;
-            ctx.global().set("TEST_S3_ACCESS_KEY", "minioadmin")?;
-            ctx.global().set("TEST_S3_SECRET_KEY", "minioadmin")?;
-            ctx.global().set("TEST_S3_BUCKET", "test-bucket")?;
-
-            rong_console::init(&ctx)?;
-            rong_assert::init(&ctx)?;
-            init(&ctx)?;
+            setup_s3_env(&ctx, &endpoint)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "s3.js")
+                .await?
+                .run()
+                .await?;
+            assert!(passed);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_s3_namespace() {
+        let workspace_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("workspace root");
+        std::env::set_current_dir(&workspace_root).expect("set cwd");
+
+        async_run!(|ctx: JSContext| async move {
+            unsafe {
+                std::env::set_var("NO_PROXY", "127.0.0.1,localhost");
+            }
+
+            let endpoint = spawn_s3_server().await;
+            setup_s3_env(&ctx, &endpoint)?;
+
+            // Create a pre-configured client with namespace prefix from Rust,
+            // then inject it as a global `s3` — JS never calls `new S3Client`.
+            let client = S3Client::new(test_s3_config(&endpoint), Some("app1/".to_string()));
+            let js_client = Class::get::<S3Client>(&ctx)?.instance(client);
+            ctx.global().set("s3", js_client)?;
+
+            let passed = UnitJSRunner::load_script(&ctx, "s3_namespace.js")
                 .await?
                 .run()
                 .await?;

@@ -18,6 +18,7 @@ fn type_error(msg: impl Into<String>) -> RongJSError {
 pub struct S3File {
     config: Rc<S3Config>,
     key: String,
+    display_name: String,
     range_start: Option<u64>,
     range_end: Option<u64>,
 }
@@ -31,10 +32,11 @@ impl S3File {
         ))
     }
 
-    pub(crate) fn create(config: Rc<S3Config>, key: String) -> Self {
+    pub(crate) fn create(config: Rc<S3Config>, key: String, display_name: String) -> Self {
         Self {
             config,
             key,
+            display_name,
             range_start: None,
             range_end: None,
         }
@@ -42,7 +44,7 @@ impl S3File {
 
     #[js_method(getter)]
     fn name(&self) -> String {
-        self.key.clone()
+        self.display_name.clone()
     }
 
     /// S3 objects don't have synchronous size — use stat() instead.
@@ -198,6 +200,7 @@ impl S3File {
         let file = S3File {
             config: self.config.clone(),
             key: self.key.clone(),
+            display_name: self.display_name.clone(),
             range_start: Some(start as u64),
             range_end: end.0.map(|v| v as u64),
         };

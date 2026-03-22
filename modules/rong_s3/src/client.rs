@@ -12,18 +12,41 @@ fn s3_error(msg: impl Into<String>) -> RongJSError {
 #[js_export]
 pub struct S3Client {
     pub(crate) config: Rc<S3Config>,
+    namespace_prefix: Option<String>,
+}
+
+impl S3Client {
+    /// Create an `S3Client` from Rust with a pre-built config.
+    ///
+    /// This is the primary Rust-side API for creating pre-configured clients,
+    /// useful for environments that inject instances via a platform namespace
+    /// instead of exposing the JS constructor.
+    pub fn new(config: S3Config, namespace_prefix: Option<String>) -> Self {
+        Self {
+            config: config.into_rc(),
+            namespace_prefix,
+        }
+    }
+
+    fn prefixed_path(&self, path: &str) -> String {
+        match self.namespace_prefix.as_deref() {
+            Some(prefix) if !prefix.is_empty() => format!("{prefix}{path}"),
+            _ => path.to_string(),
+        }
+    }
 }
 
 #[js_class]
 impl S3Client {
     #[js_method(constructor)]
-    fn new(options: Optional<JSObject>) -> JSResult<Self> {
+    fn js_new(options: Optional<JSObject>) -> JSResult<Self> {
         let config = match options.0 {
             Some(ref obj) => S3Config::from_js_options(obj)?,
             None => S3Config::default(),
         };
         Ok(Self {
             config: config.into_rc(),
+            namespace_prefix: None,
         })
     }
 
@@ -40,7 +63,7 @@ impl S3Client {
         } else {
             self.config.clone()
         };
-        let file = S3File::create(config, path);
+        let file = S3File::create(config, self.prefixed_path(&path), path);
         Ok(Class::get::<S3File>(&ctx)?.instance(file))
     }
 
@@ -51,6 +74,7 @@ impl S3Client {
         data: JSValue,
         options: Optional<JSObject>,
     ) -> JSResult<f64> {
+        let path = self.prefixed_path(&path);
         let config = if let Some(ref obj) = options.0 {
             self.config.merge_js_options(obj)?
         } else {
@@ -75,6 +99,7 @@ impl S3Client {
 
     #[js_method]
     async fn delete(&self, path: String) -> JSResult<()> {
+        let path = self.prefixed_path(&path);
         let bucket = self.config.create_bucket()?;
         bucket
             .delete_object(&path)
@@ -90,6 +115,7 @@ impl S3Client {
 
     #[js_method]
     async fn exists(&self, path: String) -> JSResult<bool> {
+        let path = self.prefixed_path(&path);
         let bucket = self.config.create_bucket()?;
         match bucket.head_object(&path).await {
             Ok(_) => Ok(true),
@@ -99,6 +125,7 @@ impl S3Client {
 
     #[js_method]
     async fn size(&self, path: String) -> JSResult<f64> {
+        let path = self.prefixed_path(&path);
         let bucket = self.config.create_bucket()?;
         let (head, _status) = bucket
             .head_object(&path)
@@ -109,6 +136,7 @@ impl S3Client {
 
     #[js_method]
     async fn stat(&self, ctx: JSContext, path: String) -> JSResult<JSObject> {
+        let path = self.prefixed_path(&path);
         let bucket = self.config.create_bucket()?;
         let (head, _status) = bucket
             .head_object(&path)
@@ -131,6 +159,7 @@ impl S3Client {
 
     #[js_method]
     async fn presign(&self, path: String, options: Optional<JSObject>) -> JSResult<String> {
+        let path = self.prefixed_path(&path);
         let config = if let Some(ref obj) = options.0 {
             self.config.merge_js_options(obj)?
         } else {
@@ -181,11 +210,14 @@ impl S3Client {
         };
         let bucket = config.create_bucket()?;
 
-        let prefix = options
+        let user_prefix = options
             .0
             .as_ref()
             .and_then(|o| o.get::<_, String>("prefix").ok())
             .unwrap_or_default();
+
+        // Combine namespace prefix with user-provided prefix
+        let prefix = self.prefixed_path(&user_prefix);
 
         let max_keys = options
             .0
@@ -196,7 +228,8 @@ impl S3Client {
         let start_after = options
             .0
             .as_ref()
-            .and_then(|o| o.get::<_, String>("startAfter").ok());
+            .and_then(|o| o.get::<_, String>("startAfter").ok())
+            .map(|s| self.prefixed_path(&s));
 
         let results = bucket
             .list(prefix, None)
@@ -207,6 +240,8 @@ impl S3Client {
         let contents = JSArray::new(&ctx)?;
         let mut total_count = 0usize;
         let mut is_truncated = false;
+
+        let ns_prefix = self.namespace_prefix.as_deref().unwrap_or("");
 
         'outer: for page in &results {
             for obj in &page.contents {
@@ -222,8 +257,11 @@ impl S3Client {
                     }
                 }
 
+                // Strip namespace prefix from returned keys
+                let key = obj.key.strip_prefix(ns_prefix).unwrap_or(&obj.key);
+
                 let entry = JSObject::new(&ctx);
-                entry.set("key", obj.key.as_str())?;
+                entry.set("key", key)?;
                 entry.set("size", obj.size as f64)?;
                 entry.set("lastModified", obj.last_modified.as_str())?;
                 if let Some(ref etag) = obj.e_tag {
