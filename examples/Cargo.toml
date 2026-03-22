@@ -12,6 +12,8 @@ publish = false
 rong = { workspace = true }
 rong_modules = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = "0.3"
 
 [features]
 # Out-of-the-box build uses QuickJS + aws-lc TLS.
