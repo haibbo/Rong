@@ -145,6 +145,11 @@ impl RedisClient {
         }
     }
 
+    /// Create a new `RedisClient` from Rust.
+    ///
+    /// This is the primary Rust-side API for creating pre-configured clients,
+    /// e.g. in environments that inject instances via a platform namespace
+    /// instead of exposing the JS constructor.
     pub fn new(url: String, namespace_prefix: Option<String>) -> Self {
         Self {
             url,

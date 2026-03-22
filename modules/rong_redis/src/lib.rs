@@ -104,25 +104,53 @@ mod tests {
         Err("redis-server did not start in time".to_string())
     }
 
+    async fn setup_redis_env(
+        ctx: &JSContext,
+    ) -> Result<(String, tokio::process::Child), RongJSError> {
+        let (url, child) = start_test_redis().await.map_err(|msg| {
+            HostError::new(
+                "E_TEST_SETUP",
+                format!("Failed to start redis-server for rong_redis tests: {}", msg),
+            )
+        })?;
+
+        ctx.global().set("TEST_REDIS_URL", url.as_str())?;
+        rong_assert::init(ctx)?;
+        rong_console::init(ctx)?;
+        rong_abort::init(ctx)?;
+        rong_timer::init(ctx)?;
+        init(ctx)?;
+
+        Ok((url, child))
+    }
+
     #[test]
     fn test_redis() {
         async_run!(|ctx: JSContext| async move {
-            let (_url, _child) = start_test_redis().await.map_err(|msg| {
-                HostError::new(
-                    "E_TEST_SETUP",
-                    format!("Failed to start redis-server for rong_redis tests: {}", msg),
-                )
-            })?;
-
-            ctx.global().set("TEST_REDIS_URL", _url)?;
-
-            rong_assert::init(&ctx)?;
-            rong_console::init(&ctx)?;
-            rong_abort::init(&ctx)?;
-            rong_timer::init(&ctx)?;
-            init(&ctx)?;
+            let (_url, _child) = setup_redis_env(&ctx).await?;
 
             let passed = UnitJSRunner::load_script(&ctx, "redis.js")
+                .await?
+                .run()
+                .await?;
+            assert!(passed);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_redis_namespace() {
+        async_run!(|ctx: JSContext| async move {
+            let (url, _child) = setup_redis_env(&ctx).await?;
+
+            // Create a pre-configured client with namespace prefix from Rust,
+            // then inject it as a global `redis` — JS never calls `new RedisClient`.
+            let client = RedisClient::new(url, Some("app1:".to_string()));
+            let js_client = Class::get::<RedisClient>(&ctx)?.instance(client);
+            ctx.global().set("redis", js_client)?;
+
+            let passed = UnitJSRunner::load_script(&ctx, "redis_namespace.js")
                 .await?
                 .run()
                 .await?;

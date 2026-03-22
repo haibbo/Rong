@@ -1,6 +1,6 @@
 # rong_redis
 
-Redis client API inspired by Bun's `RedisClient`, adapted for RongJS. Exposed as both global `RedisClient` and `Rong.RedisClient`.
+Async Redis client. Exposed as global `RedisClient`.
 
 ## JS APIs
 
@@ -39,3 +39,14 @@ Redis client API inspired by Bun's `RedisClient`, adapted for RongJS. Exposed as
   - `for await...of` with `break` closes the underlying subscription via iterator `return()`
 - **Raw commands**
   - `send(command, args)` — execute any Redis command
+
+## Rust API
+
+- `RedisClient::new(url, namespace_prefix)` — create a pre-configured client from Rust, useful for environments that inject instances via a platform namespace instead of exposing the JS constructor.
+
+To hide the JS constructor after init:
+
+```rust
+rong_redis::init(&ctx)?;
+ctx.global().delete("RedisClient")?;
+```
