@@ -15,10 +15,6 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<RedisClient>()?;
     ctx.register_class::<RedisSubscription>()?;
 
-    let constructor = Class::get::<RedisClient>(ctx)?;
-    ctx.global().set("RedisClient", constructor.clone())?;
-    ctx.rong().set("RedisClient", constructor.clone())?;
-
     ctx.eval::<()>(Source::from_bytes(
         r#"(function() {
             const proto = RedisClient.prototype;

@@ -18,10 +18,9 @@ import type {
 } from './fs';
 import type { Process } from './process';
 import type { RedisClientConstructor } from './redis';
-
+import type { RongWorkerConstructor } from './worker';
 import type { SSEConstructor } from './sse';
 import type { StorageConstructor, StorageModule } from './storage';
-import type { RongWorkerConstructor } from './worker';
 
 declare global {
   /**
@@ -59,11 +58,6 @@ declare global {
     // Storage
     readonly Storage: StorageConstructor;
     readonly storage: StorageModule;
-
-    // Database / cache clients
-    readonly RedisClient: RedisClientConstructor;
-    readonly S3Client: typeof import('./s3').S3Client;
-
   };
 
   /**

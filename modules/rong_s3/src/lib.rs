@@ -12,16 +12,10 @@ pub use file::S3File;
 
 use rong::*;
 
-/// Register S3Client and S3File, expose `Rong.S3Client` and global `S3Client` constructor.
+/// Register S3Client and S3File as global constructors.
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<S3File>()?;
     ctx.register_class::<S3Client>()?;
-
-    let constructor = Class::get::<S3Client>(ctx)?;
-
-    let rong = ctx.rong();
-    rong.set("S3Client", constructor.clone())?;
-    ctx.global().set("S3Client", constructor.clone())?;
 
     Ok(())
 }

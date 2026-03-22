@@ -36,18 +36,6 @@ describe("S3Client", () => {
     assert(client, "S3Client with custom region");
   });
 
-  it("Rong.S3Client should be the constructor", () => {
-    assert(Rong.S3Client, "Rong.S3Client exists");
-    assert.equal(Rong.S3Client, S3Client);
-    const c = new Rong.S3Client({
-      accessKeyId: S3_ACCESS_KEY,
-      secretAccessKey: S3_SECRET_KEY,
-      bucket: S3_BUCKET,
-      endpoint: S3_ENDPOINT,
-    });
-    assert(c, "constructed via Rong.S3Client");
-  });
-
   // ─── file() — lazy reference ──────────────────────────────────
 
   it("file() returns lazy S3File with correct name", () => {

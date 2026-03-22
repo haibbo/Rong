@@ -12,13 +12,6 @@ describe("RedisClient — connection", () => {
   });
   afterEach(() => client.close());
 
-  it("is exposed on Rong namespace", () => {
-    assert.equal(Rong.RedisClient, RedisClient);
-    const c = new Rong.RedisClient(REDIS_URL);
-    assert.equal(c.connected, false);
-    c.close();
-  });
-
   it("requires an explicit URL", () => {
     let threw = false;
     try {

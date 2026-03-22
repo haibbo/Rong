@@ -1,6 +1,6 @@
 # Redis
 
-Async Redis client for JavaScript. Exposed as both global `RedisClient` and `Rong.RedisClient`.
+Async Redis client for JavaScript. Exposed as global `RedisClient`.
 
 ## Quick Start
 
