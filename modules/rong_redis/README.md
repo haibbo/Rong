@@ -40,6 +40,13 @@ Async Redis client. Exposed as global `RedisClient`.
 - **Raw commands**
   - `send(command, args)` — execute any Redis command
 
+## Namespaced Injected Clients
+
+When a `RedisClient` is created from Rust with a non-empty `namespace_prefix`, the
+following JS API restriction applies:
+
+- `send()` is **disabled** — throws `TypeError`. Raw commands could bypass the namespace prefix, breaking isolation. Use the typed methods (`set`, `get`, `hset`, etc.) instead, which automatically apply the prefix.
+
 ## Rust API
 
 - `RedisClient::new(url, namespace_prefix)` — create a pre-configured client from Rust, useful for environments that inject instances via a platform namespace instead of exposing the JS constructor.

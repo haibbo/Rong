@@ -23,6 +23,19 @@ S3-compatible object storage client. Exposed as global `S3Client`.
   - `presign(options?)` — presigned URL
   - `name` / `size` — getters
 
+## Namespaced Injected Clients
+
+When an `S3Client` is created from Rust with a non-empty `namespace_prefix`, JS code **cannot override S3 config fields** (`accessKeyId`, `secretAccessKey`, `sessionToken`, `region`, `endpoint`, `bucket`, `acl`, `virtualHostedStyle`) in method options. Attempting to do so throws `TypeError`. This prevents JS from escaping the intended bucket/credentials scope.
+
+Allowed option fields per method:
+
+| Method | Allowed options |
+|--------|----------------|
+| `file(path, options?)` | *(none)* |
+| `write(path, data, options?)` | `type` |
+| `presign(path, options?)` | `expiresIn`, `method` |
+| `list(options?)` | `prefix`, `maxKeys`, `startAfter` |
+
 ## Rust API
 
 - `S3Client::new(config, namespace_prefix)` — create a pre-configured client from Rust. The optional `namespace_prefix` is transparently prepended to all object keys and stripped from list results.
