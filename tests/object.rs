@@ -227,3 +227,25 @@ fn test_object_prototype() {
         Ok(())
     });
 }
+
+#[test]
+fn test_from_json_string_invalid_json_throws_syntax_error() {
+    run(|ctx| {
+        let err = JSObject::from_json_string(ctx, r#"{foo:1}"#).unwrap_err();
+        let thrown = thrown_object(ctx, &err)?;
+        let name: String = thrown.get("name")?;
+        let message: String = thrown.get("message")?;
+
+        assert_eq!(name, "SyntaxError");
+        assert!(
+            !message.is_empty(),
+            "Expected non-empty SyntaxError message"
+        );
+        assert!(
+            !message.contains("Unexpected end of JSON input"),
+            "Property-name syntax errors should not be reported as EOF: {}",
+            message
+        );
+        Ok(())
+    });
+}

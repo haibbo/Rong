@@ -479,12 +479,19 @@ impl JSValueImpl for JSCValue {
         let ctx = ctx.to_raw();
         let c_str = CString::new(str).unwrap();
         let raw = unsafe {
-            let js_string = jsc::JSStringCreateWithUTF8CString(c_str.as_ptr());
-            let raw = jsc::JSValueMakeFromJSONString(ctx, js_string);
-            jsc::JSStringRelease(js_string);
+            let input = jsc::JSStringCreateWithUTF8CString(c_str.as_ptr());
+            let raw = jsc::JSValueMakeFromJSONString(ctx, input);
+            jsc::JSStringRelease(input);
             raw
         };
-        Self::from_owned_raw(ctx, raw)
+        if raw.is_null() {
+            let borrowed_ctx = JSCContext::from_borrowed_raw(ctx);
+            borrowed_ctx
+                .new_error_with_name_internal("SyntaxError", "Invalid JSON", None)
+                .with_exception()
+        } else {
+            Self::from_owned_raw(ctx, raw)
+        }
     }
 
     fn create_symbol(ctx: &Self::Context, description: &str) -> Self {
