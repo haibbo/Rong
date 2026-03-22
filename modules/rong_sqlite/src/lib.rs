@@ -14,18 +14,18 @@ fn sqlite_error(msg: impl Into<String>) -> RongJSError {
         .into()
 }
 
-/// Shared connection handle used by both Database and Statement.
+/// Shared connection handle used by both SQLite and Statement.
 pub(crate) type SharedConn = Rc<RefCell<Option<rusqlite::Connection>>>;
 
 /// SQLite database connection.
 #[js_export]
-pub struct Database {
+pub struct SQLite {
     pub(crate) conn: SharedConn,
     filename: String,
 }
 
 #[js_class]
-impl Database {
+impl SQLite {
     #[js_method(constructor)]
     fn new(filename: Optional<String>) -> JSResult<Self> {
         let filename = filename.0.unwrap_or_else(|| ":memory:".to_string());
@@ -334,13 +334,8 @@ pub(crate) fn query_rows(
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<Database>()?;
+    ctx.register_class::<SQLite>()?;
     ctx.register_class::<Statement>()?;
-
-    let constructor = Class::get::<Database>(ctx)?;
-    ctx.global().set("Database", constructor.clone())?;
-    ctx.rong().set("Database", constructor.clone())?;
-
     Ok(())
 }
 

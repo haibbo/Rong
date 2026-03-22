@@ -61,7 +61,6 @@ declare global {
     readonly storage: StorageModule;
 
     // Database / cache clients
-    readonly Database: typeof import('./sqlite').Database;
     readonly RedisClient: RedisClientConstructor;
     readonly S3Client: typeof import('./s3').S3Client;
 
@@ -103,9 +102,9 @@ declare global {
   const S3Client: typeof import('./s3').S3Client;
 
   /**
-   * Database - SQLite database (sync API)
+   * SQLite - Embedded SQLite database (sync API)
    */
-  const Database: typeof import('./sqlite').Database;
+  const SQLite: typeof import('./sqlite').SQLite;
 
   /**
    * SSE - Server-Sent Events async iterator client

@@ -3,49 +3,43 @@ function tempDbPath(prefix = "rong_sqlite") {
   return `/tmp/${prefix}_${Date.now()}_${rand}.db`;
 }
 
-describe("Database — construction", () => {
+describe("SQLite — construction", () => {
   it("opens in-memory database by default", () => {
-    const db = new Database();
+    const db = new SQLite();
     assert.equal(db.filename, ":memory:");
     assert.equal(db.inTransaction, false);
     db.close();
   });
 
   it("opens in-memory database with explicit :memory:", () => {
-    const db = new Database(":memory:");
+    const db = new SQLite(":memory:");
     assert.equal(db.filename, ":memory:");
     db.close();
   });
 
-  it("is instance of Database", () => {
-    const db = new Database();
-    assert(db instanceof Database);
-    db.close();
-  });
-
-  it("is exposed on Rong namespace", () => {
-    assert.equal(Rong.Database, Database);
-    const db = new Rong.Database();
+  it("is instance of SQLite", () => {
+    const db = new SQLite();
+    assert(db instanceof SQLite);
     db.close();
   });
 
   it("close is idempotent", () => {
-    const db = new Database();
+    const db = new SQLite();
     db.close();
     db.close();
   });
 });
 
-describe("Database — file-backed", () => {
+describe("SQLite — file-backed", () => {
   it("persists data across reopen", () => {
     const filename = tempDbPath();
 
-    let db = new Database(filename);
+    let db = new SQLite(filename);
     db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)");
     db.run("INSERT INTO users (name) VALUES (?)", ["Alice"]);
     db.close();
 
-    db = new Database(filename);
+    db = new SQLite(filename);
     const rows = db.query("SELECT * FROM users");
     assert.equal(rows.length, 1);
     assert.equal(rows[0].name, "Alice");
@@ -53,9 +47,9 @@ describe("Database — file-backed", () => {
   });
 });
 
-describe("Database — exec", () => {
+describe("SQLite — exec", () => {
   let db;
-  beforeEach(() => { db = new Database(); });
+  beforeEach(() => { db = new SQLite(); });
   afterEach(() => db.close());
 
   it("creates tables", () => {
@@ -83,10 +77,10 @@ describe("Database — exec", () => {
   });
 });
 
-describe("Database — run & query", () => {
+describe("SQLite — run & query", () => {
   let db;
   beforeEach(() => {
-    db = new Database();
+    db = new SQLite();
     db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER, score REAL)");
   });
   afterEach(() => db.close());
@@ -128,10 +122,10 @@ describe("Database — run & query", () => {
   });
 });
 
-describe("Database — prepared statements", () => {
+describe("SQLite — prepared statements", () => {
   let db;
   beforeEach(() => {
-    db = new Database();
+    db = new SQLite();
     db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER)");
     db.run("INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30]);
     db.run("INSERT INTO users (name, age) VALUES (?, ?)", ["Bob", 25]);
@@ -186,10 +180,10 @@ describe("Database — prepared statements", () => {
   });
 });
 
-describe("Database — transactions", () => {
+describe("SQLite — transactions", () => {
   let db;
   beforeEach(() => {
-    db = new Database();
+    db = new SQLite();
     db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)");
   });
   afterEach(() => db.close());
@@ -242,9 +236,9 @@ describe("Database — transactions", () => {
   });
 });
 
-describe("Database — type handling", () => {
+describe("SQLite — type handling", () => {
   let db;
-  beforeEach(() => { db = new Database(); });
+  beforeEach(() => { db = new SQLite(); });
   afterEach(() => db.close());
 
   it("handles NULL values", () => {
@@ -317,9 +311,9 @@ describe("Database — type handling", () => {
   });
 });
 
-describe("Database — error handling", () => {
+describe("SQLite — error handling", () => {
   it("throws on closed database", () => {
-    const db = new Database();
+    const db = new SQLite();
     db.close();
     let threw = false;
     try { db.exec("SELECT 1"); } catch (e) {
@@ -330,7 +324,7 @@ describe("Database — error handling", () => {
   });
 
   it("throws on unsupported parameter types", () => {
-    const db = new Database();
+    const db = new SQLite();
     db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, val TEXT)");
     let threw = false;
     try {
@@ -345,7 +339,7 @@ describe("Database — error handling", () => {
   });
 
   it("prepared statements throw after database close", () => {
-    const db = new Database();
+    const db = new SQLite();
     const stmt = db.prepare("SELECT 1 AS n");
     db.close();
 

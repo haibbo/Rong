@@ -5,7 +5,7 @@ use rong::function::Optional;
 use rong::*;
 use rusqlite::types::Value;
 
-/// Prepared statement. Shares the Database connection via Rc.
+/// Prepared statement. Shares the SQLite connection via Rc.
 #[js_export]
 pub struct Statement {
     conn: SharedConn,

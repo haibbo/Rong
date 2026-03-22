@@ -62,7 +62,7 @@ export type SQLiteParams = SQLiteParam[];
  *
  * @example
  * ```typescript
- * const db = new Database("mydb.sqlite");
+ * const db = new SQLite("mydb.sqlite");
  *
  * db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
  * db.run("INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30]);
@@ -73,7 +73,7 @@ export type SQLiteParams = SQLiteParam[];
  * db.close();
  * ```
  */
-export declare class Database {
+export declare class SQLite {
   /**
    * Open a SQLite database.
    * @param filename - Path to the database file, or `":memory:"` for in-memory. Defaults to `":memory:"`.

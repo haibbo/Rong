@@ -5,7 +5,7 @@ Embedded SQLite database with synchronous API. Uses WAL mode by default.
 ## Quick Start
 
 ```javascript
-const db = new Database("mydb.sqlite");
+const db = new SQLite("mydb.sqlite");
 
 db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
 db.run("INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30]);
@@ -19,9 +19,9 @@ db.close();
 ## Opening a Database
 
 ```javascript
-const db = new Database("mydb.sqlite");   // file-based
-const db = new Database(":memory:");      // in-memory
-const db = new Database();                // in-memory (default)
+const db = new SQLite("mydb.sqlite");   // file-based
+const db = new SQLite(":memory:");      // in-memory
+const db = new SQLite();                // in-memory (default)
 ```
 
 ## Executing SQL
