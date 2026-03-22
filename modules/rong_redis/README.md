@@ -1,6 +1,6 @@
 # rong_redis
 
-Async Redis client following Bun's `RedisClient` API design. Exposed as both global `RedisClient` and `Rong.RedisClient`.
+Redis client API inspired by Bun's `RedisClient`, adapted for RongJS. Exposed as both global `RedisClient` and `Rong.RedisClient`.
 
 ## JS APIs
 

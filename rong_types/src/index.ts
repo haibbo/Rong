@@ -64,6 +64,7 @@ export * from './assert';
 export * from './console';
 export * from './sqlite';
 export * from './redis';
+export * from './s3';
 
 // Error types
 export * from './error';

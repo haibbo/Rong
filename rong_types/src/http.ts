@@ -54,6 +54,9 @@ export interface FetchResponse {
   /** Get response body as FormData */
   formData(): Promise<FormData>;
 
+  /** Clone the response */
+  clone(): FetchResponse;
+
   /** Get response body as ReadableStream */
   readonly body: ReadableStream<Uint8Array> | null;
 }
@@ -124,6 +127,8 @@ export interface Request extends Body {
   readonly redirect: string;
   readonly signal: AbortSignal | null;
   readonly url: string;
+  readonly cache: string;
+  readonly keepalive: boolean;
   clone(): Request;
 }
 

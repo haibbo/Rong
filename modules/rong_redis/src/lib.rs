@@ -1,6 +1,6 @@
 //! # Rong Redis Module
 //!
-//! Async Redis client following Bun's RedisClient API.
+//! Redis client API inspired by Bun's RedisClient, adapted for RongJS.
 //!
 //! Provides `RedisClient` as a global class with promise-based methods
 //! for strings, hashes, sets, lists, pub/sub, and raw commands.
