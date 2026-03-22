@@ -30,6 +30,18 @@ describe("S3 namespace prefix", () => {
     assert.equal(file.name, KEY);
   });
 
+  it("file() rejects config override on namespaced client", () => {
+    let threw = false;
+    try {
+      s3.file(KEY, { bucket: "other-bucket" });
+    } catch (e) {
+      threw = true;
+      assert.equal(e.name, "TypeError");
+      assert(e.message.includes("Cannot override S3 config field"), e.message);
+    }
+    assert(threw, "file() config override should be blocked");
+  });
+
   it("exists returns true for namespaced key", async () => {
     assert.equal(await s3.exists(KEY), true);
   });
@@ -49,6 +61,48 @@ describe("S3 namespace prefix", () => {
     // Keys should NOT contain the namespace prefix — it's transparent
     const found = result.contents.find((o) => o.key === KEY);
     assert(found, "found key without namespace prefix");
+  });
+
+  it("write() allows content type but rejects config override", async () => {
+    const n = await s3.write(KEY, CONTENT, { type: "text/plain" });
+    assert.equal(n, CONTENT.length);
+
+    let threw = false;
+    try {
+      await s3.write(KEY, CONTENT, { bucket: "other-bucket" });
+    } catch (e) {
+      threw = true;
+      assert.equal(e.name, "TypeError");
+      assert(e.message.includes("Cannot override S3 config field"), e.message);
+    }
+    assert(threw, "write() config override should be blocked");
+  });
+
+  it("presign() rejects config override", async () => {
+    const url = await s3.presign(KEY, { method: "GET", expiresIn: 60 });
+    assert(typeof url === "string", "presign still works with safe options");
+
+    let threw = false;
+    try {
+      await s3.presign(KEY, { endpoint: "http://evil.example.com" });
+    } catch (e) {
+      threw = true;
+      assert.equal(e.name, "TypeError");
+      assert(e.message.includes("Cannot override S3 config field"), e.message);
+    }
+    assert(threw, "presign() config override should be blocked");
+  });
+
+  it("list() rejects config override", async () => {
+    let threw = false;
+    try {
+      await s3.list({ bucket: "other-bucket" });
+    } catch (e) {
+      threw = true;
+      assert.equal(e.name, "TypeError");
+      assert(e.message.includes("Cannot override S3 config field"), e.message);
+    }
+    assert(threw, "list() config override should be blocked");
   });
 
   it("file operations are isolated from non-prefixed keys", async () => {

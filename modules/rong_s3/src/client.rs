@@ -34,6 +34,61 @@ impl S3Client {
             _ => path.to_string(),
         }
     }
+
+    fn namespaced(&self) -> bool {
+        matches!(self.namespace_prefix.as_deref(), Some(prefix) if !prefix.is_empty())
+    }
+
+    fn reject_config_override(
+        &self,
+        options: &Optional<JSObject>,
+        allowed_non_config_keys: &[&str],
+    ) -> JSResult<()> {
+        if !self.namespaced() {
+            return Ok(());
+        }
+
+        let Some(obj) = options.0.as_ref() else {
+            return Ok(());
+        };
+
+        let forbidden = [
+            "accessKeyId",
+            "secretAccessKey",
+            "sessionToken",
+            "region",
+            "endpoint",
+            "bucket",
+            "acl",
+            "virtualHostedStyle",
+        ];
+
+        for key in forbidden {
+            if obj.has(key) {
+                return Err(HostError::new(
+                    "E_INVALID_ARG",
+                    format!(
+                        "Cannot override S3 config field '{key}' on a namespaced injected S3Client"
+                    ),
+                )
+                .with_name("TypeError")
+                .into());
+            }
+        }
+
+        for key_str in obj.keys_as::<String>()? {
+            if !allowed_non_config_keys.contains(&key_str.as_str()) {
+                return Err(HostError::new(
+                    "E_INVALID_ARG",
+                    format!("Option '{key_str}' is not allowed on a namespaced injected S3Client"),
+                )
+                .with_name("TypeError")
+                .into());
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[js_class]
@@ -58,6 +113,7 @@ impl S3Client {
         path: String,
         options: Optional<JSObject>,
     ) -> JSResult<JSObject> {
+        self.reject_config_override(&options, &[])?;
         let config = if let Some(ref obj) = options.0 {
             self.config.merge_js_options(obj)?.into_rc()
         } else {
@@ -74,6 +130,7 @@ impl S3Client {
         data: JSValue,
         options: Optional<JSObject>,
     ) -> JSResult<f64> {
+        self.reject_config_override(&options, &["type"])?;
         let path = self.prefixed_path(&path);
         let config = if let Some(ref obj) = options.0 {
             self.config.merge_js_options(obj)?
@@ -159,6 +216,7 @@ impl S3Client {
 
     #[js_method]
     async fn presign(&self, path: String, options: Optional<JSObject>) -> JSResult<String> {
+        self.reject_config_override(&options, &["expiresIn", "method"])?;
         let path = self.prefixed_path(&path);
         let config = if let Some(ref obj) = options.0 {
             self.config.merge_js_options(obj)?
@@ -203,6 +261,7 @@ impl S3Client {
 
     #[js_method]
     async fn list(&self, ctx: JSContext, options: Optional<JSObject>) -> JSResult<JSObject> {
+        self.reject_config_override(&options, &["prefix", "maxKeys", "startAfter"])?;
         let config = if let Some(ref obj) = options.0 {
             self.config.merge_js_options(obj)?
         } else {
