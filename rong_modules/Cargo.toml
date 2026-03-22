@@ -27,6 +27,7 @@ rong_child_process = { workspace = true, optional = true }
 rong_redis = { workspace = true, optional = true }
 rong_sqlite = { workspace = true, optional = true }
 rong_worker = { workspace = true, optional = true }
+rong_s3 = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -52,6 +53,7 @@ quickjs = [
     "rong_redis?/quickjs",
     "rong_sqlite?/quickjs",
     "rong_worker?/quickjs",
+    "rong_s3?/quickjs",
 ]
 jscore = [
     "rong/jscore",
@@ -74,6 +76,7 @@ jscore = [
     "rong_redis?/jscore",
     "rong_sqlite?/jscore",
     "rong_worker?/jscore",
+    "rong_s3?/jscore",
 ]
 arkjs = [
     "rong/arkjs",
@@ -96,6 +99,7 @@ arkjs = [
     "rong_redis?/arkjs",
     "rong_sqlite?/arkjs",
     "rong_worker?/arkjs",
+    "rong_s3?/arkjs",
 ]
 tls-aws-lc = ["rong_http?/tls-aws-lc"]
 tls-ring = ["rong_http?/tls-ring"]
@@ -119,6 +123,7 @@ all = [
     "redis",
     "sqlite",
     "worker",
+    "s3",
 ]
 
 timer = ["rong_timer"]
@@ -139,3 +144,4 @@ child_process = ["rong_child_process"]
 redis = ["rong_redis"]
 sqlite = ["rong_sqlite"]
 worker = ["rong_worker"]
+s3 = ["rong_s3"]

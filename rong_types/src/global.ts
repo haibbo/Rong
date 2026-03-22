@@ -18,8 +18,10 @@ import type {
 } from './fs';
 import type { Process } from './process';
 import type { RedisClientConstructor } from './redis';
+
 import type { SSEConstructor } from './sse';
 import type { StorageConstructor, StorageModule } from './storage';
+import type { RongWorkerConstructor } from './worker';
 
 declare global {
   /**
@@ -61,6 +63,7 @@ declare global {
     // Database / cache clients
     readonly Database: typeof import('./sqlite').Database;
     readonly RedisClient: RedisClientConstructor;
+    readonly S3Client: typeof import('./s3').S3Client;
 
   };
 
@@ -95,6 +98,11 @@ declare global {
   const RedisClient: RedisClientConstructor;
 
   /**
+   * S3Client - S3-compatible object storage client
+   */
+  const S3Client: typeof import('./s3').S3Client;
+
+  /**
    * Database - SQLite database (sync API)
    */
   const Database: typeof import('./sqlite').Database;
@@ -103,6 +111,11 @@ declare global {
    * SSE - Server-Sent Events async iterator client
    */
   const SSE: SSEConstructor;
+
+  /**
+   * Worker - Web Workers for running JS in dedicated threads
+   */
+  const Worker: RongWorkerConstructor;
 }
 
 export {};

@@ -59,5 +59,8 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     #[cfg(feature = "worker")]
     rong_worker::init(ctx)?;
 
+    #[cfg(feature = "s3")]
+    rong_s3::init(ctx)?;
+
     Ok(())
 }

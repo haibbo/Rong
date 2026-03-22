@@ -1,0 +1,418 @@
+// S3Client / S3File API tests
+// Uses TEST_S3_* globals set by the Rust test harness (local s3s mock server).
+
+const S3_ENDPOINT = globalThis.TEST_S3_ENDPOINT ?? "http://127.0.0.1:9000";
+const S3_ACCESS_KEY = globalThis.TEST_S3_ACCESS_KEY ?? "minioadmin";
+const S3_SECRET_KEY = globalThis.TEST_S3_SECRET_KEY ?? "minioadmin";
+const S3_BUCKET = globalThis.TEST_S3_BUCKET ?? "test-bucket";
+
+function makeClient(overrides) {
+  return new S3Client({
+    accessKeyId: S3_ACCESS_KEY,
+    secretAccessKey: S3_SECRET_KEY,
+    bucket: S3_BUCKET,
+    endpoint: S3_ENDPOINT,
+    ...overrides,
+  });
+}
+
+// ─── Unit tests (construction, lazy refs, error handling) ──────────
+
+describe("S3Client", () => {
+  // ─── Construction ──────────────────────────────────────────────
+
+  it("constructor with explicit options", () => {
+    const client = makeClient();
+    assert(client, "S3Client instance created");
+  });
+
+  it("constructor with no arguments", () => {
+    const client = new S3Client();
+    assert(client, "S3Client created without args");
+  });
+
+  it("constructor with custom region", () => {
+    const client = makeClient({ region: "us-west-2" });
+    assert(client, "S3Client with custom region");
+  });
+
+  it("Rong.S3Client should be the constructor", () => {
+    assert(Rong.S3Client, "Rong.S3Client exists");
+    assert.equal(Rong.S3Client, S3Client);
+    const c = new Rong.S3Client({
+      accessKeyId: S3_ACCESS_KEY,
+      secretAccessKey: S3_SECRET_KEY,
+      bucket: S3_BUCKET,
+      endpoint: S3_ENDPOINT,
+    });
+    assert(c, "constructed via Rong.S3Client");
+  });
+
+  // ─── file() — lazy reference ──────────────────────────────────
+
+  it("file() returns lazy S3File with correct name", () => {
+    const client = makeClient();
+    const f = client.file("hello.txt");
+    assert(f, "file() returned an object");
+    assert.equal(f.name, "hello.txt");
+  });
+
+  it("file() with options override", () => {
+    const client = makeClient();
+    const f = client.file("data.bin", { bucket: "other-bucket" });
+    assert(f, "file() with options returned an object");
+    assert.equal(f.name, "data.bin");
+  });
+
+  it("S3File.size is always NaN", () => {
+    const client = makeClient();
+    const f = client.file("any.bin");
+    assert(Number.isNaN(f.size), "size is NaN for remote files");
+  });
+
+  // ─── slice() — no network ─────────────────────────────────────
+
+  it("slice() returns a new S3File with range", () => {
+    const client = makeClient();
+    const f = client.file("large.bin");
+    const partial = f.slice(0, 1024);
+    assert(partial, "slice returned an object");
+    assert.equal(partial.name, "large.bin");
+    assert(Number.isNaN(partial.size), "sliced file size is still NaN");
+  });
+
+  // ─── presign() — no data transfer ─────────────────────────────
+
+  it("presign() GET returns a signed URL string", async () => {
+    const client = makeClient();
+    const url = await client.presign("test-key.txt");
+    assert(typeof url === "string", "presign returns a string");
+    assert(url.includes("test-key.txt"), "URL contains the key");
+    assert(
+      url.includes("X-Amz-Signature") || url.includes("Signature"),
+      "URL is signed",
+    );
+  });
+
+  it("presign() PUT with custom expiry", async () => {
+    const client = makeClient();
+    const url = await client.presign("upload.bin", {
+      expiresIn: 3600,
+      method: "PUT",
+    });
+    assert(typeof url === "string", "PUT presign returns a string");
+  });
+
+  it("presign() DELETE method", async () => {
+    const client = makeClient();
+    const url = await client.presign("to-delete.txt", { method: "DELETE" });
+    assert(typeof url === "string", "DELETE presign returns a string");
+  });
+
+  it("S3File.presign() works on file reference", async () => {
+    const client = makeClient();
+    const f = client.file("report.pdf");
+    const url = await f.presign({ expiresIn: 7200 });
+    assert(url.includes("report.pdf"), "file presign URL contains key");
+  });
+
+  it("S3File.presign() PUT on file reference", async () => {
+    const client = makeClient();
+    const f = client.file("upload.bin");
+    const url = await f.presign({ method: "PUT" });
+    assert(typeof url === "string", "file PUT presign returns string");
+  });
+
+  // ─── Error handling ────────────────────────────────────────────
+
+  it("error on missing credentials for network ops", async () => {
+    const client = new S3Client({
+      bucket: "some-bucket",
+      endpoint: S3_ENDPOINT,
+    });
+    try {
+      await client.exists("test.txt");
+      assert(false, "should have thrown");
+    } catch (e) {
+      assert(
+        e.message.includes("credentials") || e.message.includes("Credentials"),
+        "error mentions credentials: " + e.message,
+      );
+    }
+  });
+
+  it("error on missing bucket", async () => {
+    const client = new S3Client({
+      accessKeyId: S3_ACCESS_KEY,
+      secretAccessKey: S3_SECRET_KEY,
+      endpoint: S3_ENDPOINT,
+    });
+    try {
+      await client.exists("test.txt");
+      assert(false, "should have thrown");
+    } catch (e) {
+      assert(
+        e.message.includes("bucket") || e.message.includes("Bucket"),
+        "error mentions bucket: " + e.message,
+      );
+    }
+  });
+
+  it("S3File constructor throws (use client.file())", () => {
+    try {
+      new S3File();
+      assert(false, "should have thrown");
+    } catch (e) {
+      assert(e.message.includes("cannot be constructed"), e.message);
+    }
+  });
+
+  it("presign() rejects invalid method", async () => {
+    const client = makeClient();
+    try {
+      await client.presign("key", { method: "PATCH" });
+      assert(false, "should have thrown");
+    } catch (e) {
+      assert(e.message.includes("PATCH"), "error mentions bad method");
+    }
+  });
+
+  it("S3 errors have name 'S3Error'", async () => {
+    const client = makeClient();
+    try {
+      // read a non-existent key — should throw S3Error
+      await client.file("does-not-exist-" + Date.now()).text();
+      assert(false, "should have thrown");
+    } catch (e) {
+      assert.equal(e.name, "S3Error");
+    }
+  });
+
+  it("write() with invalid data type throws TypeError", async () => {
+    const client = makeClient();
+    try {
+      await client.write("key.txt", 12345);
+      assert(false, "should have thrown");
+    } catch (e) {
+      assert.equal(e.name, "TypeError");
+    }
+  });
+});
+
+// ─── Live tests (against local s3s mock server) ──────────────────
+
+describe("S3 operations", () => {
+  const client = makeClient();
+  const TEST_KEY = `rong-test-${Date.now()}.txt`;
+  const TEST_JSON_KEY = `rong-test-${Date.now()}.json`;
+  const TEST_BIN_KEY = `rong-test-${Date.now()}.bin`;
+  const TEST_CONTENT = "Hello from RongJS S3 test!";
+  const TEST_JSON = { name: "rong", version: "0.2.0", timestamp: Date.now() };
+
+  // ─── write + read ──────────────────────────────────────────────
+
+  it("client.write() returns bytes written", async () => {
+    const n = await client.write(TEST_KEY, TEST_CONTENT);
+    assert.equal(n, TEST_CONTENT.length);
+  });
+
+  it("file.text() reads back written content", async () => {
+    const file = client.file(TEST_KEY);
+    const text = await file.text();
+    assert.equal(text, TEST_CONTENT);
+  });
+
+  it("write() with content type + json()", async () => {
+    await client.write(TEST_JSON_KEY, JSON.stringify(TEST_JSON), {
+      type: "application/json",
+    });
+    const file = client.file(TEST_JSON_KEY);
+    const data = await file.json();
+    assert.equal(data.name, "rong");
+    assert.equal(data.version, "0.2.0");
+  });
+
+  it("write() ArrayBuffer + bytes() roundtrip", async () => {
+    const src = new Uint8Array([0x00, 0x01, 0x02, 0xff, 0xfe]);
+    await client.write(TEST_BIN_KEY, src.buffer);
+    const file = client.file(TEST_BIN_KEY);
+    const buf = await file.bytes();
+    const out = new Uint8Array(buf);
+    assert.equal(out.length, 5);
+    assert.equal(out[0], 0x00);
+    assert.equal(out[3], 0xff);
+    assert.equal(out[4], 0xfe);
+  });
+
+  it("write() Uint8Array", async () => {
+    const src = new Uint8Array([10, 20, 30]);
+    const n = await client.write(TEST_BIN_KEY, src);
+    assert.equal(n, 3);
+  });
+
+  // ─── exists ────────────────────────────────────────────────────
+
+  it("client.exists() returns true for existing key", async () => {
+    const exists = await client.exists(TEST_KEY);
+    assert.equal(exists, true);
+  });
+
+  it("client.exists() returns false for missing key", async () => {
+    const exists = await client.exists("nonexistent-key-" + Date.now());
+    assert.equal(exists, false);
+  });
+
+  it("file.exists() returns true for existing key", async () => {
+    const file = client.file(TEST_KEY);
+    const exists = await file.exists();
+    assert.equal(exists, true);
+  });
+
+  it("file.exists() returns false for missing key", async () => {
+    const file = client.file("nonexistent-file-" + Date.now());
+    const exists = await file.exists();
+    assert.equal(exists, false);
+  });
+
+  // ─── size ──────────────────────────────────────────────────────
+
+  it("client.size() returns byte count", async () => {
+    const sz = await client.size(TEST_KEY);
+    assert.equal(sz, TEST_CONTENT.length);
+  });
+
+  // ─── stat ──────────────────────────────────────────────────────
+
+  it("client.stat() returns metadata object", async () => {
+    const st = await client.stat(TEST_KEY);
+    assert(typeof st.size === "number", "stat.size is a number");
+    assert(st.size > 0, "stat.size > 0");
+    assert(typeof st.type === "string", "stat.type is a string");
+  });
+
+  it("file.stat() returns metadata object", async () => {
+    const file = client.file(TEST_KEY);
+    const st = await file.stat();
+    assert(typeof st.size === "number", "stat.size is a number");
+    assert(st.size > 0, "stat.size > 0");
+  });
+
+  // ─── bytes / arrayBuffer ───────────────────────────────────────
+
+  it("file.bytes() returns ArrayBuffer", async () => {
+    const file = client.file(TEST_KEY);
+    const buf = await file.bytes();
+    assert(buf !== null && buf !== undefined, "bytes() returned data");
+    assert(buf.byteLength > 0, "has byte length");
+  });
+
+  it("file.arrayBuffer() is alias for bytes()", async () => {
+    const file = client.file(TEST_KEY);
+    const buf = await file.arrayBuffer();
+    assert(buf !== null && buf !== undefined, "arrayBuffer() returned data");
+    assert.equal(buf.byteLength, TEST_CONTENT.length);
+  });
+
+  // ─── slice ─────────────────────────────────────────────────────
+
+  it("slice() returns partial content", async () => {
+    const file = client.file(TEST_KEY);
+    const partial = file.slice(0, 5);
+    const text = await partial.text();
+    assert.equal(text, TEST_CONTENT.slice(0, 5));
+  });
+
+  it("slice() with only start", async () => {
+    const file = client.file(TEST_KEY);
+    const partial = file.slice(6);
+    const text = await partial.text();
+    assert.equal(text, TEST_CONTENT.slice(6));
+  });
+
+  // ─── list ──────────────────────────────────────────────────────
+
+  it("list() returns objects", async () => {
+    const result = await client.list({ prefix: "rong-test-" });
+    assert(result.contents, "has contents array");
+    assert(result.contents.length > 0, "found test objects");
+    const found = result.contents.find((o) => o.key === TEST_KEY);
+    assert(found, "found our test key in listing");
+    assert(found.size > 0, "listed object has size");
+    assert(typeof found.lastModified === "string", "has lastModified");
+  });
+
+  it("list() with maxKeys limits results + isTruncated", async () => {
+    const result = await client.list({ prefix: "rong-test-", maxKeys: 1 });
+    assert.equal(result.contents.length, 1);
+    assert.equal(result.isTruncated, true);
+  });
+
+  it("list() with startAfter paginates", async () => {
+    const all = await client.list({ prefix: "rong-test-" });
+    assert(all.contents.length >= 2, "need at least 2 objects for pagination test");
+    const firstKey = all.contents[0].key;
+    const page2 = await client.list({ prefix: "rong-test-", startAfter: firstKey });
+    const keys2 = page2.contents.map((o) => o.key);
+    assert(!keys2.includes(firstKey), "startAfter excludes first key");
+  });
+
+  // ─── presign (live) ────────────────────────────────────────────
+
+  it("client.presign() generates valid URL", async () => {
+    const url = await client.presign(TEST_KEY);
+    assert(typeof url === "string", "presign returns string");
+    assert(url.includes(TEST_KEY), "URL contains key");
+  });
+
+  // ─── file.write ────────────────────────────────────────────────
+
+  it("file.write() on file reference", async () => {
+    const file = client.file(TEST_KEY);
+    const n = await file.write("updated content");
+    assert.equal(n, "updated content".length);
+    const text = await file.text();
+    assert.equal(text, "updated content");
+  });
+
+  // ─── delete / unlink ──────────────────────────────────────────
+
+  it("client.delete() removes the object", async () => {
+    await client.delete(TEST_KEY);
+    const exists = await client.exists(TEST_KEY);
+    assert.equal(exists, false);
+  });
+
+  it("client.unlink() alias works", async () => {
+    const key = `rong-unlink-test-${Date.now()}.txt`;
+    await client.write(key, "temp");
+    await client.unlink(key);
+    const exists = await client.exists(key);
+    assert.equal(exists, false);
+  });
+
+  it("file.delete() removes the object", async () => {
+    const key = `rong-file-delete-${Date.now()}.txt`;
+    await client.write(key, "to-delete");
+    const file = client.file(key);
+    await file.delete();
+    const exists = await client.exists(key);
+    assert.equal(exists, false);
+  });
+
+  it("file.unlink() alias works", async () => {
+    const key = `rong-file-unlink-${Date.now()}.txt`;
+    await client.write(key, "to-unlink");
+    const file = client.file(key);
+    await file.unlink();
+    const exists = await client.exists(key);
+    assert.equal(exists, false);
+  });
+
+  // ─── Cleanup ───────────────────────────────────────────────────
+
+  it("cleanup", async () => {
+    for (const k of [TEST_JSON_KEY, TEST_BIN_KEY]) {
+      try { await client.delete(k); } catch (_) {}
+    }
+  });
+});
