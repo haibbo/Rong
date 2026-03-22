@@ -28,7 +28,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Designate Worker 0 for setInterval, others for expressions
     let interval_worker = workers[0].clone();
     let interval_worker_id = interval_worker.id();
-    info!(worker_id = interval_worker_id, "Designating worker for interval task");
+    info!(
+        worker_id = interval_worker_id,
+        "Designating worker for interval task"
+    );
 
     interval_worker.spawn_future(async move |runtime, _receiver| -> JSResult<()> {
         info!(worker_id = interval_worker_id, "Interval task started");
@@ -97,10 +100,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    info!(worker_id = interval_worker_id, "Waiting to observe interval logs");
+    info!(
+        worker_id = interval_worker_id,
+        "Waiting to observe interval logs"
+    );
     tokio::time::sleep(Duration::from_secs(3)).await;
 
-    info!(worker_id = interval_worker_id, "Terminating interval worker");
+    info!(
+        worker_id = interval_worker_id,
+        "Terminating interval worker"
+    );
     interval_worker.terminate()?;
 
     info!("Waiting for all workers termination/idle");
