@@ -373,6 +373,33 @@ impl<C: JSContextImpl> JSContext<C> {
         JSObject::from_js_value(self, JSValue::from_raw(self, raw)).unwrap()
     }
 
+    fn register_class_with_visibility<JC>(&self, expose_on_global: bool) -> JSResult<()>
+    where
+        JC: JSClass<C::Value>,
+        C::Value: JSObjectOps,
+    {
+        let registry = self
+            .get_class_registry()
+            .ok_or_else(|| HostError::new(crate::error::E_INTERNAL, "No Class registry!"))?;
+
+        if registry.borrow().contains_key(&TypeId::of::<JC>()) {
+            return Ok(());
+        }
+
+        let value = self.rc.inner.register_class::<JC>();
+
+        let constructor = JSValue::from_raw(self, value.clone());
+        JC::class_setup(&ClassSetup::new(constructor.clone().into(), self)?)?;
+        if expose_on_global {
+            let obj = self.global();
+            obj.set(JC::NAME, constructor)?;
+        }
+
+        registry.borrow_mut().insert(TypeId::of::<JC>(), value);
+
+        Ok(())
+    }
+
     /// Register a JavaScript class for a Rust type.
     ///
     /// This function registers a JavaScript class constructor in the global object
@@ -388,24 +415,19 @@ impl<C: JSContextImpl> JSContext<C> {
         JC: JSClass<C::Value>,
         C::Value: JSObjectOps,
     {
-        let registry = self
-            .get_class_registry()
-            .ok_or_else(|| HostError::new(crate::error::E_INTERNAL, "No Class registry!"))?;
+        self.register_class_with_visibility::<JC>(true)
+    }
 
-        if registry.borrow().contains_key(&TypeId::of::<JC>()) {
-            return Ok(());
-        }
-
-        let value = self.rc.inner.register_class::<JC>();
-
-        let obj = self.global();
-        let constructor = JSValue::from_raw(self, value.clone());
-        JC::class_setup(&ClassSetup::new(constructor.clone().into(), self)?)?;
-        obj.set(JC::NAME, constructor)?;
-
-        registry.borrow_mut().insert(TypeId::of::<JC>(), value);
-
-        Ok(())
+    /// Register a JavaScript class without exposing its constructor on the global object.
+    ///
+    /// This is for Rust-owned interop classes that must exist in the class registry
+    /// but should not be directly constructed by JavaScript code.
+    pub fn register_hidden_class<JC>(&self) -> JSResult<()>
+    where
+        JC: JSClass<C::Value>,
+        C::Value: JSObjectOps,
+    {
+        self.register_class_with_visibility::<JC>(false)
     }
 
     /// Get class registry from context
