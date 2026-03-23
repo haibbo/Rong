@@ -10,3 +10,4 @@ readme = "README.md"
 [dependencies]
 rong_jscore_sys = { workspace = true }
 rong_core = { workspace = true }
+smallvec = { workspace = true }

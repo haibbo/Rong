@@ -3,6 +3,7 @@ use rong_core::{
     JSClass, JSContextImpl, JSErrorFactory, JSExceptionThrower, JSRuntimeImpl, JSTypeOf,
     JSValueImpl, RongJSError, Source,
 };
+use smallvec::SmallVec;
 use std::ffi::CString;
 use std::mem::MaybeUninit;
 use std::rc::Rc;
@@ -142,14 +143,10 @@ impl JSContextImpl for QJSContext {
         QJSValue::from_owned_raw(self.ctx, raw)
     }
 
-    fn call(
-        &self,
-        function: &Self::Value,
-        this: Self::Value,
-        argv: Vec<Self::Value>,
-    ) -> Self::Value {
+    fn call(&self, function: &Self::Value, this: Self::Value, argv: &[Self::Value]) -> Self::Value {
         // Convert argv to raw JSValues
-        let mut args: Vec<qjs::JSValue> = argv.iter().map(|v| *v.as_raw_value()).collect();
+        let mut args: SmallVec<[qjs::JSValue; 4]> =
+            argv.iter().map(|v| *v.as_raw_value()).collect();
 
         let val = unsafe {
             qjs::JS_Call(

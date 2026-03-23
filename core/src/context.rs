@@ -76,17 +76,12 @@ pub trait JSContextImpl {
     ///
     /// * `function` - The JavaScript function to call
     /// * `this` - Optional `this` value to use when calling the function
-    /// * `argv` - Vector of arguments to pass to the function
+    /// * `argv` - Slice of arguments to pass to the function
     ///
     /// # Returns
     ///
     /// Returns the result of the function call as a JavaScript value
-    fn call(
-        &self,
-        function: &Self::Value,
-        this: Self::Value,
-        argv: Vec<Self::Value>,
-    ) -> Self::Value;
+    fn call(&self, function: &Self::Value, this: Self::Value, argv: &[Self::Value]) -> Self::Value;
 
     /// Creates a new JavaScript Promise and returns a tuple containing:
     /// - The Promise object

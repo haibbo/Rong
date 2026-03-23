@@ -3,6 +3,7 @@ use rong_core::{
     JSClass, JSContextImpl, JSErrorFactory, JSExceptionThrower, JSRuntimeImpl, JSValueImpl,
     RongJSError,
 };
+use smallvec::SmallVec;
 use std::ffi::CString;
 use std::ptr;
 
@@ -91,12 +92,7 @@ impl JSContextImpl for JSCContext {
     }
 
     /// Calls a JavaScript function with the specified `this` value and arguments.
-    fn call(
-        &self,
-        function: &Self::Value,
-        this: Self::Value,
-        argv: Vec<Self::Value>,
-    ) -> Self::Value {
+    fn call(&self, function: &Self::Value, this: Self::Value, argv: &[Self::Value]) -> Self::Value {
         unsafe {
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
@@ -104,7 +100,7 @@ impl JSContextImpl for JSCContext {
             let this_value: jsc::JSValueRef = (*this.as_raw_value()).cast();
 
             // Convert argv to raw JSValues
-            let args: Vec<jsc::JSValueRef> = argv
+            let args: SmallVec<[jsc::JSValueRef; 4]> = argv
                 .iter()
                 .map(|v| {
                     let raw = *v.as_raw_value();
@@ -175,9 +171,10 @@ impl JSContextImpl for JSCContext {
                     return JSCValue::from_owned_raw(self.raw, exception).with_exception();
                 }
 
-                let mut call_args: Vec<jsc::JSValueRef> = Vec::with_capacity(args.len() + 1);
+                let mut call_args: SmallVec<[jsc::JSValueRef; 5]> =
+                    SmallVec::with_capacity(args.len() + 1);
                 call_args.push(this_value);
-                call_args.extend(args);
+                call_args.extend(args.iter().copied());
 
                 jsc::JSObjectCallAsFunction(
                     self.raw,

@@ -6,7 +6,7 @@ use crate::{
 use std::ops::Deref;
 
 mod args;
-pub use args::IntoJSArgs;
+pub use args::{IntoJSArgs, JSArgsVec};
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct JSFunc<V: JSValueImpl>(JSObject<V>);
@@ -47,6 +47,24 @@ where
 }
 
 impl<V: JSObjectOps> JSFunc<V> {
+    fn call_with_argv(&self, this: Option<JSObject<V>>, argv: &[V]) -> V {
+        let ctx = &self.get_ctx();
+        let this = match this {
+            Some(obj) => obj.into_value(),
+            None => V::create_undefined(ctx.as_ref()),
+        };
+        ctx.as_ref().call(self.as_value(), this, argv)
+    }
+
+    fn call_raw<Args>(&self, this: Option<JSObject<V>>, args: Args) -> V
+    where
+        Args: IntoJSArgs<V>,
+    {
+        let ctx = &self.get_ctx();
+        let argv = args.into_js_args(ctx);
+        self.call_with_argv(this, &argv)
+    }
+
     /// Create a new JavaScript function from a Rust function or closure
     ///
     /// # Arguments
@@ -128,13 +146,7 @@ impl<V: JSObjectOps> JSFunc<V> {
         R: FromJSValue<V>,
         V: JSObjectOps,
     {
-        let ctx = &self.get_ctx();
-        let this = match this {
-            Some(obj) => obj.into_value(),
-            None => V::create_undefined(ctx.as_ref()),
-        };
-        let argv = args.into_js_args(ctx);
-        let result = ctx.as_ref().call(self.as_value(), this, argv);
+        let result = self.call_raw(this, args);
         result.try_convert::<R>()
     }
 
@@ -174,12 +186,7 @@ impl<V: JSObjectOps> JSFunc<V> {
         V: JSObjectOps + JSTypeOf + 'static,
     {
         let ctx = &self.get_ctx();
-        let this = match this {
-            Some(obj) => obj.into_value(),
-            None => V::create_undefined(ctx.as_ref()),
-        };
-        let argv = args.into_js_args(ctx);
-        let result = ctx.as_ref().call(self.as_value(), this, argv);
+        let result = self.call_raw(this, args);
 
         if result.is_promise() {
             let promise = Promise::from_js_value(ctx, JSValue::from_raw(ctx, result))?;
@@ -205,6 +212,10 @@ impl<V: JSObjectOps> JSFunc<V> {
 
     pub(crate) fn into_value(self) -> V {
         self.0.into_value()
+    }
+
+    pub(crate) fn invoke_with_argv(&self, this: Option<JSObject<V>>, argv: &[V]) -> V {
+        self.call_with_argv(this, argv)
     }
 }
 

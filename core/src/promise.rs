@@ -208,7 +208,8 @@ where
         let ctx = resolve.get_ctx();
         let arg = <Vec<T> as IntoJSValue<V>>::into_js_value(self, &ctx).into_value();
         let this = V::create_undefined(ctx.as_ref());
-        let _ = ctx.as_ref().call(resolve.as_value(), this, vec![arg]);
+        let argv = [arg];
+        let _ = ctx.as_ref().call(resolve.as_value(), this, &argv);
         drain_microtasks::<V>(&ctx);
     }
 }
@@ -227,16 +228,16 @@ where
                 let ctx = resolve.get_ctx();
                 let arg = <T as IntoJSValue<V>>::into_js_value(value, &ctx).into_value();
                 let this = V::create_undefined(ctx.as_ref());
-                let _ = ctx.as_ref().call(resolve.as_value(), this, vec![arg]);
+                let argv = [arg];
+                let _ = ctx.as_ref().call(resolve.as_value(), this, &argv);
                 drain_microtasks::<V>(&ctx);
             }
             Err(err) => {
                 let ctx = reject.get_ctx();
                 let js_error_value = err.into_catch_value(&ctx).into_value();
                 let this = V::create_undefined(ctx.as_ref());
-                let _ = ctx
-                    .as_ref()
-                    .call(reject.as_value(), this, vec![js_error_value]);
+                let argv = [js_error_value];
+                let _ = ctx.as_ref().call(reject.as_value(), this, &argv);
                 drain_microtasks::<V>(&ctx);
             }
         }
