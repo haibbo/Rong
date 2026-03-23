@@ -1,5 +1,6 @@
 use rong::{
-    JSFunc, JSResult, JsInvokePriority, Rong, RongJS, Source, WorkerMessage, enqueue_js_invoke,
+    JSFunc, JSObject, JSResult, JsInvokePriority, Rong, RongJS, Source, WorkerMessage,
+    enqueue_js_invoke,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -355,6 +356,138 @@ async fn test_scheduler_makes_progress_under_burst_enqueue() -> JSResult<()> {
         observed.load(Ordering::SeqCst) > 0,
         "scheduler failed to make progress during burst enqueue"
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
+    let rong = Rong::<RongJS>::builder().build();
+    let started = Arc::new(AtomicUsize::new(0));
+    let observed = Arc::new(AtomicUsize::new(0));
+    let started_clone = started.clone();
+    let observed_clone = observed.clone();
+
+    rong.block_on(|runtime, _receiver| async move {
+        let ctx = runtime.context();
+
+        ctx.global().set(
+            "sleepMs",
+            JSFunc::new(&ctx, |ms: i32| async move {
+                tokio::time::sleep(Duration::from_millis(ms as u64)).await;
+            })?,
+        )?;
+
+        let slow: JSFunc = ctx.eval(Source::from_bytes(
+            r#"(async function () {
+                globalThis.__scheduler_started = 1;
+                await sleepMs(200);
+            })"#,
+        ))?;
+
+        let fast = JSFunc::new(&ctx, move || {
+            observed_clone.store(1, Ordering::SeqCst);
+        })?;
+
+        enqueue_js_invoke(
+            &ctx,
+            slow,
+            None,
+            None,
+            JsInvokePriority::Normal,
+            None,
+            false,
+        )
+        .await?;
+
+        tokio::time::timeout(Duration::from_millis(100), async {
+            while started_clone.load(Ordering::SeqCst) == 0 {
+                if let Ok(started_flag) = ctx.global().get::<_, i32>("__scheduler_started") {
+                    if started_flag == 1 {
+                        started.store(1, Ordering::SeqCst);
+                    }
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("slow invoke did not start");
+
+        tokio::time::timeout(
+            Duration::from_millis(50),
+            enqueue_js_invoke(&ctx, fast, None, None, JsInvokePriority::High, None, true),
+        )
+        .await
+        .expect("high-priority invoke timed out")?;
+
+        Ok(())
+    })?;
+
+    assert_eq!(observed.load(Ordering::SeqCst), 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_scheduler_event_async_handler_keeps_last_wins_ordering() -> JSResult<()> {
+    let rong = Rong::<RongJS>::builder().build();
+
+    rong.block_on(|runtime, _receiver| async move {
+        let ctx = runtime.context();
+
+        ctx.global().set(
+            "sleepMs",
+            JSFunc::new(&ctx, |ms: i32| async move {
+                tokio::time::sleep(Duration::from_millis(ms as u64)).await;
+            })?,
+        )?;
+
+        ctx.eval::<()>(Source::from_bytes(r#"globalThis.__event_value = "unset";"#))?;
+
+        let handler: JSFunc = ctx.eval(Source::from_bytes(
+            r#"(async function (event) {
+                await sleepMs(event.delay);
+                globalThis.__event_value = event.label;
+            })"#,
+        ))?;
+
+        let old_event = JSObject::new(&ctx);
+        old_event.set("label", "old")?;
+        old_event.set("delay", 75)?;
+
+        let new_event = JSObject::new(&ctx);
+        new_event.set("label", "new")?;
+        new_event.set("delay", 0)?;
+
+        enqueue_js_invoke(
+            &ctx,
+            handler.clone(),
+            None,
+            Some(old_event),
+            JsInvokePriority::Event,
+            Some("view:update".to_string()),
+            false,
+        )
+        .await?;
+
+        enqueue_js_invoke(
+            &ctx,
+            handler,
+            None,
+            Some(new_event),
+            JsInvokePriority::Event,
+            Some("view:update".to_string()),
+            true,
+        )
+        .await?;
+
+        tokio::time::sleep(Duration::from_millis(120)).await;
+
+        let final_value: String = ctx.global().get("__event_value")?;
+        assert_eq!(final_value, "new");
+
+        Ok(())
+    })?;
 
     Ok(())
 }

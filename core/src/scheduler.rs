@@ -1,6 +1,6 @@
 use crate::{
-    HostError, JSContext, JSContextImpl, JSFunc, JSObject, JSObjectOps, JSResult, JSRuntimeService,
-    JSValueImpl,
+    FromJSValue, HostError, JSContext, JSContextImpl, JSFunc, JSObject, JSObjectOps, JSResult,
+    JSRuntimeService, JSTypeOf, JSValue, JSValueImpl, JSValueMapper, Promise,
 };
 use futures::Future;
 use std::{
@@ -9,6 +9,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::{Mutex, mpsc, oneshot};
+use tracing::error;
 
 /// Runtime-level gate: hard serialization at engine entrance.
 #[derive(Clone, Default)]
@@ -72,10 +73,7 @@ impl JsInvokeQueue {
                     }
 
                     let fut = (item.cb)();
-                    let res = fut.await;
-                    if let Some(tx) = item.reply {
-                        let _ = tx.send(res);
-                    }
+                    fut.await;
                     // After processing, loop back to drain more incoming + process more.
                     continue;
                 }
@@ -159,7 +157,7 @@ pub enum JsInvokePriority {
     Event,
 }
 
-type InvokeFuture = Pin<Box<dyn Future<Output = JSResult<()>> + 'static>>;
+type InvokeFuture = Pin<Box<dyn Future<Output = ()> + 'static>>;
 type InvokeFn = Box<dyn FnOnce() -> InvokeFuture + 'static>;
 
 struct QueueItem {
@@ -167,7 +165,6 @@ struct QueueItem {
     dedup_key: Option<String>,
     generation: u64,
     cb: InvokeFn,
-    reply: Option<oneshot::Sender<JSResult<()>>>,
 }
 
 /// Enqueue a JS function invocation with priority/coalescing.
@@ -182,7 +179,7 @@ pub async fn enqueue_js_invoke<C>(
 ) -> JSResult<()>
 where
     C: JSContextImpl + 'static,
-    C::Value: JSValueImpl + JSObjectOps + 'static,
+    C::Value: JSValueImpl + JSObjectOps + JSTypeOf + 'static,
     C::Runtime: 'static,
 {
     let queue = ctx.runtime().get_or_init_service::<JsInvokeQueue>().clone();
@@ -196,9 +193,45 @@ where
 
     let ctx_clone = ctx.clone();
     let cb: InvokeFn = Box::new(move || {
-        Box::pin(
-            async move { js_invoke_async::<C, ()>(&ctx_clone, func, this_obj, args_obj).await },
-        )
+        Box::pin(async move {
+            if priority == JsInvokePriority::Event {
+                let result = js_invoke_async::<C, ()>(&ctx_clone, func, this_obj, args_obj).await;
+                if let Some(tx) = reply_tx {
+                    let _ = tx.send(result);
+                } else if let Err(err) = result {
+                    error!(target: "rong", error = ?err, "queued js event invoke failed");
+                }
+                return;
+            }
+
+            match js_invoke_start::<C>(&ctx_clone, func, this_obj, args_obj).await {
+                Ok(Some(promise)) => {
+                    if let Some(tx) = reply_tx {
+                        crate::rong::spawn(async move {
+                            let _ = tx.send(promise.into_future::<()>().await);
+                        });
+                    } else {
+                        crate::rong::spawn(async move {
+                            if let Err(err) = promise.into_future::<()>().await {
+                                error!(target: "rong", error = ?err, "background js invoke failed");
+                            }
+                        });
+                    }
+                }
+                Ok(None) => {
+                    if let Some(tx) = reply_tx {
+                        let _ = tx.send(Ok(()));
+                    }
+                }
+                Err(err) => {
+                    if let Some(tx) = reply_tx {
+                        let _ = tx.send(Err(err));
+                    } else {
+                        error!(target: "rong", error = ?err, "queued js invoke failed");
+                    }
+                }
+            }
+        })
     });
 
     let item = QueueItem {
@@ -206,7 +239,6 @@ where
         dedup_key,
         generation: 0,
         cb,
-        reply: reply_tx,
     };
     queue
         .tx
@@ -223,7 +255,39 @@ where
     }
 }
 
+async fn js_invoke_start<C>(
+    ctx: &JSContext<C>,
+    func: JSFunc<C::Value>,
+    this_obj: Option<JSObject<C::Value>>,
+    args_obj: Option<JSObject<C::Value>>,
+) -> JSResult<Option<Promise<C::Value>>>
+where
+    C: JSContextImpl,
+    C::Value: JSValueImpl + JSObjectOps + JSTypeOf + 'static,
+    C::Runtime: 'static,
+{
+    let gate = ctx.runtime().get_or_init_service::<JsInvokeGate>().clone();
+    let result = {
+        let _guard = gate.0.lock().await;
+        match args_obj {
+            Some(obj) => {
+                let argv = [obj.into_value()];
+                func.invoke_with_argv(this_obj, &argv)
+            }
+            None => func.invoke_with_argv(this_obj, &[]),
+        }
+    };
+
+    if result.is_promise() {
+        Promise::from_js_value(ctx, JSValue::from_raw(ctx, result)).map(Some)
+    } else {
+        result.try_convert::<()>()?;
+        Ok(None)
+    }
+}
+
 /// Dispatch a JS invocation immediately with hard gate (async form).
+#[allow(dead_code)]
 pub async fn js_invoke_async<C, R>(
     ctx: &JSContext<C>,
     func: JSFunc<C::Value>,
@@ -232,16 +296,27 @@ pub async fn js_invoke_async<C, R>(
 ) -> JSResult<R>
 where
     C: JSContextImpl,
-    C::Value: JSValueImpl + JSObjectOps + 'static,
+    C::Value: JSValueImpl + JSObjectOps + JSTypeOf + 'static,
     C::Runtime: 'static,
     R: crate::FromJSValue<C::Value> + 'static,
 {
     let gate = ctx.runtime().get_or_init_service::<JsInvokeGate>().clone();
-    let _guard = gate.0.lock().await;
+    let result = {
+        let _guard = gate.0.lock().await;
+        match args_obj {
+            Some(obj) => {
+                let argv = [obj.into_value()];
+                func.invoke_with_argv(this_obj, &argv)
+            }
+            None => func.invoke_with_argv(this_obj, &[]),
+        }
+    };
 
-    match args_obj {
-        Some(obj) => func.call_async::<_, R>(this_obj, (obj,)).await,
-        None => func.call_async::<_, R>(this_obj, ()).await,
+    if result.is_promise() {
+        let promise = Promise::from_js_value(ctx, JSValue::from_raw(ctx, result))?;
+        promise.into_future::<R>().await
+    } else {
+        result.try_convert::<R>()
     }
 }
 
@@ -254,8 +329,7 @@ mod tests {
             priority,
             dedup_key: dedup_key.map(str::to_string),
             generation: 0,
-            cb: Box::new(|| Box::pin(async { Ok(()) })),
-            reply: None,
+            cb: Box::new(|| Box::pin(async {})),
         }
     }
 
