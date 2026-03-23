@@ -356,7 +356,7 @@ impl Response {
             .headers
             .get("Content-Type".to_string())?
             .unwrap_or_else(|| "".to_string());
-        Ok(Blob::from_parts(mime, bytes.to_vec()))
+        Ok(Blob::from_parts(mime, bytes))
     }
 
     #[js_method(rename = "arrayBuffer")]
@@ -493,6 +493,25 @@ impl Response {
             abort_receiver,
             ..Default::default()
         }
+    }
+}
+
+impl Response {
+    /// Extract status, headers, and body from a JS Response object directly via Rust,
+    /// bypassing JS property access and async `arrayBuffer()` calls.
+    ///
+    /// Returns `(status, headers, body)`. Headers are returned as a `HeaderMap`,
+    /// preserving type safety and avoiding String round-trips.
+    pub async fn extract(
+        obj: &JSObject,
+    ) -> JSResult<(u16, http::HeaderMap<http::header::HeaderValue>, Vec<u8>)> {
+        let response = obj.borrow::<Response>()?;
+
+        let status = response.status;
+        let headers = response.headers.as_header_map().clone();
+        let body = response.body_to_bytes().await?.to_vec();
+
+        Ok((status, headers, body))
     }
 }
 

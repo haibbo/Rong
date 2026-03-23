@@ -119,8 +119,10 @@ impl TryFromJSValue for RequestInit {
         }
 
         // Signal
-        if let Ok(signal) = obj.get::<_, AbortSignal>("signal") {
-            request.signal = Some(signal);
+        if let Ok(signal_obj) = obj.get::<_, JSObject>("signal")
+            && let Ok(signal) = signal_obj.borrow::<AbortSignal>()
+        {
+            request.signal = Some(signal.clone());
         }
         Ok(request)
     }
@@ -132,15 +134,6 @@ impl Request {
     pub(crate) fn new(input: JSValue, request_init: Optional<RequestInit>) -> JSResult<Self> {
         // Parse input - can be a URL string or another Request object
         let mut request = if let Ok(url_str) = input.clone().try_into::<String>() {
-            // Validate URL format
-            if !url_str.starts_with("http://") && !url_str.starts_with("https://") {
-                return Err(HostError::new(
-                    rong::error::E_INVALID_ARG,
-                    format!("Invalid URL: {}", url_str),
-                )
-                .with_name("TypeError")
-                .into());
-            }
             let url = Uri::try_from(url_str.as_str()).map_err(|_| {
                 HostError::new(
                     rong::error::E_INVALID_ARG,
@@ -360,6 +353,52 @@ impl Default for Request {
             signal: None,
             consumed: Cell::new(false),
         }
+    }
+}
+
+impl Request {
+    /// Construct a JS `Request` object directly from Rust parts, bypassing JS constructor.
+    ///
+    /// Accepts a `HeaderMap` directly — no string round-trips.
+    pub fn from_parts(
+        ctx: &JSContext,
+        url: &str,
+        method: &str,
+        headers: http::HeaderMap<http::header::HeaderValue>,
+        body: Option<&[u8]>,
+    ) -> JSResult<JSObject> {
+        let uri = Uri::try_from(url).map_err(|_| {
+            HostError::new(rong::error::E_INVALID_ARG, format!("Invalid URL: {url}"))
+                .with_name("TypeError")
+        })?;
+        let http_method = Method::from_bytes(method.as_bytes()).map_err(|_| {
+            HostError::new(
+                rong::error::E_INVALID_ARG,
+                format!("Invalid method: {method}"),
+            )
+            .with_name("TypeError")
+        })?;
+
+        let http_body = body.map(|b| {
+            HttpBody(
+                JSArrayBuffer::from_bytes(ctx, b)
+                    .unwrap()
+                    .into_js_value(ctx),
+            )
+        });
+
+        let request = Request {
+            url: uri,
+            method: http_method,
+            headers: Headers::from_header_map(headers),
+            body: http_body,
+            redirect: RequestRedirect::default(),
+            signal: None,
+            consumed: Cell::new(false),
+        };
+
+        let class = Class::get::<Request>(ctx)?;
+        Ok(class.instance(request))
     }
 }
 

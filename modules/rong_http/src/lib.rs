@@ -13,6 +13,8 @@ mod sse;
 
 pub use client::*;
 pub use download::*;
+pub use request::Request;
+pub use response::Response;
 
 // Re-export security-related items
 pub use security::{NetworkAccessGuard, set_network_access_guard, set_network_access_guard_scoped};

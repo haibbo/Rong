@@ -11,13 +11,18 @@ pub struct Headers {
 }
 
 impl Headers {
+    /// Create `Headers` from an existing `HeaderMap`.
+    pub(crate) fn from_header_map(headers: HeaderMap<HeaderValue>) -> Self {
+        Self { headers }
+    }
+
     // Take ownership of the inner HeaderMap
-    pub fn into_header_map(self) -> HeaderMap<HeaderValue> {
+    pub(crate) fn into_header_map(self) -> HeaderMap<HeaderValue> {
         self.headers
     }
 
     // Get a reference to the inner HeaderMap
-    pub fn as_header_map(&self) -> &HeaderMap<HeaderValue> {
+    pub(crate) fn as_header_map(&self) -> &HeaderMap<HeaderValue> {
         &self.headers
     }
 }
