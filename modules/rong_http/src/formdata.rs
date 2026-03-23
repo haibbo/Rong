@@ -207,7 +207,7 @@ impl FormData {
 
 impl FormData {
     // Add new methods for serialization
-    pub(crate) async fn serialize(&self, ctx: JSContext) -> JSResult<(Vec<u8>, String)> {
+    pub(crate) async fn serialize(&self, _ctx: JSContext) -> JSResult<(Vec<u8>, String)> {
         let boundary = uuid::Uuid::new_v4().to_string();
         let mut body = Vec::new();
 
@@ -226,11 +226,7 @@ impl FormData {
                     body.extend_from_slice(
                         format!("Content-Type: {}\r\n\r\n", file.mime_type()).as_bytes(),
                     );
-                    if let Ok(bytes) = file.bytes(ctx.clone()).await
-                        && let Some(bytes_vec) = bytes.as_bytes()
-                    {
-                        body.extend_from_slice(bytes_vec);
-                    }
+                    body.extend_from_slice(file.bytes_ref().as_ref());
                 }
                 FormDataEntryValue::Blob(blob) => {
                     body.extend_from_slice(
@@ -243,11 +239,7 @@ impl FormData {
                     body.extend_from_slice(
                         format!("Content-Type: {}\r\n\r\n", blob.mime_type()).as_bytes(),
                     );
-                    if let Ok(bytes) = blob.bytes(ctx.clone()).await
-                        && let Some(bytes_vec) = bytes.as_bytes()
-                    {
-                        body.extend_from_slice(bytes_vec);
-                    }
+                    body.extend_from_slice(blob.bytes_ref().as_ref());
                 }
                 FormDataEntryValue::String(value) => {
                     body.extend_from_slice(

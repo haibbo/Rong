@@ -58,33 +58,19 @@ impl HttpBody {
             }
 
             // Handle Blob
-            if let Ok(blob) = obj.borrow::<Blob>().map(|b| b.clone()) {
-                let bytes = {
-                    let blob = blob.clone();
-                    blob.bytes(ctx.clone()).await?
-                };
-                if let Some(bytes_vec) = bytes.as_bytes() {
-                    return Ok((Bytes::from(bytes_vec.to_vec()), None));
-                }
+            if let Ok(blob) = obj.borrow::<Blob>() {
+                return Ok((blob.bytes_ref().clone(), None));
             }
 
             // Handle File
-            if let Ok(file) = obj.borrow::<File>().map(|f| f.clone()) {
-                let bytes = {
-                    let file = file.clone();
-                    file.bytes(ctx.clone()).await?
-                };
-                if let Some(bytes_vec) = bytes.as_bytes() {
-                    return Ok((Bytes::from(bytes_vec.to_vec()), None));
-                }
+            if let Ok(file) = obj.borrow::<File>() {
+                return Ok((file.bytes_ref().clone(), None));
             }
 
             // Handle FormData
-            if let Ok(formdata) = obj.borrow::<FormData>().map(|f| f.clone()) {
-                let (body, boundary) = {
-                    let formdata = formdata.clone();
-                    formdata.serialize(ctx.clone()).await?
-                };
+            if let Ok(formdata) = obj.borrow::<FormData>() {
+                let formdata = formdata.clone();
+                let (body, boundary) = formdata.serialize(ctx.clone()).await?;
                 return Ok((Bytes::from(body), Some(boundary)));
             }
 

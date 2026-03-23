@@ -16,23 +16,29 @@ use crate::response::Response;
 use crate::security::grant_network_access;
 use rong_stream::ReadableStream;
 
-// Convert Request to hyper::Request
-async fn to_hyper_request(mut request: Request) -> JSResult<HttpRequest<BoxBody<Bytes, Error>>> {
+// Convert Request to hyper::Request without cloning the whole Request value.
+async fn to_hyper_request(request: &Request) -> JSResult<HttpRequest<BoxBody<Bytes, Error>>> {
     let user_agent = rong::get_user_agent();
     let mut builder = HttpRequest::builder()
-        .method(request.method)
-        .uri(request.url)
+        .method(request.method.clone())
+        .uri(request.url.clone())
         .header(header::USER_AGENT, user_agent.as_str())
         .header(header::ACCEPT, "*/*")
         .header(header::ACCEPT_ENCODING, "gzip"); // TODO: "gzip, zstd"
 
-    // Take ownership of headers
+    // Clone only the header map entries we need for the outbound request.
     if let Some(headers) = builder.headers_mut() {
-        headers.extend(request.headers.into_header_map());
+        headers.extend(
+            request
+                .headers
+                .as_header_map()
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone())),
+        );
     }
 
     // Create body
-    let body: BoxBody<Bytes, Error> = if let Some(body) = request.body.take() {
+    let body: BoxBody<Bytes, Error> = if let Some(body) = &request.body {
         // Detect ReadableStream for streaming upload
         if let Some(obj) = body.0.clone().into_object() {
             if let Ok(rs) = obj.borrow::<ReadableStream>() {
@@ -120,10 +126,8 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
     const MAX_REDIRECTS: u32 = 20;
 
     loop {
-        // Convert Request to hyper::Request
-        // We clone the request because to_hyper_request consumes it, and we might need
-        // the original request object for the next iteration of the loop (if redirecting).
-        let hyper_request = to_hyper_request(request.clone()).await?;
+        // Convert Request to hyper::Request without cloning the whole Request object.
+        let hyper_request = to_hyper_request(&request).await?;
         let orig_method = hyper_request.method().clone();
         let orig_uri = hyper_request.uri().clone();
 

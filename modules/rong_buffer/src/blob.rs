@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use rong::{function::Optional, js_class, js_export, js_method, *};
 
 #[derive(Default)]
@@ -18,10 +19,10 @@ const LINE_ENDING: &[u8] = b"\r\n";
 #[cfg(not(windows))]
 const LINE_ENDING: &[u8] = b"\n";
 
-#[js_export]
+#[js_export(clone)]
 pub struct Blob {
     mime_type: String,
-    data: Vec<u8>,
+    data: Bytes,
 }
 
 #[js_class]
@@ -59,11 +60,15 @@ impl Blob {
         Ok(Self::from_parts(blob_options.type_, blob_data))
     }
 
-    pub fn from_parts(mime: String, data: Vec<u8>) -> Self {
+    pub fn from_parts(mime: String, data: impl Into<Bytes>) -> Self {
         Self {
             mime_type: mime,
-            data,
+            data: data.into(),
         }
+    }
+
+    pub fn bytes_ref(&self) -> &Bytes {
+        &self.data
     }
 
     #[js_method(getter, enumerable)]
@@ -79,13 +84,13 @@ impl Blob {
     /// Returns a promise that resolves with an ArrayBuffer containing the blob's data
     #[js_method(rename = "arrayBuffer")]
     pub async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer> {
-        JSArrayBuffer::from_bytes(&ctx, &self.data)
+        JSArrayBuffer::from_bytes(&ctx, self.data.as_ref())
     }
 
     /// Returns a promise that resolves with a text representation of the blob's data
     #[js_method]
     pub async fn text(&self) -> JSResult<String> {
-        String::from_utf8(self.data.clone()).map_err(|e| {
+        String::from_utf8(self.data.to_vec()).map_err(|e| {
             HostError::new(
                 rong::error::E_INVALID_DATA,
                 format!("Invalid UTF-8 sequence: {}", e),
@@ -132,20 +137,20 @@ impl Blob {
         if start > end {
             return Ok(Self {
                 mime_type: content_type.0.unwrap_or_default(),
-                data: Vec::new(),
+                data: Bytes::new(),
             });
         }
 
         Ok(Self {
             mime_type: content_type.0.unwrap_or_else(|| self.mime_type.clone()),
-            data: self.data[start..end].to_vec(),
+            data: self.data.slice(start..end),
         })
     }
 
     /// Returns a promise that resolves with a Uint8Array containing the blob's data
     #[js_method]
     pub async fn bytes(&self, ctx: JSContext) -> JSResult<JSTypedArray> {
-        let buffer = JSArrayBuffer::from_bytes(&ctx, &self.data)?;
+        let buffer = JSArrayBuffer::from_bytes(&ctx, self.data.as_ref())?;
         JSTypedArray::<u8>::from_array_buffer(&ctx, buffer, 0, None)
     }
 
@@ -197,7 +202,7 @@ fn process_blob_part(array: &JSArray, options: &BlobOptions) -> JSResult<Vec<u8>
             }
 
             if let Ok(blob) = object.borrow::<Blob>() {
-                data.extend_from_slice(&blob.data);
+                data.extend_from_slice(blob.data.as_ref());
                 continue;
             }
         }

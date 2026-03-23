@@ -1,8 +1,9 @@
 use super::blob::Blob;
+use bytes::Bytes;
 use rong::{function::Optional, *};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[js_export]
+#[js_export(clone)]
 pub struct File {
     blob: Blob,
     filename: String,
@@ -57,7 +58,7 @@ impl File {
 
     pub fn from_parts(
         mime_type: String,
-        data: Vec<u8>,
+        data: impl Into<Bytes>,
         filename: String,
         last_modified: Option<i64>,
     ) -> JSResult<Self> {
@@ -75,6 +76,10 @@ impl File {
             filename,
             last_modified: last_modified.unwrap_or(default_time),
         })
+    }
+
+    pub fn bytes_ref(&self) -> &Bytes {
+        self.blob.bytes_ref()
     }
 
     #[js_method(getter)]

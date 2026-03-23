@@ -1,6 +1,6 @@
 use crate::writable::WritableStream;
 use bytes::{Bytes, BytesMut};
-use rong::function::This;
+use rong::function::{JSClassRef, This};
 use rong::*;
 use rong_abort::AbortSignal;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -153,7 +153,7 @@ impl ReadableStream {
     async fn pipe_to(
         &self,
         ctx: JSContext,
-        dest: WritableStream,
+        dest: JSClassRef<WritableStream>,
         options: function::Optional<PipeToOptions>,
     ) -> JSResult<()> {
         let opts = options.0.unwrap_or_default();
@@ -169,7 +169,7 @@ impl ReadableStream {
 
         // Acquire reader and writer
         let reader = self.get_reader()?;
-        let mut writer = dest.get_writer()?;
+        let mut writer = dest.borrow()?.get_writer()?;
 
         // Fast path: if this ReadableStream is channel-backed and the writer is channel-backed,
         // forward bytes directly between channels without constructing JS ArrayBuffers.

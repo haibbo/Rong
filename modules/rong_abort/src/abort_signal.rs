@@ -8,7 +8,7 @@ use tokio::sync::watch;
 // The AbortSignal interface represents a signal object that allows you to communicate
 // with an asynchronous operation (such as a fetch request) and abort it if required
 // via an AbortController object
-#[js_export]
+#[js_export(clone)]
 pub struct AbortSignal {
     inner: Rc<Mutex<AbortSignalInner>>,
 }

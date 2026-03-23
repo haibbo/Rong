@@ -9,6 +9,7 @@ repository.workspace = true
 readme.workspace = true
 [dependencies]
 rong = { workspace = true }
+bytes = { workspace = true }
 
 [features]
 # Forward JS engine features to the main rong crate
