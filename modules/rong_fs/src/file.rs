@@ -30,12 +30,7 @@ pub(crate) struct FileHandle {
 impl FileHandle {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(HostError::new(
-            rong::error::E_ILLEGAL_CONSTRUCTOR,
-            "Not Allowed 'new FileHandle()', use Rong.file(path).open()",
-        )
-        .with_name("TypeError")
-        .into())
+        rong::illegal_constructor("Not Allowed 'new FileHandle()', use Rong.file(path).open()")
     }
 
     #[js_method]
@@ -307,7 +302,7 @@ pub(crate) async fn open_file_internal(
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
     let rong = ctx.rong();
 
-    ctx.register_class::<FileHandle>()?;
+    ctx.register_hidden_class::<FileHandle>()?;
 
     let seek_mode = JSObject::new(ctx);
     seek_mode.set("Start", 0u32)?;

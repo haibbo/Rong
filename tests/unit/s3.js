@@ -21,6 +21,21 @@ function makeClient(overrides) {
 describe("S3Client", () => {
   // ─── Construction ──────────────────────────────────────────────
 
+  it("hides S3File from global scope", () => {
+    assert.equal(typeof S3File, "undefined");
+    assert.equal(globalThis.S3File, undefined);
+
+    const client = makeClient();
+    const file = client.file("hello.txt");
+    let failed = false;
+    try {
+      new file.constructor();
+    } catch (e) {
+      failed = true;
+    }
+    assert(failed, "S3File should not be constructible via instance.constructor");
+  });
+
   it("constructor with explicit options", () => {
     const client = makeClient();
     assert(client, "S3Client instance created");
@@ -146,13 +161,9 @@ describe("S3Client", () => {
     }
   });
 
-  it("S3File constructor throws (use client.file())", () => {
-    try {
-      new S3File();
-      assert(false, "should have thrown");
-    } catch (e) {
-      assert(e.message.includes("cannot be constructed"), e.message);
-    }
+  it("S3File constructor is not exposed globally", () => {
+    assert.equal(typeof S3File, "undefined");
+    assert.equal(globalThis.S3File, undefined);
   });
 
   it("presign() rejects invalid method", async () => {

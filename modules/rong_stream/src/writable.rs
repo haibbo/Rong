@@ -194,11 +194,7 @@ impl WritableStream {
 impl WritableStreamDefaultWriter {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(
-            HostError::new(rong::error::E_ILLEGAL_CONSTRUCTOR, "Illegal constructor")
-                .with_name("TypeError")
-                .into(),
-        )
+        rong::illegal_constructor("Illegal constructor")
     }
 
     #[js_method]
@@ -417,7 +413,7 @@ where
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<WritableStream>()?;
-    ctx.register_class::<WritableStreamDefaultWriter>()?;
+    ctx.register_hidden_class::<WritableStreamDefaultWriter>()?;
     Ok(())
 }
 

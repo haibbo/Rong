@@ -15,12 +15,8 @@ pub struct DirEntry {
 #[js_class]
 impl DirEntry {
     #[js_method(constructor)]
-    fn new(name: String, file_type: bool, is_symlink: bool) -> Self {
-        Self {
-            name,
-            file_type,
-            is_symlink,
-        }
+    fn new(_name: String, _file_type: bool, _is_symlink: bool) -> JSResult<Self> {
+        rong::illegal_constructor("DirEntry cannot be constructed directly. Use Rong.readDir().")
     }
 
     #[js_method(getter)]
@@ -232,7 +228,7 @@ async fn chdir(directory: String) -> JSResult<()> {
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
     let rong = ctx.rong();
 
-    ctx.register_class::<DirEntry>()?;
+    ctx.register_hidden_class::<DirEntry>()?;
 
     let mkdir_fn = JSFunc::new(ctx, mkdir)?.name("mkdir")?;
     rong.set("mkdir", mkdir_fn)?;

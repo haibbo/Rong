@@ -371,11 +371,7 @@ impl ReadableStream {
 impl ReadableStreamDefaultReader {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(
-            HostError::new(rong::error::E_ILLEGAL_CONSTRUCTOR, "Illegal constructor")
-                .with_name("TypeError")
-                .into(),
-        )
+        rong::illegal_constructor("Illegal constructor")
     }
 
     #[js_method]
@@ -486,11 +482,7 @@ impl ReadableStreamDefaultReader {
 impl ReadableStreamDefaultController {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(
-            HostError::new(rong::error::E_ILLEGAL_CONSTRUCTOR, "Illegal constructor")
-                .with_name("TypeError")
-                .into(),
-        )
+        rong::illegal_constructor("Illegal constructor")
     }
 
     #[js_method]
@@ -688,8 +680,8 @@ impl JSReadableStream {
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<ReadableStream>()?;
-    ctx.register_class::<ReadableStreamDefaultReader>()?;
-    ctx.register_class::<ReadableStreamDefaultController>()?;
+    ctx.register_hidden_class::<ReadableStreamDefaultReader>()?;
+    ctx.register_hidden_class::<ReadableStreamDefaultController>()?;
     Ok(())
 }
 

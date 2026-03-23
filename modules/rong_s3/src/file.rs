@@ -27,9 +27,9 @@ pub struct S3File {
 impl S3File {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(type_error(
+        rong::illegal_constructor(
             "S3File cannot be constructed directly. Use S3Client.file() instead.",
-        ))
+        )
     }
 
     pub(crate) fn create(config: Rc<S3Config>, key: String, display_name: String) -> Self {

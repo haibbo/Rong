@@ -44,15 +44,21 @@ pub struct Process {
     events: EventEmitter,
 }
 
-#[js_class]
 impl Process {
-    #[js_method(constructor)]
     pub fn new() -> Self {
         // Ensure start time is initialized
         let _ = get_start_time();
         Self {
             events: EventEmitter::new(),
         }
+    }
+}
+
+#[js_class]
+impl Process {
+    #[js_method(constructor)]
+    pub fn constructor() -> JSResult<Self> {
+        rong::illegal_constructor("Process cannot be constructed directly. Use globalThis.process.")
     }
 
     // Static properties as getters
@@ -269,8 +275,8 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     // Initialize stream module for stdin
     rong_stream::init(ctx)?;
 
-    // Register the Process class
-    ctx.register_class::<Process>()?;
+    // Register the Process class without exposing a global constructor.
+    ctx.register_hidden_class::<Process>()?;
 
     // Add EventEmitter methods to Process prototype
     Process::add_node_event_target_prototype(ctx)?;

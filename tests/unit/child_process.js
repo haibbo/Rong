@@ -1,4 +1,18 @@
 describe("Child Process", () => {
+  it("hides internal child process classes from global scope", () => {
+    assert.equal(typeof ChildProcess, "undefined");
+    assert.equal(typeof ExecResult, "undefined");
+
+    const child = child_process.spawn("echo", ["hello"]);
+    let childFailed = false;
+    try {
+      new child.constructor();
+    } catch (e) {
+      childFailed = true;
+    }
+    assert.equal(childFailed, true, "ChildProcess should not be constructible via instance.constructor");
+  });
+
   describe("exec", () => {
     it("should execute a shell command and return stdout", async () => {
       const result = await child_process.exec("echo hello");

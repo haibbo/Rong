@@ -17,12 +17,7 @@ pub struct Statement {
 impl Statement {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(HostError::new(
-            rong::error::E_ILLEGAL_CONSTRUCTOR,
-            "Not allowed 'new Statement()'. Use db.prepare(sql) instead.",
-        )
-        .with_name("TypeError")
-        .into())
+        rong::illegal_constructor("Not allowed 'new Statement()'. Use db.prepare(sql) instead.")
     }
 
     pub(crate) fn create(conn: SharedConn, sql: String) -> Self {

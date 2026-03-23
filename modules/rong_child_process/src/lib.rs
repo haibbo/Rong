@@ -95,9 +95,7 @@ pub struct ChildProcess {
     kill_tx: Option<mpsc::Sender<ChildCommand>>,
 }
 
-#[js_class]
 impl ChildProcess {
-    #[js_method(constructor)]
     pub fn new() -> Self {
         Self {
             events: EventEmitter::new(),
@@ -108,6 +106,16 @@ impl ChildProcess {
             #[cfg(windows)]
             kill_tx: None,
         }
+    }
+}
+
+#[js_class]
+impl ChildProcess {
+    #[js_method(constructor)]
+    pub fn constructor() -> JSResult<Self> {
+        rong::illegal_constructor(
+            "ChildProcess cannot be constructed directly. Use child_process.spawn().",
+        )
     }
 
     #[js_method(getter)]
@@ -220,15 +228,23 @@ pub struct ExecResult {
     code: Option<i32>,
 }
 
-#[js_class]
 impl ExecResult {
-    #[js_method(constructor)]
     pub fn new() -> Self {
         Self {
             stdout: String::new(),
             stderr: String::new(),
             code: None,
         }
+    }
+}
+
+#[js_class]
+impl ExecResult {
+    #[js_method(constructor)]
+    pub fn constructor() -> JSResult<Self> {
+        rong::illegal_constructor(
+            "ExecResult cannot be constructed directly. Use child_process.exec() or execFile().",
+        )
     }
 
     #[js_method(getter)]
@@ -691,8 +707,8 @@ fn exec_file(
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     rong_stream::init(ctx)?;
 
-    ctx.register_class::<ChildProcess>()?;
-    ctx.register_class::<ExecResult>()?;
+    ctx.register_hidden_class::<ChildProcess>()?;
+    ctx.register_hidden_class::<ExecResult>()?;
 
     ChildProcess::add_node_event_target_prototype(ctx)?;
 

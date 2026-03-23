@@ -7,6 +7,11 @@ async function waitForQuiet(ms = 75) {
 describe("RedisClient — connection", () => {
   let client;
 
+  it("hides RedisSubscription from global scope", () => {
+    assert.equal(typeof RedisSubscription, "undefined");
+    assert.equal(globalThis.RedisSubscription, undefined);
+  });
+
   beforeEach(() => {
     client = new RedisClient(REDIS_URL);
   });

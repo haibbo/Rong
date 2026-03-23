@@ -35,14 +35,18 @@ describe("Filesystem", () => {
     assert.equal(f.name, "/some/path.txt", "name getter should return path");
   });
 
-  it("RongFile constructor is not callable", () => {
+  it("RongFile is hidden from global scope", () => {
+    assert.equal(typeof RongFile, "undefined");
+    assert.equal(globalThis.RongFile, undefined);
+
+    const file = Rong.file("/some/path.txt");
     let failed = false;
     try {
-      new RongFile();
+      new file.constructor();
     } catch (e) {
       failed = true;
     }
-    assert(failed, "Should not be able to construct RongFile directly");
+    assert(failed, "Should not construct RongFile via instance.constructor");
   });
 
   // ==================== Rong.write() + RongFile.text() ====================
@@ -502,14 +506,26 @@ describe("Filesystem", () => {
     await cleanupTempDir();
   });
 
-  it("FileHandle constructor is not callable", () => {
+  it("FileHandle is hidden from global scope", () => {
+    assert.equal(typeof FileHandle, "undefined");
+    assert.equal(globalThis.FileHandle, undefined);
+  });
+
+  it("FileHandle cannot be constructed via instance.constructor", async () => {
+    await ensureTempDir();
+    const testFile = getTempPath("handle_indirect_ctor.txt");
+    await Rong.write(testFile, "hello");
+
+    const handle = await Rong.file(testFile).open({ read: true });
     let failed = false;
     try {
-      new FileHandle();
+      new handle.constructor();
     } catch (e) {
       failed = true;
     }
-    assert(failed, "Should not construct FileHandle directly");
+    assert(failed, "Should not construct FileHandle via instance.constructor");
+    await handle.close();
+    await cleanupTempDir();
   });
 
   it("FileHandle - opening non-existent file fails", async () => {
@@ -756,14 +772,25 @@ describe("Filesystem", () => {
     await cleanupTempDir();
   });
 
-  it("FileSink constructor is not callable", () => {
+  it("FileSink is hidden from global scope", () => {
+    assert.equal(typeof FileSink, "undefined");
+    assert.equal(globalThis.FileSink, undefined);
+  });
+
+  it("FileSink cannot be constructed via instance.constructor", async () => {
+    await ensureTempDir();
+    const testFile = getTempPath("sink_indirect_ctor.txt");
+    const sink = await Rong.file(testFile).writer();
+
     let failed = false;
     try {
-      new FileSink();
+      new sink.constructor();
     } catch (e) {
       failed = true;
     }
-    assert(failed, "Should not construct FileSink directly");
+    assert(failed, "Should not construct FileSink via instance.constructor");
+    await sink.end();
+    await cleanupTempDir();
   });
 
   it("FileSink.end() invalidates the writer", async () => {

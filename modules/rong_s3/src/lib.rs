@@ -12,9 +12,9 @@ pub use file::S3File;
 
 use rong::*;
 
-/// Register S3Client and S3File as global constructors.
+/// Register S3Client globally and keep S3File internal-only.
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<S3File>()?;
+    ctx.register_hidden_class::<S3File>()?;
     ctx.register_class::<S3Client>()?;
 
     Ok(())

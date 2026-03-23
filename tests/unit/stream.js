@@ -1,4 +1,30 @@
 describe("ReadableStream (constructor + reader)", () => {
+  it("hides internal stream helper classes from global scope", () => {
+    assert.equal(typeof ReadableStreamDefaultReader, "undefined");
+    assert.equal(typeof ReadableStreamDefaultController, "undefined");
+    assert.equal(typeof WritableStreamDefaultWriter, "undefined");
+
+    const reader = new ReadableStream({}).getReader();
+    let readerFailed = false;
+    try {
+      new reader.constructor();
+    } catch (e) {
+      readerFailed = true;
+    }
+    expect(readerFailed).toBe(true);
+    reader.releaseLock();
+
+    const writer = new WritableStream({}).getWriter();
+    let writerFailed = false;
+    try {
+      new writer.constructor();
+    } catch (e) {
+      writerFailed = true;
+    }
+    expect(writerFailed).toBe(true);
+    writer.releaseLock();
+  });
+
   it("new ReadableStream(start) enqueues and closes", async () => {
     const rs = new ReadableStream({
       start(controller) {

@@ -40,17 +40,10 @@ impl FileInfo {
 #[js_class]
 impl FileInfo {
     #[js_method(constructor)]
-    fn new() -> Self {
-        Self {
-            is_file: false,
-            is_directory: false,
-            is_symlink: false,
-            size: 0.0,
-            modified: None,
-            accessed: None,
-            created: None,
-            mode: None,
-        }
+    fn new() -> JSResult<Self> {
+        rong::illegal_constructor(
+            "FileInfo cannot be constructed directly. Use stat(), lstat(), or FileHandle.stat().",
+        )
     }
 
     #[js_method(getter, rename = "isFile")]
@@ -108,6 +101,6 @@ impl FileInfo {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<FileInfo>()?;
+    ctx.register_hidden_class::<FileInfo>()?;
     Ok(())
 }

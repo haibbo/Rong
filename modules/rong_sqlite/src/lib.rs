@@ -335,7 +335,7 @@ pub(crate) fn query_rows(
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<SQLite>()?;
-    ctx.register_class::<Statement>()?;
+    ctx.register_hidden_class::<Statement>()?;
     Ok(())
 }
 

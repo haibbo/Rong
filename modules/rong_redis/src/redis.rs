@@ -61,12 +61,9 @@ impl RedisSubscription {
 impl RedisSubscription {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(HostError::new(
-            rong::error::E_ILLEGAL_CONSTRUCTOR,
+        rong::illegal_constructor(
             "Not allowed 'new RedisSubscription()'. Use client.subscribe(channel) instead.",
         )
-        .with_name("TypeError")
-        .into())
     }
 
     #[js_method(getter)]

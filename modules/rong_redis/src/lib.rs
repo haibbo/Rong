@@ -13,7 +13,7 @@ pub use redis::*;
 /// Initialize the Redis module — exposes `RedisClient` globally.
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<RedisClient>()?;
-    ctx.register_class::<RedisSubscription>()?;
+    ctx.register_hidden_class::<RedisSubscription>()?;
 
     ctx.eval::<()>(Source::from_bytes(
         r#"(function() {

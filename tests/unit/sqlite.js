@@ -4,6 +4,22 @@ function tempDbPath(prefix = "rong_sqlite") {
 }
 
 describe("SQLite — construction", () => {
+  it("hides Statement from global scope", () => {
+    assert.equal(typeof Statement, "undefined");
+    assert.equal(globalThis.Statement, undefined);
+
+    const db = new SQLite();
+    const stmt = db.prepare("SELECT 1");
+    let failed = false;
+    try {
+      new stmt.constructor();
+    } catch (e) {
+      failed = true;
+    }
+    assert(failed, "Statement should not be constructible via instance.constructor");
+    db.close();
+  });
+
   it("opens in-memory database by default", () => {
     const db = new SQLite();
     assert.equal(db.filename, ":memory:");

@@ -24,12 +24,7 @@ impl RongFile {
 impl RongFile {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(HostError::new(
-            rong::error::E_ILLEGAL_CONSTRUCTOR,
-            "Not Allowed 'new RongFile()', use Rong.file(path)",
-        )
-        .with_name("TypeError")
-        .into())
+        rong::illegal_constructor("Not Allowed 'new RongFile()', use Rong.file(path)")
     }
 
     #[js_method(getter)]
@@ -165,7 +160,7 @@ fn file(path: String) -> JSResult<RongFile> {
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
     let rong = ctx.rong();
 
-    ctx.register_class::<RongFile>()?;
+    ctx.register_hidden_class::<RongFile>()?;
 
     let file_fn = JSFunc::new(ctx, file)?.name("file")?;
     rong.set("file", file_fn)?;

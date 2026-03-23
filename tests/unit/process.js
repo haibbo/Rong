@@ -1,4 +1,17 @@
 describe("Process", () => {
+  it("hides Process constructor from global scope", () => {
+    assert.equal(typeof Process, "undefined");
+    assert.equal(globalThis.Process, undefined);
+
+    let failed = false;
+    try {
+      new process.constructor();
+    } catch (e) {
+      failed = true;
+    }
+    assert.equal(failed, true, "Process should not be constructible via instance.constructor");
+  });
+
   describe("Static Properties", () => {
     it("should have platform property", () => {
       assert.ok(typeof process.platform === "string");

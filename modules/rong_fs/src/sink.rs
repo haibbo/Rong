@@ -57,12 +57,7 @@ impl FileSink {
 impl FileSink {
     #[js_method(constructor)]
     fn new() -> JSResult<Self> {
-        Err(HostError::new(
-            rong::error::E_ILLEGAL_CONSTRUCTOR,
-            "Not Allowed 'new FileSink()', use Rong.file(path).writer()",
-        )
-        .with_name("TypeError")
-        .into())
+        rong::illegal_constructor("Not Allowed 'new FileSink()', use Rong.file(path).writer()")
     }
 
     #[js_method]
@@ -157,6 +152,6 @@ impl FileSink {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<FileSink>()?;
+    ctx.register_hidden_class::<FileSink>()?;
     Ok(())
 }
