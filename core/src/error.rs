@@ -45,6 +45,12 @@ use tokio::sync::oneshot;
 
 pub type JSResult<T> = Result<T, RongJSError>;
 
+pub fn illegal_constructor<T>(message: impl Into<String>) -> JSResult<T> {
+    Err(HostError::new(E_ILLEGAL_CONSTRUCTOR, message)
+        .with_name("TypeError")
+        .into())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorNumber {
     I64(i64),

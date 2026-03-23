@@ -137,12 +137,7 @@ where
     fn data_constructor() -> Constructor<V> {
         Constructor::new(
             |_ctx: JSContext<V::Context>, _arg: Optional<JSValue<V>>| -> JSResult<JSBytes<V>> {
-                Err(HostError::new(
-                    crate::error::E_TYPE,
-                    "JSBytes cannot be constructed from JavaScript",
-                )
-                .with_name("TypeError")
-                .into())
+                crate::illegal_constructor("JSBytes cannot be constructed from JavaScript")
             },
         )
     }
@@ -150,12 +145,7 @@ where
     fn call_without_new() -> Constructor<V> {
         Constructor::new(
             |_ctx: JSContext<V::Context>, _arg: Optional<JSValue<V>>| -> JSResult<JSBytes<V>> {
-                Err(HostError::new(
-                    crate::error::E_TYPE,
-                    "JSBytes cannot be constructed from JavaScript",
-                )
-                .with_name("TypeError")
-                .into())
+                crate::illegal_constructor("JSBytes cannot be constructed from JavaScript")
             },
         )
     }

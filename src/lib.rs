@@ -8,8 +8,8 @@ pub use rong_core::{
     JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
     JSTypedArray as CoreJSTypedArray, JSTypedArrayKind, JSValue as CoreJSValue, JSValueType,
     JsonToJSValue, Promise as CorePromise, PropertyDescriptor as CorePropertyDescriptor,
-    RongJSError, Source, SourceKind, Uint8Clamped, error, install_async_iterator_symbol,
-    install_iterator_symbol,
+    RongJSError, Source, SourceKind, Uint8Clamped, error, illegal_constructor,
+    install_async_iterator_symbol, install_iterator_symbol,
 };
 // Re-export selected runtime API from rong_core::rong so downstream crates use `rong::...`
 pub use rong_core::rong::{Rong, Worker, WorkerMessage, spawn};

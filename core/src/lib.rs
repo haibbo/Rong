@@ -13,7 +13,7 @@ pub use scheduler::{JsInvokePriority, enqueue_js_invoke};
 
 pub use class::*;
 pub use context::*;
-pub use error::{HostError, JSResult, RongJSError};
+pub use error::{HostError, JSResult, RongJSError, illegal_constructor};
 pub use iterator::*;
 pub use promise::*;
 pub use runtime::*;
