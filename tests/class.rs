@@ -131,17 +131,13 @@ fn constructor() {
 }
 
 #[test]
-fn rustfunc_class_registered() {
+fn rustfunc_class_hidden_from_global() {
     run(|ctx| {
         assert_eq!(
-            ctx.eval::<String>(Source::from_bytes(b"RustFunc.name"))?,
-            "RustFunc"
+            ctx.eval::<String>(Source::from_bytes(b"typeof RustFunc"))?,
+            "undefined"
         );
-
-        assert_eq!(
-            ctx.eval::<String>(Source::from_bytes(b"RustFunc.constructor.name"))?,
-            "Function"
-        );
+        assert!(ctx.eval::<bool>(Source::from_bytes(b"globalThis.RustFunc === undefined"))?);
         Ok(())
     });
 }

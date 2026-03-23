@@ -149,8 +149,8 @@ impl<C: JSContextImpl> JSContext<C> {
         C::Value: JSObjectOps + JSTypeOf + JSValueConversion + JSArrayOps + 'static,
         C: JSErrorFactory + JSExceptionThrower,
     {
-        self.register_class::<RustFunc<C::Value>>()?;
-        self.register_class::<JSBytesData>()?;
+        self.register_hidden_class::<RustFunc<C::Value>>()?;
+        self.register_hidden_class::<JSBytesData>()?;
         Ok(())
     }
 }

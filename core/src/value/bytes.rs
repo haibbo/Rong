@@ -113,7 +113,7 @@ where
     /// This is the main constructor for exchange-oriented flows where Rust
     /// creates data and JS only forwards it.
     pub fn from_bytes(ctx: &JSContext<V::Context>, bytes: Bytes) -> JSResult<Self> {
-        ctx.register_class::<JSBytesData>()?;
+        ctx.register_hidden_class::<JSBytesData>()?;
         let instance = Class::get::<JSBytesData>(ctx)?.instance(JSBytesData { bytes });
         Ok(Self { inner: instance })
     }
@@ -124,36 +124,6 @@ where
         S: Into<String>,
     {
         Self::from_bytes(ctx, Bytes::from(text.into()))
-    }
-
-    fn from_ctor_arg(ctx: &JSContext<V::Context>, arg: Option<JSValue<V>>) -> JSResult<Self> {
-        match arg {
-            None => Self::from_bytes(ctx, Bytes::new()),
-            Some(value) if value.is_undefined() => Self::from_bytes(ctx, Bytes::new()),
-            Some(value) if value.is_string() => {
-                let text = String::from_js_value(ctx, value)?;
-                Self::from_string(ctx, text)
-            }
-            Some(value) if value.is_object() => {
-                let obj = JSObject::from_js_value(ctx, value)?;
-                if let Some(bytes) = Self::from_object(obj) {
-                    Ok(bytes)
-                } else {
-                    Err(HostError::new(
-                        crate::error::E_TYPE,
-                        "JSBytes constructor expects a string or another JSBytes instance",
-                    )
-                    .with_name("TypeError")
-                    .into())
-                }
-            }
-            Some(_) => Err(HostError::new(
-                crate::error::E_TYPE,
-                "JSBytes constructor expects a string or another JSBytes instance",
-            )
-            .with_name("TypeError")
-            .into()),
-        }
     }
 }
 
@@ -166,8 +136,26 @@ where
 
     fn data_constructor() -> Constructor<V> {
         Constructor::new(
-            |ctx: JSContext<V::Context>, arg: Optional<JSValue<V>>| -> JSResult<JSBytes<V>> {
-                JSBytes::from_ctor_arg(&ctx, arg.0)
+            |_ctx: JSContext<V::Context>, _arg: Optional<JSValue<V>>| -> JSResult<JSBytes<V>> {
+                Err(HostError::new(
+                    crate::error::E_TYPE,
+                    "JSBytes cannot be constructed from JavaScript",
+                )
+                .with_name("TypeError")
+                .into())
+            },
+        )
+    }
+
+    fn call_without_new() -> Constructor<V> {
+        Constructor::new(
+            |_ctx: JSContext<V::Context>, _arg: Optional<JSValue<V>>| -> JSResult<JSBytes<V>> {
+                Err(HostError::new(
+                    crate::error::E_TYPE,
+                    "JSBytes cannot be constructed from JavaScript",
+                )
+                .with_name("TypeError")
+                .into())
             },
         )
     }
