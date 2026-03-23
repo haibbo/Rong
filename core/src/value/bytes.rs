@@ -68,6 +68,10 @@ where
         Ok(self.inner.borrow::<JSBytesData>()?.bytes.len())
     }
 
+    pub fn is_empty(&self) -> JSResult<bool> {
+        Ok(self.inner.borrow::<JSBytesData>()?.bytes.is_empty())
+    }
+
     /// Clone out the underlying bytes.
     ///
     /// `Bytes` is cheap to clone, so this is the primary Rust-side extraction API.

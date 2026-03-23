@@ -242,15 +242,15 @@ impl S3Client {
             "GET" => bucket
                 .presign_get(&path, expires_in, None)
                 .await
-                .map_err(|e| s3_error(format!("presign GET: {}", e)).into()),
+                .map_err(|e| s3_error(format!("presign GET: {}", e))),
             "PUT" => bucket
                 .presign_put(&path, expires_in, None, None)
                 .await
-                .map_err(|e| s3_error(format!("presign PUT: {}", e)).into()),
+                .map_err(|e| s3_error(format!("presign PUT: {}", e))),
             "DELETE" => bucket
                 .presign_delete(&path, expires_in)
                 .await
-                .map_err(|e| s3_error(format!("presign DELETE: {}", e)).into()),
+                .map_err(|e| s3_error(format!("presign DELETE: {}", e))),
             other => Err(HostError::new(
                 "ERR_S3_INVALID_METHOD",
                 format!("Unsupported presign method: {}", other),
@@ -304,16 +304,16 @@ impl S3Client {
 
         'outer: for page in &results {
             for obj in &page.contents {
-                if let Some(ref after) = start_after {
-                    if obj.key <= *after {
-                        continue;
-                    }
+                if let Some(ref after) = start_after
+                    && obj.key <= *after
+                {
+                    continue;
                 }
-                if let Some(max) = max_keys {
-                    if total_count >= max {
-                        is_truncated = true;
-                        break 'outer;
-                    }
+                if let Some(max) = max_keys
+                    && total_count >= max
+                {
+                    is_truncated = true;
+                    break 'outer;
                 }
 
                 // Strip namespace prefix from returned keys

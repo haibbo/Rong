@@ -17,9 +17,11 @@
 //! ```
 
 use rong::{Source, spawn, *};
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::{
-    Arc, Mutex, OnceLock,
+    Arc, OnceLock,
     atomic::{AtomicBool, Ordering},
 };
 use tokio::sync::mpsc;
@@ -76,9 +78,9 @@ pub struct Worker {
     /// Receive messages from the worker thread.
     from_worker: Arc<tokio::sync::Mutex<mpsc::Receiver<FromWorker>>>,
     /// JS callback for incoming messages.
-    message_handler: Arc<Mutex<Option<JSFunc>>>,
+    message_handler: Rc<RefCell<Option<JSFunc>>>,
     /// JS callback for errors.
-    error_handler: Arc<Mutex<Option<JSFunc>>>,
+    error_handler: Rc<RefCell<Option<JSFunc>>>,
     /// Whether terminate() has been called.
     terminated: Arc<AtomicBool>,
     /// Ensure the main-side polling loop starts only once.
@@ -131,8 +133,8 @@ impl Worker {
         Ok(Worker {
             to_worker: to_worker_tx,
             from_worker: Arc::new(tokio::sync::Mutex::new(from_worker_rx)),
-            message_handler: Arc::new(Mutex::new(None)),
-            error_handler: Arc::new(Mutex::new(None)),
+            message_handler: Rc::new(RefCell::new(None)),
+            error_handler: Rc::new(RefCell::new(None)),
             terminated,
             polling_started: Arc::new(AtomicBool::new(false)),
             thread_handle: Arc::new(tokio::sync::Mutex::new(Some(thread_handle))),
@@ -173,9 +175,7 @@ impl Worker {
     /// that reads messages from the worker thread and dispatches to JS.
     #[js_method(setter, rename = "onmessage")]
     fn set_onmessage(&self, ctx: JSContext, handler: JSFunc) -> JSResult<()> {
-        if let Ok(mut slot) = self.message_handler.lock() {
-            *slot = Some(handler);
-        }
+        *self.message_handler.borrow_mut() = Some(handler);
 
         self.ensure_polling(ctx);
         Ok(())
@@ -183,9 +183,7 @@ impl Worker {
 
     #[js_method(setter, rename = "onerror")]
     fn set_onerror(&self, ctx: JSContext, handler: JSFunc) -> JSResult<()> {
-        if let Ok(mut slot) = self.error_handler.lock() {
-            *slot = Some(handler);
-        }
+        *self.error_handler.borrow_mut() = Some(handler);
         self.ensure_polling(ctx);
         Ok(())
     }
@@ -221,16 +219,12 @@ impl Worker {
 
                         match JSObject::from_json_string(&ctx, &json_str) {
                             Ok(value) => {
-                                let handler =
-                                    message_handler.lock().ok().and_then(|guard| guard.clone());
+                                let handler = message_handler.borrow().clone();
                                 if let Some(func) = handler {
                                     let event = JSObject::new(&ctx);
                                     event.set("data", value).ok();
                                     if let Err(e) = func.call_async::<_, ()>(None, (event,)).await {
-                                        let err_handler = error_handler
-                                            .lock()
-                                            .ok()
-                                            .and_then(|guard| guard.clone());
+                                        let err_handler = error_handler.borrow().clone();
                                         if let Some(err_fn) = err_handler {
                                             let err_message = worker_error_message(&ctx, e);
                                             let err_event =
@@ -250,7 +244,7 @@ impl Worker {
                         }
                     }
                     Some(FromWorker::Error(message)) => {
-                        let err_handler = error_handler.lock().ok().and_then(|guard| guard.clone());
+                        let err_handler = error_handler.borrow().clone();
                         if let Some(err_fn) = err_handler {
                             let err_event = worker_error_event(&ctx, &message);
                             let _ = err_fn.call_async::<_, ()>(None, (err_event,)).await;
@@ -270,7 +264,7 @@ impl Worker {
         F: FnMut(&JSValue),
     {
         for slot in [&self.message_handler, &self.error_handler] {
-            if let Some(handler) = slot.lock().ok().and_then(|guard| guard.clone()) {
+            if let Some(handler) = slot.borrow().clone() {
                 mark_fn(handler.as_js_value());
             }
         }
@@ -372,18 +366,18 @@ impl Worker {
                 Some(ToWorker::Message(json_str)) => {
                     match JSObject::from_json_string(&ctx, &json_str) {
                         Ok(data) => {
-                            if let Ok(handler) = ctx.global().get::<_, JSValue>("onmessage") {
-                                if let Ok(func) = handler.try_into::<JSFunc>() {
-                                    let event = JSObject::new(&ctx);
-                                    event.set("data", data).ok();
-                                    if let Err(e) = func.call_async::<_, ()>(None, (event,)).await {
-                                        let _ = from_worker_tx
-                                            .send(FromWorker::Error(format!(
-                                                "worker onmessage handler error: {}",
-                                                worker_error_message(&ctx, e)
-                                            )))
-                                            .await;
-                                    }
+                            if let Ok(handler) = ctx.global().get::<_, JSValue>("onmessage")
+                                && let Ok(func) = handler.try_into::<JSFunc>()
+                            {
+                                let event = JSObject::new(&ctx);
+                                event.set("data", data).ok();
+                                if let Err(e) = func.call_async::<_, ()>(None, (event,)).await {
+                                    let _ = from_worker_tx
+                                        .send(FromWorker::Error(format!(
+                                            "worker onmessage handler error: {}",
+                                            worker_error_message(&ctx, e)
+                                        )))
+                                        .await;
                                 }
                             }
                         }

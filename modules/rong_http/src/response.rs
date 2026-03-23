@@ -231,19 +231,19 @@ impl Response {
         }
     }
 
-    async fn body_to_bytes(&self) -> JSResult<Bytes> {
-        match &self.body {
+    async fn body_to_bytes_parts(
+        body: Option<BodyKind>,
+        headers: http::HeaderMap,
+        body_stream: Option<JSObject>,
+        abort_receiver: Option<AbortReceiver>,
+    ) -> JSResult<Bytes> {
+        match body {
             Some(BodyKind::JS(body)) => body.bytes().await,
-            Some(BodyKind::Buffered(b)) => {
-                let header_map = self.headers.as_header_map();
-                crate::body::decompress_bytes(b.clone(), header_map)
-            }
+            Some(BodyKind::Buffered(bytes)) => crate::body::decompress_bytes(bytes, &headers),
             Some(BodyKind::Channel(inner)) => {
                 let mut collected = Vec::new();
                 // Pre-reserve capacity using Content-Length when available
-                if let Some(cl_val) = self
-                    .headers
-                    .as_header_map()
+                if let Some(cl_val) = headers
                     .get(header::CONTENT_LENGTH)
                     .and_then(|v| v.to_str().ok())
                     .and_then(|s| s.parse::<usize>().ok())
@@ -251,7 +251,7 @@ impl Response {
                     collected.reserve(cl_val);
                 }
                 // Try to take receiver from cached ReadableStream first (if one exists)
-                let mut rx_opt = if let Some(obj) = self.body_stream.borrow().as_ref() {
+                let mut rx_opt = if let Some(obj) = body_stream.as_ref() {
                     if let Ok(rs) = obj.borrow::<rong_stream::ReadableStream>() {
                         rong_stream::readable_stream_take_receiver(&rs)
                     } else {
@@ -269,7 +269,7 @@ impl Response {
                 }
 
                 if let Some(mut rx) = rx_opt {
-                    let mut abort_receiver = self.abort_receiver.clone();
+                    let mut abort_receiver = abort_receiver;
                     if let Some(receiver) = &mut abort_receiver {
                         loop {
                             tokio::select! {
@@ -298,8 +298,7 @@ impl Response {
                             }
                         }
                     }
-                    let header_map = self.headers.as_header_map();
-                    crate::body::decompress_bytes(Bytes::from(collected), header_map)
+                    crate::body::decompress_bytes(Bytes::from(collected), &headers)
                 } else {
                     Ok(Bytes::new())
                 }
@@ -307,6 +306,20 @@ impl Response {
 
             None => Ok(Bytes::new()),
         }
+    }
+
+    async fn body_to_bytes(&self) -> JSResult<Bytes> {
+        let body_stream = {
+            let body_stream = self.body_stream.borrow();
+            body_stream.as_ref().cloned()
+        };
+        Self::body_to_bytes_parts(
+            self.body.clone(),
+            self.headers.as_header_map().clone(),
+            body_stream,
+            self.abort_receiver.clone(),
+        )
+        .await
     }
 
     #[js_method]
@@ -462,6 +475,7 @@ impl Response {
 }
 
 impl Response {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_meta(
         status: http::StatusCode,
         headers_in: http::HeaderMap,
@@ -505,11 +519,20 @@ impl Response {
     pub async fn extract(
         obj: &JSObject,
     ) -> JSResult<(u16, http::HeaderMap<http::header::HeaderValue>, Vec<u8>)> {
-        let response = obj.borrow::<Response>()?;
-
-        let status = response.status;
-        let headers = response.headers.as_header_map().clone();
-        let body = response.body_to_bytes().await?.to_vec();
+        let (status, headers, body_kind, body_stream, abort_receiver) = {
+            let response = obj.borrow::<Response>()?;
+            (
+                response.status,
+                response.headers.as_header_map().clone(),
+                response.body.clone(),
+                response.body_stream.borrow().as_ref().cloned(),
+                response.abort_receiver.clone(),
+            )
+        };
+        let body =
+            Self::body_to_bytes_parts(body_kind, headers.clone(), body_stream, abort_receiver)
+                .await?
+                .to_vec();
 
         Ok((status, headers, body))
     }

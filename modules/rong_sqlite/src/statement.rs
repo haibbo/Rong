@@ -105,7 +105,7 @@ impl Statement {
                 Ok(JSValue::from(&ctx, obj))
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(JSValue::null(&ctx)),
-            Err(e) => Err(sqlite_error(e.to_string()).into()),
+            Err(e) => Err(sqlite_error(e.to_string())),
         }
     }
 

@@ -93,22 +93,22 @@ impl FileSink {
         }
 
         // TypedArray (Uint8Array etc.)
-        if let Some(obj) = data.into_object() {
-            if let Some(ta) = AnyJSTypedArray::from_object(obj) {
-                let bytes = ta.as_bytes().ok_or_else(|| {
-                    HostError::new(rong::error::E_INVALID_ARG, "Invalid TypedArray data")
-                        .with_name("TypeError")
-                })?;
-                let len = bytes.len();
-                let mut file = self.file.lock().await;
-                let file = file.as_mut().ok_or_else(|| {
-                    HostError::new(rong::error::E_INVALID_STATE, "FileSink is closed")
-                })?;
-                file.write_all(bytes)
-                    .await
-                    .map_err(|e| HostError::new("FS_IO", format!("Write failed: {}", e)))?;
-                return Ok(len as f64);
-            }
+        if let Some(obj) = data.into_object()
+            && let Some(ta) = AnyJSTypedArray::from_object(obj)
+        {
+            let bytes = ta.as_bytes().ok_or_else(|| {
+                HostError::new(rong::error::E_INVALID_ARG, "Invalid TypedArray data")
+                    .with_name("TypeError")
+            })?;
+            let len = bytes.len();
+            let mut file = self.file.lock().await;
+            let file = file.as_mut().ok_or_else(|| {
+                HostError::new(rong::error::E_INVALID_STATE, "FileSink is closed")
+            })?;
+            file.write_all(bytes)
+                .await
+                .map_err(|e| HostError::new("FS_IO", format!("Write failed: {}", e)))?;
+            return Ok(len as f64);
         }
 
         Err(HostError::new(

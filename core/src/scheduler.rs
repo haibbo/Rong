@@ -64,12 +64,11 @@ impl JsInvokeQueue {
                     Self::dequeue_item(&mut q_high, &mut q_norm, &mut q_event, &event_gen)
                 {
                     // Clean up the generation entry now that the event is consumed.
-                    if let Some(key) = &item.dedup_key {
-                        if let Some(&latest) = event_gen.get(key) {
-                            if latest == item.generation {
-                                event_gen.remove(key);
-                            }
-                        }
+                    if let Some(key) = &item.dedup_key
+                        && let Some(&latest) = event_gen.get(key)
+                        && latest == item.generation
+                    {
+                        event_gen.remove(key);
                     }
 
                     let fut = (item.cb)();
@@ -135,12 +134,11 @@ impl JsInvokeQueue {
         }
         // For events, skip stale entries (superseded by newer same-key events).
         while let Some(ev) = q_event.pop_front() {
-            if let Some(key) = &ev.dedup_key {
-                if let Some(&latest) = event_gen.get(key) {
-                    if ev.generation != latest {
-                        continue; // Stale — skip.
-                    }
-                }
+            if let Some(key) = &ev.dedup_key
+                && let Some(&latest) = event_gen.get(key)
+                && ev.generation != latest
+            {
+                continue; // Stale — skip.
             }
             return Some(ev);
         }

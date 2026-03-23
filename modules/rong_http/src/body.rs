@@ -68,8 +68,12 @@ impl HttpBody {
             }
 
             // Handle FormData
-            if let Ok(formdata) = obj.borrow::<FormData>() {
-                let formdata = formdata.clone();
+            let formdata = if let Ok(formdata) = obj.borrow::<FormData>() {
+                Some(formdata.clone())
+            } else {
+                None
+            };
+            if let Some(formdata) = formdata {
                 let (body, boundary) = formdata.serialize(ctx.clone()).await?;
                 return Ok((Bytes::from(body), Some(boundary)));
             }

@@ -402,10 +402,10 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
 
         tokio::time::timeout(Duration::from_millis(100), async {
             while started_clone.load(Ordering::SeqCst) == 0 {
-                if let Ok(started_flag) = ctx.global().get::<_, i32>("__scheduler_started") {
-                    if started_flag == 1 {
-                        started.store(1, Ordering::SeqCst);
-                    }
+                if let Ok(started_flag) = ctx.global().get::<_, i32>("__scheduler_started")
+                    && started_flag == 1
+                {
+                    started.store(1, Ordering::SeqCst);
                 }
                 tokio::task::yield_now().await;
             }

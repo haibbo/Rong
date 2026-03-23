@@ -330,7 +330,7 @@ impl RedisClient {
 
     #[js_method]
     pub async fn hmset(&self, key: String, fields: Vec<String>) -> JSResult<String> {
-        if fields.len() % 2 != 0 {
+        if !fields.len().is_multiple_of(2) {
             return Err(HostError::new(
                 "E_INVALID_ARG",
                 "Fields must be [field, value, ...] pairs (even length)",

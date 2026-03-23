@@ -45,9 +45,8 @@ impl JSClass<JSEngineValue> for Point {
 
     fn class_setup(class: &ClassSetup<JSEngineValue>) -> JSResult<()> {
         class.property("x", |builder| {
-            let getter = class.new_func(|this: This<function::JSClassRef<Point>>| {
-                Ok(this.borrow()?.x)
-            })?;
+            let getter =
+                class.new_func(|this: This<function::JSClassRef<Point>>| Ok(this.borrow()?.x))?;
             let setter = class.new_func(|this: ThisMut<Point>, x: i32| -> JSResult<()> {
                 let mut point = this.borrow_mut()?;
                 point.x = x;
@@ -57,9 +56,8 @@ impl JSClass<JSEngineValue> for Point {
         })?;
 
         class.property("y", |builder| {
-            let getter = class.new_func(|this: This<function::JSClassRef<Point>>| {
-                Ok(this.borrow()?.y)
-            })?;
+            let getter =
+                class.new_func(|this: This<function::JSClassRef<Point>>| Ok(this.borrow()?.y))?;
             let setter = class.new_func(|this: ThisMut<Point>, y: i32| -> JSResult<()> {
                 let mut point = this.borrow_mut()?;
                 point.y = y;

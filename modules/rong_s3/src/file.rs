@@ -178,15 +178,15 @@ impl S3File {
             "GET" => bucket
                 .presign_get(&self.key, expires_in, None)
                 .await
-                .map_err(|e| s3_error(format!("presign GET: {}", e)).into()),
+                .map_err(|e| s3_error(format!("presign GET: {}", e))),
             "PUT" => bucket
                 .presign_put(&self.key, expires_in, None, None)
                 .await
-                .map_err(|e| s3_error(format!("presign PUT: {}", e)).into()),
+                .map_err(|e| s3_error(format!("presign PUT: {}", e))),
             "DELETE" => bucket
                 .presign_delete(&self.key, expires_in)
                 .await
-                .map_err(|e| s3_error(format!("presign DELETE: {}", e)).into()),
+                .map_err(|e| s3_error(format!("presign DELETE: {}", e))),
             other => Err(HostError::new(
                 "ERR_S3_INVALID_METHOD",
                 format!("Unsupported presign method: {}", other),
@@ -244,12 +244,11 @@ pub(crate) fn resolve_body(data: &JSValue) -> JSResult<(Vec<u8>, Option<String>)
             .map_err(|_| type_error("invalid ArrayBuffer"))?;
         return Ok((ab.as_bytes().to_vec(), None));
     }
-    if let Some(obj) = data.clone().into_object() {
-        if let Some(ta) = AnyJSTypedArray::from_object(obj) {
-            if let Some(bytes) = ta.as_bytes() {
-                return Ok((bytes.to_vec(), None));
-            }
-        }
+    if let Some(obj) = data.clone().into_object()
+        && let Some(ta) = AnyJSTypedArray::from_object(obj)
+        && let Some(bytes) = ta.as_bytes()
+    {
+        return Ok((bytes.to_vec(), None));
     }
     Err(type_error(
         "data must be a string, ArrayBuffer, or Uint8Array",

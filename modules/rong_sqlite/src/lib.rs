@@ -161,11 +161,11 @@ impl SQLite {
     #[js_method]
     fn close(&self) -> JSResult<()> {
         let conn = self.conn.borrow_mut().take();
-        if let Some(conn) = conn {
-            if let Err((conn, e)) = conn.close() {
-                *self.conn.borrow_mut() = Some(conn);
-                return Err(sqlite_error(e.to_string()));
-            }
+        if let Some(conn) = conn
+            && let Err((conn, e)) = conn.close()
+        {
+            *self.conn.borrow_mut() = Some(conn);
+            return Err(sqlite_error(e.to_string()));
         }
         Ok(())
     }
@@ -233,12 +233,11 @@ fn js_value_to_sqlite(val: &JSValue) -> JSResult<Value> {
             .map_err(|_| sqlite_error("invalid ArrayBuffer"))?;
         return Ok(Value::Blob(ab.as_bytes().to_vec()));
     }
-    if let Some(obj) = val.clone().into_object() {
-        if let Some(ta) = AnyJSTypedArray::from_object(obj) {
-            if let Some(bytes) = ta.as_bytes() {
-                return Ok(Value::Blob(bytes.to_vec()));
-            }
-        }
+    if let Some(obj) = val.clone().into_object()
+        && let Some(ta) = AnyJSTypedArray::from_object(obj)
+        && let Some(bytes) = ta.as_bytes()
+    {
+        return Ok(Value::Blob(bytes.to_vec()));
     }
     Err(sqlite_error(
         "Unsupported parameter type. Use null, boolean, number, bigint, string, ArrayBuffer, or Uint8Array.",

@@ -43,6 +43,25 @@ static CLIENT: OnceLock<Mutex<Option<CachedClient>>> = OnceLock::new();
 static PROXY_CONFIG: OnceLock<RwLock<Option<ProxyConfig>>> = OnceLock::new();
 static REQUEST_TIMEOUT_MS: AtomicU64 = AtomicU64::new(DEFAULT_REQUEST_TIMEOUT.as_millis() as u64);
 
+async fn forward_or_buffer_chunk(
+    tx: &mpsc::Sender<Result<Bytes, String>>,
+    buf: &mut bytes::BytesMut,
+    data: Bytes,
+    coalesce_target: usize,
+) -> bool {
+    if coalesce_target == 0 || (buf.is_empty() && data.len() >= coalesce_target) {
+        return tx.send(Ok(data)).await.is_ok();
+    }
+
+    buf.extend_from_slice(&data);
+    if buf.len() >= coalesce_target {
+        let out = buf.split().freeze();
+        return tx.send(Ok(out)).await.is_ok();
+    }
+
+    true
+}
+
 fn client_cache() -> &'static Mutex<Option<CachedClient>> {
     CLIENT.get_or_init(|| Mutex::new(None))
 }
@@ -351,18 +370,10 @@ async fn process_request(
                     maybe = timeout(READ_FRAME_TIMEOUT, body.frame()) => {
                         match maybe {
                             Ok(Some(Ok(frame))) => {
-                                if let Ok(data) = frame.into_data() {
-                                    if coalesce_target == 0 {
-                                        if tx.send(Ok(data)).await.is_err() { break; }
-                                    } else if buf.is_empty() && data.len() >= coalesce_target {
-                                        if tx.send(Ok(data)).await.is_err() { break; }
-                                    } else {
-                                        buf.extend_from_slice(&data);
-                                        if buf.len() >= coalesce_target {
-                                            let out = buf.split().freeze();
-                                            if tx.send(Ok(out)).await.is_err() { break; }
-                                        }
-                                    }
+                                if let Ok(data) = frame.into_data()
+                                    && !forward_or_buffer_chunk(&tx, &mut buf, data, coalesce_target).await
+                                {
+                                    break;
                                 }
                             }
                             Ok(Some(Err(e))) => { let _ = tx.send(Err(format!("read frame: {}", e))).await; break; }
@@ -375,24 +386,10 @@ async fn process_request(
             } else {
                 match timeout(READ_FRAME_TIMEOUT, body.frame()).await {
                     Ok(Some(Ok(frame))) => {
-                        if let Ok(data) = frame.into_data() {
-                            if coalesce_target == 0 {
-                                if tx.send(Ok(data)).await.is_err() {
-                                    break;
-                                }
-                            } else if buf.is_empty() && data.len() >= coalesce_target {
-                                if tx.send(Ok(data)).await.is_err() {
-                                    break;
-                                }
-                            } else {
-                                buf.extend_from_slice(&data);
-                                if buf.len() >= coalesce_target {
-                                    let out = buf.split().freeze();
-                                    if tx.send(Ok(out)).await.is_err() {
-                                        break;
-                                    }
-                                }
-                            }
+                        if let Ok(data) = frame.into_data()
+                            && !forward_or_buffer_chunk(&tx, &mut buf, data, coalesce_target).await
+                        {
+                            break;
                         }
                     }
                     Ok(Some(Err(e))) => {

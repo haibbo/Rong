@@ -71,6 +71,16 @@ type BoxedFutureFn<E> =
 // Type alias for the complex callback used in UserAsyncReturnType::BlockOn
 type BlockOnCallback = Box<dyn FnOnce(JSResult<Box<dyn Any + Send>>) + Send>;
 
+struct WorkerLoopContext {
+    worker_id: usize,
+    terminate_signal: Arc<tokio::sync::Notify>,
+    state: Arc<TokioMutex<WorkerState>>,
+    free_signal: Arc<Notify>,
+    any_worker_free: Arc<Notify>,
+    worker_span: Span,
+    ready_tx: oneshot::Sender<()>,
+}
+
 /// Enum to differentiate how results are handled
 enum UserAsyncReturnType {
     BlockOn(BlockOnCallback),
@@ -524,15 +534,17 @@ impl<E: JSEngine + 'static> Rong<E> {
 
                     rt.block_on(async {
                         Self::run_worker_loop(
-                            i,
+                            WorkerLoopContext {
+                                worker_id: i,
+                                terminate_signal,
+                                state: state_clone,
+                                free_signal: free_signal_clone,
+                                any_worker_free: any_free_clone,
+                                worker_span: worker_span.clone(),
+                                ready_tx,
+                            },
                             task_rx,
                             worker_message_rx,
-                            terminate_signal,
-                            state_clone,
-                            free_signal_clone,
-                            any_free_clone,
-                            worker_span.clone(),
-                            ready_tx,
                         )
                         .await;
                     });
@@ -550,16 +562,19 @@ impl<E: JSEngine + 'static> Rong<E> {
 
     /// Core processing loop for a worker thread.
     async fn run_worker_loop(
-        worker_id: usize,
+        ctx: WorkerLoopContext,
         mut task_rx: mpsc::Receiver<UserAsyncTask<E>>,
         mut worker_message_rx: mpsc::Receiver<WorkerMessage>,
-        terminate_signal: Arc<tokio::sync::Notify>,
-        state: Arc<TokioMutex<WorkerState>>,
-        free_signal: Arc<Notify>,
-        any_worker_free: Arc<Notify>,
-        worker_span: Span,
-        ready_tx: oneshot::Sender<()>,
     ) {
+        let WorkerLoopContext {
+            worker_id,
+            terminate_signal,
+            state,
+            free_signal,
+            any_worker_free,
+            worker_span,
+            ready_tx,
+        } = ctx;
         let local = tokio::task::LocalSet::new();
 
         local
@@ -667,12 +682,10 @@ impl<E: JSEngine + 'static> Rong<E> {
 
                         // Process messages for the currently running task
                         maybe_message = worker_message_rx.recv(), if current_task_message_tx.is_some() => {
-                             if let Some(message) = maybe_message {
-                                if let Some(tx) = &current_task_message_tx {
-                                    if tx.send(message).await.is_ok() {
-                                        js_runtime.run_pending_jobs();
-                                    }
-                                }
+                             if let Some(message) = maybe_message
+                                && let Some(tx) = &current_task_message_tx
+                                && tx.send(message).await.is_ok() {
+                                    js_runtime.run_pending_jobs();
                              }
                              // If worker_message_rx closed, let running task finish
                         },

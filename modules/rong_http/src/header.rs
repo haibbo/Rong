@@ -16,11 +16,6 @@ impl Headers {
         Self { headers }
     }
 
-    // Take ownership of the inner HeaderMap
-    pub(crate) fn into_header_map(self) -> HeaderMap<HeaderValue> {
-        self.headers
-    }
-
     // Get a reference to the inner HeaderMap
     pub(crate) fn as_header_map(&self) -> &HeaderMap<HeaderValue> {
         &self.headers

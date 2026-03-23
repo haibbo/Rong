@@ -56,8 +56,8 @@ fn android_setup(build: &mut cc::Build) {
     build.archiver(format!(
         "{ndk}/toolchains/llvm/prebuilt/{os}-{arch}/bin/llvm-ar"
     ));
-    build.flag(&format!("-target"));
-    build.flag(&format!("{cc_target}{api}"));
+    build.flag("-target");
+    build.flag(format!("{cc_target}{api}"));
 
     unsafe {
         env::set_var(

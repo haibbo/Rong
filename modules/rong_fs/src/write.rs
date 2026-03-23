@@ -13,10 +13,10 @@ fn resolve_dest(dest: &JSValue) -> JSResult<PathBuf> {
     }
 
     // Try as RongFile object
-    if let Some(obj) = dest.clone().into_object() {
-        if let Ok(rf) = obj.borrow::<RongFile>() {
-            return Ok(rf.resolved().clone());
-        }
+    if let Some(obj) = dest.clone().into_object()
+        && let Ok(rf) = obj.borrow::<RongFile>()
+    {
+        return Ok(rf.resolved().clone());
     }
 
     Err(HostError::new(
@@ -84,34 +84,41 @@ async fn rong_write(_ctx: JSContext, dest: JSValue, data: JSValue) -> JSResult<f
     // Try as object (TypedArray or RongFile)
     if let Some(obj) = data.clone().into_object() {
         // Try as RongFile (copy semantics)
-        if let Ok(rf) = obj.borrow::<RongFile>() {
-            let bytes_copied = tokio::fs::copy(rf.resolved(), &resolved)
+        let source = {
+            if let Ok(rf) = obj.borrow::<RongFile>() {
+                Some(rf.resolved().clone())
+            } else {
+                None
+            }
+        };
+        if let Some(source) = source {
+            let bytes_copied = tokio::fs::copy(&source, &resolved)
                 .await
                 .map_err(|e| HostError::new("FS_IO", format!("Failed to copy file: {}", e)))?;
             return Ok(bytes_copied as f64);
         }
 
         // Try as TypedArray (Uint8Array, etc.)
-        if let Some(ta) = AnyJSTypedArray::from_object(obj) {
-            if let Some(bytes) = ta.as_bytes() {
-                let len = bytes.len();
+        if let Some(ta) = AnyJSTypedArray::from_object(obj)
+            && let Some(bytes) = ta.as_bytes()
+        {
+            let len = bytes.len();
 
-                let mut file = tokio::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .open(&resolved)
-                    .await
-                    .map_err(|e| HostError::new("FS_IO", format!("Failed to open file: {}", e)))?;
-                file.write_all(bytes)
-                    .await
-                    .map_err(|e| HostError::new("FS_IO", format!("Write failed: {}", e)))?;
-                file.flush()
-                    .await
-                    .map_err(|e| HostError::new("FS_IO", format!("Flush failed: {}", e)))?;
+            let mut file = tokio::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&resolved)
+                .await
+                .map_err(|e| HostError::new("FS_IO", format!("Failed to open file: {}", e)))?;
+            file.write_all(bytes)
+                .await
+                .map_err(|e| HostError::new("FS_IO", format!("Write failed: {}", e)))?;
+            file.flush()
+                .await
+                .map_err(|e| HostError::new("FS_IO", format!("Flush failed: {}", e)))?;
 
-                return Ok(len as f64);
-            }
+            return Ok(len as f64);
         }
     }
 

@@ -138,7 +138,7 @@ fn main() -> Result<(), RongJSError> {
         }
     } else {
         // Give workers the same module set as the main context
-        rong_modules::worker::set_initializer(|ctx| rong_modules::init(ctx));
+        rong_modules::worker::set_initializer(rong_modules::init);
 
         // For commands that need JS execution, use a single Rong instance
         Rong::<RongJS>::builder()

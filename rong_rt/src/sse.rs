@@ -17,6 +17,12 @@ use crate::client::{self, HttpBody};
 const SSE_STREAM_COALESCE_TARGET: usize = 0;
 const SSE_EVENT_CHAN_CAP: usize = 128;
 
+type SseConnectionPartsWithOpen = (
+    mpsc::Receiver<Result<SseEvent, String>>,
+    Option<oneshot::Sender<()>>,
+    oneshot::Receiver<Result<String, String>>,
+);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SseScheme {
     Http,
@@ -180,13 +186,7 @@ impl SseConnection {
         (events, self.close_tx.take())
     }
 
-    pub fn into_parts_with_open(
-        mut self,
-    ) -> (
-        mpsc::Receiver<Result<SseEvent, String>>,
-        Option<oneshot::Sender<()>>,
-        oneshot::Receiver<Result<String, String>>,
-    ) {
+    pub fn into_parts_with_open(mut self) -> SseConnectionPartsWithOpen {
         let (_dummy_tx, dummy_rx) = mpsc::channel(1);
         let events = std::mem::replace(&mut self.events, dummy_rx);
         let (_dummy_open_tx, dummy_open_rx) = oneshot::channel();

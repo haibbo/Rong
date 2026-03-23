@@ -14,13 +14,17 @@ fn type_error(message: impl Into<String>) -> RongJSError {
         .into()
 }
 
+type EventReceiver = mpsc::Receiver<Result<rong_rt::sse::SseEvent, String>>;
+type OpenedReceiver = oneshot::Receiver<Result<String, String>>;
+
+#[allow(clippy::upper_case_acronyms, clippy::type_complexity)]
 #[js_export]
 pub struct SSE {
     url: String,
     close_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     _rt_close_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
-    rx: Arc<Mutex<Option<mpsc::Receiver<Result<rong_rt::sse::SseEvent, String>>>>>,
-    opened_rx: Arc<Mutex<Option<oneshot::Receiver<Result<String, String>>>>>,
+    rx: Arc<Mutex<Option<EventReceiver>>>,
+    opened_rx: Arc<Mutex<Option<OpenedReceiver>>>,
 }
 
 #[js_class]
@@ -54,33 +58,34 @@ impl SSE {
                 }
             }
 
-            if opts.has("reconnect") {
-                if let Ok(reconnect_obj) = opts.get::<_, JSObject>("reconnect") {
-                    reconnect_opts.enabled =
-                        reconnect_obj.get::<_, bool>("enabled").unwrap_or(true);
-                    if let Ok(v) = reconnect_obj.get::<_, f64>("baseDelayMs") {
-                        if v.is_finite() && v >= 0.0 {
-                            reconnect_opts.base_delay =
-                                std::time::Duration::from_millis((v as u64).max(1));
-                        }
-                    }
-                    if let Ok(v) = reconnect_obj.get::<_, f64>("maxDelayMs") {
-                        if v.is_finite() && v >= 1.0 {
-                            reconnect_opts.max_delay = std::time::Duration::from_millis(v as u64);
-                        }
-                    }
-                    reconnect_opts.max_retries = reconnect_obj
-                        .get::<_, f64>("maxRetries")
-                        .ok()
-                        .filter(|v| v.is_finite() && *v >= 0.0)
-                        .map(|v| v as u32);
+            if opts.has("reconnect")
+                && let Ok(reconnect_obj) = opts.get::<_, JSObject>("reconnect")
+            {
+                reconnect_opts.enabled = reconnect_obj.get::<_, bool>("enabled").unwrap_or(true);
+                if let Ok(v) = reconnect_obj.get::<_, f64>("baseDelayMs")
+                    && v.is_finite()
+                    && v >= 0.0
+                {
+                    reconnect_opts.base_delay = std::time::Duration::from_millis((v as u64).max(1));
                 }
+                if let Ok(v) = reconnect_obj.get::<_, f64>("maxDelayMs")
+                    && v.is_finite()
+                    && v >= 1.0
+                {
+                    reconnect_opts.max_delay = std::time::Duration::from_millis(v as u64);
+                }
+                reconnect_opts.max_retries = reconnect_obj
+                    .get::<_, f64>("maxRetries")
+                    .ok()
+                    .filter(|v| v.is_finite() && *v >= 0.0)
+                    .map(|v| v as u32);
             }
 
-            if let Ok(v) = opts.get::<_, f64>("requestTimeoutMs") {
-                if v.is_finite() && v > 0.0 {
-                    request_timeout = Some(std::time::Duration::from_millis(v as u64));
-                }
+            if let Ok(v) = opts.get::<_, f64>("requestTimeoutMs")
+                && v.is_finite()
+                && v > 0.0
+            {
+                request_timeout = Some(std::time::Duration::from_millis(v as u64));
             }
 
             // AbortSignal support
@@ -146,10 +151,10 @@ impl SSE {
 
     #[js_method]
     fn close(&self) {
-        if let Ok(mut guard) = self.close_tx.lock() {
-            if let Some(tx) = guard.take() {
-                let _ = tx.send(());
-            }
+        if let Ok(mut guard) = self.close_tx.lock()
+            && let Some(tx) = guard.take()
+        {
+            let _ = tx.send(());
         }
         if let Ok(mut guard) = self._rt_close_tx.lock() {
             guard.take();
@@ -196,8 +201,8 @@ struct SseEventStream {
     ctx: JSContext,
     origin: String,
     state: SseStreamState,
-    opened_rx: Option<oneshot::Receiver<Result<String, String>>>,
-    rx: Option<mpsc::Receiver<Result<rong_rt::sse::SseEvent, String>>>,
+    opened_rx: Option<OpenedReceiver>,
+    rx: Option<EventReceiver>,
 }
 
 impl Stream for SseEventStream {

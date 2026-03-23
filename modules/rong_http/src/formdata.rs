@@ -286,10 +286,10 @@ impl FormData {
         }
         for part in content_type.split(';').skip(1) {
             let part = part.trim();
-            if let Some((key, val)) = part.split_once('=') {
-                if key.trim().eq_ignore_ascii_case("boundary") {
-                    return Some(val.trim().trim_matches('"').to_string());
-                }
+            if let Some((key, val)) = part.split_once('=')
+                && key.trim().eq_ignore_ascii_case("boundary")
+            {
+                return Some(val.trim().trim_matches('"').to_string());
             }
         }
         None
