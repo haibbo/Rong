@@ -3,7 +3,7 @@ use rong_test::*;
 use std::sync::{Mutex, OnceLock};
 use tokio::time::Duration;
 
-#[js_export]
+#[js_export(clone)]
 #[derive(Debug, PartialEq)]
 struct Point {
     x: i32,

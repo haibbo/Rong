@@ -1,6 +1,32 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::DeriveInput;
+use syn::{DeriveInput, Meta, parse::Parse, punctuated::Punctuated};
+
+#[derive(Default)]
+struct JsExportOptions {
+    clone: bool,
+}
+
+impl Parse for JsExportOptions {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut options = Self::default();
+        let metas = Punctuated::<Meta, syn::Token![,]>::parse_terminated(input)?;
+        for meta in metas {
+            match meta {
+                Meta::Path(path) if path.is_ident("clone") => {
+                    options.clone = true;
+                }
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        meta,
+                        "unsupported #[js_export] option; expected `clone`",
+                    ));
+                }
+            }
+        }
+        Ok(options)
+    }
+}
 
 /// Main implementation of the object macro
 pub fn class_instance_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
@@ -8,6 +34,13 @@ pub fn class_instance_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
     let vis = &input.vis;
     let generics = &input.generics;
     let data = &input.data;
+    let options = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("js_export"))
+        .map(|attr| attr.parse_args::<JsExportOptions>())
+        .transpose()?
+        .unwrap_or_default();
 
     // Filter out object attributes
     let filtered_attrs: Vec<_> = input
@@ -29,6 +62,23 @@ pub fn class_instance_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
         _ => return Err(syn::Error::new_spanned(input, "Only structs are supported")),
     };
 
+    let clone_from_js_impl = if options.clone {
+        quote! {
+            impl rong::FromJSValue<rong::JSEngineValue> for #type_name {
+                fn from_js_value(ctx: &rong::JSContext, value: rong::JSValue) -> rong::JSResult<Self> {
+                    let obj = rong::JSObject::from_js_value(ctx, value)?;
+                    let instance = obj.borrow::<Self>()?;
+                    // Some JS-exposed structs implement an inherent `clone()` method (e.g. `Response.prototype.clone()`).
+                    // Method-call syntax would prefer the inherent method over `Clone::clone`, which would break
+                    // internal "this" passing by returning a fresh value instead of a plain Rust clone.
+                    Ok(<Self as ::core::clone::Clone>::clone(&*instance))
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     let expanded = quote! {
         #type_def
 
@@ -40,16 +90,7 @@ pub fn class_instance_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
             }
         }
 
-        impl rong::FromJSValue<rong::JSEngineValue> for #type_name {
-            fn from_js_value(ctx: &rong::JSContext, value: rong::JSValue) -> rong::JSResult<Self> {
-                let obj = rong::JSObject::from_js_value(ctx, value)?;
-                let instance = obj.borrow::<Self>()?;
-                // Some JS-exposed structs implement an inherent `clone()` method (e.g. `Response.prototype.clone()`).
-                // Method-call syntax would prefer the inherent method over `Clone::clone`, which would break
-                // internal "this" passing by returning a fresh value instead of a plain Rust clone.
-                Ok(<Self as ::core::clone::Clone>::clone(&*instance))
-            }
-        }
+        #clone_from_js_impl
 
         impl rong::function::JSParameterType for #type_name {}
     };

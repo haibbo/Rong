@@ -2,7 +2,7 @@ use crate::{
     FromJSValue, JSArrayOps, JSClass, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
     JSTypeOf, JSValue, JSValueImpl,
 };
-use std::cell::RefMut;
+use std::cell::{Ref, RefMut};
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -67,6 +67,12 @@ pub struct This<T>(pub T);
 /// Represents the `this` context in JavaScript function calls with mutable access
 pub struct ThisMut<T, V: JSValueImpl>(pub(crate) JSObject<V>, PhantomData<T>);
 
+/// A non-owning handle to a JS class instance.
+///
+/// Unlike `FromJSValue<T>` for clone-enabled classes, this keeps the original JS
+/// object identity and lets Rust borrow the underlying class data on demand.
+pub struct JSClassRef<T, V: JSValueImpl>(JSObject<V>, PhantomData<T>);
+
 /// Represents an optional parameter in JavaScript function calls.
 ///
 /// # Usage
@@ -127,6 +133,44 @@ where
 
     pub fn borrow_mut(&self) -> JSResult<RefMut<'_, T>> {
         self.0.borrow_mut::<T>()
+    }
+}
+
+impl<T, V> JSClassRef<T, V>
+where
+    V: JSObjectOps,
+    T: JSClass<V>,
+{
+    pub fn object(&self) -> JSObject<V> {
+        self.0.clone()
+    }
+
+    pub fn borrow(&self) -> JSResult<Ref<'_, T>> {
+        self.0.borrow::<T>()
+    }
+
+    pub fn borrow_mut(&self) -> JSResult<RefMut<'_, T>> {
+        self.0.borrow_mut::<T>()
+    }
+}
+
+impl<T, V> Clone for JSClassRef<T, V>
+where
+    V: JSObjectOps,
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<T, V> Deref for JSClassRef<T, V>
+where
+    V: JSValueImpl,
+{
+    type Target = JSObject<V>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -381,6 +425,27 @@ impl JSParameterType for &str {}
 
 /// `Option<T>` can be used as a parameter type for async functions
 impl<T> JSParameterType for Option<T> where T: JSParameterType {}
+
+impl<T, V> FromJSValue<V> for JSClassRef<T, V>
+where
+    V: JSObjectOps,
+    T: JSClass<V>,
+{
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
+        let obj = JSObject::from_js_value(ctx, value)?;
+        if !crate::Class::instance_of::<T>(&obj) {
+            return Err(crate::HostError::new(
+                crate::error::E_TYPE,
+                format!("Not instance of {}", std::any::type_name::<T>()),
+            )
+            .with_name("TypeError")
+            .into());
+        }
+        Ok(Self(obj, PhantomData))
+    }
+}
+
+impl<T, V> JSParameterType for JSClassRef<T, V> where V: JSValueImpl {}
 
 macro_rules! impl_from_params {
     ($($T:ident),*) => {

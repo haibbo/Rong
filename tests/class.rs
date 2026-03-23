@@ -1,6 +1,7 @@
 use rong::JSEngineValue;
 use rong_macro::js_export;
 use rong_test::*;
+use std::cell::Ref;
 
 #[js_export]
 struct Point {
@@ -10,7 +11,7 @@ struct Point {
 }
 
 impl Point {
-    fn add(&self, p: Point) -> Self {
+    fn add(&self, p: &Point) -> Self {
         Self {
             x: self.x + p.x,
             y: self.y + p.y,
@@ -31,6 +32,10 @@ impl Point {
     }
 }
 
+fn borrow_point(obj: &JSObject) -> JSResult<Ref<'_, Point>> {
+    obj.borrow::<Point>()
+}
+
 impl JSClass<JSEngineValue> for Point {
     const NAME: &'static str = "Point";
 
@@ -40,7 +45,9 @@ impl JSClass<JSEngineValue> for Point {
 
     fn class_setup(class: &ClassSetup<JSEngineValue>) -> JSResult<()> {
         class.property("x", |builder| {
-            let getter = class.new_func(|this: This<Point>| this.x)?;
+            let getter = class.new_func(|this: This<function::JSClassRef<Point>>| {
+                Ok(this.borrow()?.x)
+            })?;
             let setter = class.new_func(|this: ThisMut<Point>, x: i32| -> JSResult<()> {
                 let mut point = this.borrow_mut()?;
                 point.x = x;
@@ -50,7 +57,9 @@ impl JSClass<JSEngineValue> for Point {
         })?;
 
         class.property("y", |builder| {
-            let getter = class.new_func(|this: This<Point>| this.y)?;
+            let getter = class.new_func(|this: This<function::JSClassRef<Point>>| {
+                Ok(this.borrow()?.y)
+            })?;
             let setter = class.new_func(|this: ThisMut<Point>, y: i32| -> JSResult<()> {
                 let mut point = this.borrow_mut()?;
                 point.y = y;
@@ -71,7 +80,16 @@ impl JSClass<JSEngineValue> for Point {
             Ok(builder.getter(getter).setter(setter).configurable(true))
         })?;
 
-        class.method("add", |this: This<Point>, p: Point| this.add(p))?;
+        class.method(
+            "add",
+            |this: This<function::JSClassRef<Point>>,
+             p: function::JSClassRef<Point>|
+             -> JSResult<Point> {
+                let this = this.borrow()?;
+                let p = p.borrow()?;
+                Ok(this.add(&p))
+            },
+        )?;
 
         class.method(
             "setJSObj",
@@ -100,7 +118,8 @@ impl JSClass<JSEngineValue> for Point {
 fn constructor() {
     run(|ctx| {
         ctx.register_class::<Point>()?;
-        let point = ctx.eval::<Point>(Source::from_bytes(b"let point=new Point(2,3); point"))?;
+        let point = ctx.eval::<JSObject>(Source::from_bytes(b"let point=new Point(2,3); point"))?;
+        let point = borrow_point(&point)?;
         assert_eq!(point.x, 2);
         assert_eq!(point.y, 3);
 
@@ -171,13 +190,17 @@ fn test_property_getter_setter() {
         ctx.register_class::<Point>()?;
 
         // Test getter
-        let point = ctx.eval::<Point>(Source::from_bytes(b"let p = new Point(5, 10); p"))?;
-        assert_eq!(point.x, 5);
+        let point = ctx.eval::<JSObject>(Source::from_bytes(b"let p = new Point(5, 10); p"))?;
+        {
+            let point = borrow_point(&point)?;
+            assert_eq!(point.x, 5);
+        }
 
         // Test setter
         let point = ctx
-            .eval::<Point>(Source::from_bytes(b"p.x = 15; p"))
+            .eval::<JSObject>(Source::from_bytes(b"p.x = 15; p"))
             .unwrap();
+        let point = borrow_point(&point)?;
         assert_eq!(point.x, 15);
 
         // Test property descriptor
@@ -210,10 +233,11 @@ fn test_instance_method() {
 
         // Test method call
         let result = ctx
-            .eval::<Point>(Source::from_bytes(
+            .eval::<JSObject>(Source::from_bytes(
                 b"let p1 = new Point(1, 2); let p2 = new Point(3, 4); p1.add(p2)",
             ))
             .unwrap();
+        let result = borrow_point(&result)?;
         assert_eq!(result.x, 4); // 1 + 3
         assert_eq!(result.y, 6); // 2 + 4
 
@@ -239,8 +263,9 @@ fn test_static_method() {
 
         // Test static method call
         let result = ctx
-            .eval::<Point>(Source::from_bytes(b"Point.sadd(5, 7)"))
+            .eval::<JSObject>(Source::from_bytes(b"Point.sadd(5, 7)"))
             .unwrap();
+        let result = borrow_point(&result)?;
         assert_eq!(result.x, 6); // 5 + 1
         assert_eq!(result.y, 8); // 7 + 1
 
@@ -264,8 +289,9 @@ fn test_static_property() {
 
         // Test static getter
         let origin = ctx
-            .eval::<Point>(Source::from_bytes(b"Point.origin"))
+            .eval::<JSObject>(Source::from_bytes(b"Point.origin"))
             .unwrap();
+        let origin = borrow_point(&origin)?;
         assert_eq!(origin.x, 0x5a);
         assert_eq!(origin.y, 0xa5);
 

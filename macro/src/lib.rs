@@ -18,7 +18,8 @@ mod serialize;
 /// - Generates class instance implementation
 /// - Allows method and property definitions
 /// - Supports constructors and static methods
-/// - Implements `FromJSValue`, `IntoJSValue`,`FromJSObj`, and `JSParameterType` traits
+/// - Always implements `IntoJSValue` and `JSParameterType`
+/// - Implements `FromJSValue` only with `#[js_export(clone)]`
 ///
 /// For enums:
 /// - Implements `FromJSValue`, `IntoJSValue`, and `JSParameterType` traits

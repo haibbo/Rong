@@ -249,13 +249,39 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
                         },
                     )
                 } else {
-                    // For &self methods, use This and map to Self::method_name
+                    // For &self methods, borrow the class instance directly from the JS object.
                     (
-                        quote! { __self: rong::function::This<#impl_type> },
+                        quote! { __this: rong::function::This<rong::function::JSClassRef<#impl_type>> },
                         if is_async {
-                            quote! { Self::#method_name(&*__self, #(#patterns),*).await }
+                            if returns_js_result {
+                                quote! {{
+                                    let __self = {
+                                        let __borrow = __this.borrow()?;
+                                        <#impl_type as ::core::clone::Clone>::clone(&*__borrow)
+                                    };
+                                    Self::#method_name(&__self, #(#patterns),*).await
+                                }}
+                            } else {
+                                quote! {{
+                                    let __self = {
+                                        let __borrow = __this.borrow()?;
+                                        <#impl_type as ::core::clone::Clone>::clone(&*__borrow)
+                                    };
+                                    Ok(Self::#method_name(&__self, #(#patterns),*).await)
+                                }}
+                            }
+                        } else if returns_js_result {
+                            quote! {{
+                                let __self = __this.borrow()?;
+                                Self::#method_name(&*__self, #(#patterns),*)
+                            }}
                         } else {
-                            quote! { Self::#method_name(&*__self, #(#patterns),*) }
+                            quote! {{
+                                let __self = {
+                                    __this.borrow()?
+                                };
+                                Ok(Self::#method_name(&*__self, #(#patterns),*))
+                            }}
                         },
                     )
                 }

@@ -5,7 +5,9 @@ use std::cell::RefCell;
 use std::future::Future;
 
 mod parameter;
-pub use parameter::{FromParams, JSParameterType, Optional, ParamsAccessor, Rest, This, ThisMut};
+pub use parameter::{
+    FromParams, JSClassRef, JSParameterType, Optional, ParamsAccessor, Rest, This, ThisMut,
+};
 
 /// Container to hold rust closure/function that's callable from JS.
 ///

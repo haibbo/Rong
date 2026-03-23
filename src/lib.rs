@@ -30,8 +30,14 @@ pub mod function {
     #[cfg(any(feature = "quickjs", feature = "jscore"))]
     pub type ThisMut<T> = rong_core::function::ThisMut<T, crate::JSEngineValue>;
 
+    #[cfg(any(feature = "quickjs", feature = "jscore"))]
+    pub type JSClassRef<T> = rong_core::function::JSClassRef<T, crate::JSEngineValue>;
+
     #[cfg(not(any(feature = "quickjs", feature = "jscore")))]
     pub type ThisMut<T> = rong_core::function::ThisMut<T, ()>;
+
+    #[cfg(not(any(feature = "quickjs", feature = "jscore")))]
+    pub type JSClassRef<T> = rong_core::function::JSClassRef<T, ()>;
 }
 
 #[cfg(all(feature = "quickjs", feature = "jscore"))]
