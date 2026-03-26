@@ -373,26 +373,22 @@ pub struct RongBuilder<E: JSEngine + 'static> {
     worker_count: usize,
     task_queue_size: usize,
     message_queue_size: usize,
-    service_worker_threads: usize,
     _marker: PhantomData<E>,
 }
 
 impl<E: JSEngine + 'static> RongBuilder<E> {
     fn new() -> Self {
         Self {
-            worker_count: 4,
+            worker_count: 1,
             task_queue_size: 100,
             message_queue_size: 512,
-            service_worker_threads: 1,
             _marker: PhantomData,
         }
     }
 
-    /// Set the number of worker threads
+    /// Set the number of JS worker threads. Defaults to 1.
     pub fn with_num_workers(mut self, count: usize) -> Self {
-        if count < 1 {
-            panic!("At least one worker thread is required");
-        }
+        assert!(count >= 1, "At least one worker thread is required");
         self.worker_count = count;
         self
     }
@@ -413,25 +409,11 @@ impl<E: JSEngine + 'static> RongBuilder<E> {
         self
     }
 
-    /// Configure the global service runtime worker thread count.
-    ///
-    /// The service runtime is started eagerly during `build()`.
-    /// If not set, defaults to 1 thread.
-    pub fn with_service_threads(mut self, threads: usize) -> Self {
-        if threads < 1 {
-            panic!("At least one service runtime worker thread is required");
-        }
-        self.service_worker_threads = threads;
-        self
-    }
-
     /// Build and start a Rong instance.
     ///
-    /// Starts the service runtime and initializes the worker pool.
-    /// Configuration cannot be changed after this point.
+    /// Initializes the worker pool. The background I/O runtime (`rong_rt`) is
+    /// lazily started on first use with `available_parallelism()` threads.
     pub fn build(self) -> Arc<Rong<E>> {
-        rong_rt::start(self.service_worker_threads);
-
         let rong = Arc::new(Rong {
             workers: Arc::new(TokioMutex::new(Vec::with_capacity(self.worker_count))),
             worker_count: self.worker_count,
@@ -466,7 +448,7 @@ pub struct Rong<E: JSEngine + 'static> {
 }
 
 impl<E: JSEngine + 'static> Rong<E> {
-    /// Create a new builder to configure and build a Rong instance
+    /// Create a new builder to configure and build a Rong instance.
     pub fn builder() -> RongBuilder<E> {
         RongBuilder::new()
     }

@@ -251,7 +251,7 @@ async fn test_enqueue_js_invoke_queue() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_get_worker_wait_eventually_returns_free_worker() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().with_num_workers(1).build();
+    let rong = Rong::<RongJS>::builder().build();
 
     for _ in 0..32 {
         let worker = rong.get_worker().await?;
@@ -279,7 +279,7 @@ async fn test_get_worker_wait_eventually_returns_free_worker() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_block_on_reentrant_inside_worker_returns_error() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().with_num_workers(1).build();
+    let rong = Rong::<RongJS>::builder().build();
     let rong_clone = rong.clone();
 
     let nested_error = Arc::new(Mutex::new(None::<String>));
