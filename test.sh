@@ -109,7 +109,7 @@ run_core_test() {
     log_info "Running core test: $test_name (engine: $engine)"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo test --test="$test_name" --no-default-features --features="$engine" --quiet; then
+    if cargo test --release --test="$test_name" --no-default-features --features="$engine" --quiet; then
         log_success "Core test $test_name passed on $engine"
         PASSED_TESTS=$((PASSED_TESTS + 1))
         return 0

@@ -475,6 +475,55 @@ impl Response {
 }
 
 impl Response {
+    /// Construct a JS `Response` object directly from Rust parts, bypassing the JS constructor.
+    ///
+    /// This is intended for host runtimes that already have buffered response parts and want to
+    /// expose a standard `Response` object to JavaScript without rebuilding it through JS glue.
+    pub fn from_parts(
+        ctx: &JSContext,
+        url: &str,
+        method: &str,
+        status: u16,
+        headers: http::HeaderMap<http::header::HeaderValue>,
+        body: Option<&[u8]>,
+    ) -> JSResult<JSObject> {
+        let uri = Uri::try_from(url).map_err(|_| {
+            HostError::new(rong::error::E_INVALID_ARG, format!("Invalid URL: {url}"))
+                .with_name("TypeError")
+        })?;
+        let http_method = Method::from_bytes(method.as_bytes()).map_err(|_| {
+            HostError::new(
+                rong::error::E_INVALID_ARG,
+                format!("Invalid method: {method}"),
+            )
+            .with_name("TypeError")
+        })?;
+        let status = http::StatusCode::from_u16(status).map_err(|_| {
+            HostError::new(
+                rong::error::E_INVALID_ARG,
+                format!("Invalid status code: {status}"),
+            )
+            .with_name("RangeError")
+        })?;
+
+        let response = Response {
+            url: uri,
+            method: http_method,
+            headers: Headers::from_header_map(headers),
+            status: status.as_u16(),
+            status_text: status.canonical_reason().unwrap_or("").to_string(),
+            body: body.map(|bytes| BodyKind::Buffered(Bytes::copy_from_slice(bytes))),
+            consumed: Rc::new(Cell::new(false)),
+            redirected: false,
+            type_: "default".to_string(),
+            abort_receiver: None,
+            body_stream: Rc::new(RefCell::new(None)),
+        };
+
+        let class = Class::get::<Response>(ctx)?;
+        Ok(class.instance(response))
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_meta(
         status: http::StatusCode,
