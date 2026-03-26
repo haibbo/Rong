@@ -285,11 +285,8 @@ fn set_timeout_with_repeat(
         send_tick();
     };
 
-    // Prefer background runtime for reliable timing; fall back to local if not started.
-    let bg_fut = run_timer(cancel_bg.clone(), pending_bg.clone(), callback_tx.clone());
-    if rong_rt::spawn(bg_fut).is_err() {
-        spawn(run_timer(cancel_bg, pending_bg, callback_tx));
-    }
+    // Run timer on the background runtime for reliable timing.
+    rong_rt::spawn(run_timer(cancel_bg, pending_bg, callback_tx));
 
     id
 }
