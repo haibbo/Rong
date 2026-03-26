@@ -40,10 +40,3 @@ Allowed option fields per method:
 
 - `S3Client::new(config, namespace_prefix)` — create a pre-configured client from Rust. The optional `namespace_prefix` is transparently prepended to all object keys and stripped from list results.
 - `S3Config` — configuration struct with public fields (`access_key_id`, `secret_access_key`, `bucket`, `region`, `endpoint`, etc.)
-
-To hide the JS constructor after init:
-
-```rust
-rong_s3::init(&ctx)?;
-ctx.global().delete("S3Client")?;
-```

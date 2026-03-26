@@ -17,10 +17,3 @@ Key-value storage backed by a local database file.
 ## Rust API
 
 - `Storage::new(path, options)` — create a pre-configured instance from Rust, useful for environments that inject instances via a platform namespace instead of exposing the JS constructor.
-
-To hide the JS constructor after init:
-
-```rust
-rong_storage::init(&ctx)?;
-ctx.global().delete("Storage")?;
-```
