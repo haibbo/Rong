@@ -104,20 +104,12 @@ fn request_download_inner(
 ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
     let (completion_tx, completion_rx) = oneshot::channel();
 
-    if !crate::is_started() {
-        return Err(
-            "background task manager not started (call `Rong::builder().build()` or `crate::start(...)` first)"
-                .to_string(),
-        );
-    }
-
     let url = url.into();
     let dest = dest.into();
     crate::spawn(async move {
         let res = download_resource(&url, &dest, abort_rx, sink, timeout_override).await;
         let _ = completion_tx.send(res);
-    })
-    .map_err(|e| e.to_string())?;
+    });
 
     Ok(completion_rx)
 }
@@ -248,9 +240,7 @@ fn finalize_sink(
 mod tests {
     use super::*;
 
-    fn ensure_started() {
-        crate::start(1);
-    }
+    // Pool starts lazily on first spawn/handle; nothing to do here.
 
     async fn spawn_file_server(content: &'static [u8]) -> std::net::SocketAddr {
         use axum::Router;
@@ -286,8 +276,7 @@ mod tests {
 
     #[test]
     fn spawn_download_with_options_succeeds() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let content = b"hello download";
             let addr = spawn_file_server(content).await;
@@ -318,8 +307,7 @@ mod tests {
 
     #[test]
     fn download_convenience_succeeds() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let content = b"hello direct download";
             let addr = spawn_file_server(content).await;
@@ -344,8 +332,7 @@ mod tests {
 
     #[test]
     fn download_with_timeout_expires() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let addr = spawn_slow_server(300).await;
             let url = format!("http://{}/slow", addr);

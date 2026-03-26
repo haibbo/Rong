@@ -331,10 +331,6 @@ mod tests {
     use http::header;
     use http_body_util::{BodyExt, Full};
 
-    fn ensure_started() {
-        crate::start(1);
-    }
-
     async fn spawn_server() -> std::net::SocketAddr {
         use axum::Router;
         use axum::body::Body;
@@ -447,8 +443,7 @@ mod tests {
 
     #[test]
     fn send_bytes_collects_body() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let addr = spawn_server().await;
             let url = format!("http://{}/bytes", addr);
@@ -462,8 +457,7 @@ mod tests {
 
     #[test]
     fn send_json_parses_body() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let addr = spawn_server().await;
             let url = format!("http://{}/json", addr);
@@ -478,8 +472,7 @@ mod tests {
 
     #[test]
     fn send_stream_collects_streaming_body() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let addr = spawn_server().await;
             let url = format!("http://{}/stream", addr);
@@ -494,8 +487,7 @@ mod tests {
 
     #[test]
     fn post_json_bytes_sends_json_headers_and_body() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let addr = spawn_server().await;
             let url = format!("http://{}/echo-json", addr);
@@ -519,8 +511,7 @@ mod tests {
 
     #[test]
     fn post_json_serializes_request_and_decodes_response() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let addr = spawn_server().await;
             let url = format!("http://{}/echo-json", addr);

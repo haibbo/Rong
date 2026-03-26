@@ -178,20 +178,13 @@ pub fn request_upload(
     options: UploadOptions,
     abort_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<UploadTask, String> {
-    if !crate::is_started() {
-        return Err(
-            "background task manager not started (call `Rong::builder().build()` or `crate::start(...)` first)".to_string(),
-        );
-    }
-
     let (events_tx, events_rx) =
         mpsc::channel::<Result<UploadEvent, String>>(UPLOAD_EVENT_CHAN_CAP);
     let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
 
     crate::spawn(async move {
         run_upload_worker(options, abort_rx, cancel_rx, events_tx).await;
-    })
-    .map_err(|e| e.to_string())?;
+    });
 
     Ok(UploadTask {
         events: events_rx,
@@ -407,9 +400,7 @@ mod tests {
     use super::*;
     use tokio_stream::StreamExt;
 
-    fn ensure_started() {
-        crate::start(1);
-    }
+    // Pool starts lazily on first spawn/handle; nothing to do here.
 
     async fn spawn_upload_server() -> std::net::SocketAddr {
         use axum::Router;
@@ -443,8 +434,7 @@ mod tests {
 
     #[test]
     fn spawn_upload_reports_progress_and_success() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let addr = spawn_upload_server().await;
             let path = std::env::temp_dir().join(format!(
@@ -491,8 +481,7 @@ mod tests {
 
     #[test]
     fn upload_convenience_returns_response() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let addr = spawn_upload_server().await;
             let path = std::env::temp_dir().join(format!(

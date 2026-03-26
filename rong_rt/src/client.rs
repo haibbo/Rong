@@ -155,13 +155,6 @@ pub fn reset_request_timeout() {
     );
 }
 
-fn ensure_bg_started() -> Result<(), String> {
-    if crate::is_started() {
-        return Ok(());
-    }
-    Err("background task manager not started (call `Rong::builder().build()` or `crate::start(...)` first)".to_string())
-}
-
 fn build_client(proxy: Option<ProxyConfig>) -> HttpClient {
     #[cfg(feature = "tls-aws-lc")]
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -249,7 +242,6 @@ pub async fn send_request_with_coalesce(
     stream_coalesce_target: usize,
     timeout_override: Option<Duration>,
 ) -> Result<HttpResponse, String> {
-    ensure_bg_started()?;
     let client = client()?;
     let join = crate::spawn(async move {
         process_request(
@@ -261,8 +253,7 @@ pub async fn send_request_with_coalesce(
             timeout_override,
         )
         .await
-    })
-    .map_err(|e| e.to_string())?;
+    });
 
     join.await
         .map_err(|e| format!("user task panicked or runtime dropped: {}", e))?

@@ -259,8 +259,7 @@ pub fn connect_sse(
 
     crate::spawn(async move {
         run_sse_worker(options, abort_rx, close_rx, events_tx, Some(opened_tx)).await;
-    })
-    .map_err(|e| e.to_string())?;
+    });
 
     Ok(SseConnection {
         events: events_rx,
@@ -703,9 +702,7 @@ mod tests {
     use tokio::sync::mpsc;
     use tokio_stream::{self as stream, wrappers::ReceiverStream};
 
-    fn ensure_started() {
-        crate::start(1);
-    }
+    // Pool starts lazily on first spawn/handle; nothing to do here.
 
     async fn spawn_sse_server() -> std::net::SocketAddr {
         async fn live_small() -> impl IntoResponse {
@@ -759,8 +756,7 @@ mod tests {
 
     #[test]
     fn connect_convenience_opens_and_receives_small_event() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let addr = spawn_sse_server().await;
             let url = format!("http://{}/live-small", addr);
@@ -788,8 +784,7 @@ mod tests {
 
     #[test]
     fn connect_options_builder_sends_headers_and_last_event_id() {
-        ensure_started();
-        let handle = crate::handle().unwrap();
+        let handle = crate::handle();
         handle.block_on(async {
             let addr = spawn_sse_server().await;
             let url = format!("http://{}/headers", addr);
