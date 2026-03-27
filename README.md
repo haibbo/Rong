@@ -44,7 +44,7 @@ In Chinese culture, "融" represents natural harmony and coexistence - perfectly
 │    QuickJS   │      JavaScriptCore     │      ArkJS         │
 ├─────────────────────────────────────────────────────────────┤
 │              Built-in Modules & Extensions                  │
-│   Timer │ HTTP │ FS │ Console │  Path │ URL │ ...           │
+│   Timer │ HTTP │ FS │ Console │ S3 │ SQLite │ Redis │ ...   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -102,16 +102,17 @@ Rong comes with a rich set of built-in modules:
 - **rong_assert** - Assertion utilities
 - **rong_storage** - Storage APIs
 - **rong_stream** - Stream APIs
-- **rong_path** - Path manipulation
 - **rong_process** - Process information and environment
 - **rong_child_process** - Child process management
 - **rong_exception** - Exception handling
-- **rong_navigator** - Navigator APIs
+- **rong_sqlite** - SQLite APIs
+- **rong_s3** - S3-compatible object storage APIs
 
 ## 📚 Documentation
 
 Comprehensive guides for working with Rong:
 
+- **[Contributing Guide](CONTRIBUTING.md)** - Local setup, verification, hooks, and release workflow
 - **[Module Development Guide](docs/module_development.md)** - Learn how to create Rust-driven JavaScript APIs and classes
 - **[Value System Guide](docs/value_system.md)** - Understand type conversion between Rust and JavaScript
 - **[Error Handling Guide](docs/error_handling.md)** - Best practices for error handling
