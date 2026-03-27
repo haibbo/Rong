@@ -41,7 +41,6 @@ cargo test -p rong_fs --features quickjs
 - `rong_event` - Event emitter
 - `rong_abort` - AbortController
 - `rong_url` - URL parsing
-- `rong_path` - Path manipulation
 - `rong_stream` - Stream APIs
 - `rong_process` - Process information
 - `rong_child_process` - Child process management

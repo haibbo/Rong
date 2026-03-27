@@ -18,7 +18,6 @@ import type {
 } from './fs';
 import type { Process } from './process';
 import type { RedisClientConstructor } from './redis';
-import type { RongWorkerConstructor } from './worker';
 import type { SSEConstructor } from './sse';
 import type { StorageConstructor, StorageModule } from './storage';
 
@@ -104,11 +103,6 @@ declare global {
    * SSE - Server-Sent Events async iterator client
    */
   const SSE: SSEConstructor;
-
-  /**
-   * Worker - Web Workers for running JS in dedicated threads
-   */
-  const Worker: RongWorkerConstructor;
 }
 
 export {};

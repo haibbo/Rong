@@ -12,7 +12,7 @@ TypeScript type definitions for the Rong JavaScript runtime (globals injected by
 Rong injects a small set of globals:
 
 - `Rong` namespace: file system + storage
-- Globals: `process`, `child_process`, `path`, `fetch`, `timers`, `assert`, `atob`, `btoa`
+- Globals: `process`, `child_process`, `fetch`, `timers`, `assert`, `atob`, `btoa`, `RedisClient`, `S3Client`, `SQLite`, `SSE`, `Worker`
 
 Rong also implements/extends a subset of Web APIs; the type package relies on TypeScript’s DOM libs for base types like `URL`, `ReadableStream`, `AbortController`, etc.
 
@@ -38,6 +38,8 @@ Notes:
 
 - This enables global typings; you should not `import` runtime modules like `'child_process'` or `'http'` (those are Rong globals, not Node modules).
 - Ensure your `tsconfig.json` `lib` includes `"DOM"` if you want DOM globals (e.g. `URL`, `ReadableStream`) to be typed.
+- `Worker` uses the DOM global type name. The package exports `RongWorker`/`RongWorkerMessageEvent`/`RongWorkerErrorEvent` for the precise Rong subset when you want stricter annotations.
+- The package only supports the root export `@lingxia/rong`; `src/*` and `dist/*` are not public import paths.
 
 ## Accuracy notes (common gotchas)
 

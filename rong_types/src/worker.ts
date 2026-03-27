@@ -2,28 +2,33 @@
  * Worker module type definitions
  * Corresponds to: modules/rong_worker
  *
- * The runtime exposes a global `Worker` constructor. This file documents the
- * runtime-specific subset and event payload shapes.
+ * Rong exposes the standard global `Worker` name, but this package does not
+ * redeclare the global constructor because projects are expected to include the
+ * DOM lib for shared Web API types. Doing so would conflict with `lib.dom.d.ts`.
+ *
+ * Export the Rong-specific subset here for documentation and for precise local
+ * annotations when you want the runtime surface rather than the full browser
+ * Worker API.
  */
 
-export interface WorkerMessageEvent {
-  readonly data: any;
+export interface RongWorkerMessageEvent<T = any> {
+  readonly data: T;
 }
 
-export interface WorkerErrorEvent {
+export interface RongWorkerErrorEvent {
   readonly type: 'error';
   readonly message: string;
 }
 
 export interface RongWorker {
-  onmessage: ((event: WorkerMessageEvent) => void) | null;
-  onerror: ((event: WorkerErrorEvent) => void) | null;
-  postMessage(data: any): void;
+  onmessage: ((event: RongWorkerMessageEvent) => void) | null;
+  onerror: ((event: RongWorkerErrorEvent) => void) | null;
+  postMessage(data: unknown): void;
   terminate(): void;
 }
 
 export interface RongWorkerConstructor {
-  new(path: string): RongWorker;
+  new (path: string): RongWorker;
   prototype: RongWorker;
 }
 
