@@ -112,7 +112,8 @@ async fn compile_file(ctx: &JSContext, input: PathBuf, output: PathBuf) -> Resul
     bytecode_source.save_bytecode(ctx, output).await
 }
 
-fn main() -> Result<(), RongJSError> {
+#[tokio::main]
+async fn main() -> Result<(), RongJSError> {
     logging::init_tracing();
 
     let command = match parse_args() {
@@ -143,7 +144,7 @@ fn main() -> Result<(), RongJSError> {
         // For commands that need JS execution, use a single Rong worker pool
         Rong::<RongJS>::builder()
             .build()?
-            .block_on(async |runtime, _receiver| {
+            .call(|runtime, _receiver| async move {
                 let ctx = runtime.context();
                 // Initialize all modules
                 rong_modules::init(&ctx)?;
@@ -156,7 +157,8 @@ fn main() -> Result<(), RongJSError> {
                     Command::Compile { input, output } => compile_file(&ctx, input, output).await,
                     _ => unreachable!(), // Help and Version already handled
                 }
-            })?
+            })
+            .await?
     }
 
     Ok(())

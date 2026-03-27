@@ -17,6 +17,7 @@ rong = { workspace = true }
 rong_console = { workspace = true }
 rong_modules = { workspace = true, features = ["all"] }
 rustyline = "17.0.2"
+tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 

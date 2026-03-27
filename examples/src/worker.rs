@@ -1,4 +1,4 @@
-use rong::{JSResult, Rong, RongJS, Source, WorkerMessage};
+use rong::{JSResult, Rong, RongJS, Source, TaskMessage};
 use std::error::Error;
 use std::time::Duration;
 use tracing::{error, info, warn};
@@ -11,15 +11,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let rong = Rong::<RongJS>::builder().workers(num_workers).build()?;
     info!(num_workers, "Rong worker pool created");
 
-    let mut workers = Vec::with_capacity(num_workers);
-    for _ in 0..num_workers {
-        match rong.get_worker().await {
-            Ok(w) => workers.push(w),
-            Err(e) => {
-                error!(error = ?e, "Failed to acquire all workers");
-                return Ok(());
-            }
-        }
+    let workers = rong.workers();
+    if workers.len() != num_workers {
+        error!(
+            expected = num_workers,
+            actual = workers.len(),
+            "Worker pool size mismatch"
+        );
+        return Ok(());
     }
     info!(count = workers.len(), "Acquired all workers");
 
@@ -31,7 +30,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "Designating worker for interval task"
     );
 
-    interval_worker.spawn(async move |runtime, _receiver| -> JSResult<()> {
+    let _interval_task = interval_worker.spawn(async move |runtime, _receiver| -> JSResult<()> {
         info!(worker_id = interval_worker_id, "Interval task started");
         let ctx = runtime.context();
         // Optional: Initialize modules if needed
@@ -54,18 +53,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tokio::time::sleep(Duration::from_secs(60)).await;
         info!(worker_id = interval_worker_id, "Interval task finished sleep (unexpected)");
         Ok(())
-    })?;
+    }).await?;
     info!(worker_id = interval_worker_id, "Interval task spawned");
 
     // Spawn expression evaluation tasks on other workers
+    let mut expr_tasks = Vec::with_capacity(workers.len().saturating_sub(1));
     for worker in workers.iter().skip(1) {
         let worker = worker.clone();
         let worker_id = worker.id();
-        worker.spawn(async move |runtime, mut receiver| -> JSResult<()> {
+        let task = worker.spawn(async move |runtime, mut receiver| -> JSResult<()> {
             info!(worker_id, "Expr task waiting for expression");
             let ctx = runtime.context();
 
-            if let Some(WorkerMessage::String(expr_str)) = receiver.recv().await {
+            if let Some(TaskMessage::String(expr_str)) = receiver.recv().await {
                 info!(worker_id, expr = %expr_str, "Received expression");
                 match ctx.eval::<i32>(Source::from_bytes(expr_str.as_bytes())) {
                     Ok(result) => {
@@ -81,7 +81,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
             info!(worker_id, "Expr task finished");
             Ok(())
-        })?;
+        }).await?;
+        expr_tasks.push(task);
         info!(worker_id = worker.id(), "Expression task spawned");
     }
 
@@ -90,10 +91,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Send expressions ONLY to workers 1, 2, 3
     info!(count = workers.len() - 1, "Sending expressions to workers");
-    for (i, worker) in workers.iter().enumerate().skip(1) {
+    for (i, (worker, task)) in workers.iter().zip(expr_tasks.iter()).enumerate().skip(1) {
         let expr = format!("{}+{}", i * 2 + 1, i * 2 + 2);
         info!(worker_id = worker.id(), expr = %expr, "Sending expression");
-        if let Err(e) = worker.post_message(WorkerMessage::String(expr)) {
+        if let Err(e) = task.send(TaskMessage::String(expr)).await {
             error!(worker_id = worker.id(), error = ?e, "Failed to send message");
         }
     }
@@ -111,7 +112,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     interval_worker.terminate()?;
 
     info!("Waiting for all workers termination/idle");
-    rong.join_all().await?;
+    rong.join().await?;
     info!("All workers idle. Example complete.");
 
     Ok(())
