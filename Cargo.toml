@@ -92,13 +92,13 @@ smallvec = "1.15.1"
 
 [package]
 name = "rong"
-version.workspace = true
-edition.workspace = true
+version = "0.2.0"
+edition = "2024"
 
 description = "RongJS runtime and embedding API"
-license.workspace = true
-repository.workspace = true
-readme.workspace = true
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/LingXia-Dev/Rong"
+readme = "README.md"
 [dependencies]
 rong_core = { workspace = true }
 rong_rt = { workspace = true }
