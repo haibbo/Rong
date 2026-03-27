@@ -24,7 +24,11 @@ version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/LingXia-Dev/Rong"
+homepage = "https://github.com/LingXia-Dev/Rong"
+rust-version = "1.90"
 readme = "README.md"
+keywords = ["javascript", "runtime", "embedding"]
+categories = ["api-bindings"]
 
 [workspace.dependencies]
 # Internal dependencies
@@ -98,7 +102,20 @@ edition = "2024"
 description = "RongJS runtime and embedding API"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/LingXia-Dev/Rong"
+homepage.workspace = true
+rust-version.workspace = true
+documentation = "https://docs.rs/rong"
 readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+include = [
+    "Cargo.toml",
+    "CHANGELOG.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+    "README.md",
+    "src/**",
+]
 [dependencies]
 rong_core = { workspace = true }
 rong_rt = { workspace = true }

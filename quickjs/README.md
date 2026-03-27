@@ -1,27 +1,11 @@
-This crate is a low level unsafe raw bindings for the QuickJS JavaScript engine.
+# rong_quickjs
 
-## How to debug 'Assertion failed: (p->ref_count > 0), function gc_decref_child' ?
-1. apply patch
-```diff
-diff --git a/quickjs.c b/quickjs.c
-index 9cac6de..562b486 100644
---- a/quickjs.c
-+++ b/quickjs.c
-@@ -5829,6 +5829,9 @@ static void mark_children(JSRuntime *rt, JSGCObjectHeader *gp,
+QuickJS backend for RongJS.
 
- static void gc_decref_child(JSRuntime *rt, JSGCObjectHeader *p)
- {
-+    if (p->ref_count <= 0) {
-+      JS_DumpGCObject(rt, p);
-+    }
-     assert(p->ref_count > 0);
-     p->ref_count--;
-     if (p->ref_count == 0 && p->mark == 1) {
-```
-2. run
-```sh
-DUMPFLAGS=0x200 cargo run
+This crate integrates the vendored `rong_quickjs_sys` bindings with Rong's
+engine-agnostic runtime traits and value model.
 
-```
-3. use address printed by JS_DumpGCObject to find which object had been freed.
-
+- Use `rong` if you want the public embedding API.
+- Use `rong_quickjs` if you are wiring the QuickJS backend into lower-level
+  Rong internals.
+- Use `rong_quickjs_sys` only if you need the raw FFI layer.

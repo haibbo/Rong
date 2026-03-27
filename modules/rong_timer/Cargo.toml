@@ -6,7 +6,12 @@ edition.workspace = true
 description = "Timer module for RongJS"
 license.workspace = true
 repository.workspace = true
-readme.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/rong_timer"
+readme = "README.md"
 [dependencies]
 rong = { workspace = true }
 rong_rt = { workspace = true }

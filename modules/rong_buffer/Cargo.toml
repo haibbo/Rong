@@ -6,7 +6,12 @@ edition.workspace = true
 description = "Buffer module for RongJS"
 license.workspace = true
 repository.workspace = true
-readme.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/rong_buffer"
+readme = "README.md"
 [dependencies]
 rong = { workspace = true }
 bytes = { workspace = true }

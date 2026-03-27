@@ -6,6 +6,11 @@ edition.workspace = true
 description = "QuickJS backend for RongJS"
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/rong_quickjs"
 readme = "README.md"
 [dependencies]
 rong_quickjs_sys = { workspace = true }

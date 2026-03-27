@@ -6,7 +6,42 @@ edition.workspace = true
 description = "QuickJS FFI bindings for RongJS"
 license.workspace = true
 repository.workspace = true
-readme.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/rong_quickjs_sys"
+readme = "README.md"
+include = [
+    "Cargo.toml",
+    "README.md",
+    "build.rs",
+    "quickjs.wrapper.h",
+    "patch/extra.c",
+    "patch/inline.c",
+    "patch/qjs.c",
+    "patch/qjs.h",
+    "quickjs-ng/LICENSE",
+    "quickjs-ng/builtin-array-fromasync.h",
+    "quickjs-ng/builtin-iterator-zip-keyed.h",
+    "quickjs-ng/builtin-iterator-zip.h",
+    "quickjs-ng/cutils.h",
+    "quickjs-ng/dtoa.c",
+    "quickjs-ng/dtoa.h",
+    "quickjs-ng/libregexp-opcode.h",
+    "quickjs-ng/libregexp.c",
+    "quickjs-ng/libregexp.h",
+    "quickjs-ng/libunicode-table.h",
+    "quickjs-ng/libunicode.c",
+    "quickjs-ng/libunicode.h",
+    "quickjs-ng/list.h",
+    "quickjs-ng/quickjs-atom.h",
+    "quickjs-ng/quickjs-c-atomics.h",
+    "quickjs-ng/quickjs-opcode.h",
+    "quickjs-ng/quickjs.c",
+    "quickjs-ng/quickjs.h",
+    "src/**",
+]
 [build-dependencies]
 bindgen = "0.72"
 cc = "1"
