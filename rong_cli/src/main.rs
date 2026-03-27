@@ -143,6 +143,7 @@ async fn main() -> Result<(), RongJSError> {
 
         // For commands that need JS execution, use a single Rong worker pool
         Rong::<RongJS>::builder()
+            .shared()
             .build()?
             .call(|runtime, _receiver| async move {
                 let ctx = runtime.context();

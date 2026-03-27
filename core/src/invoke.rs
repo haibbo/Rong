@@ -16,7 +16,7 @@ use tracing::error;
 pub struct JsInvokeGate(pub Arc<Mutex<()>>);
 impl JSRuntimeService for JsInvokeGate {}
 
-/// Soft scheduler with priority and event coalescing, per JSRuntime.
+/// Soft invoke queue with priority and event coalescing, per JSRuntime.
 #[derive(Clone)]
 pub struct JsInvokeQueue {
     tx: mpsc::Sender<QueueItem>,
@@ -263,11 +263,11 @@ where
         .tx
         .send(item)
         .await
-        .map_err(|_| HostError::new(crate::error::E_INTERNAL, "scheduler queue closed"))?;
+        .map_err(|_| HostError::new(crate::error::E_INTERNAL, "invoke queue closed"))?;
 
     if let Some(rx) = reply_rx {
         rx.await.unwrap_or_else(|_| {
-            Err(HostError::new(crate::error::E_INTERNAL, "scheduler reply dropped").into())
+            Err(HostError::new(crate::error::E_INTERNAL, "invoke queue reply dropped").into())
         })
     } else {
         Ok(())

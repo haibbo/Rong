@@ -5,7 +5,7 @@ use tokio::time::sleep;
 
 #[tokio::main]
 async fn main() {
-    let rong = Rong::<RongJS>::builder().build().unwrap();
+    let rong = Rong::<RongJS>::builder().shared().build().unwrap();
     rong.call(|runtime, _receiver| async move {
         let ctx = runtime.context();
 

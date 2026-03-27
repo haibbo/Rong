@@ -8,7 +8,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
     let num_workers = 4;
-    let rong = Rong::<RongJS>::builder().workers(num_workers).build()?;
+    let rong = Rong::<RongJS>::builder()
+        .shared()
+        .workers(num_workers)
+        .build()?;
     info!(num_workers, "Rong worker pool created");
 
     let workers = rong.workers();
