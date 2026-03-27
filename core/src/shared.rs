@@ -516,6 +516,7 @@ fn shutdown_workers<E: JSEngine + 'static>(workers: &[Worker<E>]) {
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_worker_loop<E: JSEngine + 'static>(
     worker_id: usize,
     mut task_rx: mpsc::Receiver<UserAsyncTask<E>>,

@@ -487,6 +487,7 @@ where
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_pinned_worker_loop<E, K, S>(
     worker_id: usize,
     mut task_rx: mpsc::Receiver<PinnedAsyncTask<E, K, S>>,

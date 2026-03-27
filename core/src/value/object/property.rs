@@ -151,6 +151,15 @@ pub struct PropertyDescriptor<V: JSValueImpl> {
     attributes: PropertyAttributes,
 }
 
+impl<V> Default for PropertyDescriptor<V>
+where
+    V: JSObjectOps,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<V> PropertyDescriptor<V>
 where
     V: JSObjectOps,
