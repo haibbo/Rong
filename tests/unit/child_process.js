@@ -1,5 +1,5 @@
 describe("Child Process", () => {
-  it("hides internal child process classes from global scope", () => {
+  it("hides internal child process classes from global scope", async () => {
     assert.equal(typeof ChildProcess, "undefined");
     assert.equal(typeof ExecResult, "undefined");
 
@@ -11,6 +11,7 @@ describe("Child Process", () => {
       childFailed = true;
     }
     assert.equal(childFailed, true, "ChildProcess should not be constructible via instance.constructor");
+    await child.wait();
   });
 
   describe("exec", () => {
@@ -173,13 +174,14 @@ describe("Child Process", () => {
   });
 
   describe("spawn", () => {
-    it("should spawn a process and return ChildProcess object", () => {
+    it("should spawn a process and return ChildProcess object", async () => {
       const child = child_process.spawn("echo", ["hello"]);
       assert.ok(child !== null, "should return a ChildProcess object");
       assert.ok(typeof child.pid === "number", "should have pid property");
+      await child.wait();
     });
 
-    it("should have stdin, stdout and stderr streams", () => {
+    it("should have stdin, stdout and stderr streams", async () => {
       const child = child_process.spawn("cat", []);
       assert.ok(child.stdin !== null, "should have stdin");
       assert.ok(child.stdout !== null, "should have stdout");
@@ -200,6 +202,7 @@ describe("Child Process", () => {
       );
       // Clean up
       child.kill();
+      await child.wait();
     });
 
     it("should write to stdin and read from stdout", async () => {
@@ -301,57 +304,66 @@ describe("Child Process", () => {
   });
 
   describe("ChildProcess properties", () => {
-    it("should have pid after spawn", () => {
+    it("should have pid after spawn", async () => {
       const child = child_process.spawn("echo", ["test"]);
       assert.ok(typeof child.pid === "number", "pid should be a number");
       assert.ok(child.pid > 0, "pid should be positive");
+      await child.wait();
     });
 
-    it("should have kill method", () => {
+    it("should have kill method", async () => {
       const child = child_process.spawn("sleep", ["10"]);
       assert.ok(typeof child.kill === "function", "should have kill method");
       // Kill the sleep process with default SIGTERM
       const result = child.kill();
       assert.equal(result, true, "kill should return true for running process");
+      await child.wait();
     });
 
-    it("should support kill with signal name", () => {
+    it("should support kill with signal name", async () => {
       const child = child_process.spawn("sleep", ["10"]);
       const result = child.kill("SIGKILL");
       assert.equal(result, true, "kill with SIGKILL should return true");
+      await child.wait();
     });
 
-    it("should support kill with signal number", () => {
+    it("should support kill with signal number", async () => {
       const child = child_process.spawn("sleep", ["10"]);
       const result = child.kill("9"); // SIGKILL
       assert.equal(result, true, "kill with signal number should return true");
+      await child.wait();
     });
 
-    it("should have wait method", () => {
+    it("should have wait method", async () => {
       const child = child_process.spawn("echo", ["test"]);
       assert.ok(typeof child.wait === "function", "should have wait method");
+      await child.wait();
     });
   });
 
   describe("EventEmitter interface", () => {
-    it("should have on method", () => {
+    it("should have on method", async () => {
       const child = child_process.spawn("echo", ["test"]);
       assert.ok(typeof child.on === "function", "should have on method");
+      await child.wait();
     });
 
-    it("should have once method", () => {
+    it("should have once method", async () => {
       const child = child_process.spawn("echo", ["test"]);
       assert.ok(typeof child.once === "function", "should have once method");
+      await child.wait();
     });
 
-    it("should have off method", () => {
+    it("should have off method", async () => {
       const child = child_process.spawn("echo", ["test"]);
       assert.ok(typeof child.off === "function", "should have off method");
+      await child.wait();
     });
 
-    it("should have emit method", () => {
+    it("should have emit method", async () => {
       const child = child_process.spawn("echo", ["test"]);
       assert.ok(typeof child.emit === "function", "should have emit method");
+      await child.wait();
     });
   });
 });

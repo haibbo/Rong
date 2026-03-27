@@ -140,7 +140,7 @@ fn create_counter(ctx: &JSContext) -> JSResult<JSObject> {
     let (tx, rx) = mpsc::channel::<i32>(32);
 
     // Producer: spawn background work that feeds the channel
-    spawn(async move {
+    spawn_local(async move {
         for i in 1..=10 {
             if tx.send(i).await.is_err() { break; }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -179,7 +179,7 @@ fn make_manual_async_iter(ctx: &JSContext) -> JSResult<JSObject> {
         let c = c.clone();
         match ctx.promise() {
             Ok((promise, resolve, reject)) => {
-                spawn(async move {
+                spawn_local(async move {
                     let mut n = c.borrow_mut();
                     *n += 1;
                     let result = JSObject::new(&ctx);
@@ -215,7 +215,7 @@ fn make_manual_async_iter(ctx: &JSContext) -> JSResult<JSObject> {
 ```rust
 let (promise, resolve, reject) = ctx.promise()?;
 
-spawn(async move {
+spawn_local(async move {
     // ... do async work ...
     let _ = resolve.call::<_, ()>(None, (result,));
 });
@@ -378,7 +378,7 @@ assert.deepEqual(results, [10, 20, 30]);
 | `install_iterator_symbol(&ctx, &obj)` | Add only `[Symbol.iterator]` (when `next()` already exists) |
 | `install_async_iterator_symbol(&ctx, &obj)` | Add only `[Symbol.asyncIterator]` (when `next()` already exists) |
 | `ctx.promise()` | Create `(promise, resolve, reject)` for manual Promise construction |
-| `spawn(async { ... })` | Spawn async work on the current thread's LocalSet |
+| `spawn_local(async { ... })` | Spawn async work on the current thread's LocalSet |
 
 ## See Also
 

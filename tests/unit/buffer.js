@@ -93,6 +93,7 @@ describe("Buffer", () => {
       const file = new File(["Hello, World!"], "test.txt", {
         type: "text/plain",
       });
+      const after = Date.now();
 
       console.log("File instance details:", {
         constructorName: file.constructor.name,
@@ -114,12 +115,18 @@ describe("Buffer", () => {
       console.log("Comparing values:", {
         name: { actual: file.name, expected: "test.txt" },
         type: { actual: file.type, expected: "text/plain" },
-        lastModified: { actual: file.lastModified, expected: now },
+        lastModified: {
+          actual: file.lastModified,
+          expectedRange: [now, after],
+        },
       });
 
       assert.equal(file.name, "test.txt", "Filename should match");
       assert.equal(file.type, "text/plain", "MIME type should match");
-      assert.equal(file.lastModified, now, "Last modified time should match");
+      assert(
+        file.lastModified >= now && file.lastModified <= after,
+        "Last modified time should be captured during construction",
+      );
     });
 
     it("should create an empty file with defaults", () => {

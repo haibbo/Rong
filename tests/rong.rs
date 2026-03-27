@@ -8,7 +8,7 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn test_block_on_simple() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
     let result = rong.block_on(|_runtime, _receiver| async {
         let value = 10 + 20;
         Ok(value)
@@ -20,7 +20,7 @@ async fn test_block_on_simple() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_post_usize_message() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
     let worker = rong.get_worker().await?;
     let worker_clone = worker.clone();
 
@@ -28,7 +28,7 @@ async fn test_post_usize_message() -> JSResult<()> {
     let received_value = Arc::new(Mutex::new(None::<usize>));
     let received_value_clone = received_value.clone();
 
-    worker_clone.spawn_future::<_, _, ()>(async move |_runtime, mut receiver| {
+    worker_clone.spawn::<_, _, ()>(async move |_runtime, mut receiver| {
         println!("[Test Worker] Waiting for message...");
         if let Some(msg) = receiver.recv().await {
             match msg {
@@ -65,13 +65,13 @@ async fn test_post_usize_message() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_post_string_message() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
     let worker = rong.get_worker().await?;
     let worker_clone = worker.clone();
     let received_value = Arc::new(Mutex::new(None::<String>));
     let received_value_clone = received_value.clone();
 
-    worker_clone.spawn_future::<_, _, ()>(async move |_runtime, mut receiver| {
+    worker_clone.spawn::<_, _, ()>(async move |_runtime, mut receiver| {
         if let Some(WorkerMessage::String(val)) = receiver.recv().await {
             println!("[Test Worker] Received string: {}", val);
             *received_value_clone.lock().unwrap() = Some(val);
@@ -101,13 +101,13 @@ async fn test_post_custom_message() -> JSResult<()> {
         name: String,
     }
 
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
     let worker = rong.get_worker().await?;
     let worker_clone = worker.clone();
     let received_value = Arc::new(Mutex::new(None::<MyCustomData>));
     let received_value_clone = received_value.clone();
 
-    worker_clone.spawn_future::<_, _, ()>(async move |_runtime, mut receiver| {
+    worker_clone.spawn::<_, _, ()>(async move |_runtime, mut receiver| {
         if let Some(WorkerMessage::Custom(val_box)) = receiver.recv().await {
             if let Ok(downcasted_val) = val_box.downcast::<MyCustomData>() {
                 println!("[Test Worker] Received custom: {:?}", *downcasted_val);
@@ -138,7 +138,7 @@ async fn test_post_custom_message() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_worker_termination() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
     let worker = rong.get_worker().await?;
     let worker_clone = worker.clone();
 
@@ -151,7 +151,7 @@ async fn test_worker_termination() -> JSResult<()> {
         worker_clone.id()
     );
     let worker_id = worker_clone.id(); // Get ID before the closure
-    worker_clone.spawn_future::<_, _, ()>(async move |_runtime, _receiver| {
+    worker_clone.spawn::<_, _, ()>(async move |_runtime, _receiver| {
         println!("[Test Worker {}] Task started, sleeping...", worker_id); // Use captured ID
         task_started_clone.store(true, std::sync::atomic::Ordering::SeqCst);
         tokio::time::sleep(Duration::from_secs(5)).await;
@@ -175,7 +175,7 @@ async fn test_worker_termination() -> JSResult<()> {
     println!("[Test Main] Terminating Worker {}", worker.id());
     worker.terminate()?;
 
-    // Wait for the worker pool to become idle (should happen quickly after termination)
+    // Wait for the Rong worker pool to become idle (should happen quickly after termination)
     // Use a timeout to prevent the test from hanging indefinitely if termination fails
     println!("[Test Main] Waiting for join_all()...");
     match tokio::time::timeout(Duration::from_secs(2), rong.join_all()).await {
@@ -198,7 +198,7 @@ async fn test_worker_termination() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_enqueue_js_invoke_queue() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
     rong.block_on(|runtime, _receiver| async move {
         let ctx = runtime.context();
         let script = r#"(() => {
@@ -251,11 +251,11 @@ async fn test_enqueue_js_invoke_queue() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_get_worker_wait_eventually_returns_free_worker() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
 
     for _ in 0..32 {
         let worker = rong.get_worker().await?;
-        worker.spawn_future::<_, _, ()>(async move |_runtime, _receiver| {
+        worker.spawn::<_, _, ()>(async move |_runtime, _receiver| {
             tokio::time::sleep(Duration::from_millis(10)).await;
             Ok(())
         })?;
@@ -270,7 +270,7 @@ async fn test_get_worker_wait_eventually_returns_free_worker() -> JSResult<()> {
             .expect("get_worker_wait timed out")?;
         assert_eq!(waited_worker.id(), worker.id());
 
-        waited_worker.spawn_future::<_, _, ()>(async move |_runtime, _receiver| Ok(()))?;
+        waited_worker.spawn::<_, _, ()>(async move |_runtime, _receiver| Ok(()))?;
         rong.join_all().await?;
     }
 
@@ -279,7 +279,7 @@ async fn test_get_worker_wait_eventually_returns_free_worker() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_block_on_reentrant_inside_worker_returns_error() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
     let rong_clone = rong.clone();
 
     let nested_error = Arc::new(Mutex::new(None::<String>));
@@ -304,7 +304,7 @@ async fn test_block_on_reentrant_inside_worker_returns_error() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_scheduler_makes_progress_under_burst_enqueue() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
     let observed = Arc::new(AtomicUsize::new(0));
     let observed_clone = observed.clone();
 
@@ -362,7 +362,7 @@ async fn test_scheduler_makes_progress_under_burst_enqueue() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
     let started = Arc::new(AtomicUsize::new(0));
     let observed = Arc::new(AtomicUsize::new(0));
     let started_clone = started.clone();
@@ -382,6 +382,7 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
             r#"(async function () {
                 globalThis.__scheduler_started = 1;
                 await sleepMs(200);
+                globalThis.__scheduler_finished = 1;
             })"#,
         ))?;
 
@@ -420,6 +421,19 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
         .await
         .expect("high-priority invoke timed out")?;
 
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if let Ok(finished_flag) = ctx.global().get::<_, i32>("__scheduler_finished")
+                    && finished_flag == 1
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("slow invoke did not finish");
+
         Ok(())
     })?;
 
@@ -430,7 +444,7 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_scheduler_event_async_handler_keeps_last_wins_ordering() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build();
+    let rong = Rong::<RongJS>::builder().build()?;
 
     rong.block_on(|runtime, _receiver| async move {
         let ctx = runtime.context();

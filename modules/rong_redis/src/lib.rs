@@ -35,9 +35,23 @@ mod tests {
     use super::*;
     use rong_test::*;
     use std::time::Duration;
+    use tokio::io::AsyncReadExt;
 
     /// Start a redis-server on a random port. Returns (url, child).
     /// The child is killed when dropped via `kill_on_drop(true)`.
+    async fn read_child_stderr(child: &mut tokio::process::Child) -> String {
+        let Some(mut stderr) = child.stderr.take() else {
+            return String::new();
+        };
+
+        let mut buf = Vec::new();
+        if stderr.read_to_end(&mut buf).await.is_err() {
+            return String::new();
+        }
+
+        String::from_utf8_lossy(&buf).trim().to_string()
+    }
+
     async fn start_test_redis() -> Result<(String, tokio::process::Child), String> {
         // Find a free port
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -72,8 +86,10 @@ mod tests {
             None => return Err("redis-server not found".to_string()),
         };
 
-        let child = tokio::process::Command::new(bin)
+        let mut child = tokio::process::Command::new(bin)
             .args([
+                "--bind",
+                "127.0.0.1",
                 "--port",
                 &port.to_string(),
                 "--save",
@@ -84,13 +100,29 @@ mod tests {
                 "warning",
             ])
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| format!("failed to spawn redis-server: {}", e))?;
 
         // Wait for server to accept connections
-        for _ in 0..50 {
+        for _ in 0..150 {
+            if let Some(status) = child
+                .try_wait()
+                .map_err(|e| format!("failed to poll redis-server: {}", e))?
+            {
+                let stderr = read_child_stderr(&mut child).await;
+                let details = if stderr.is_empty() {
+                    format!("redis-server exited early with status {}", status)
+                } else {
+                    format!(
+                        "redis-server exited early with status {}: {}",
+                        status, stderr
+                    )
+                };
+                return Err(details);
+            }
+
             if tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port))
                 .await
                 .is_ok()
@@ -101,7 +133,15 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
 
-        Err("redis-server did not start in time".to_string())
+        let _ = child.kill().await;
+        let _ = child.wait().await;
+        let stderr = read_child_stderr(&mut child).await;
+        let details = if stderr.is_empty() {
+            "redis-server did not start in time".to_string()
+        } else {
+            format!("redis-server did not start in time: {}", stderr)
+        };
+        Err(details)
     }
 
     async fn setup_redis_env(

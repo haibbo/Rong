@@ -6,6 +6,7 @@ use tokio::time::sleep;
 fn main() {
     Rong::<RongJS>::builder()
         .build()
+        .unwrap()
         .block_on(async |runtime, _receiver| {
             let ctx = runtime.context();
 

@@ -569,7 +569,7 @@ impl RedisClient {
         let (msg_tx, msg_rx) = mpsc::channel::<Result<RedisSubscriptionMessage, String>>(64);
         let event_channel = logical_channel.clone();
 
-        rong::spawn(async move {
+        rong::spawn_local(async move {
             let mut stream = pubsub.on_message();
             loop {
                 if let Some(abort_rx) = &mut abort_rx {
