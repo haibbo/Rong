@@ -2,6 +2,32 @@
 
 Recommended path: use the **GitHub Actions** release-plz workflows. Local scripts are here for manual use / emergencies.
 
+Release flow summary: see [`docs/releasing.md`](../docs/releasing.md).
+
+## Local verification
+
+```bash
+cargo make pre-commit
+cargo make ci-verify
+ENGINE=jscore cargo make ci-verify
+cargo make ci-verify-all
+```
+
+- `cargo make pre-commit`: fast local gate (`cargo fmt --check` + `cargo check` + `cargo clippy`)
+- `cargo make ci-verify`: CI-equivalent gate for one engine, including `bash test.sh -e <engine>`
+- `cargo make ci-verify-all`: runs `ci-verify` sequentially for all default CI engines
+
+Optional local hook setup:
+
+```bash
+git config --local core.hooksPath .githooks
+./.githooks/pre-commit
+./.githooks/pre-push
+```
+
+- `pre-commit` hook only runs `cargo fmt --all -- --check`
+- `pre-push` hook runs `cargo make pre-commit`
+
 ## bump_version.sh
 
 ```

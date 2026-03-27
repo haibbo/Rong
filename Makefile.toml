@@ -1,0 +1,56 @@
+[config]
+skip_crate_env_info = true
+
+[env]
+ENGINE = "quickjs"
+ENGINES = "quickjs jscore"
+WORKSPACE_ARGS = "--workspace --exclude rong_arkjs --exclude rong_arkjs_sys"
+
+[tasks.fmt-check]
+command = "cargo"
+args = ["fmt", "--all", "--", "--check"]
+
+[tasks.check-engine]
+script_runner = "@shell"
+script = '''
+set -euo pipefail
+
+if [ "${ENGINE}" = "quickjs" ]; then
+  cargo check ${WORKSPACE_ARGS} --lib --bins --tests
+else
+  cargo check ${WORKSPACE_ARGS} --lib --bins --tests --no-default-features --features "${ENGINE},tls-aws-lc"
+fi
+'''
+
+[tasks.clippy-engine]
+script_runner = "@shell"
+script = '''
+set -euo pipefail
+
+if [ "${ENGINE}" = "quickjs" ]; then
+  cargo clippy ${WORKSPACE_ARGS} --lib --bins --tests -- -D warnings
+else
+  cargo clippy ${WORKSPACE_ARGS} --lib --bins --tests --no-default-features --features "${ENGINE},tls-aws-lc" -- -D warnings
+fi
+'''
+
+[tasks.test-engine]
+command = "bash"
+args = ["test.sh", "-e", "${ENGINE}"]
+
+[tasks.pre-commit]
+dependencies = ["fmt-check", "check-engine", "clippy-engine"]
+
+[tasks.ci-verify]
+dependencies = ["fmt-check", "check-engine", "clippy-engine", "test-engine"]
+
+[tasks.ci-verify-all]
+script_runner = "@shell"
+script = '''
+set -euo pipefail
+
+for engine in ${ENGINES}; do
+  echo "==> ci-verify (${engine})"
+  ENGINE="${engine}" cargo make ci-verify
+done
+'''

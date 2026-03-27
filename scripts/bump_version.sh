@@ -36,8 +36,9 @@ EXAMPLES:
 
 WORKFLOW:
   1. Updates [workspace.package] version
-  2. Syncs all [workspace.dependencies] versions
-  3. Creates git commit (if --commit or --commit-and-tag)
+  2. Updates the root [package] version
+  3. Syncs all [workspace.dependencies] versions
+  4. Creates git commit (if --commit or --commit-and-tag)
 
 DEFAULT BEHAVIOR:
   By default, this script only updates Cargo.toml without git operations.
@@ -148,7 +149,26 @@ perl -i -pe '
 echo -e "${GREEN}✓ Updated workspace.package.version to ${NEW_VERSION}${NC}"
 echo ""
 
-echo -e "${BLUE}Step 2: Syncing workspace.dependencies${NC}"
+echo -e "${BLUE}Step 2: Updating root package version${NC}"
+
+perl -i -pe '
+  BEGIN { $in_pkg = 0; }
+
+  if (/^\[package\]/) {
+    $in_pkg = 1;
+  } elsif (/^\[/ && $in_pkg) {
+    $in_pkg = 0;
+  }
+
+  if ($in_pkg && /^version = /) {
+    s/^version = ".*"/version = "'"$NEW_VERSION"'"/;
+  }
+' "$WORKSPACE_TOML"
+
+echo -e "${GREEN}✓ Updated root package version to ${NEW_VERSION}${NC}"
+echo ""
+
+echo -e "${BLUE}Step 3: Syncing workspace.dependencies${NC}"
 
 # Sync all workspace.dependencies versions
 perl -i -pe '
@@ -176,7 +196,7 @@ echo ""
 echo ""
 
 if [ "$DO_COMMIT" = true ]; then
-  echo -e "${BLUE}Step 3: Creating git commit${NC}"
+  echo -e "${BLUE}Step 4: Creating git commit${NC}"
 
   git add Cargo.toml
   git commit -m "chore: bump version to ${NEW_VERSION}"

@@ -3,7 +3,8 @@
 ## `ci.yml` (tests)
 
 - **Trigger:** push + pull_request
-- **Runs:** `test.sh` on macOS for `quickjs` and `jscore`
+- **Runs:** macOS matrix for `quickjs` and `jscore`
+- **Steps:** `cargo fmt --check` → `cargo make check-engine` → `cargo make clippy-engine` → `cargo make test-engine`
 
 ## `release-pr.yml` (release-plz)
 
@@ -25,8 +26,22 @@
 ## Local testing
 
 ```bash
-bash test.sh -e quickjs
-bash test.sh -e jscore
+cargo make ci-verify
+ENGINE=jscore cargo make ci-verify
+cargo make ci-verify-all
 ```
+
+## Local hooks
+
+```bash
+git config --local core.hooksPath .githooks
+./.githooks/pre-commit
+./.githooks/pre-push
+```
+
+Local hooks are layered:
+
+- `pre-commit`: `cargo fmt --all -- --check`
+- `pre-push`: `cargo make pre-commit` (`fmt` + `check` + `clippy` with the default `quickjs` engine)
 
 For local release steps, see `scripts/README.md`.

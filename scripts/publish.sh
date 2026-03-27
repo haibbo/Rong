@@ -41,8 +41,6 @@ CRATES=(
   "rong_assert"
   "rong_buffer"
   "rong_encoding"
-  "rong_navigator"
-  "rong_path"
   "rong_url"
   "rong_event"
   "rong_timer"
@@ -58,6 +56,10 @@ CRATES=(
   "rong_process"
   "rong_child_process"
   "rong_http"
+  "rong_redis"
+  "rong_sqlite"
+  "rong_worker"
+  "rong_s3"
 
   # Layer 8 - Meta package
   "rong_modules"
