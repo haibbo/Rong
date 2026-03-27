@@ -64,12 +64,12 @@ macro_rules! async_run {
     ($user_fn:expr) => {{
         let rong = Rong::<RongJS>::builder().build().unwrap();
 
-        let block_on_closure = |runtime: JSRuntime, _receiver| {
+        let call_closure = |runtime: JSRuntime, _receiver| {
             let ctx = runtime.context();
             $user_fn(ctx)
         };
 
-        rong.block_on::<_, _, ()>(block_on_closure).unwrap();
+        rong.call_blocking::<_, _, ()>(call_closure).unwrap();
     }};
 }
 

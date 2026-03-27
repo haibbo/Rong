@@ -1,100 +1,75 @@
 use rong::{
-    JSFunc, JSObject, JSResult, JsInvokePriority, Rong, RongJS, Source, WorkerMessage,
+    JSFunc, JSObject, JSResult, JsInvokePriority, Rong, RongJS, Source, TaskMessage,
     enqueue_js_invoke,
 };
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[tokio::test]
-async fn test_block_on_simple() -> JSResult<()> {
+async fn test_call_simple() -> JSResult<()> {
     let rong = Rong::<RongJS>::builder().build()?;
-    let result = rong.block_on(|_runtime, _receiver| async {
-        let value = 10 + 20;
-        Ok(value)
-    })?;
-    println!("[Test Main] Result: {:?}", result);
+    let result = rong
+        .call(|_runtime, _receiver| async {
+            let value = 10 + 20;
+            Ok(value)
+        })
+        .await?;
     assert_eq!(result, 30);
     Ok(())
 }
 
 #[tokio::test]
-async fn test_post_usize_message() -> JSResult<()> {
+async fn test_send_usize_message() -> JSResult<()> {
     let rong = Rong::<RongJS>::builder().build()?;
-    let worker = rong.get_worker().await?;
-    let worker_clone = worker.clone();
+    let worker = rong.worker(0)?;
+    let received = Arc::new(Mutex::new(None::<usize>));
+    let received_clone = received.clone();
 
-    // Use Arc<Mutex<Option<usize>>> to get the result back from the spawned future
-    let received_value = Arc::new(Mutex::new(None::<usize>));
-    let received_value_clone = received_value.clone();
-
-    worker_clone.spawn::<_, _, ()>(async move |_runtime, mut receiver| {
-        println!("[Test Worker] Waiting for message...");
-        if let Some(msg) = receiver.recv().await {
-            match msg {
-                WorkerMessage::Usize(val) => {
-                    println!("[Test Worker] Received usize: {}", val);
-                    let mut guard = received_value_clone.lock().unwrap();
-                    *guard = Some(val); // Store the received value
-                }
-                _ => {
-                    println!("[Test Worker] Received unexpected message type");
-                }
+    let task = worker
+        .spawn::<_, _, ()>(async move |_runtime, mut receiver| {
+            if let Some(TaskMessage::Usize(value)) = receiver.recv().await {
+                *received_clone.lock().unwrap() = Some(value);
             }
-        } else {
-            println!("[Test Worker] Channel closed unexpectedly");
-        }
-        Ok(())
-    })?;
+            Ok(())
+        })
+        .await?;
 
-    // Give the worker thread a moment to start and listen
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    task.send(TaskMessage::Usize(123)).await?;
+    task.join().await?;
+    rong.join().await?;
 
-    let sent_value = 123;
-    println!("[Test Main] Posting usize: {}", sent_value);
-    worker.post_message(WorkerMessage::Usize(sent_value))?;
-
-    rong.join_all().await?; // Waits for all workers to become free
-
-    // Check if the value was received
-    let final_value = *received_value.lock().unwrap();
-    assert_eq!(final_value, Some(sent_value));
-
+    assert_eq!(*received.lock().unwrap(), Some(123));
     Ok(())
 }
 
 #[tokio::test]
-async fn test_post_string_message() -> JSResult<()> {
+async fn test_send_string_message() -> JSResult<()> {
     let rong = Rong::<RongJS>::builder().build()?;
-    let worker = rong.get_worker().await?;
-    let worker_clone = worker.clone();
-    let received_value = Arc::new(Mutex::new(None::<String>));
-    let received_value_clone = received_value.clone();
+    let worker = rong.worker(0)?;
+    let received = Arc::new(Mutex::new(None::<String>));
+    let received_clone = received.clone();
 
-    worker_clone.spawn::<_, _, ()>(async move |_runtime, mut receiver| {
-        if let Some(WorkerMessage::String(val)) = receiver.recv().await {
-            println!("[Test Worker] Received string: {}", val);
-            *received_value_clone.lock().unwrap() = Some(val);
-        }
-        Ok(())
-    })?;
+    let task = worker
+        .spawn::<_, _, ()>(async move |_runtime, mut receiver| {
+            if let Some(TaskMessage::String(value)) = receiver.recv().await {
+                *received_clone.lock().unwrap() = Some(value);
+            }
+            Ok(())
+        })
+        .await?;
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    let expected = "hello worker".to_string();
+    task.send(TaskMessage::String(expected.clone())).await?;
+    task.join().await?;
+    rong.join().await?;
 
-    let sent_value = "hello worker".to_string();
-    println!("[Test Main] Posting string: {}", sent_value);
-    worker.post_message(WorkerMessage::String(sent_value.clone()))?;
-
-    rong.join_all().await?;
-
-    let final_value = received_value.lock().unwrap().clone();
-    assert_eq!(final_value, Some(sent_value));
-
+    assert_eq!(received.lock().unwrap().clone(), Some(expected));
     Ok(())
 }
 
 #[tokio::test]
-async fn test_post_custom_message() -> JSResult<()> {
+async fn test_send_custom_message() -> JSResult<()> {
     #[derive(Debug, PartialEq, Clone)]
     struct MyCustomData {
         id: i32,
@@ -102,104 +77,70 @@ async fn test_post_custom_message() -> JSResult<()> {
     }
 
     let rong = Rong::<RongJS>::builder().build()?;
-    let worker = rong.get_worker().await?;
-    let worker_clone = worker.clone();
-    let received_value = Arc::new(Mutex::new(None::<MyCustomData>));
-    let received_value_clone = received_value.clone();
+    let worker = rong.worker(0)?;
+    let received = Arc::new(Mutex::new(None::<MyCustomData>));
+    let received_clone = received.clone();
 
-    worker_clone.spawn::<_, _, ()>(async move |_runtime, mut receiver| {
-        if let Some(WorkerMessage::Custom(val_box)) = receiver.recv().await {
-            if let Ok(downcasted_val) = val_box.downcast::<MyCustomData>() {
-                println!("[Test Worker] Received custom: {:?}", *downcasted_val);
-                *received_value_clone.lock().unwrap() = Some(*downcasted_val);
-            } else {
-                println!("[Test Worker] Failed to downcast custom message");
+    let task = worker
+        .spawn::<_, _, ()>(async move |_runtime, mut receiver| {
+            if let Some(TaskMessage::Custom(value)) = receiver.recv().await
+                && let Ok(value) = value.downcast::<MyCustomData>()
+            {
+                *received_clone.lock().unwrap() = Some(*value);
             }
-        }
-        Ok(())
-    })?;
+            Ok(())
+        })
+        .await?;
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
-
-    let sent_value = MyCustomData {
+    let expected = MyCustomData {
         id: 99,
         name: "test data".to_string(),
     };
-    println!("[Test Main] Posting custom: {:?}", sent_value);
-    worker.post_message(WorkerMessage::Custom(Box::new(sent_value.clone())))?;
+    task.send(TaskMessage::Custom(Box::new(expected.clone())))
+        .await?;
+    task.join().await?;
+    rong.join().await?;
 
-    rong.join_all().await?;
-
-    let final_value = received_value.lock().unwrap().clone();
-    assert_eq!(final_value, Some(sent_value));
-
+    assert_eq!(received.lock().unwrap().clone(), Some(expected));
     Ok(())
 }
 
 #[tokio::test]
 async fn test_worker_termination() -> JSResult<()> {
     let rong = Rong::<RongJS>::builder().build()?;
-    let worker = rong.get_worker().await?;
-    let worker_clone = worker.clone();
+    let worker = rong.worker(0)?;
+    let started = Arc::new(AtomicBool::new(false));
+    let started_clone = started.clone();
 
-    // Flag to check if the task started execution
-    let task_started = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let task_started_clone = task_started.clone();
+    let task = worker
+        .spawn::<_, _, ()>(async move |_runtime, _receiver| {
+            started_clone.store(true, Ordering::SeqCst);
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            Ok(())
+        })
+        .await?;
 
-    println!(
-        "[Test Main] Spawning sleeping task on Worker {}",
-        worker_clone.id()
-    );
-    let worker_id = worker_clone.id(); // Get ID before the closure
-    worker_clone.spawn::<_, _, ()>(async move |_runtime, _receiver| {
-        println!("[Test Worker {}] Task started, sleeping...", worker_id); // Use captured ID
-        task_started_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        // This part should ideally not be reached if termination works correctly
-        println!(
-            "[Test Worker {}] Task finished sleeping (should have been terminated)",
-            worker_id
-        );
-        Ok(())
-    })?;
-
-    // Wait until the task has started inside the worker
-    println!("[Test Main] Waiting for task to start...");
-    while !task_started.load(std::sync::atomic::Ordering::SeqCst) {
+    while !started.load(Ordering::SeqCst) {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    println!("[Test Main] Task confirmed started.");
 
-    // Give it a tiny bit more time just in case, then terminate
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    println!("[Test Main] Terminating Worker {}", worker.id());
     worker.terminate()?;
 
-    // Wait for the Rong worker pool to become idle (should happen quickly after termination)
-    // Use a timeout to prevent the test from hanging indefinitely if termination fails
-    println!("[Test Main] Waiting for join_all()...");
-    match tokio::time::timeout(Duration::from_secs(2), rong.join_all()).await {
-        Ok(Ok(_)) => {
-            println!("[Test Main] join_all() completed successfully after termination.");
-            // Check worker state after join_all confirms it's free
-            // assert_eq!(worker.state().await, rong::WorkerState::Free);
-            Ok(())
-        }
-        Ok(Err(e)) => {
-            panic!("[Test Main] join_all() failed after termination: {:?}", e);
-        }
-        Err(_) => {
-            panic!(
-                "[Test Main] Timed out waiting for join_all() after termination. Worker might not have terminated correctly."
-            );
-        }
-    }
+    let err = tokio::time::timeout(Duration::from_secs(2), task.join())
+        .await
+        .expect("task join timed out")
+        .expect_err("terminated task should not complete successfully");
+    assert!(err.to_string().contains("aborted"));
+
+    rong.join().await?;
+    assert_eq!(worker.state(), rong::WorkerState::Idle);
+    Ok(())
 }
 
 #[tokio::test]
 async fn test_enqueue_js_invoke_queue() -> JSResult<()> {
     let rong = Rong::<RongJS>::builder().build()?;
-    rong.block_on(|runtime, _receiver| async move {
+    rong.call(|runtime, _receiver| async move {
         let ctx = runtime.context();
         let script = r#"(() => {
             globalThis.__invoke_counter = 0;
@@ -243,59 +184,56 @@ async fn test_enqueue_js_invoke_queue() -> JSResult<()> {
 
         let final_value: i32 = ctx.global().get("__invoke_counter")?;
         assert_eq!(final_value, 3);
-
         Ok(())
-    })?;
+    })
+    .await?;
     Ok(())
 }
 
 #[tokio::test]
-async fn test_get_worker_wait_eventually_returns_free_worker() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build()?;
+async fn test_spawn_waits_for_idle_worker() -> JSResult<()> {
+    let rong = Rong::<RongJS>::builder().workers(1).build()?;
 
-    for _ in 0..32 {
-        let worker = rong.get_worker().await?;
-        worker.spawn::<_, _, ()>(async move |_runtime, _receiver| {
-            tokio::time::sleep(Duration::from_millis(10)).await;
+    let first = rong
+        .spawn::<_, _, ()>(async move |_runtime, _receiver| {
+            tokio::time::sleep(Duration::from_millis(50)).await;
             Ok(())
-        })?;
+        })
+        .await?;
 
-        assert!(
-            rong.get_worker().await.is_err(),
-            "worker should still be busy"
-        );
+    let second = tokio::time::timeout(
+        Duration::from_secs(1),
+        rong.spawn::<_, _, ()>(async move |_runtime, _receiver| Ok(())),
+    )
+    .await
+    .expect("Rong::spawn timed out")?;
 
-        let waited_worker = tokio::time::timeout(Duration::from_secs(1), rong.get_worker_wait())
-            .await
-            .expect("get_worker_wait timed out")?;
-        assert_eq!(waited_worker.id(), worker.id());
-
-        waited_worker.spawn::<_, _, ()>(async move |_runtime, _receiver| Ok(()))?;
-        rong.join_all().await?;
-    }
-
+    assert_eq!(first.worker_id(), second.worker_id());
+    first.join().await?;
+    second.join().await?;
+    rong.join().await?;
     Ok(())
 }
 
 #[tokio::test]
-async fn test_block_on_reentrant_inside_worker_returns_error() -> JSResult<()> {
+async fn test_reentrant_rong_call_blocking_returns_error() -> JSResult<()> {
     let rong = Rong::<RongJS>::builder().build()?;
     let rong_clone = rong.clone();
-
     let nested_error = Arc::new(Mutex::new(None::<String>));
     let nested_error_clone = nested_error.clone();
 
-    rong.block_on(move |_runtime, _receiver| async move {
+    rong.call(move |_runtime, _receiver| async move {
         let err = rong_clone
-            .block_on(|_runtime, _receiver| async move { Ok::<_, rong::RongJSError>(123) })
-            .expect_err("reentrant block_on should fail");
+            .call_blocking(|_runtime, _receiver| async move { Ok::<_, rong::RongJSError>(123) })
+            .expect_err("reentrant Rong::call_blocking should fail");
         *nested_error_clone.lock().unwrap() = Some(err.to_string());
         Ok(())
-    })?;
+    })
+    .await?;
 
     let message = nested_error.lock().unwrap().clone().unwrap_or_default();
     assert!(
-        message.contains("reentrant block_on") || message.contains("inside a worker thread"),
+        message.contains("Rong::call_blocking") || message.contains("Rong worker thread"),
         "unexpected reentrant error: {message}"
     );
 
@@ -308,7 +246,7 @@ async fn test_scheduler_makes_progress_under_burst_enqueue() -> JSResult<()> {
     let observed = Arc::new(AtomicUsize::new(0));
     let observed_clone = observed.clone();
 
-    rong.block_on(|runtime, _receiver| async move {
+    rong.call(|runtime, _receiver| async move {
         let ctx = runtime.context();
         let script = r#"(() => {
             globalThis.__burst_counter = 0;
@@ -350,7 +288,8 @@ async fn test_scheduler_makes_progress_under_burst_enqueue() -> JSResult<()> {
         let value: i32 = ctx.global().get("__burst_counter")?;
         observed_clone.store(value as usize, Ordering::SeqCst);
         Ok(())
-    })?;
+    })
+    .await?;
 
     assert!(
         observed.load(Ordering::SeqCst) > 0,
@@ -368,7 +307,7 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
     let started_clone = started.clone();
     let observed_clone = observed.clone();
 
-    rong.block_on(|runtime, _receiver| async move {
+    rong.call(|runtime, _receiver| async move {
         let ctx = runtime.context();
 
         ctx.global().set(
@@ -435,10 +374,10 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
         .expect("slow invoke did not finish");
 
         Ok(())
-    })?;
+    })
+    .await?;
 
     assert_eq!(observed.load(Ordering::SeqCst), 1);
-
     Ok(())
 }
 
@@ -446,7 +385,7 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
 async fn test_scheduler_event_async_handler_keeps_last_wins_ordering() -> JSResult<()> {
     let rong = Rong::<RongJS>::builder().build()?;
 
-    rong.block_on(|runtime, _receiver| async move {
+    rong.call(|runtime, _receiver| async move {
         let ctx = runtime.context();
 
         ctx.global().set(
@@ -501,7 +440,8 @@ async fn test_scheduler_event_async_handler_keeps_last_wins_ordering() -> JSResu
         assert_eq!(final_value, "new");
 
         Ok(())
-    })?;
+    })
+    .await?;
 
     Ok(())
 }

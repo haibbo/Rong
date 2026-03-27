@@ -10,7 +10,6 @@ publish = false
 [dependencies]
 rong = { workspace = true }
 tokio = { workspace = true }
-futures = { workspace = true }
 axum = { workspace = true, optional = true }
 
 [features]
