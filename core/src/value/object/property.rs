@@ -160,13 +160,41 @@ where
     }
 
     #[must_use]
-    pub fn builder() -> Self {
+    pub fn new() -> Self {
         Self {
             value: None,
             getter: None,
             setter: None,
             attributes: PropertyAttributes::default(),
         }
+    }
+
+    #[must_use]
+    pub fn from_value(value: JSValue<V>) -> Self {
+        Self::new().value(value)
+    }
+
+    #[must_use]
+    pub fn from_rust<T>(ctx: &JSContext<V::Context>, value: T) -> Self
+    where
+        T: crate::IntoJSValue<V>,
+    {
+        Self::from_value(JSValue::from_rust(ctx, value))
+    }
+
+    #[must_use]
+    pub fn from_getter(getter: JSFunc<V>) -> Self {
+        Self::new().getter(getter)
+    }
+
+    #[must_use]
+    pub fn from_setter(setter: JSFunc<V>) -> Self {
+        Self::new().setter(setter)
+    }
+
+    #[must_use]
+    pub fn from_accessor(getter: JSFunc<V>, setter: JSFunc<V>) -> Self {
+        Self::from_getter(getter).setter(setter)
     }
 
     #[must_use]
@@ -188,42 +216,50 @@ where
     }
 
     #[must_use]
-    pub fn writable(mut self, status: bool) -> Self {
+    pub fn writable(mut self) -> Self {
         self.attributes.0 |= PropertyAttributes::HAS_WRITABLE;
-        if status {
-            self.attributes.0 |= PropertyAttributes::WRITABLE;
-        } else {
-            self.attributes.0 &= !PropertyAttributes::WRITABLE;
-        }
+        self.attributes.0 |= PropertyAttributes::WRITABLE;
         self
     }
 
     #[must_use]
-    pub fn enumerable(mut self, status: bool) -> Self {
+    pub fn readonly(mut self) -> Self {
+        self.attributes.0 |= PropertyAttributes::HAS_WRITABLE;
+        self.attributes.0 &= !PropertyAttributes::WRITABLE;
+        self
+    }
+
+    #[must_use]
+    pub fn enumerable(mut self) -> Self {
         self.attributes.0 |= PropertyAttributes::HAS_ENUMERABLE;
-        if status {
-            self.attributes.0 |= PropertyAttributes::ENUMERABLE;
-        } else {
-            self.attributes.0 &= !PropertyAttributes::ENUMERABLE;
-        }
+        self.attributes.0 |= PropertyAttributes::ENUMERABLE;
         self
     }
 
     #[must_use]
-    pub fn configurable(mut self, status: bool) -> Self {
-        self.attributes.0 |= PropertyAttributes::HAS_CONFIGURABLE;
-        if status {
-            self.attributes.0 |= PropertyAttributes::CONFIGURABLE;
-        } else {
-            self.attributes.0 &= !PropertyAttributes::CONFIGURABLE;
-        }
+    pub fn hidden(mut self) -> Self {
+        self.attributes.0 |= PropertyAttributes::HAS_ENUMERABLE;
+        self.attributes.0 &= !PropertyAttributes::ENUMERABLE;
         self
     }
 
-    // apply PropertyDescriptor to JS Object with key
-    pub fn apply_to<K>(mut self, obj: &JSObject<V>, k: K) -> JSResult<()>
+    #[must_use]
+    pub fn configurable(mut self) -> Self {
+        self.attributes.0 |= PropertyAttributes::HAS_CONFIGURABLE;
+        self.attributes.0 |= PropertyAttributes::CONFIGURABLE;
+        self
+    }
+
+    #[must_use]
+    pub fn non_configurable(mut self) -> Self {
+        self.attributes.0 |= PropertyAttributes::HAS_CONFIGURABLE;
+        self.attributes.0 &= !PropertyAttributes::CONFIGURABLE;
+        self
+    }
+
+    pub fn define_on<'a, K>(mut self, obj: &JSObject<V>, k: K) -> JSResult<()>
     where
-        K: for<'a> Into<PropertyKey<'a, V>>,
+        K: Into<PropertyKey<'a, V>>,
         V: JSObjectOps,
     {
         let ctx = &obj.context();

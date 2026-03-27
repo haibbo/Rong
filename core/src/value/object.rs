@@ -196,6 +196,18 @@ where
         Ok(self)
     }
 
+    pub fn define_property<'a, K>(
+        &'a self,
+        k: K,
+        descriptor: PropertyDescriptor<V>,
+    ) -> JSResult<&'a Self>
+    where
+        K: Into<PropertyKey<'a, V>>,
+    {
+        descriptor.define_on(self, k)?;
+        Ok(self)
+    }
+
     pub fn delete<'a, K>(&'a self, k: K) -> JSResult<bool>
     where
         K: Into<PropertyKey<'a, V>>,

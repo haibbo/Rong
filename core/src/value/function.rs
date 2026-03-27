@@ -192,12 +192,13 @@ impl<V: JSObjectOps> JSFunc<V> {
         let ctx = &self.0.context();
         let name_value = JSValue::from_rust(ctx, name);
         // Per JS spec, Function#name is non-writable, non-enumerable, configurable
-        PropertyDescriptor::builder()
-            .value(name_value)
-            .writable(false)
-            .enumerable(false)
-            .configurable(true)
-            .apply_to(&self.0, "name")?;
+        self.0.define_property(
+            "name",
+            PropertyDescriptor::from_value(name_value)
+                .readonly()
+                .hidden()
+                .configurable(),
+        )?;
         Ok(self)
     }
 
@@ -218,12 +219,13 @@ where
         let length = self.parameter_required_count();
         let class = Class::lookup::<RustFunc<V>>(ctx)?;
         let obj = class.instance::<RustFunc<V>>(self);
-        let len_value = crate::JSValue::from_rust(ctx, length as i32);
-        crate::PropertyDescriptor::builder()
-            .value(len_value)
-            .enumerable(false)
-            .configurable(false)
-            .apply_to(&obj, "length")?;
+        obj.define_property(
+            "length",
+            crate::PropertyDescriptor::from_rust(ctx, length as i32)
+                .readonly()
+                .hidden()
+                .non_configurable(),
+        )?;
         Ok(JSFunc(obj))
     }
 }

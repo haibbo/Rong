@@ -187,7 +187,7 @@ mod tests {
             // Create a pre-configured client with namespace prefix from Rust,
             // then inject it as a global `redis` — JS never calls `new RedisClient`.
             let client = RedisClient::new(url, Some("app1:".to_string()));
-            let js_client = Class::get::<RedisClient>(&ctx)?.instance(client);
+            let js_client = Class::lookup::<RedisClient>(&ctx)?.instance(client);
             ctx.global().set("redis", js_client)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "redis_namespace.js")

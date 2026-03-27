@@ -179,12 +179,13 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 
     // Add all error names as static properties
     for name in DOMExceptionName::iter() {
-        PropertyDescriptor::builder()
-            .value(JSValue::from_rust(ctx, name))
-            .enumerable(true)
-            .writable(false)
-            .configurable(false)
-            .apply_to(&constructor, name)?;
+        constructor.define_property(
+            name,
+            PropertyDescriptor::from_rust(ctx, name)
+                .enumerable()
+                .readonly()
+                .non_configurable(),
+        )?;
     }
     Ok(())
 }

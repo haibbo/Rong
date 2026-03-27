@@ -414,26 +414,27 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
 
     // Generate instance property definitions
     for (name, (getter, setter, enumerable)) in instance_properties {
+        let descriptor = match (getter.as_ref(), setter.as_ref()) {
+            (Some(getter), Some(setter)) => {
+                quote! { rong::PropertyDescriptor::from_accessor(#getter, #setter) }
+            }
+            (Some(getter), None) => quote! { rong::PropertyDescriptor::from_getter(#getter) },
+            (None, Some(setter)) => quote! { rong::PropertyDescriptor::from_setter(#setter) },
+            (None, None) => quote! { rong::PropertyDescriptor::new() },
+        };
+
         let mut parts = Vec::new();
 
-        // First add accessors
-        if let Some(getter) = getter {
-            parts.push(quote! { .getter(#getter) });
-        }
-        if let Some(ref setter) = setter {
-            parts.push(quote! { .setter(#setter) });
-        }
-
         // Always set configurable by default
-        parts.push(quote! { .configurable(true) });
+        parts.push(quote! { .configurable() });
 
         // Set enumerable if specified
         if enumerable {
-            parts.push(quote! { .enumerable(true) });
+            parts.push(quote! { .enumerable() });
         }
 
         let property = quote! {
-            class.property(#name, |builder| Ok(builder #(#parts)*))?;
+            class.property(#name, #descriptor #(#parts)*)?;
         };
 
         instance_methods.push(property);
@@ -441,26 +442,27 @@ pub fn class_impl(input: &ItemImpl, attr: TokenStream) -> syn::Result<TokenStrea
 
     // Generate static property definitions
     for (name, (getter, setter, enumerable)) in static_properties {
+        let descriptor = match (getter.as_ref(), setter.as_ref()) {
+            (Some(getter), Some(setter)) => {
+                quote! { rong::PropertyDescriptor::from_accessor(#getter, #setter) }
+            }
+            (Some(getter), None) => quote! { rong::PropertyDescriptor::from_getter(#getter) },
+            (None, Some(setter)) => quote! { rong::PropertyDescriptor::from_setter(#setter) },
+            (None, None) => quote! { rong::PropertyDescriptor::new() },
+        };
+
         let mut parts = Vec::new();
 
-        // First add accessors
-        if let Some(getter) = getter {
-            parts.push(quote! { .getter(#getter) });
-        }
-        if let Some(ref setter) = setter {
-            parts.push(quote! { .setter(#setter) });
-        }
-
         // Always set configurable by default
-        parts.push(quote! { .configurable(true) });
+        parts.push(quote! { .configurable() });
 
         // Set enumerable if specified
         if enumerable {
-            parts.push(quote! { .enumerable(true) });
+            parts.push(quote! { .enumerable() });
         }
 
         static_methods.push(quote! {
-            class.static_property(#name, |builder| Ok(builder #(#parts)*))?;
+            class.static_property(#name, #descriptor #(#parts)*)?;
         });
     }
 

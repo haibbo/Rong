@@ -274,12 +274,13 @@ fn test_property_descriptor_false_flags_on_existing_property() {
         let obj = JSObject::new(ctx);
         obj.set("fixed", 1)?;
 
-        PropertyDescriptor::builder()
-            .value(JSValue::from_rust(ctx, 2))
-            .writable(false)
-            .enumerable(false)
-            .configurable(false)
-            .apply_to(&obj, "fixed")?;
+        obj.define_property(
+            "fixed",
+            PropertyDescriptor::from_rust(ctx, 2)
+                .readonly()
+                .hidden()
+                .non_configurable(),
+        )?;
 
         ctx.global().set("__fixed_obj", obj.clone())?;
 

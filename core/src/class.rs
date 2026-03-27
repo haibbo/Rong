@@ -350,21 +350,19 @@ where
         Ok(())
     }
 
-    pub fn property<Fun, Key>(&self, k: Key, f: Fun) -> JSResult<()>
+    pub fn property<Key>(&self, k: Key, descriptor: PropertyDescriptor<V>) -> JSResult<()>
     where
-        Fun: Fn(PropertyDescriptor<V>) -> JSResult<PropertyDescriptor<V>>,
         Key: for<'b> Into<PropertyKey<'b, V>>,
     {
-        f(PropertyDescriptor::builder())?.apply_to(&self.prototype, k)?;
+        self.prototype.define_property(k, descriptor)?;
         Ok(())
     }
 
-    pub fn static_property<Fun, Key>(&self, k: Key, f: Fun) -> JSResult<()>
+    pub fn static_property<Key>(&self, k: Key, descriptor: PropertyDescriptor<V>) -> JSResult<()>
     where
-        Fun: Fn(PropertyDescriptor<V>) -> JSResult<PropertyDescriptor<V>>,
         Key: for<'b> Into<PropertyKey<'b, V>>,
     {
-        f(PropertyDescriptor::builder())?.apply_to(&self.constructor, k)?;
+        self.constructor.define_property(k, descriptor)?;
         Ok(())
     }
 

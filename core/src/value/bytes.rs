@@ -26,7 +26,7 @@ use crate::function::{Constructor, Optional};
 use crate::{
     Class, ClassSetup, FromJSValue, HostError, IntoJSValue, JSArrayOps, JSClass, JSContext,
     JSErrorFactory, JSExceptionThrower, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue,
-    JSValueConversion, JSValueImpl,
+    JSValueConversion, JSValueImpl, PropertyDescriptor,
 };
 
 use std::ops::Deref;
@@ -155,10 +155,11 @@ where
     }
 
     fn class_setup(class: &ClassSetup<V>) -> JSResult<()> {
-        class.property("length", |builder| {
-            let getter = class.new_func(|this: crate::function::This<JSBytes<V>>| this.len())?;
-            Ok(builder.getter(getter).configurable(true))
-        })?;
+        let getter = class.new_func(|this: crate::function::This<JSBytes<V>>| this.len())?;
+        class.property(
+            "length",
+            PropertyDescriptor::from_getter(getter).configurable(),
+        )?;
 
         class.method("toString", |this: crate::function::This<JSBytes<V>>| {
             this.to_string()

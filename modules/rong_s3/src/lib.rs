@@ -137,7 +137,7 @@ mod tests {
             // Create a pre-configured client with namespace prefix from Rust,
             // then inject it as a global `s3` — JS never calls `new S3Client`.
             let client = S3Client::new(test_s3_config(&endpoint), Some("app1/".to_string()));
-            let js_client = Class::get::<S3Client>(&ctx)?.instance(client);
+            let js_client = Class::lookup::<S3Client>(&ctx)?.instance(client);
             ctx.global().set("s3", js_client)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "s3_namespace.js")

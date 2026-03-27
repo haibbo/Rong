@@ -44,39 +44,42 @@ impl JSClass<JSEngineValue> for Point {
     }
 
     fn class_setup(class: &ClassSetup<JSEngineValue>) -> JSResult<()> {
-        class.property("x", |builder| {
-            let getter =
-                class.new_func(|this: This<function::JSClassRef<Point>>| Ok(this.borrow()?.x))?;
-            let setter = class.new_func(|this: ThisMut<Point>, x: i32| -> JSResult<()> {
-                let mut point = this.borrow_mut()?;
-                point.x = x;
-                Ok(())
-            })?;
-            Ok(builder.getter(getter).setter(setter).configurable(true))
+        let x_getter =
+            class.new_func(|this: This<function::JSClassRef<Point>>| Ok(this.borrow()?.x))?;
+        let x_setter = class.new_func(|this: ThisMut<Point>, x: i32| -> JSResult<()> {
+            let mut point = this.borrow_mut()?;
+            point.x = x;
+            Ok(())
         })?;
+        class.property(
+            "x",
+            PropertyDescriptor::from_accessor(x_getter, x_setter).configurable(),
+        )?;
 
-        class.property("y", |builder| {
-            let getter =
-                class.new_func(|this: This<function::JSClassRef<Point>>| Ok(this.borrow()?.y))?;
-            let setter = class.new_func(|this: ThisMut<Point>, y: i32| -> JSResult<()> {
-                let mut point = this.borrow_mut()?;
-                point.y = y;
-                Ok(())
-            })?;
-            Ok(builder.getter(getter).setter(setter).configurable(true))
+        let y_getter =
+            class.new_func(|this: This<function::JSClassRef<Point>>| Ok(this.borrow()?.y))?;
+        let y_setter = class.new_func(|this: ThisMut<Point>, y: i32| -> JSResult<()> {
+            let mut point = this.borrow_mut()?;
+            point.y = y;
+            Ok(())
         })?;
+        class.property(
+            "y",
+            PropertyDescriptor::from_accessor(y_getter, y_setter).configurable(),
+        )?;
 
-        class.static_property("origin", |builder| {
-            let getter = class.new_func(|| Point {
-                x: 0x5a,
-                y: 0xa5,
-                jsobj: None,
-            })?;
-            let setter = class.new_func(|| {
-                // Read-only property, setter does nothing
-            })?;
-            Ok(builder.getter(getter).setter(setter).configurable(true))
+        let origin_getter = class.new_func(|| Point {
+            x: 0x5a,
+            y: 0xa5,
+            jsobj: None,
         })?;
+        let origin_setter = class.new_func(|| {
+            // Read-only property, setter does nothing
+        })?;
+        class.static_property(
+            "origin",
+            PropertyDescriptor::from_accessor(origin_getter, origin_setter).configurable(),
+        )?;
 
         class.method(
             "add",
