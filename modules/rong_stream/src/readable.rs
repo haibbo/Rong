@@ -3,6 +3,8 @@ use bytes::{Bytes, BytesMut};
 use rong::function::{JSClassRef, This};
 use rong::*;
 use rong_abort::AbortSignal;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::io::AsyncRead;
@@ -15,11 +17,34 @@ type ControlReceiver = mpsc::UnboundedReceiver<StreamChunk>;
 type SharedReceiverSlot = Arc<StdMutex<Option<StreamReceiver>>>;
 type SharedReceiver = Arc<StdMutex<Option<StreamReceiver>>>;
 type SharedSender = Arc<StdMutex<Option<ControlSender>>>;
+type StreamInitializer = Rc<RefCell<Option<Box<dyn FnOnce() -> StreamReceiver>>>>;
+
+#[derive(Clone, Default)]
+struct AsyncReaderTaskRegistry {
+    handles: Rc<RefCell<Vec<tokio::task::JoinHandle<()>>>>,
+}
+
+impl AsyncReaderTaskRegistry {
+    fn track(&self, handle: tokio::task::JoinHandle<()>) {
+        let mut handles = self.handles.borrow_mut();
+        handles.retain(|task| !task.is_finished());
+        handles.push(handle);
+    }
+}
+
+impl JSRuntimeService for AsyncReaderTaskRegistry {
+    fn on_shutdown(&self) {
+        for handle in self.handles.borrow_mut().drain(..) {
+            handle.abort();
+        }
+    }
+}
 
 #[js_export]
 pub struct ReadableStream {
     // A single-consumer source guarded by a lock; getReader() takes ownership.
     pub(crate) rx_slot: SharedReceiverSlot,
+    initializer: StreamInitializer,
 }
 
 #[js_export]
@@ -40,33 +65,18 @@ impl ReadableStream {
     pub fn from_receiver(rx: StreamReceiver) -> Self {
         Self {
             rx_slot: Arc::new(StdMutex::new(Some(rx))),
+            initializer: Rc::new(RefCell::new(None)),
         }
     }
 
-    pub fn from_async_reader<R>(mut reader: R, chunk_size: usize) -> Self
+    fn from_lazy_receiver<F>(init: F) -> Self
     where
-        R: AsyncRead + Unpin + Send + 'static,
+        F: FnOnce() -> StreamReceiver + 'static,
     {
-        let (tx, rx) = mpsc::channel::<StreamChunk>(16);
-        rong::spawn(async move {
-            let mut buf = BytesMut::with_capacity(chunk_size.max(1));
-            loop {
-                buf.clear();
-                match tokio::io::AsyncReadExt::read_buf(&mut reader, &mut buf).await {
-                    Ok(0) => break,
-                    Ok(_) => {
-                        if tx.send(Ok(buf.split().freeze())).await.is_err() {
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        let _ = tx.send(Err(e.to_string())).await;
-                        break;
-                    }
-                }
-            }
-        });
-        Self::from_receiver(rx)
+        Self {
+            rx_slot: Arc::new(StdMutex::new(None)),
+            initializer: Rc::new(RefCell::new(Some(Box::new(init)))),
+        }
     }
 }
 
@@ -95,7 +105,7 @@ impl ReadableStream {
 
         // Forward controller writes to the bounded stream channel in-order.
         let tx_forwards = tx.clone();
-        rong::spawn(async move {
+        rong::spawn_local(async move {
             while let Some(item) = control_rx.recv().await {
                 if tx_forwards.send(item).await.is_err() {
                     break;
@@ -123,6 +133,11 @@ impl ReadableStream {
             .rx_slot
             .lock()
             .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
+        if guard.is_none()
+            && let Some(init) = self.initializer.borrow_mut().take()
+        {
+            *guard = Some(init());
+        }
         match guard.take() {
             Some(rx) => Ok(ReadableStreamDefaultReader {
                 slot: self.rx_slot.clone(),
@@ -144,6 +159,7 @@ impl ReadableStream {
             .lock()
             .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Stream is poisoned"))?;
         *guard = None;
+        let _ = self.initializer.borrow_mut().take();
         Ok(())
     }
 
@@ -313,7 +329,7 @@ impl ReadableStream {
         let (tx1, rx1) = mpsc::channel::<StreamChunk>(16);
         let (tx2, rx2) = mpsc::channel::<StreamChunk>(16);
 
-        rong::spawn(async move {
+        rong::spawn_local(async move {
             let mut src = rx;
             let mut tx1 = Some(tx1);
             let mut tx2 = Some(tx2);
@@ -657,7 +673,10 @@ impl JSReadableStream {
     /// The slot is an Arc<Mutex<Option<Receiver>>> managed by another owner.
     /// This does not consume the channel until the stream is locked via getReader/iteration.
     pub fn from_shared_receiver(ctx: &JSContext, slot: SharedReceiverSlot) -> JSResult<Self> {
-        let stream = ReadableStream { rx_slot: slot };
+        let stream = ReadableStream {
+            rx_slot: slot,
+            initializer: Rc::new(RefCell::new(None)),
+        };
         Self::new(ctx, stream)
     }
 
@@ -665,7 +684,34 @@ impl JSReadableStream {
     where
         R: AsyncRead + Unpin + Send + 'static,
     {
-        let stream = ReadableStream::from_async_reader(reader, chunk_size);
+        let registry = ctx
+            .runtime()
+            .get_or_init_service::<AsyncReaderTaskRegistry>()
+            .clone();
+        let stream = ReadableStream::from_lazy_receiver(move || {
+            let (tx, rx) = mpsc::channel::<StreamChunk>(16);
+            let mut reader = reader;
+            let task = rong::spawn_local(async move {
+                let mut buf = BytesMut::with_capacity(chunk_size.max(1));
+                loop {
+                    buf.clear();
+                    match tokio::io::AsyncReadExt::read_buf(&mut reader, &mut buf).await {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            if tx.send(Ok(buf.split().freeze())).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Err(e.to_string())).await;
+                            break;
+                        }
+                    }
+                }
+            });
+            registry.track(task);
+            rx
+        });
         Self::new(ctx, stream)
     }
 

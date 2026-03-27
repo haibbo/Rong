@@ -16,7 +16,7 @@
 //! });
 //! ```
 
-use rong::{Source, spawn, *};
+use rong::{Source, spawn_local, *};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -85,9 +85,10 @@ pub struct Worker {
     terminated: Arc<AtomicBool>,
     /// Ensure the main-side polling loop starts only once.
     polling_started: Arc<AtomicBool>,
+    /// Handle for the main-side polling loop so terminate/shutdown can abort it.
+    polling_handle: Rc<RefCell<Option<tokio::task::JoinHandle<()>>>>,
     /// Thread join handle for forceful shutdown.
-    #[allow(dead_code)]
-    thread_handle: Arc<tokio::sync::Mutex<Option<std::thread::JoinHandle<()>>>>,
+    thread_handle: Arc<std::sync::Mutex<Option<std::thread::JoinHandle<()>>>>,
 }
 
 #[js_class]
@@ -137,7 +138,8 @@ impl Worker {
             error_handler: Rc::new(RefCell::new(None)),
             terminated,
             polling_started: Arc::new(AtomicBool::new(false)),
-            thread_handle: Arc::new(tokio::sync::Mutex::new(Some(thread_handle))),
+            polling_handle: Rc::new(RefCell::new(None)),
+            thread_handle: Arc::new(std::sync::Mutex::new(Some(thread_handle))),
         })
     }
 
@@ -150,7 +152,7 @@ impl Worker {
 
         let json = js_value_to_json(&ctx, &data)?;
         let tx = self.to_worker.clone();
-        spawn(async move {
+        spawn_local(async move {
             let _ = tx.send(ToWorker::Message(json)).await;
         });
         Ok(())
@@ -163,10 +165,25 @@ impl Worker {
             return Ok(());
         }
 
+        if let Some(handle) = self.polling_handle.borrow_mut().take() {
+            handle.abort();
+        }
+
         let tx = self.to_worker.clone();
-        spawn(async move {
+        spawn_local(async move {
             let _ = tx.send(ToWorker::Terminate).await;
         });
+
+        let thread_handle = self
+            .thread_handle
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.take());
+        if let Some(handle) = thread_handle {
+            RongExecutor::global().spawn_blocking(move || {
+                let _ = handle.join();
+            });
+        }
 
         Ok(())
     }
@@ -198,9 +215,10 @@ impl Worker {
         let message_handler = self.message_handler.clone();
         let error_handler = self.error_handler.clone();
         let terminated = self.terminated.clone();
+        let polling_handle_slot = self.polling_handle.clone();
 
         // This runs on the main thread's LocalSet via spawn_local.
-        spawn(async move {
+        let polling_handle = spawn_local(async move {
             loop {
                 if terminated.load(Ordering::Acquire) {
                     break;
@@ -256,6 +274,7 @@ impl Worker {
                 }
             }
         });
+        *polling_handle_slot.borrow_mut() = Some(polling_handle);
     }
 
     #[js_method(gc_mark)]
@@ -304,7 +323,7 @@ impl Worker {
         let post_message_fn = JSFunc::new(&ctx, move |data: JSValue| {
             let c = post_ctx.clone();
             let t = tx.clone();
-            spawn(async move {
+            spawn_local(async move {
                 match js_value_to_json(&c, &data) {
                     Ok(json) => {
                         let _ = t.send(FromWorker::Message(json)).await;

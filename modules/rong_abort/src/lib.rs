@@ -38,7 +38,7 @@ mod tests {
                 let mut recv = abort.subscribe();
 
                 let tx = tx.clone();
-                spawn(async move {
+                spawn_local(async move {
                     let value = recv.recv().await;
                     let reason: String = value.try_into().unwrap();
                     println!("Got reason:{}", reason);

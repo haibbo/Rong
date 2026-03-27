@@ -6,7 +6,7 @@ use futures::Future;
 use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, Mutex as StdMutex},
 };
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tracing::error;
@@ -20,6 +20,7 @@ impl JSRuntimeService for JsInvokeGate {}
 #[derive(Clone)]
 pub struct JsInvokeQueue {
     tx: mpsc::Sender<QueueItem>,
+    background_tasks: Arc<StdMutex<Vec<futures::future::AbortHandle>>>,
 }
 
 impl Default for JsInvokeQueue {
@@ -31,8 +32,9 @@ impl Default for JsInvokeQueue {
 impl JsInvokeQueue {
     pub fn new() -> Self {
         let (tx, mut rx) = mpsc::channel::<QueueItem>(1024);
+        let background_tasks = Arc::new(StdMutex::new(Vec::new()));
 
-        crate::rong::spawn(async move {
+        crate::rong::spawn_local(async move {
             let mut q_high: VecDeque<QueueItem> = VecDeque::new();
             let mut q_norm: VecDeque<QueueItem> = VecDeque::new();
             let mut q_event: VecDeque<QueueItem> = VecDeque::new();
@@ -92,7 +94,10 @@ impl JsInvokeQueue {
             }
         });
 
-        Self { tx }
+        Self {
+            tx,
+            background_tasks,
+        }
     }
 
     /// Route an item into the correct priority queue.
@@ -145,7 +150,18 @@ impl JsInvokeQueue {
         None
     }
 }
-impl JSRuntimeService for JsInvokeQueue {}
+impl JSRuntimeService for JsInvokeQueue {
+    fn on_shutdown(&self) {
+        let abort_handles = {
+            let mut guard = self.background_tasks.lock().unwrap();
+            std::mem::take(&mut *guard)
+        };
+
+        for handle in abort_handles {
+            handle.abort();
+        }
+    }
+}
 
 /// Invocation priority
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -190,6 +206,7 @@ where
     };
 
     let ctx_clone = ctx.clone();
+    let background_tasks = queue.background_tasks.clone();
     let cb: InvokeFn = Box::new(move || {
         Box::pin(async move {
             if priority == JsInvokePriority::Event {
@@ -205,14 +222,18 @@ where
             match js_invoke_start::<C>(&ctx_clone, func, this_obj, args_obj).await {
                 Ok(Some(promise)) => {
                     if let Some(tx) = reply_tx {
-                        crate::rong::spawn(async move {
+                        crate::rong::spawn_local(async move {
                             let _ = tx.send(promise.into_future::<()>().await);
                         });
                     } else {
-                        crate::rong::spawn(async move {
+                        let (future, abort_handle) = futures::future::abortable(async move {
                             if let Err(err) = promise.into_future::<()>().await {
                                 error!(target: "rong", error = ?err, "background js invoke failed");
                             }
+                        });
+                        background_tasks.lock().unwrap().push(abort_handle);
+                        crate::rong::spawn_local(async move {
+                            let _ = future.await;
                         });
                     }
                 }

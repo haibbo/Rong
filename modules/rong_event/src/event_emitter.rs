@@ -387,6 +387,19 @@ where
 }
 
 impl EventEmitter {
+    /// Returns whether this emitter currently has any listeners for `key`.
+    pub fn has_listeners(&self, key: &EventKey) -> bool {
+        self.inner
+            .lock()
+            .map(|events| {
+                events
+                    .listeners
+                    .get(key)
+                    .is_some_and(|listeners| !listeners.is_empty())
+            })
+            .unwrap_or(false)
+    }
+
     /// Returns the first listener function for the given event key, or None if no listeners exist
     pub fn get_listener(&self, key: &EventKey) -> Option<JSFunc> {
         self.inner.lock().ok().and_then(|inner| {

@@ -18,7 +18,10 @@
 //!   to the callback function. Only the callback function and delay are supported.
 //! - Delay is in milliseconds and should be a positive number.
 
-use rong::{JSContext, JSFunc, JSResult, JSRuntimeService, JSValue, function::Optional, spawn};
+use rong::{
+    JSContext, JSFunc, JSResult, JSRuntimeService, JSValue, RongExecutor, function::Optional,
+    spawn_local,
+};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -68,7 +71,7 @@ impl TimerCallbackQueue {
             return;
         };
 
-        spawn(async move {
+        spawn_local(async move {
             while let Some(id) = rx.recv().await {
                 let (callback, repeat, pending) = {
                     let mut timers = lock_poison(&registry.inner.timers);
@@ -285,8 +288,8 @@ fn set_timeout_with_repeat(
         send_tick();
     };
 
-    // Run timer on the background runtime for reliable timing.
-    rong_rt::spawn(run_timer(cancel_bg, pending_bg, callback_tx));
+    // Run timer on the global host executor for reliable timing.
+    RongExecutor::global().spawn(run_timer(cancel_bg, pending_bg, callback_tx));
 
     id
 }

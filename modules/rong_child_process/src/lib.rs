@@ -6,13 +6,15 @@
 //! - `execFile(file, args?, options?)` - Execute a file directly
 
 use rong::{
-    HostError, JSArray, JSContext, JSFunc, JSObject, JSResult, JSValue, Promise,
+    HostError, JSArray, JSContext, JSContextService, JSFunc, JSObject, JSResult, JSValue, Promise,
     function::{Optional, Rest, This},
     js_class, js_export, js_method,
 };
 use rong_event::{Emitter, EmitterExt, EventEmitter};
 use rong_stream::{JSReadableStream, JSWritableStream};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -27,6 +29,37 @@ use tokio::sync::mpsc;
 #[cfg(windows)]
 enum ChildCommand {
     Kill,
+}
+
+#[derive(Clone, Default)]
+struct ChildProcessTaskRegistry {
+    handles: Rc<RefCell<Vec<tokio::task::JoinHandle<()>>>>,
+}
+
+impl ChildProcessTaskRegistry {
+    fn ensure(ctx: &JSContext) -> Self {
+        if let Some(registry) = ctx.get_service::<Self>() {
+            return registry.clone();
+        }
+
+        let registry = Self::default();
+        ctx.set_service(registry.clone());
+        registry
+    }
+
+    fn track(&self, handle: tokio::task::JoinHandle<()>) {
+        let mut handles = self.handles.borrow_mut();
+        handles.retain(|task| !task.is_finished());
+        handles.push(handle);
+    }
+}
+
+impl JSContextService for ChildProcessTaskRegistry {
+    fn on_shutdown(&self) {
+        for handle in self.handles.borrow_mut().drain(..) {
+            handle.abort();
+        }
+    }
 }
 
 fn type_error(message: impl Into<String>) -> HostError {
@@ -364,6 +397,7 @@ fn build_command(
     cmd.stdin(std::process::Stdio::piped());
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
+    cmd.kill_on_drop(true);
 
     cmd
 }
@@ -395,6 +429,25 @@ fn parse_args(args: &Optional<JSValue>) -> JSResult<Vec<String>> {
 
 const STREAM_CHUNK_SIZE: usize = 8192;
 
+#[cfg(unix)]
+fn configure_timeout_process_group(cmd: &mut Command) {
+    cmd.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn configure_timeout_process_group(_cmd: &mut Command) {}
+
+#[cfg(unix)]
+fn kill_child_process_group(pid: u32) {
+    // Negative pid targets the process group created via `process_group(0)`.
+    unsafe {
+        let _ = libc::kill(-(pid as i32), libc::SIGKILL);
+    }
+}
+
+#[cfg(not(unix))]
+fn kill_child_process_group(_pid: u32) {}
+
 async fn read_all(
     mut stdout: Option<impl tokio::io::AsyncRead + Unpin>,
 ) -> Result<Vec<u8>, std::io::Error> {
@@ -411,6 +464,7 @@ async fn run_command_with_output(
     mut child: Child,
     timeout: Option<u64>,
 ) -> JSResult<(std::process::ExitStatus, Vec<u8>, Vec<u8>)> {
+    let child_pid = child.id();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
 
@@ -422,6 +476,9 @@ async fn run_command_with_output(
             Ok(res) => res.map_err(|e| HostError::new(rong::error::E_IO, e.to_string()))?,
             Err(_) => {
                 let _ = child.start_kill();
+                if let Some(pid) = child_pid {
+                    kill_child_process_group(pid);
+                }
                 let _ = child.wait().await;
                 let _ = stdout_task.await;
                 let _ = stderr_task.await;
@@ -481,10 +538,12 @@ fn spawn(
     let stdin_writer = child.stdin.take();
     let stdout_reader = child.stdout.take();
     let stderr_reader = child.stderr.take();
+    let task_registry = ChildProcessTaskRegistry::ensure(&ctx);
 
     // Create ChildProcess instance
     let mut child_process = ChildProcess::new();
     child_process.pid = pid;
+    let exit_events = child_process.events.clone();
 
     // Clones for the background wait task.
     let exit_code = child_process.exit_code.clone();
@@ -530,7 +589,7 @@ fn spawn(
     let ctx_for_exit = ctx.clone();
     let child_obj_for_exit = child_obj.clone();
 
-    rong::spawn(async move {
+    let wait_task = rong::spawn_local(async move {
         let emit_exit = |code: Option<i32>| {
             if let Ok(mut ec) = exit_code.lock() {
                 *ec = code;
@@ -538,13 +597,18 @@ fn spawn(
             exited.store(true, Ordering::SeqCst);
             exit_notify.notify_waiters();
 
+            let exit_key = rong_event::EventKey::from("exit");
+            if !exit_events.has_listeners(&exit_key) {
+                return;
+            }
+
             let code_val = match code {
                 Some(code) => JSValue::from(&ctx_for_exit, code),
                 None => JSValue::null(&ctx_for_exit),
             };
             let _ = ChildProcess::do_emit(
                 This(child_obj_for_exit.clone()),
-                rong_event::EventKey::from("exit"),
+                exit_key,
                 Rest(vec![code_val]),
             );
         };
@@ -585,6 +649,7 @@ fn spawn(
             emit_exit(code);
         }
     });
+    task_registry.track(wait_task);
 
     Ok(child_obj)
 }
@@ -632,8 +697,13 @@ fn exec(ctx: JSContext, command: String, options: Optional<JSObject>) -> JSResul
             }
         }
 
+        if timeout.is_some() {
+            configure_timeout_process_group(&mut cmd);
+        }
+
         cmd.stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true);
 
         let child = cmd
             .spawn()
@@ -687,8 +757,13 @@ fn exec_file(
             }
         }
 
+        if timeout.is_some() {
+            configure_timeout_process_group(&mut cmd);
+        }
+
         cmd.stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true);
 
         let child = cmd
             .spawn()
@@ -706,6 +781,7 @@ fn exec_file(
 /// Initialize the child_process module
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     rong_stream::init(ctx)?;
+    let _ = ChildProcessTaskRegistry::ensure(ctx);
 
     ctx.register_hidden_class::<ChildProcess>()?;
     ctx.register_hidden_class::<ExecResult>()?;
@@ -726,13 +802,27 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rong::JSContext;
+    use rong::{JSContext, JSObject};
     use rong_test::*;
+
+    fn install_process_env(ctx: &JSContext) -> JSResult<()> {
+        let process = JSObject::new(ctx);
+        let env = JSObject::new(ctx);
+
+        for (key, value) in std::env::vars() {
+            env.set(key.as_str(), value.as_str())?;
+        }
+
+        process.set("env", env)?;
+        ctx.global().set("process", process)?;
+
+        Ok(())
+    }
 
     #[test]
     fn test_child_process() {
         async_run!(|ctx: JSContext| async move {
-            rong_process::init(&ctx)?;
+            install_process_env(&ctx)?;
             rong_encoding::init(&ctx)?;
             init(&ctx)?;
             rong_timer::init(&ctx)?;
