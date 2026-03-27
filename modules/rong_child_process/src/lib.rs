@@ -78,19 +78,19 @@ pub struct SpawnOptions {
 impl SpawnOptions {
     fn from_js_object(_ctx: &JSContext, obj: &JSObject) -> JSResult<Self> {
         let mut opts = SpawnOptions::default();
-        if obj.has("cwd") {
+        if obj.has_property("cwd")? {
             let cwd = obj
                 .get::<_, String>("cwd")
                 .map_err(|_| type_error("options.cwd must be a string"))?;
             opts.cwd = Some(cwd);
         }
-        if obj.has("shell") {
+        if obj.has_property("shell")? {
             let shell = obj
                 .get::<_, bool>("shell")
                 .map_err(|_| type_error("options.shell must be a boolean"))?;
             opts.shell = Some(shell);
         }
-        if obj.has("env") {
+        if obj.has_property("env")? {
             let env_obj = obj
                 .get::<_, JSObject>("env")
                 .map_err(|_| type_error("options.env must be an object of string values"))?;
@@ -103,7 +103,7 @@ impl SpawnOptions {
             }
             opts.env = Some(env_map);
         }
-        if obj.has("timeout") {
+        if obj.has_property("timeout")? {
             let timeout = obj
                 .get::<_, f64>("timeout")
                 .map_err(|_| type_error("options.timeout must be a non-negative number"))?;
@@ -558,8 +558,8 @@ fn spawn(
     };
 
     // Create the JS object
-    let child_obj = JSValue::from(&ctx, child_process);
-    let child_obj: JSObject = child_obj.try_into()?;
+    let child_obj = JSValue::from_rust(&ctx, child_process);
+    let child_obj: JSObject = child_obj.to_rust()?;
 
     // Create WritableStream for stdin
     if let Some(stdin) = stdin_writer {
@@ -603,7 +603,7 @@ fn spawn(
             }
 
             let code_val = match code {
-                Some(code) => JSValue::from(&ctx_for_exit, code),
+                Some(code) => JSValue::from_rust(&ctx_for_exit, code),
                 None => JSValue::null(&ctx_for_exit),
             };
             let _ = ChildProcess::do_emit(

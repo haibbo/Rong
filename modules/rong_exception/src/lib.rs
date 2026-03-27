@@ -168,23 +168,23 @@ impl DOMException {
             message: message.to_string(),
             name,
         };
-        Ok(Class::get::<DOMException>(ctx)?.instance(dom))
+        Ok(Class::lookup::<DOMException>(ctx)?.instance(dom))
     }
 }
 
 /// Register exception-related classes with the JavaScript engine
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<DOMException>()?;
-    let constructor = Class::get::<DOMException>(ctx)?;
+    let constructor = Class::lookup::<DOMException>(ctx)?;
 
     // Add all error names as static properties
     for name in DOMExceptionName::iter() {
         PropertyDescriptor::builder()
-            .value(JSValue::from(ctx, name))
+            .value(JSValue::from_rust(ctx, name))
             .enumerable(true)
             .writable(false)
             .configurable(false)
-            .apply_to(&constructor, name);
+            .apply_to(&constructor, name)?;
     }
     Ok(())
 }

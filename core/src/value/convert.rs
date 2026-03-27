@@ -108,6 +108,20 @@ where
     }
 }
 
+impl<V, T> FromJSValue<V> for Option<T>
+where
+    V: JSValueImpl + super::JSTypeOf,
+    T: FromJSValue<V>,
+{
+    fn from_js_value(ctx: &JSContext<V::Context>, value: JSValue<V>) -> JSResult<Self> {
+        if value.is_null() || value.is_undefined() {
+            Ok(None)
+        } else {
+            T::from_js_value(ctx, value).map(Some)
+        }
+    }
+}
+
 /// convert to JS Value represented by trait JSValueImpl
 pub trait IntoJSValue<V>
 where

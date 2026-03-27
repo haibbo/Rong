@@ -84,7 +84,7 @@ pub fn class_instance_impl(input: &DeriveInput) -> syn::Result<TokenStream> {
 
         impl rong::IntoJSValue<rong::JSEngineValue> for #type_name {
             fn into_js_value(self, context: &rong::JSContext) -> rong::JSValue {
-                rong::Class::get::<Self>(context)
+                rong::Class::lookup::<Self>(context)
                     .map(|class| class.instance(self).into_js_value())
                     .unwrap_or_else(|_| context.throw_error("Failed to make Class Instance"))
             }

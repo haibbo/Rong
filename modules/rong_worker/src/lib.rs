@@ -51,7 +51,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 /// Serialize a JSValue to a JSON string using the context's JSON.stringify.
 fn js_value_to_json(ctx: &JSContext, data: &JSValue) -> JSResult<String> {
     if let Some(obj) = data.clone().into_object() {
-        obj.json_stringify()
+        obj.to_json_string()
     } else {
         let json_obj = ctx.global().get::<_, JSObject>("JSON")?;
         let stringify = json_obj.get::<_, JSFunc>("stringify")?;
@@ -386,7 +386,7 @@ impl Worker {
                     match JSObject::from_json_string(&ctx, &json_str) {
                         Ok(data) => {
                             if let Ok(handler) = ctx.global().get::<_, JSValue>("onmessage")
-                                && let Ok(func) = handler.try_into::<JSFunc>()
+                                && let Ok(func) = handler.to_rust::<JSFunc>()
                             {
                                 let event = JSObject::new(&ctx);
                                 event.set("data", data).ok();

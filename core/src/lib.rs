@@ -12,14 +12,62 @@ mod shared;
 mod source;
 mod value;
 mod worker_thread;
+
+pub mod engine {
+    pub use crate::class::JSClassExt;
+    pub use crate::context::{JSContextImpl, JSRawContext};
+    pub use crate::runtime::{JSEngine, JSRuntimeImpl};
+    pub use crate::value::{
+        JSArrayBufferOps, JSArrayOps, JSErrorFactory, JSExceptionThrower, JSObjectOps, JSTypeOf,
+        JSTypedArrayKind, JSTypedArrayOps, JSValueConversion, JSValueImpl, JSValueMapper,
+        JSValueType,
+    };
+}
+
+pub mod advanced {
+    pub use crate::context::JSContextService;
+    pub use crate::runtime::JSRuntimeService;
+}
+
 pub use invoke::{JsInvokePriority, enqueue_js_invoke};
 
-pub use class::*;
-pub use context::*;
+pub use class::{Class, ClassSetup, JSClass};
+pub use context::JSContext;
 pub use error::{HostError, JSResult, RongJSError, illegal_constructor};
-pub use iterator::*;
+pub use function::Constructor;
+pub use iterator::{
+    IntoJSAsyncIteratorExt, IntoJSIteratorExt, JSAsyncIterator, JSIterator,
+    install_async_iterator_symbol, install_iterator_symbol,
+};
 pub use pinned::*;
-pub use promise::*;
-pub use runtime::*;
+pub use promise::{Promise, PromiseResolver};
+pub use runtime::{JSEngine, JSRuntime};
 pub use source::{Source, SourceKind};
-pub use value::*;
+pub use value::{
+    AnyJSTypedArray, FromJSValue, IntoJSValue, JSArray, JSArrayBuffer, JSBytes, JSDate,
+    JSException, JSFunc, JSObject, JSSymbol, JSTypedArray, JSTypedArrayKind, JSValue, JSValueType,
+    JsonToJSValue, PropertyAttributes, PropertyDescriptor, PropertyKey, TypedArrayElement,
+    Uint8Clamped,
+};
+
+#[doc(hidden)]
+pub use advanced::{JSContextService, JSRuntimeService};
+#[doc(hidden)]
+pub use engine::{
+    JSArrayBufferOps, JSArrayOps, JSClassExt, JSContextImpl, JSErrorFactory, JSExceptionThrower,
+    JSObjectOps, JSRawContext, JSRuntimeImpl, JSTypeOf, JSTypedArrayOps, JSValueConversion,
+    JSValueImpl, JSValueMapper,
+};
+
+pub mod prelude {
+    pub use crate::{
+        Class, ClassSetup, FromJSValue, HostError, IntoJSAsyncIteratorExt, IntoJSIteratorExt,
+        IntoJSValue, JSArray, JSArrayBuffer, JSArrayBufferOps, JSArrayOps, JSAsyncIterator,
+        JSBytes, JSClass, JSContext, JSContextImpl, JSDate, JSEngine, JSErrorFactory, JSException,
+        JSExceptionThrower, JSFunc, JSIterator, JSObject, JSObjectOps, JSRawContext, JSResult,
+        JSRuntime, JSRuntimeImpl, JSSymbol, JSTypeOf, JSTypedArray, JSTypedArrayOps, JSValue,
+        JSValueConversion, JSValueImpl, JSValueMapper, JsInvokePriority, Promise, RongJSError,
+        Source, SourceKind, enqueue_js_invoke, install_async_iterator_symbol,
+        install_iterator_symbol,
+    };
+}

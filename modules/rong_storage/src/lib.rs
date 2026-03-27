@@ -113,7 +113,7 @@ mod tests {
                     ..Default::default()
                 },
             )?;
-            let js_storage = Class::get::<Storage>(&ctx)?.instance(storage);
+            let js_storage = Class::lookup::<Storage>(&ctx)?.instance(storage);
             ctx.global().set("storage", js_storage)?;
 
             let passed = UnitJSRunner::load_script(&ctx, "storage_injected.js")

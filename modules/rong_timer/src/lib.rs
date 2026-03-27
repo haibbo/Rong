@@ -320,7 +320,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 
     let registry_clone = registry.clone();
     let clear_timeout = JSFunc::new(ctx, move |id: JSValue| {
-        if let Ok(id) = id.try_into::<u32>() {
+        if let Ok(id) = id.to_rust::<u32>() {
             registry_clone.cancel_timer(id);
         }
     });
@@ -338,7 +338,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     });
 
     let clear_interval = JSFunc::new(ctx, move |id: JSValue| {
-        if let Ok(id) = id.try_into::<u32>() {
+        if let Ok(id) = id.to_rust::<u32>() {
             registry.cancel_timer(id);
         }
     });

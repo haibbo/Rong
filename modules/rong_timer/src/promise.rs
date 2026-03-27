@@ -162,19 +162,18 @@ pub fn set_interval(ctx: JSContext, delay: Optional<f64>) -> JSResult<JSObject> 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
     let timer = JSObject::new(ctx);
 
-    timer
-        .set(
-            "setTimeout",
-            JSFunc::new(ctx, set_timeout)?.name("setTimeout")?,
-        )?
-        .set(
-            "setImmediate",
-            JSFunc::new(ctx, set_immediate)?.name("setImmediate")?,
-        )?
-        .set(
-            "setInterval",
-            JSFunc::new(ctx, set_interval)?.name("setInterval")?,
-        )?;
+    timer.set(
+        "setTimeout",
+        JSFunc::new(ctx, set_timeout)?.name("setTimeout")?,
+    )?;
+    timer.set(
+        "setImmediate",
+        JSFunc::new(ctx, set_immediate)?.name("setImmediate")?,
+    )?;
+    timer.set(
+        "setInterval",
+        JSFunc::new(ctx, set_interval)?.name("setInterval")?,
+    )?;
 
     ctx.global().set("timers", timer)?;
     Ok(())

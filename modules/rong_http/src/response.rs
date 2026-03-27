@@ -405,7 +405,7 @@ impl Response {
             .get("Content-Type".to_string())?
             .unwrap_or_default();
         let form = FormData::from_bytes(&bytes, &content_type)?;
-        Ok(Class::get::<FormData>(&ctx)?.instance(form))
+        Ok(Class::lookup::<FormData>(&ctx)?.instance(form))
     }
 
     #[js_method]
@@ -520,7 +520,7 @@ impl Response {
             body_stream: Rc::new(RefCell::new(None)),
         };
 
-        let class = Class::get::<Response>(ctx)?;
+        let class = Class::lookup::<Response>(ctx)?;
         Ok(class.instance(response))
     }
 

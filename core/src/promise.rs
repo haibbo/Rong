@@ -176,7 +176,7 @@ where
     <V::Context as crate::JSContextImpl>::Runtime: 'static,
 {
     fn resolve_promise(self, _resolve: JSFunc<V>, reject: JSFunc<V>) {
-        let ctx = reject.get_ctx();
+        let ctx = reject.context();
         let js_err = self.into_catch_value(&ctx);
         let _ = reject.call::<_, ()>(None, (js_err,));
         drain_microtasks::<V>(&ctx);
@@ -191,7 +191,7 @@ where
     <V::Context as crate::JSContextImpl>::Runtime: 'static,
 {
     fn resolve_promise(self, resolve: JSFunc<V>, _reject: JSFunc<V>) {
-        let ctx = resolve.get_ctx();
+        let ctx = resolve.context();
         let _ = resolve.call::<_, ()>(None, (self,));
         drain_microtasks::<V>(&ctx);
     }
@@ -205,7 +205,7 @@ where
     <V::Context as crate::JSContextImpl>::Runtime: 'static,
 {
     fn resolve_promise(self, resolve: JSFunc<V>, _reject: JSFunc<V>) {
-        let ctx = resolve.get_ctx();
+        let ctx = resolve.context();
         let arg = <Vec<T> as IntoJSValue<V>>::into_js_value(self, &ctx).into_value();
         let this = V::create_undefined(ctx.as_ref());
         let argv = [arg];
@@ -225,7 +225,7 @@ where
     fn resolve_promise(self, resolve: JSFunc<V>, reject: JSFunc<V>) {
         match self {
             Ok(value) => {
-                let ctx = resolve.get_ctx();
+                let ctx = resolve.context();
                 let arg = <T as IntoJSValue<V>>::into_js_value(value, &ctx).into_value();
                 let this = V::create_undefined(ctx.as_ref());
                 let argv = [arg];
@@ -233,7 +233,7 @@ where
                 drain_microtasks::<V>(&ctx);
             }
             Err(err) => {
-                let ctx = reject.get_ctx();
+                let ctx = reject.context();
                 let js_error_value = err.into_catch_value(&ctx).into_value();
                 let this = V::create_undefined(ctx.as_ref());
                 let argv = [js_error_value];
@@ -262,12 +262,9 @@ impl<V: JSValueImpl + 'static> Promise<V> {
     ///
     /// # Example
     /// ```rust,no_run
-    /// use rong_core::{JSEngine, JSArrayBufferOps, JSObjectOps, Promise, Source, JSResult};
+    /// use rong_core::prelude::*;
     ///
-    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
-    /// where
-    ///     E::Value: JSArrayBufferOps + JSObjectOps + 'static,
-    /// {
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()> {
     ///     let runtime = E::runtime();
     ///     let ctx = runtime.context();
     ///
@@ -304,7 +301,7 @@ where
             let state = Rc::new(RefCell::new(PromiseState::Pending(cx.waker().clone())));
             this.state = Some(state.clone());
 
-            let ctx = &this.promise.obj.get_ctx();
+            let ctx = &this.promise.obj.context();
 
             // Clone state for callbacks
             let state = this.state.clone().unwrap();

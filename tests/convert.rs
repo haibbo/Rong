@@ -5,65 +5,65 @@ use std::string::String;
 #[test]
 fn test_convert() {
     run(|ctx| {
-        let jsvalue = JSValue::from(ctx, false);
+        let jsvalue = JSValue::from_rust(ctx, false);
         assert!(jsvalue.is_boolean());
-        assert!(!jsvalue.try_into::<bool>().unwrap());
+        assert!(!jsvalue.to_rust::<bool>().unwrap());
 
-        let jsvalue = JSValue::from(ctx, i32::MIN);
+        let jsvalue = JSValue::from_rust(ctx, i32::MIN);
         assert!(jsvalue.is_number());
-        assert_eq!(i32::MIN, jsvalue.try_into::<i32>().unwrap());
+        assert_eq!(i32::MIN, jsvalue.to_rust::<i32>().unwrap());
 
-        let jsvalue = JSValue::from(ctx, u32::MAX);
-        assert_eq!(u32::MAX, jsvalue.try_into::<u32>().unwrap());
+        let jsvalue = JSValue::from_rust(ctx, u32::MAX);
+        assert_eq!(u32::MAX, jsvalue.to_rust::<u32>().unwrap());
 
         // Test i64: small values should be regular numbers, large values should be BigInt
         let small_i64: i64 = 42;
-        let jsvalue = JSValue::from(ctx, small_i64);
+        let jsvalue = JSValue::from_rust(ctx, small_i64);
         assert!(jsvalue.is_number(), "Small i64 should be a regular number");
-        assert_eq!(small_i64, jsvalue.try_into::<i64>().unwrap());
+        assert_eq!(small_i64, jsvalue.to_rust::<i64>().unwrap());
 
-        let jsvalue = JSValue::from(ctx, i64::MIN);
+        let jsvalue = JSValue::from_rust(ctx, i64::MIN);
         assert!(jsvalue.is_bigint(), "i64::MIN should be a BigInt");
-        assert_eq!(i64::MIN, jsvalue.try_into::<i64>().unwrap());
+        assert_eq!(i64::MIN, jsvalue.to_rust::<i64>().unwrap());
 
         // Test u64: small values should be regular numbers, large values should be BigInt
         let small_u64: u64 = 42;
-        let jsvalue = JSValue::from(ctx, small_u64);
+        let jsvalue = JSValue::from_rust(ctx, small_u64);
         assert!(jsvalue.is_number(), "Small u64 should be a regular number");
-        assert_eq!(small_u64, jsvalue.try_into::<u64>().unwrap());
+        assert_eq!(small_u64, jsvalue.to_rust::<u64>().unwrap());
 
-        let jsvalue = JSValue::from(ctx, u64::MAX);
+        let jsvalue = JSValue::from_rust(ctx, u64::MAX);
         assert!(jsvalue.is_bigint(), "u64::MAX should be a BigInt");
-        assert_eq!(u64::MAX, jsvalue.try_into::<u64>().unwrap());
+        assert_eq!(u64::MAX, jsvalue.to_rust::<u64>().unwrap());
 
         // Test JavaScript safe integer boundary (2^53 - 1)
         let safe_max: i64 = (1i64 << 53) - 1;
-        let jsvalue = JSValue::from(ctx, safe_max);
+        let jsvalue = JSValue::from_rust(ctx, safe_max);
         assert!(
             jsvalue.is_number(),
             "JS safe max should be a regular number"
         );
-        assert_eq!(safe_max, jsvalue.try_into::<i64>().unwrap());
+        assert_eq!(safe_max, jsvalue.to_rust::<i64>().unwrap());
 
         let unsafe_max: i64 = 1i64 << 53;
-        let jsvalue = JSValue::from(ctx, unsafe_max);
+        let jsvalue = JSValue::from_rust(ctx, unsafe_max);
         assert!(jsvalue.is_bigint(), "Beyond JS safe max should be a BigInt");
-        assert_eq!(unsafe_max, jsvalue.try_into::<i64>().unwrap());
+        assert_eq!(unsafe_max, jsvalue.to_rust::<i64>().unwrap());
 
         // Test conversion from JS number and BigInt
         let js_num: JSValue = ctx.eval(Source::from_bytes("42")).unwrap();
-        assert_eq!(42i64, js_num.try_into::<i64>().unwrap());
+        assert_eq!(42i64, js_num.to_rust::<i64>().unwrap());
 
         let js_bigint: JSValue = ctx.eval(Source::from_bytes("9007199254740992n")).unwrap();
-        assert_eq!(1i64 << 53, js_bigint.try_into::<i64>().unwrap());
+        assert_eq!(1i64 << 53, js_bigint.to_rust::<i64>().unwrap());
 
-        let jsvalue = JSValue::from(ctx, f64::MIN);
-        assert_eq!(f64::MIN, jsvalue.try_into::<f64>().unwrap());
+        let jsvalue = JSValue::from_rust(ctx, f64::MIN);
+        assert_eq!(f64::MIN, jsvalue.to_rust::<f64>().unwrap());
 
         let hello = "Hello";
-        let jsvalue = JSValue::from(ctx, hello);
+        let jsvalue = JSValue::from_rust(ctx, hello);
         assert!(jsvalue.is_string());
-        let output: String = jsvalue.try_into().unwrap();
+        let output: String = jsvalue.to_rust().unwrap();
         assert_eq!(String::from(hello), output);
 
         let jsvalue = JSValue::undefined(ctx);
@@ -71,19 +71,19 @@ fn test_convert() {
 
         // Test usize conversion: small values should be regular numbers
         let test_usize: usize = 42;
-        let jsvalue = JSValue::from(ctx, test_usize);
+        let jsvalue = JSValue::from_rust(ctx, test_usize);
         assert!(
             jsvalue.is_number(),
             "Small usize should be a regular number"
         );
-        let output: usize = jsvalue.try_into().unwrap();
+        let output: usize = jsvalue.to_rust().unwrap();
         assert_eq!(test_usize, output);
 
         // Test large usize conversion: large values should be BigInt
         let large_usize: usize = usize::MAX;
-        let jsvalue = JSValue::from(ctx, large_usize);
+        let jsvalue = JSValue::from_rust(ctx, large_usize);
         assert!(jsvalue.is_bigint(), "Large usize should be a BigInt");
-        let output: usize = jsvalue.try_into().unwrap();
+        let output: usize = jsvalue.to_rust().unwrap();
         assert_eq!(large_usize, output);
 
         Ok(())
@@ -123,6 +123,22 @@ fn test_convert_from_js() {
     });
 }
 
+#[test]
+fn test_option_conversion_from_js() {
+    run(|ctx| {
+        let undefined: Option<String> = ctx.eval(Source::from_bytes("undefined"))?;
+        assert_eq!(undefined, None);
+
+        let null_value: Option<String> = ctx.eval(Source::from_bytes("null"))?;
+        assert_eq!(null_value, None);
+
+        let text: Option<String> = ctx.eval(Source::from_bytes("'hello'"))?;
+        assert_eq!(text, Some("hello".to_string()));
+
+        Ok(())
+    });
+}
+
 #[cfg(feature = "jscore")]
 #[test]
 fn test_jscore_i32_u32_conversion_semantics() {
@@ -154,9 +170,9 @@ fn test_jscore_i32_u32_conversion_semantics() {
 #[test]
 fn test_equal() {
     run(|ctx| {
-        let boolean = JSValue::from(ctx, false);
-        let integer = JSValue::from(ctx, i32::MAX);
-        let integer2 = JSValue::from(ctx, i32::MAX);
+        let boolean = JSValue::from_rust(ctx, false);
+        let integer = JSValue::from_rust(ctx, i32::MAX);
+        let integer2 = JSValue::from_rust(ctx, i32::MAX);
         assert!(boolean != integer);
         assert!(integer == integer.clone());
         assert!(integer == integer2);
@@ -172,15 +188,15 @@ fn test_display() {
         assert_eq!(format!("{}", jsvalue), "undefined");
 
         // Test boolean
-        let jsvalue = JSValue::from(ctx, true);
+        let jsvalue = JSValue::from_rust(ctx, true);
         assert_eq!(format!("{}", jsvalue), "true");
 
         // Test number
-        let jsvalue = JSValue::from(ctx, 42);
+        let jsvalue = JSValue::from_rust(ctx, 42);
         assert_eq!(format!("{}", jsvalue), "42");
 
         // Test string
-        let jsvalue = JSValue::from(ctx, "hello");
+        let jsvalue = JSValue::from_rust(ctx, "hello");
         assert_eq!(format!("{}", jsvalue), "hello");
 
         // Test object

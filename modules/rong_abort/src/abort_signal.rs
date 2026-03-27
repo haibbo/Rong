@@ -166,7 +166,7 @@ impl AbortSignal {
     #[js_method]
     fn any(ctx: JSContext, signals: JSArray) -> JSResult<JSObject> {
         let new_signal = AbortSignal::new(&ctx);
-        let class = Class::get::<AbortSignal>(&ctx)?;
+        let class = Class::lookup::<AbortSignal>(&ctx)?;
         let mut unaborted_signals = Vec::with_capacity(signals.len()? as usize);
 
         for item in signals.iter::<JSObject>()? {
@@ -241,7 +241,7 @@ impl AbortSignal {
             inner.reason = timeout_error;
         }
 
-        let instance = Class::get::<AbortSignal>(&ctx)?.instance(signal);
+        let instance = Class::lookup::<AbortSignal>(&ctx)?.instance(signal);
         let instance_clone = instance.clone();
 
         spawn_local(async move {

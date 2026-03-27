@@ -46,7 +46,7 @@ impl SSE {
         let mut abort_rx: Option<oneshot::Receiver<()>> = None;
 
         if let Some(opts) = options.0 {
-            if opts.has("headers") {
+            if opts.has_property("headers")? {
                 let value = opts.get::<_, JSValue>("headers")?;
                 if !value.is_undefined() && !value.is_null() {
                     let obj = value
@@ -58,7 +58,7 @@ impl SSE {
                 }
             }
 
-            if opts.has("reconnect")
+            if opts.has_property("reconnect")?
                 && let Ok(reconnect_obj) = opts.get::<_, JSObject>("reconnect")
             {
                 reconnect_opts.enabled = reconnect_obj.get::<_, bool>("enabled").unwrap_or(true);
@@ -89,7 +89,7 @@ impl SSE {
             }
 
             // AbortSignal support
-            if opts.has("signal") {
+            if opts.has_property("signal")? {
                 let signal_val = opts.get::<_, JSValue>("signal")?;
                 if !signal_val.is_undefined() && !signal_val.is_null() {
                     let signal_obj = signal_val

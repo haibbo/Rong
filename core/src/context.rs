@@ -219,12 +219,9 @@ impl<C: JSContextImpl> JSContext<C> {
     ///
     /// # Example
     /// ```rust,no_run
-    /// use rong_core::{JSEngine, JSObjectOps};
+    /// use rong_core::prelude::*;
     ///
-    /// fn demo<E: JSEngine + 'static>()
-    /// where
-    ///     E::Value: JSObjectOps + 'static,
-    /// {
+    /// fn demo<E: JSEngine + 'static>() {
     ///     let runtime = E::runtime();
     ///     let _ctx = runtime.context();
     /// }
@@ -258,8 +255,8 @@ impl<C: JSContextImpl> JSContext<C> {
         ctx
     }
 
-    /// return global Dainty object
-    pub fn rong(&self) -> JSObject<C::Value> {
+    /// Returns the host namespace object injected into the JavaScript global scope.
+    pub fn host_namespace(&self) -> JSObject<C::Value> {
         let value = JSValue::from_raw(self, self.rc.as_ref().rong.clone());
         value.into()
     }
@@ -309,12 +306,9 @@ impl<C: JSContextImpl> JSContext<C> {
     ///
     /// # Examples
     /// ```rust,no_run
-    /// use rong_core::{JSEngine, JSArrayBufferOps, JSObjectOps, JSResult, Source};
+    /// use rong_core::prelude::*;
     ///
-    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
-    /// where
-    ///     E::Value: JSArrayBufferOps + JSObjectOps + 'static,
-    /// {
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()> {
     ///     let runtime = E::runtime();
     ///     let ctx = runtime.context();
     ///
@@ -342,12 +336,9 @@ impl<C: JSContextImpl> JSContext<C> {
     ///
     /// # Examples
     /// ```rust,no_run
-    /// use rong_core::{JSEngine, JSArrayBufferOps, JSObjectOps, JSResult, JSTypeOf};
+    /// use rong_core::prelude::*;
     ///
-    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
-    /// where
-    ///     E::Value: JSArrayBufferOps + JSObjectOps + JSTypeOf + 'static,
-    /// {
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()> {
     ///     let runtime = E::runtime();
     ///     let ctx = runtime.context();
     ///
@@ -525,12 +516,9 @@ impl<C: JSContextImpl> JSContext<C> {
     ///
     /// # Example
     /// ```rust,no_run
-    /// use rong_core::{JSEngine, JSObjectOps, JSResult};
+    /// use rong_core::prelude::*;
     ///
-    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
-    /// where
-    ///     E::Value: JSObjectOps + 'static,
-    /// {
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()> {
     ///     let runtime = E::runtime();
     ///     let ctx = runtime.context();
     ///

@@ -21,7 +21,7 @@ fn handle_assertion_error(
         || ctx.throw_error(default_message),
         |value| {
             if value.is_string() {
-                let msg: String = value.try_into().unwrap_or_default();
+                let msg: String = value.to_rust().unwrap_or_default();
                 ctx.throw_error(msg)
             } else {
                 ctx.throw(value)
@@ -60,18 +60,18 @@ fn ok(ctx: JSContext, value: JSValue, message: Optional<JSValue>) -> JSValue {
     let undefined = JSValue::undefined(&ctx);
     match value.type_of() {
         JSValueType::Boolean => {
-            if value.try_into::<bool>().unwrap_or(false) {
+            if value.to_rust::<bool>().unwrap_or(false) {
                 return undefined;
             }
         }
         JSValueType::Number => {
-            if value.try_into::<i32>().map(|b| b != 0).unwrap_or(false) {
+            if value.to_rust::<i32>().map(|b| b != 0).unwrap_or(false) {
                 return undefined;
             }
         }
         JSValueType::String => {
             if value
-                .try_into::<String>()
+                .to_rust::<String>()
                 .map(|s| !s.is_empty())
                 .unwrap_or(false)
             {
@@ -101,7 +101,7 @@ fn ok(ctx: JSContext, value: JSValue, message: Optional<JSValue>) -> JSValue {
 fn fail(ctx: JSContext, message: Optional<JSValue>) -> JSValue {
     if let Some(msg) = message.0 {
         if msg.is_string() {
-            let msg: String = msg.try_into().unwrap_or_default();
+            let msg: String = msg.to_rust().unwrap_or_default();
             ctx.throw_error(msg)
         } else {
             ctx.throw(msg)
@@ -130,11 +130,11 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     let fail = JSFunc::new(ctx, fail)?.name("fail")?;
     let does_not_throw = JSFunc::new(ctx, does_not_throw)?.name("doesNotThrow")?;
 
-    ok.set("ok", ok.clone())?
-        .set("default", ok.clone())?
-        .set("equal", equal)?
-        .set("fail", fail)?
-        .set("doesNotThrow", does_not_throw)?;
+    ok.set("ok", ok.clone())?;
+    ok.set("default", ok.clone())?;
+    ok.set("equal", equal)?;
+    ok.set("fail", fail)?;
+    ok.set("doesNotThrow", does_not_throw)?;
     ctx.global().set("assert", ok)?;
 
     Ok(())

@@ -79,15 +79,22 @@ pub trait JSObjectOps: JSValueConversion + JSTypeOf {
     fn get_opaque(&self) -> *mut ();
 
     /// Deletes a property from the object.
-    /// Returns true if the property was successfully deleted.
-    fn del_property(&self, key: Self) -> bool;
+    ///
+    /// Returns `Ok(true)` when the property was deleted, `Ok(false)` when the
+    /// property was not present or could not be deleted, and `Err(thrown)` when
+    /// the engine raised a JavaScript exception.
+    fn del_property(&self, key: Self) -> Result<bool, Self>;
 
     /// Checks if the object has the specified property.
-    fn has_property(&self, key: Self) -> bool;
+    ///
+    /// Returns `Ok(bool)` on success or `Err(thrown)` when the engine raised a
+    /// JavaScript exception.
+    fn has_property(&self, key: Self) -> Result<bool, Self>;
 
     /// Sets a property on the object with the given value.
-    /// Returns true if the property was successfully set.
-    fn set_property(&self, key: Self, value: Self) -> bool;
+    ///
+    /// Returns `Err(thrown)` when the engine raised a JavaScript exception.
+    fn set_property(&self, key: Self, value: Self) -> Result<(), Self>;
 
     /// Sets the prototype of the object.
     /// Returns true if the prototype was successfully set.
@@ -109,16 +116,18 @@ pub trait JSObjectOps: JSValueConversion + JSTypeOf {
         getter: Self,
         setter: Self,
         attributes: PropertyAttributes,
-    ) -> bool;
+    ) -> Result<(), Self>;
 
-    /// Gets the value of a property.
-    /// Returns Some(value) if the property exists, None otherwise.
-    /// Returns EXCEPTION if the operation fails.
-    fn get_property(&self, key: Self) -> Option<Self>;
+    /// Gets the value produced by a property lookup.
+    ///
+    /// Successful lookups must return `undefined` as a value, not as `None`.
+    /// Use `has_property()` when you need to distinguish a missing property
+    /// from a property whose value is `undefined`.
+    fn get_property(&self, key: Self) -> Result<Option<Self>, Self>;
 
     /// Gets the names of all enumerable properties of the object.
-    /// Returns None if the operation fails.
-    fn get_own_property_names(&self) -> Option<Vec<Self>>;
+    /// Returns `Err(thrown)` when the operation fails.
+    fn get_own_property_names(&self) -> Result<Vec<Self>, Self>;
 }
 
 impl<V> JSObject<V>
@@ -140,12 +149,9 @@ where
     ///
     /// # Example
     /// ```rust,no_run
-    /// use rong_core::{JSEngine, JSObject, JSObjectOps, JSResult};
+    /// use rong_core::prelude::*;
     ///
-    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
-    /// where
-    ///     E::Value: JSObjectOps + 'static,
-    /// {
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()> {
     ///     let runtime = E::runtime();
     ///     let ctx = runtime.context();
     ///
@@ -159,9 +165,13 @@ where
         Ok(JSObject(v))
     }
 
+    fn thrown_error(ctx: &JSContext<V::Context>, thrown: V) -> RongJSError {
+        RongJSError::from_thrown_value(JSValue::from_raw(ctx, thrown))
+    }
+
     /// Convert JSObject to JSON string using JavaScript's JSON.stringify
-    pub fn json_stringify(self) -> JSResult<String> {
-        let ctx = self.get_ctx();
+    pub fn to_json_string(&self) -> JSResult<String> {
+        let ctx = self.context();
 
         // Get the global JSON object
         let json = ctx.global().get::<_, JSObject<V>>("JSON")?;
@@ -170,7 +180,7 @@ where
         let stringify = json.get::<_, JSFunc<V>>("stringify")?;
 
         // Call stringify with this object
-        stringify.call::<_, String>(None, (self,))
+        stringify.call::<_, String>(None, (self.clone(),))
     }
 
     pub fn set<'a, K, KV>(&'a self, k: K, kv: KV) -> JSResult<&'a Self>
@@ -178,28 +188,34 @@ where
         K: Into<PropertyKey<'a, V>>,
         KV: IntoJSValue<V>,
     {
-        let ctx = &self.get_ctx();
+        let ctx = &self.context();
         let key = k.into().into_value(ctx);
-        // TODO: handler other err
         self.as_value()
-            .set_property(key, kv.into_js_value(ctx).into_value());
+            .set_property(key, kv.into_js_value(ctx).into_value())
+            .map_err(|thrown| Self::thrown_error(ctx, thrown))?;
         Ok(self)
     }
 
-    pub fn del<'a, K>(&'a self, k: K) -> bool
+    pub fn delete<'a, K>(&'a self, k: K) -> JSResult<bool>
     where
         K: Into<PropertyKey<'a, V>>,
     {
-        let key = k.into().into_value(&self.get_ctx());
-        self.as_value().del_property(key)
+        let ctx = self.context();
+        let key = k.into().into_value(&ctx);
+        self.as_value()
+            .del_property(key)
+            .map_err(|thrown| Self::thrown_error(&ctx, thrown))
     }
 
-    pub fn has<'a, K>(&self, k: K) -> bool
+    pub fn has_property<'a, K>(&self, k: K) -> JSResult<bool>
     where
         K: Into<PropertyKey<'a, V>>,
     {
-        let key = k.into().into_value(&self.get_ctx());
-        self.as_value().has_property(key)
+        let ctx = self.context();
+        let key = k.into().into_value(&ctx);
+        self.as_value()
+            .has_property(key)
+            .map_err(|thrown| Self::thrown_error(&ctx, thrown))
     }
 
     pub fn get<'a, K, T>(&'a self, k: K) -> JSResult<T>
@@ -207,13 +223,80 @@ where
         K: Into<PropertyKey<'a, V>>,
         T: FromJSValue<V>,
     {
-        let ctx = &self.get_ctx();
+        let ctx = &self.context();
         let key = k.into();
         let kv = key.clone().into_value(ctx);
-        self.as_value()
-            .get_property(kv)
-            .ok_or(RongJSError::PropertyNotFound(key.to_string())) // check existence firstly
-            .and_then(|value| T::from_js_value(ctx, JSValue::from_raw(ctx, value)))
+        let value = self
+            .as_value()
+            .get_property(kv.clone())
+            .map_err(|thrown| Self::thrown_error(ctx, thrown))?
+            .map(|value| JSValue::from_raw(ctx, value));
+
+        let value = match value {
+            Some(value) if !value.is_undefined() => value,
+            Some(value) => {
+                if !self
+                    .as_value()
+                    .has_property(kv)
+                    .map_err(|thrown| Self::thrown_error(ctx, thrown))?
+                {
+                    return Err(RongJSError::PropertyNotFound(key.to_string()));
+                }
+                value
+            }
+            None => {
+                if !self
+                    .as_value()
+                    .has_property(kv)
+                    .map_err(|thrown| Self::thrown_error(ctx, thrown))?
+                {
+                    return Err(RongJSError::PropertyNotFound(key.to_string()));
+                }
+                JSValue::undefined(ctx)
+            }
+        };
+
+        T::from_js_value(ctx, value)
+    }
+
+    pub fn get_opt<'a, K, T>(&'a self, k: K) -> JSResult<Option<T>>
+    where
+        K: Into<PropertyKey<'a, V>>,
+        T: FromJSValue<V>,
+    {
+        let ctx = &self.context();
+        let key = k.into().into_value(ctx);
+        let value = self
+            .as_value()
+            .get_property(key.clone())
+            .map_err(|thrown| Self::thrown_error(ctx, thrown))?
+            .map(|value| JSValue::from_raw(ctx, value));
+
+        let value = match value {
+            Some(value) if !value.is_undefined() => value,
+            Some(value) => {
+                if !self
+                    .as_value()
+                    .has_property(key)
+                    .map_err(|thrown| Self::thrown_error(ctx, thrown))?
+                {
+                    return Ok(None);
+                }
+                value
+            }
+            None => {
+                if !self
+                    .as_value()
+                    .has_property(key)
+                    .map_err(|thrown| Self::thrown_error(ctx, thrown))?
+                {
+                    return Ok(None);
+                }
+                JSValue::undefined(ctx)
+            }
+        };
+
+        T::from_js_value(ctx, value).map(Some)
     }
 }
 
@@ -261,7 +344,7 @@ impl<V: JSValueImpl> Entry<V> {
         K: FromJSValue<V>,
         T: FromJSValue<V>,
     {
-        let ctx = self.key.get_ctx();
+        let ctx = self.key.context();
         Ok((
             K::from_js_value(&ctx, self.key)?,
             T::from_js_value(&ctx, self.value)?,
@@ -275,7 +358,7 @@ where
 {
     /// Returns an iterator over the object's own enumerable string-keyed property [key, value] pairs.
     pub fn entries(&self) -> JSResult<Vec<Entry<V>>> {
-        let ctx = &self.get_ctx();
+        let ctx = &self.context();
         let mut entries = Vec::new();
 
         // Get all enumerable property names
@@ -283,7 +366,11 @@ where
 
         // Iterate through property names to get corresponding values
         for key in keys {
-            if let Some(value) = self.as_value().get_property(key.clone()) {
+            if let Some(value) = self
+                .as_value()
+                .get_property(key.clone())
+                .map_err(|thrown| Self::thrown_error(ctx, thrown))?
+            {
                 entries.push(Entry {
                     key: JSValue::from_raw(ctx, key),
                     value: JSValue::from_raw(ctx, value),
@@ -308,14 +395,10 @@ where
 
     /// Returns an array of a given object's own enumerable property names
     pub fn own_keys(&self) -> JSResult<Vec<V>> {
-        let mut keys = Vec::new();
-
-        // Get all enumerable property names of the object
-        if let Some(obj_keys) = self.as_value().get_own_property_names() {
-            keys.extend(obj_keys);
-        }
-
-        Ok(keys)
+        let ctx = self.context();
+        self.as_value()
+            .get_own_property_names()
+            .map_err(|thrown| Self::thrown_error(&ctx, thrown))
     }
 
     /// Returns an iterator over the object's own enumerable string-keyed property values.
@@ -328,7 +411,7 @@ where
     where
         T: FromJSValue<V>,
     {
-        let ctx = &self.get_ctx();
+        let ctx = &self.context();
         self.values()?.map(|v| T::from_js_value(ctx, v)).collect()
     }
 
@@ -342,7 +425,7 @@ where
     where
         K: FromJSValue<V>,
     {
-        let ctx = &self.get_ctx();
+        let ctx = &self.context();
         self.keys()?.map(|k| K::from_js_value(ctx, k)).collect()
     }
 }

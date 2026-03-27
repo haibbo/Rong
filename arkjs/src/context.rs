@@ -127,12 +127,7 @@ impl JSContextImpl for ArkJSContext {
         crate::class::register_class_internal::<JC>(self, JC::NAME)
     }
 
-    fn call(
-        &self,
-        function: &Self::Value,
-        this: Self::Value,
-        argv: Vec<Self::Value>,
-    ) -> Self::Value {
+    fn call(&self, function: &Self::Value, this: Self::Value, argv: &[Self::Value]) -> Self::Value {
         unsafe {
             let mut result: arkjs::JSVM_Value = ptr::null_mut();
 

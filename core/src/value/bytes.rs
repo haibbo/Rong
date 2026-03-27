@@ -118,7 +118,7 @@ where
     /// creates data and JS only forwards it.
     pub fn from_bytes(ctx: &JSContext<V::Context>, bytes: Bytes) -> JSResult<Self> {
         ctx.register_hidden_class::<JSBytesData>()?;
-        let instance = Class::get::<JSBytesData>(ctx)?.instance(JSBytesData { bytes });
+        let instance = Class::lookup::<JSBytesData>(ctx)?.instance(JSBytesData { bytes });
         Ok(Self { inner: instance })
     }
 

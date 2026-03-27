@@ -51,7 +51,7 @@ impl TextEncoder {
         let input = if input.is_undefined() || input.is_null() {
             String::new()
         } else {
-            input.try_into::<String>()?
+            input.to_rust::<String>()?
         };
         // Convert the string to UTF-8 bytes
         let bytes = input.as_bytes();

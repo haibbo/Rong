@@ -29,7 +29,7 @@ fn test_date_javascript_integration() {
         assert!(js_date.is_date());
 
         // Convert to JSDate and test getting time
-        let js_date_wrapper: JSDate = js_date.try_into()?;
+        let js_date_wrapper: JSDate = js_date.to_rust()?;
         let js_time = js_date_wrapper.get_time()?;
         assert_eq!(js_time, 1640995200000.0);
 
@@ -83,7 +83,7 @@ fn test_date_system_time_conversion() {
 
         // Test JSValue to SystemTime conversion
         let date_value = date_from_system.into_js_value();
-        let system_time2: std::time::SystemTime = date_value.try_into()?;
+        let system_time2: std::time::SystemTime = date_value.to_rust()?;
         let diff2 = system_time
             .duration_since(system_time2)
             .or_else(|_| system_time2.duration_since(system_time))
@@ -119,7 +119,7 @@ fn test_date_comprehensive_types() {
         let date_value = date1.as_js_value().clone();
         assert!(date_value.is_date());
 
-        let date_back: JSDate = date_value.try_into()?;
+        let date_back: JSDate = date_value.to_rust()?;
         assert_eq!(date_back.get_time()?, epoch_ms);
 
         Ok(())

@@ -50,6 +50,7 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
     }
 }
 
+#[doc(hidden)]
 pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
     fn constructor(ctx: &V::Context, this: V, args: Vec<V>) -> V
     where
@@ -161,7 +162,7 @@ where
 {
     /// Create a new instance of the class
     pub fn instance<JC: JSClass<V>>(self, value: JC) -> JSObject<V> {
-        let context = self.0.get_ctx();
+        let context = self.0.context();
         let ptr = Box::into_raw(Box::new(RefCell::new(value)));
 
         let instance = V::make_instance(context.as_ref(), self.0.clone().into_value(), ptr as _);
@@ -176,8 +177,8 @@ where
 
     /// Check if the object is an instance of the specified class
     pub fn instance_of<JC: JSClass<V>>(object: &JSObject<V>) -> bool {
-        let context = object.get_ctx();
-        if let Ok(class) = Class::<V>::get::<JC>(&context) {
+        let context = object.context();
+        if let Ok(class) = Class::<V>::lookup::<JC>(&context) {
             object.as_value().instance_of(class.0.into_value())
         } else {
             false
@@ -196,8 +197,8 @@ where
         }
     }
 
-    /// Get class constructor by type
-    pub fn get<JC: JSClass<V>>(context: &JSContext<V::Context>) -> JSResult<Self> {
+    /// Returns the registered constructor for a class type.
+    pub fn lookup<JC: JSClass<V>>(context: &JSContext<V::Context>) -> JSResult<Self> {
         let constructor = context
             .get_class_registry()
             .and_then(|registry| registry.borrow().get(&TypeId::of::<JC>()).cloned())
@@ -212,7 +213,7 @@ where
     }
 
     pub fn prototype<JC: JSClass<V>>(context: &JSContext<V::Context>) -> JSResult<JSObject<V>> {
-        let class = Class::get::<JC>(context)?;
+        let class = Class::lookup::<JC>(context)?;
         class.0.get::<_, JSObject<V>>("prototype")
     }
 
@@ -354,7 +355,7 @@ where
         Fun: Fn(PropertyDescriptor<V>) -> JSResult<PropertyDescriptor<V>>,
         Key: for<'b> Into<PropertyKey<'b, V>>,
     {
-        f(PropertyDescriptor::builder())?.apply_to(&self.prototype, k);
+        f(PropertyDescriptor::builder())?.apply_to(&self.prototype, k)?;
         Ok(())
     }
 
@@ -363,7 +364,7 @@ where
         Fun: Fn(PropertyDescriptor<V>) -> JSResult<PropertyDescriptor<V>>,
         Key: for<'b> Into<PropertyKey<'b, V>>,
     {
-        f(PropertyDescriptor::builder())?.apply_to(&self.constructor, k);
+        f(PropertyDescriptor::builder())?.apply_to(&self.constructor, k)?;
         Ok(())
     }
 

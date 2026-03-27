@@ -248,7 +248,7 @@ pub struct DataCursor {
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_class::<DataCursor>()?;
 
-    let ctor = Class::get::<DataCursor>(ctx)?;
+    let ctor = Class::lookup::<DataCursor>(ctx)?;
     let proto: JSObject = ctor.get("prototype")?;
 
     let next_fn = JSFunc::new(ctx, move |ctx: JSContext, this: This<JSObject>| async move {

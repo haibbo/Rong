@@ -9,12 +9,12 @@ fn basic() {
         assert!(obj.is_object());
 
         assert!(obj.set(key, v).is_ok());
-        assert!(obj.has(key));
+        assert!(obj.has_property(key).unwrap());
 
-        obj.del(key);
-        assert!(!obj.has(key));
+        obj.delete(key).unwrap();
+        assert!(!obj.has_property(key).unwrap());
 
-        let value = JSValue::from(ctx, v);
+        let value = JSValue::from_rust(ctx, v);
 
         // JSValue as Property Value
         assert!(obj.set(key, value.clone()).is_ok());
@@ -24,7 +24,7 @@ fn basic() {
 
         let objv = JSObject::new(ctx);
         assert!(obj.set("obj", objv).is_ok());
-        assert!(obj.has("obj"));
+        assert!(obj.has_property("obj").unwrap());
         Ok(())
     });
 }
@@ -115,7 +115,7 @@ fn test_object_properties() {
         // Test basic property operations
         assert_eq!(obj.get::<_, String>("name").unwrap(), "test");
         assert_eq!(obj.get::<_, i32>("age").unwrap(), 42);
-        assert!(obj.has("greet"));
+        assert!(obj.has_property("greet").unwrap());
 
         // Test entries
         let entries = obj.entries().unwrap();
@@ -141,8 +141,8 @@ fn test_object_properties() {
         assert_eq!(obj.get::<_, String>("name").unwrap(), "updated");
 
         // Test property deletion
-        assert!(obj.del("age"));
-        assert!(!obj.has("age"));
+        assert!(obj.delete("age").unwrap());
+        assert!(!obj.has_property("age").unwrap());
 
         // Test non-existent property
         assert!(obj.get::<_, String>("nonexistent").is_err());
@@ -181,8 +181,8 @@ fn test_object_property_attributes() {
         assert!(!keys.contains(&"hidden".to_string()));
 
         // Test property existence
-        assert!(obj.has("hidden"));
-        assert!(obj.has("readOnly"));
+        assert!(obj.has_property("hidden").unwrap());
+        assert!(obj.has_property("readOnly").unwrap());
         Ok(())
     });
 }
@@ -224,6 +224,79 @@ fn test_object_prototype() {
         let own_keys: Vec<String> = obj.keys_as().unwrap();
         assert!(own_keys.contains(&"name".to_string()));
         assert!(!own_keys.contains(&"speak".to_string())); // speak is on the prototype
+        Ok(())
+    });
+}
+
+#[test]
+fn test_object_undefined_vs_missing_property() {
+    run(|ctx| {
+        let obj: JSObject = ctx.eval(Source::from_bytes(
+            r#"
+            ({
+                presentUndefined: undefined,
+                presentNull: null,
+            })
+            "#,
+        ))?;
+
+        let undefined_value: JSValue = obj.get("presentUndefined")?;
+        assert!(undefined_value.is_undefined());
+
+        let optional_undefined: Option<String> = obj.get("presentUndefined")?;
+        assert_eq!(optional_undefined, None);
+
+        let optional_null: Option<String> = obj.get("presentNull")?;
+        assert_eq!(optional_null, None);
+
+        let missing_value: Result<JSValue, RongJSError> = obj.get("missing");
+        assert!(matches!(missing_value, Err(err) if err.is_property_not_found()));
+
+        let get_opt_undefined: JSValue = obj.get_opt("presentUndefined")?.unwrap();
+        assert!(get_opt_undefined.is_undefined());
+
+        let get_opt_missing: Option<JSValue> = obj.get_opt("missing")?;
+        assert!(get_opt_missing.is_none());
+
+        let tri_state_undefined: Option<Option<String>> = obj.get_opt("presentUndefined")?;
+        assert_eq!(tri_state_undefined, Some(None));
+
+        let tri_state_missing: Option<Option<String>> = obj.get_opt("missing")?;
+        assert_eq!(tri_state_missing, None);
+
+        Ok(())
+    });
+}
+
+#[test]
+fn test_property_descriptor_false_flags_on_existing_property() {
+    run(|ctx| {
+        let obj = JSObject::new(ctx);
+        obj.set("fixed", 1)?;
+
+        PropertyDescriptor::builder()
+            .value(JSValue::from_rust(ctx, 2))
+            .writable(false)
+            .enumerable(false)
+            .configurable(false)
+            .apply_to(&obj, "fixed")?;
+
+        ctx.global().set("__fixed_obj", obj.clone())?;
+
+        let desc: JSObject = ctx.eval(Source::from_bytes(
+            "Object.getOwnPropertyDescriptor(__fixed_obj, 'fixed')",
+        ))?;
+        assert_eq!(desc.get::<_, i32>("value")?, 2);
+        assert!(!desc.get::<_, bool>("writable")?);
+        assert!(!desc.get::<_, bool>("enumerable")?);
+        assert!(!desc.get::<_, bool>("configurable")?);
+
+        let keys: Vec<String> = obj.keys_as()?;
+        assert!(!keys.iter().any(|key| key == "fixed"));
+
+        assert!(!obj.delete("fixed")?);
+        assert_eq!(obj.get::<_, i32>("fixed")?, 2);
+
         Ok(())
     });
 }

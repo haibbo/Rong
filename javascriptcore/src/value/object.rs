@@ -1,5 +1,6 @@
 use crate::{JSCValue, jsc};
-use rong_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
+use rong_core::engine::JSObjectOps;
+use rong_core::{JSValueImpl, PropertyAttributes};
 
 impl JSObjectOps for JSCValue {
     fn new_object(ctx: &Self::Context) -> Self {
@@ -25,7 +26,7 @@ impl JSObjectOps for JSCValue {
         }
     }
 
-    fn del_property(&self, key: Self) -> bool {
+    fn del_property(&self, key: Self) -> Result<bool, Self> {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
         unsafe {
@@ -35,11 +36,15 @@ impl JSObjectOps for JSCValue {
                 key.as_value(),
                 &mut exception,
             );
-            exception.is_null() && result
+            if exception.is_null() {
+                Ok(result)
+            } else {
+                Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception())
+            }
         }
     }
 
-    fn has_property(&self, key: Self) -> bool {
+    fn has_property(&self, key: Self) -> Result<bool, Self> {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
         unsafe {
@@ -49,11 +54,15 @@ impl JSObjectOps for JSCValue {
                 key.as_value(),
                 &mut exception,
             );
-            exception.is_null() && result
+            if exception.is_null() {
+                Ok(result)
+            } else {
+                Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception())
+            }
         }
     }
 
-    fn set_property(&self, key: Self, value: Self) -> bool {
+    fn set_property(&self, key: Self, value: Self) -> Result<(), Self> {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
         unsafe {
             jsc::JSObjectSetPropertyForKey(
@@ -65,7 +74,11 @@ impl JSObjectOps for JSCValue {
                 &mut exception,
             );
 
-            exception.is_null()
+            if exception.is_null() {
+                Ok(())
+            } else {
+                Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception())
+            }
         }
     }
 
@@ -84,7 +97,7 @@ impl JSObjectOps for JSCValue {
         getter: Self,
         setter: Self,
         attributes: PropertyAttributes,
-    ) -> bool {
+    ) -> Result<(), Self> {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
         // Get the Object constructor
@@ -107,7 +120,7 @@ impl JSObjectOps for JSCValue {
                 );
                 jsc::JSStringRelease(value_str);
                 if !exception.is_null() {
-                    return false;
+                    return Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception());
                 }
             }
 
@@ -123,7 +136,7 @@ impl JSObjectOps for JSCValue {
                 );
                 jsc::JSStringRelease(get_str);
                 if !exception.is_null() {
-                    return false;
+                    return Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception());
                 }
             }
 
@@ -139,38 +152,51 @@ impl JSObjectOps for JSCValue {
                 );
                 jsc::JSStringRelease(set_str);
                 if !exception.is_null() {
-                    return false;
+                    return Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception());
                 }
             }
 
             // Add enumerable/configurable/writable flags
             let flags = to_jsc_attributes(attributes);
-            let enumerable_str = jsc::JSStringCreateWithUTF8CString(c"enumerable".as_ptr());
-            jsc::JSObjectSetProperty(
-                self.ctx,
-                descriptor,
-                enumerable_str,
-                jsc::JSValueMakeBoolean(self.ctx, (flags & jsc::kJSPropertyAttributeDontEnum) == 0),
-                jsc::kJSPropertyAttributeNone,
-                &mut exception,
-            );
-            jsc::JSStringRelease(enumerable_str);
-
-            let configurable_str = jsc::JSStringCreateWithUTF8CString(c"configurable".as_ptr());
-            jsc::JSObjectSetProperty(
-                self.ctx,
-                descriptor,
-                configurable_str,
-                jsc::JSValueMakeBoolean(
+            if attributes.has_enumerable() {
+                let enumerable_str = jsc::JSStringCreateWithUTF8CString(c"enumerable".as_ptr());
+                jsc::JSObjectSetProperty(
                     self.ctx,
-                    (flags & jsc::kJSPropertyAttributeDontDelete) == 0,
-                ),
-                jsc::kJSPropertyAttributeNone,
-                &mut exception,
-            );
-            jsc::JSStringRelease(configurable_str);
+                    descriptor,
+                    enumerable_str,
+                    jsc::JSValueMakeBoolean(
+                        self.ctx,
+                        (flags & jsc::kJSPropertyAttributeDontEnum) == 0,
+                    ),
+                    jsc::kJSPropertyAttributeNone,
+                    &mut exception,
+                );
+                jsc::JSStringRelease(enumerable_str);
+                if !exception.is_null() {
+                    return Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception());
+                }
+            }
 
-            if attributes.has_value() {
+            if attributes.has_configurable() {
+                let configurable_str = jsc::JSStringCreateWithUTF8CString(c"configurable".as_ptr());
+                jsc::JSObjectSetProperty(
+                    self.ctx,
+                    descriptor,
+                    configurable_str,
+                    jsc::JSValueMakeBoolean(
+                        self.ctx,
+                        (flags & jsc::kJSPropertyAttributeDontDelete) == 0,
+                    ),
+                    jsc::kJSPropertyAttributeNone,
+                    &mut exception,
+                );
+                jsc::JSStringRelease(configurable_str);
+                if !exception.is_null() {
+                    return Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception());
+                }
+            }
+
+            if attributes.has_value() && attributes.has_writable() {
                 let writable_str = jsc::JSStringCreateWithUTF8CString(c"writable".as_ptr());
                 jsc::JSObjectSetProperty(
                     self.ctx,
@@ -184,6 +210,9 @@ impl JSObjectOps for JSCValue {
                     &mut exception,
                 );
                 jsc::JSStringRelease(writable_str);
+                if !exception.is_null() {
+                    return Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception());
+                }
             }
 
             // Get defineProperty function
@@ -193,7 +222,7 @@ impl JSObjectOps for JSCValue {
             jsc::JSStringRelease(define_prop_str);
 
             if !exception.is_null() || jsc::JSValueIsUndefined(self.ctx, define_prop_fn) {
-                return false;
+                return Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception());
             }
 
             // Call defineProperty
@@ -208,11 +237,15 @@ impl JSObjectOps for JSCValue {
                 &mut exception,
             );
 
-            exception.is_null()
+            if exception.is_null() {
+                Ok(())
+            } else {
+                Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception())
+            }
         }
     }
 
-    fn get_property(&self, key: Self) -> Option<Self> {
+    fn get_property(&self, key: Self) -> Result<Option<Self>, Self> {
         let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
         unsafe {
@@ -222,10 +255,10 @@ impl JSObjectOps for JSCValue {
                 key.as_value(),
                 &mut exception,
             );
-            if !exception.is_null() || jsc::JSValueIsUndefined(self.ctx, value) {
-                None
+            if !exception.is_null() {
+                Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception())
             } else {
-                Some(JSCValue::from_owned_raw(self.ctx, value))
+                Ok(Some(JSCValue::from_owned_raw(self.ctx, value)))
             }
         }
     }
@@ -243,14 +276,14 @@ impl JSObjectOps for JSCValue {
         }
     }
 
-    fn get_own_property_names(&self) -> Option<Vec<Self>> {
+    fn get_own_property_names(&self) -> Result<Vec<Self>, Self> {
         unsafe {
             let mut exception: jsc::JSValueRef = std::ptr::null_mut();
 
             // Get the property names array
             let names = jsc::JSObjectCopyPropertyNames(self.ctx, self.as_obj());
             if names.is_null() {
-                return None;
+                return Ok(Vec::new());
             }
 
             let count = jsc::JSPropertyNameArrayGetCount(names);
@@ -270,7 +303,7 @@ impl JSObjectOps for JSCValue {
             jsc::JSStringRelease(has_own_str);
 
             if !exception.is_null() {
-                return None;
+                return Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception());
             }
 
             // Collect all property names
@@ -289,19 +322,22 @@ impl JSObjectOps for JSCValue {
                     &mut exception,
                 );
 
-                if exception.is_null() {
-                    let is_own = jsc::JSValueToBoolean(self.ctx, result);
+                if !exception.is_null() {
+                    jsc::JSPropertyNameArrayRelease(names);
+                    return Err(JSCValue::from_owned_raw(self.ctx, exception).with_exception());
+                }
 
-                    if is_own {
-                        // Property names are borrowed from JSC; protect them because we store
-                        // and use them after this call (e.g. JSObject::entries).
-                        properties.push(JSCValue::from_borrowed_raw(self.ctx, value));
-                    }
+                let is_own = jsc::JSValueToBoolean(self.ctx, result);
+
+                if is_own {
+                    // Property names are borrowed from JSC; protect them because we store
+                    // and use them after this call (e.g. JSObject::entries).
+                    properties.push(JSCValue::from_borrowed_raw(self.ctx, value));
                 }
             }
 
             jsc::JSPropertyNameArrayRelease(names);
-            Some(properties)
+            Ok(properties)
         }
     }
 }

@@ -252,7 +252,7 @@ impl RedisClient {
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.get(&key).await.map_err(redis_err)?;
         match result {
-            Some(s) => Ok(JSValue::from(&ctx, s)),
+            Some(s) => Ok(JSValue::from_rust(&ctx, s)),
             None => Ok(JSValue::null(&ctx)),
         }
     }
@@ -323,7 +323,7 @@ impl RedisClient {
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.hget(&key, &field).await.map_err(redis_err)?;
         match result {
-            Some(s) => Ok(JSValue::from(&ctx, s)),
+            Some(s) => Ok(JSValue::from_rust(&ctx, s)),
             None => Ok(JSValue::null(&ctx)),
         }
     }
@@ -367,7 +367,7 @@ impl RedisClient {
         for r in &results {
             match r {
                 Some(s) => {
-                    arr.push(JSValue::from(&ctx, s.as_str()))?;
+                    arr.push(JSValue::from_rust(&ctx, s.as_str()))?;
                 }
                 None => {
                     arr.push(JSValue::null(&ctx))?;
@@ -432,7 +432,7 @@ impl RedisClient {
         let results: Vec<String> = conn.smembers(&key).await.map_err(redis_err)?;
         let arr = JSArray::new(&ctx)?;
         for s in &results {
-            arr.push(JSValue::from(&ctx, s.as_str()))?;
+            arr.push(JSValue::from_rust(&ctx, s.as_str()))?;
         }
         Ok(arr.into_js_value(&ctx))
     }
@@ -443,7 +443,7 @@ impl RedisClient {
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.srandmember(&key).await.map_err(redis_err)?;
         match result {
-            Some(s) => Ok(JSValue::from(&ctx, s)),
+            Some(s) => Ok(JSValue::from_rust(&ctx, s)),
             None => Ok(JSValue::null(&ctx)),
         }
     }
@@ -454,7 +454,7 @@ impl RedisClient {
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.spop(&key).await.map_err(redis_err)?;
         match result {
-            Some(s) => Ok(JSValue::from(&ctx, s)),
+            Some(s) => Ok(JSValue::from_rust(&ctx, s)),
             None => Ok(JSValue::null(&ctx)),
         }
     }
@@ -483,7 +483,7 @@ impl RedisClient {
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.lpop(&key, None).await.map_err(redis_err)?;
         match result {
-            Some(s) => Ok(JSValue::from(&ctx, s)),
+            Some(s) => Ok(JSValue::from_rust(&ctx, s)),
             None => Ok(JSValue::null(&ctx)),
         }
     }
@@ -494,7 +494,7 @@ impl RedisClient {
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.rpop(&key, None).await.map_err(redis_err)?;
         match result {
-            Some(s) => Ok(JSValue::from(&ctx, s)),
+            Some(s) => Ok(JSValue::from_rust(&ctx, s)),
             None => Ok(JSValue::null(&ctx)),
         }
     }
@@ -515,7 +515,7 @@ impl RedisClient {
             .map_err(redis_err)?;
         let arr = JSArray::new(&ctx)?;
         for s in &results {
-            arr.push(JSValue::from(&ctx, s.as_str()))?;
+            arr.push(JSValue::from_rust(&ctx, s.as_str()))?;
         }
         Ok(arr.into_js_value(&ctx))
     }
@@ -638,7 +638,7 @@ impl RedisClient {
             rx_slot: Arc::new(Mutex::new(Some(msg_rx))),
             owner_subs: self.subs.clone(),
         };
-        let obj = rong::Class::get::<RedisSubscription>(&ctx)?.instance(subscription);
+        let obj = rong::Class::lookup::<RedisSubscription>(&ctx)?.instance(subscription);
         if let Err(e) = rong::install_async_iterator_symbol(&ctx, &obj) {
             self.subs.borrow_mut().remove(&id);
             return Err(e);
@@ -679,7 +679,7 @@ fn subscribe_abort_receiver_from_options(
     let Some(options) = options.0.as_ref() else {
         return Ok(None);
     };
-    if !options.has("signal") {
+    if !options.has_property("signal")? {
         return Ok(None);
     }
 
@@ -709,16 +709,16 @@ fn redis_err(e: redis::RedisError) -> rong::RongJSError {
 fn redis_value_to_js(ctx: &JSContext, value: RedisValue) -> JSResult<JSValue> {
     match value {
         RedisValue::Nil => Ok(JSValue::null(ctx)),
-        RedisValue::Int(i) => Ok(JSValue::from(ctx, i)),
+        RedisValue::Int(i) => Ok(JSValue::from_rust(ctx, i)),
         RedisValue::BulkString(bytes) => match String::from_utf8(bytes) {
-            Ok(s) => Ok(JSValue::from(ctx, s)),
-            Err(e) => Ok(JSValue::from(
+            Ok(s) => Ok(JSValue::from_rust(ctx, s)),
+            Err(e) => Ok(JSValue::from_rust(
                 ctx,
                 String::from_utf8_lossy(e.as_bytes()).to_string(),
             )),
         },
-        RedisValue::SimpleString(s) => Ok(JSValue::from(ctx, s)),
-        RedisValue::Okay => Ok(JSValue::from(ctx, "OK")),
+        RedisValue::SimpleString(s) => Ok(JSValue::from_rust(ctx, s)),
+        RedisValue::Okay => Ok(JSValue::from_rust(ctx, "OK")),
         RedisValue::Array(arr) | RedisValue::Set(arr) => {
             let js_arr = JSArray::new(ctx)?;
             for v in arr {
@@ -726,8 +726,8 @@ fn redis_value_to_js(ctx: &JSContext, value: RedisValue) -> JSResult<JSValue> {
             }
             Ok(js_arr.into_js_value(ctx))
         }
-        RedisValue::Double(f) => Ok(JSValue::from(ctx, f)),
-        RedisValue::Boolean(b) => Ok(JSValue::from(ctx, b)),
+        RedisValue::Double(f) => Ok(JSValue::from_rust(ctx, f)),
+        RedisValue::Boolean(b) => Ok(JSValue::from_rust(ctx, b)),
         RedisValue::Map(pairs) => {
             let obj = rong::CoreJSObject::new(ctx);
             for (k, v) in pairs {
@@ -741,7 +741,7 @@ fn redis_value_to_js(ctx: &JSContext, value: RedisValue) -> JSResult<JSValue> {
             }
             Ok(obj.into_js_value())
         }
-        RedisValue::VerbatimString { text, .. } => Ok(JSValue::from(ctx, text)),
+        RedisValue::VerbatimString { text, .. } => Ok(JSValue::from_rust(ctx, text)),
         _ => Ok(JSValue::null(ctx)),
     }
 }

@@ -64,7 +64,7 @@ impl FileSink {
     async fn write(&self, data: JSValue) -> JSResult<f64> {
         // String
         if data.is_string() {
-            let text: String = data.try_into()?;
+            let text: String = data.to_rust()?;
             let bytes = text.as_bytes();
             let len = bytes.len();
             let mut file = self.file.lock().await;
@@ -79,7 +79,7 @@ impl FileSink {
 
         // ArrayBuffer
         if data.is_array_buffer() {
-            let ab: JSArrayBuffer = data.try_into()?;
+            let ab: JSArrayBuffer = data.to_rust()?;
             let bytes = ab.as_slice();
             let len = bytes.len();
             let mut file = self.file.lock().await;

@@ -111,7 +111,7 @@ async fn real_path(path: String) -> JSResult<String> {
 
 /// Initialize miscellaneous file system functions
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    let rong = ctx.rong();
+    let rong = ctx.host_namespace();
 
     let symlink_fn = JSFunc::new(ctx, symlink)?.name("symlink")?;
     rong.set("symlink", symlink_fn)?;

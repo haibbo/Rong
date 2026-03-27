@@ -1,6 +1,7 @@
 use crate::QJSValue;
 use crate::qjs;
-use rong_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
+use rong_core::engine::JSObjectOps;
+use rong_core::{JSValueImpl, PropertyAttributes};
 use std::mem::MaybeUninit;
 
 impl JSObjectOps for QJSValue {
@@ -21,7 +22,7 @@ impl JSObjectOps for QJSValue {
         unsafe { qjs::QJS_ObjectGetPrivate(self.value) as _ }
     }
 
-    fn del_property(&self, key: Self) -> bool {
+    fn del_property(&self, key: Self) -> Result<bool, Self> {
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
             let v = qjs::JS_DeleteProperty(
@@ -31,10 +32,17 @@ impl JSObjectOps for QJSValue {
             v
         };
 
-        v != 0
+        if v < 0 {
+            Err(
+                QJSValue::from_owned_raw(self.ctx, unsafe { qjs::JS_GetException(self.ctx) })
+                    .with_exception(),
+            )
+        } else {
+            Ok(v != 0)
+        }
     }
 
-    fn has_property(&self, key: Self) -> bool {
+    fn has_property(&self, key: Self) -> Result<bool, Self> {
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
             let v = qjs::JS_HasProperty(self.ctx, self.value, atom);
@@ -42,10 +50,17 @@ impl JSObjectOps for QJSValue {
             v
         };
 
-        v != 0
+        if v < 0 {
+            Err(
+                QJSValue::from_owned_raw(self.ctx, unsafe { qjs::JS_GetException(self.ctx) })
+                    .with_exception(),
+            )
+        } else {
+            Ok(v != 0)
+        }
     }
 
-    fn set_property(&self, key: Self, value: Self) -> bool {
+    fn set_property(&self, key: Self, value: Self) -> Result<(), Self> {
         let kv = value.into_raw_value(); //necessary
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
@@ -53,7 +68,14 @@ impl JSObjectOps for QJSValue {
             qjs::JS_FreeAtom(self.ctx, atom);
             v
         };
-        v != 0
+        if v < 0 {
+            Err(
+                QJSValue::from_owned_raw(self.ctx, unsafe { qjs::JS_GetException(self.ctx) })
+                    .with_exception(),
+            )
+        } else {
+            Ok(())
+        }
     }
 
     fn set_prototype(&self, prototype: Self) -> bool {
@@ -71,7 +93,7 @@ impl JSObjectOps for QJSValue {
         getter: Self,
         setter: Self,
         attributes: PropertyAttributes,
-    ) -> bool {
+    ) -> Result<(), Self> {
         let getter = getter.value;
         let setter = setter.value;
         let value = value.value;
@@ -91,20 +113,30 @@ impl JSObjectOps for QJSValue {
             qjs::JS_FreeAtom(self.ctx, atom);
             v
         };
-        v != 0
+        if v < 0 {
+            Err(
+                QJSValue::from_owned_raw(self.ctx, unsafe { qjs::JS_GetException(self.ctx) })
+                    .with_exception(),
+            )
+        } else {
+            Ok(())
+        }
     }
 
-    fn get_property(&self, key: Self) -> Option<Self> {
+    fn get_property(&self, key: Self) -> Result<Option<Self>, Self> {
         let v = unsafe {
             let atom = qjs::JS_ValueToAtom(self.ctx, key.value);
             let v = qjs::JS_GetProperty(self.ctx, self.value, atom);
             qjs::JS_FreeAtom(self.ctx, atom);
             v
         };
-        if unsafe { qjs::QJS_IsUndefined(self.ctx, v) } {
-            None
+        if unsafe { qjs::QJS_IsException(self.ctx, v) } {
+            Err(
+                QJSValue::from_owned_raw(self.ctx, unsafe { qjs::JS_GetException(self.ctx) })
+                    .with_exception(),
+            )
         } else {
-            Some(QJSValue::from_owned_raw(self.ctx, v))
+            Ok(Some(QJSValue::from_owned_raw(self.ctx, v)))
         }
     }
 
@@ -114,7 +146,7 @@ impl JSObjectOps for QJSValue {
         v != 0
     }
 
-    fn get_own_property_names(&self) -> Option<Vec<Self>> {
+    fn get_own_property_names(&self) -> Result<Vec<Self>, Self> {
         unsafe {
             let ctx = self.ctx;
             let mut properties = Vec::new();
@@ -134,7 +166,9 @@ impl JSObjectOps for QJSValue {
             );
 
             if ret != 0 {
-                return None;
+                return Err(
+                    QJSValue::from_owned_raw(ctx, qjs::JS_GetException(ctx)).with_exception()
+                );
             }
 
             let enums = enums.assume_init();
@@ -150,7 +184,7 @@ impl JSObjectOps for QJSValue {
 
             qjs::JS_FreePropertyEnum(ctx, enums, count);
 
-            Some(properties)
+            Ok(properties)
         }
     }
 }
@@ -169,16 +203,25 @@ fn to_flags(attr: PropertyAttributes) -> i32 {
         flags |= qjs::JS_PROP_HAS_SET;
     }
 
-    if attr.is_writable() {
+    if attr.has_writable() {
         flags |= qjs::JS_PROP_HAS_WRITABLE;
+        if attr.is_writable() {
+            flags |= qjs::JS_PROP_WRITABLE;
+        }
     }
 
-    if attr.is_enumerable() {
-        flags |= qjs::JS_PROP_ENUMERABLE;
+    if attr.has_enumerable() {
+        flags |= qjs::JS_PROP_HAS_ENUMERABLE;
+        if attr.is_enumerable() {
+            flags |= qjs::JS_PROP_ENUMERABLE;
+        }
     }
 
-    if attr.is_configurable() {
-        flags |= qjs::JS_PROP_CONFIGURABLE;
+    if attr.has_configurable() {
+        flags |= qjs::JS_PROP_HAS_CONFIGURABLE;
+        if attr.is_configurable() {
+            flags |= qjs::JS_PROP_CONFIGURABLE;
+        }
     }
     flags as _
 }

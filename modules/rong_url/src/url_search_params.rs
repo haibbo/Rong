@@ -23,7 +23,7 @@ impl URLSearchParams {
         if let Some(init) = init.0 {
             if init.is_string() {
                 // Initialize from query string
-                let query: String = init.try_into()?;
+                let query: String = init.to_rust()?;
                 if !query.is_empty() {
                     // Use Url to parse query string
                     if let Ok(url) = Url::parse(&format!("http://dummy.com/?{}", query)) {

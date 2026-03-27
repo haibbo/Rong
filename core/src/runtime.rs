@@ -1,7 +1,8 @@
 use crate::function::RustFunc;
+use crate::value::JSBytesData;
 use crate::{
-    JSArrayOps, JSBytesData, JSContext, JSContextImpl, JSErrorFactory, JSExceptionThrower,
-    JSObjectOps, JSResult, JSTypeOf, JSValueConversion, JSValueImpl,
+    JSArrayOps, JSContext, JSContextImpl, JSErrorFactory, JSExceptionThrower, JSObjectOps,
+    JSResult, JSTypeOf, JSValueConversion, JSValueImpl,
 };
 use std::any::TypeId;
 use std::cell::RefCell;
@@ -69,12 +70,9 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
     ///
     /// # Example
     /// ```rust,no_run
-    /// use rong_core::{JSEngine, JSObjectOps};
+    /// use rong_core::prelude::*;
     ///
-    /// fn demo<E: JSEngine + 'static>()
-    /// where
-    ///     E::Value: JSObjectOps + 'static,
-    /// {
+    /// fn demo<E: JSEngine + 'static>() {
     ///     let runtime = E::runtime();
     ///     let _context = runtime.context();
     /// }
@@ -91,7 +89,7 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
             .expect("Failed to register builtin class");
 
         ctx.global()
-            .set("Rong", ctx.rong())
+            .set("Rong", ctx.host_namespace())
             .expect("Failed to add Rong object");
 
         ctx
@@ -156,8 +154,15 @@ impl<C: JSContextImpl> JSContext<C> {
 }
 
 pub trait JSEngine: Sized {
-    type Value: JSValueImpl<Context = Self::Context>;
-    type Context: JSContextImpl<Value = Self::Value, Runtime = Self::Runtime>;
+    type Value: JSValueImpl<Context = Self::Context>
+        + JSObjectOps
+        + JSTypeOf
+        + JSValueConversion
+        + JSArrayOps
+        + 'static;
+    type Context: JSContextImpl<Value = Self::Value, Runtime = Self::Runtime>
+        + JSErrorFactory
+        + JSExceptionThrower;
     type Runtime: JSRuntimeImpl<Context = Self::Context> + 'static;
 
     /// JS engine name

@@ -64,7 +64,7 @@ impl S3Client {
         ];
 
         for key in forbidden {
-            if obj.has(key) {
+            if obj.has_property(key)? {
                 return Err(HostError::new(
                     "E_INVALID_ARG",
                     format!(
@@ -120,7 +120,7 @@ impl S3Client {
             self.config.clone()
         };
         let file = S3File::create(config, self.prefixed_path(&path), path);
-        Ok(Class::get::<S3File>(&ctx)?.instance(file))
+        Ok(Class::lookup::<S3File>(&ctx)?.instance(file))
     }
 
     #[js_method]
@@ -326,7 +326,7 @@ impl S3Client {
                 if let Some(ref etag) = obj.e_tag {
                     entry.set("etag", etag.as_str())?;
                 }
-                contents.push(JSValue::from(&ctx, entry))?;
+                contents.push(JSValue::from_rust(&ctx, entry))?;
                 total_count += 1;
             }
         }

@@ -8,7 +8,7 @@ use tokio::io::AsyncWriteExt;
 fn resolve_dest(dest: &JSValue) -> JSResult<PathBuf> {
     // Try as string first
     if dest.is_string() {
-        let path: String = dest.clone().try_into()?;
+        let path: String = dest.clone().to_rust()?;
         return grant_file_access(&path);
     }
 
@@ -37,7 +37,7 @@ async fn rong_write(_ctx: JSContext, dest: JSValue, data: JSValue) -> JSResult<f
     // Dispatch on data type
     if data.is_string() {
         // Write string as UTF-8
-        let text: String = data.try_into()?;
+        let text: String = data.to_rust()?;
         let bytes = text.as_bytes();
         let len = bytes.len();
 
@@ -60,7 +60,7 @@ async fn rong_write(_ctx: JSContext, dest: JSValue, data: JSValue) -> JSResult<f
 
     if data.is_array_buffer() {
         // Write ArrayBuffer
-        let ab: JSArrayBuffer = data.try_into()?;
+        let ab: JSArrayBuffer = data.to_rust()?;
         let bytes = ab.as_slice();
         let len = bytes.len();
 
@@ -131,7 +131,7 @@ async fn rong_write(_ctx: JSContext, dest: JSValue, data: JSValue) -> JSResult<f
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    let rong = ctx.rong();
+    let rong = ctx.host_namespace();
 
     let write_fn = JSFunc::new(ctx, rong_write)?.name("write")?;
     rong.set("write", write_fn)?;

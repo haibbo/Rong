@@ -419,25 +419,25 @@ impl RongJSError {
 
         match data {
             ErrorData::Null => JSValue::null(ctx),
-            ErrorData::Bool(b) => JSValue::from(ctx, *b),
-            ErrorData::String(s) => JSValue::from(ctx, s.as_str()),
+            ErrorData::Bool(b) => JSValue::from_rust(ctx, *b),
+            ErrorData::String(s) => JSValue::from_rust(ctx, s.as_str()),
             ErrorData::Number(n) => match *n {
                 ErrorNumber::I64(v) => {
                     let abs = v.unsigned_abs();
                     if abs <= MAX_SAFE_INTEGER {
-                        JSValue::from(ctx, v as f64)
+                        JSValue::from_rust(ctx, v as f64)
                     } else {
-                        JSValue::from(ctx, v.to_string())
+                        JSValue::from_rust(ctx, v.to_string())
                     }
                 }
                 ErrorNumber::U64(v) => {
                     if v <= MAX_SAFE_INTEGER {
-                        JSValue::from(ctx, v as f64)
+                        JSValue::from_rust(ctx, v as f64)
                     } else {
-                        JSValue::from(ctx, v.to_string())
+                        JSValue::from_rust(ctx, v.to_string())
                     }
                 }
-                ErrorNumber::F64(bits) => JSValue::from(ctx, f64::from_bits(bits)),
+                ErrorNumber::F64(bits) => JSValue::from_rust(ctx, f64::from_bits(bits)),
             },
             ErrorData::Array(items) => {
                 let Ok(array) = JSArray::<V>::new(ctx) else {
@@ -446,14 +446,14 @@ impl RongJSError {
                 for (i, item) in items.iter().enumerate() {
                     let _ = array.set(i as u32, Self::error_data_to_js_value::<V>(ctx, item));
                 }
-                JSValue::from(ctx, array)
+                JSValue::from_rust(ctx, array)
             }
             ErrorData::Object(map) => {
                 let obj = JSObject::<V>::new(ctx);
                 for (k, v) in map.iter() {
                     let _ = obj.set(k.as_str(), Self::error_data_to_js_value::<V>(ctx, v));
                 }
-                JSValue::from(ctx, obj)
+                JSValue::from_rust(ctx, obj)
             }
         }
     }

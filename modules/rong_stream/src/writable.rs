@@ -423,7 +423,7 @@ pub struct JSWritableStream(pub JSObject);
 
 impl JSWritableStream {
     pub fn new(ctx: &JSContext, stream: WritableStream) -> JSResult<Self> {
-        let obj = rong::Class::get::<WritableStream>(ctx)?.instance(stream);
+        let obj = rong::Class::lookup::<WritableStream>(ctx)?.instance(stream);
         Ok(Self(obj))
     }
 

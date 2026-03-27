@@ -146,6 +146,25 @@ fn test_array_iterator_edge_cases() {
 }
 
 #[test]
+fn test_array_get_opt_distinguishes_hole_from_undefined() {
+    run(|ctx| {
+        let array = ctx
+            .eval::<JSArray>(Source::from_bytes("[1, , undefined, null]"))
+            .unwrap();
+
+        assert_eq!(array.get_opt::<i32>(0).unwrap(), Some(1));
+        assert_eq!(array.get_opt::<i32>(1).unwrap(), None);
+
+        let explicit_undefined: JSValue = array.get_opt(2)?.unwrap();
+        assert!(explicit_undefined.is_undefined());
+
+        assert_eq!(array.get_opt::<Option<String>>(2).unwrap(), Some(None));
+        assert_eq!(array.get_opt::<Option<String>>(3).unwrap(), Some(None));
+        Ok(())
+    });
+}
+
+#[test]
 fn test_vec_to_js_array() {
     run(|ctx| {
         let vec = vec![1, 2, 3];

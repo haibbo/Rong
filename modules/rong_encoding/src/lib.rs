@@ -14,7 +14,8 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 
     let atob = JSFunc::new(ctx, atob)?;
     let btoa = JSFunc::new(ctx, btoa)?;
-    ctx.global().set("atob", atob)?.set("btoa", btoa)?;
+    ctx.global().set("atob", atob)?;
+    ctx.global().set("btoa", btoa)?;
 
     Ok(())
 }

@@ -38,7 +38,7 @@ impl HttpBody {
     // Convert to bytes synchronously for hyper Body implementation
     pub async fn to_bytes(&self) -> JSResult<(Bytes, Option<String>)> {
         if let Some(obj) = self.0.clone().into_object() {
-            let ctx = obj.get_ctx();
+            let ctx = obj.context();
 
             // Handle URLSearchParams
             if let Ok(params) = obj.borrow::<URLSearchParams>() {
@@ -83,7 +83,7 @@ impl HttpBody {
         }
 
         // Handle string
-        if let Ok(s) = self.0.clone().try_into::<String>() {
+        if let Ok(s) = self.0.clone().to_rust::<String>() {
             return Ok((Bytes::from(s), None));
         }
 

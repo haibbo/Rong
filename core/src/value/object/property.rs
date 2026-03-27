@@ -1,5 +1,6 @@
 use crate::{
-    JSContext, JSFunc, JSObject, JSObjectOps, JSSymbol, JSValue, JSValueConversion, JSValueImpl,
+    JSContext, JSFunc, JSObject, JSObjectOps, JSResult, JSSymbol, JSValue, JSValueConversion,
+    JSValueImpl, RongJSError,
 };
 
 // PropertyKey represents a key in a JavaScript object property
@@ -99,17 +100,35 @@ impl PropertyAttributes {
     const HAS_VALUE: u32 = 1 << 3;
     const HAS_GET: u32 = 1 << 4;
     const HAS_SET: u32 = 1 << 5;
+    const HAS_WRITABLE: u32 = 1 << 6;
+    const HAS_ENUMERABLE: u32 = 1 << 7;
+    const HAS_CONFIGURABLE: u32 = 1 << 8;
 
     pub fn is_writable(&self) -> bool {
         self.0 & Self::WRITABLE != 0
+    }
+
+    #[doc(hidden)]
+    pub fn has_writable(&self) -> bool {
+        self.0 & Self::HAS_WRITABLE != 0
     }
 
     pub fn is_enumerable(&self) -> bool {
         self.0 & Self::ENUMERABLE != 0
     }
 
+    #[doc(hidden)]
+    pub fn has_enumerable(&self) -> bool {
+        self.0 & Self::HAS_ENUMERABLE != 0
+    }
+
     pub fn is_configurable(&self) -> bool {
         self.0 & Self::CONFIGURABLE != 0
+    }
+
+    #[doc(hidden)]
+    pub fn has_configurable(&self) -> bool {
+        self.0 & Self::HAS_CONFIGURABLE != 0
     }
 
     pub fn has_value(&self) -> bool {
@@ -136,6 +155,10 @@ impl<V> PropertyDescriptor<V>
 where
     V: JSObjectOps,
 {
+    fn thrown_error(ctx: &JSContext<V::Context>, thrown: V) -> RongJSError {
+        RongJSError::from_thrown_value(JSValue::from_raw(ctx, thrown))
+    }
+
     #[must_use]
     pub fn builder() -> Self {
         Self {
@@ -166,6 +189,7 @@ where
 
     #[must_use]
     pub fn writable(mut self, status: bool) -> Self {
+        self.attributes.0 |= PropertyAttributes::HAS_WRITABLE;
         if status {
             self.attributes.0 |= PropertyAttributes::WRITABLE;
         } else {
@@ -176,6 +200,7 @@ where
 
     #[must_use]
     pub fn enumerable(mut self, status: bool) -> Self {
+        self.attributes.0 |= PropertyAttributes::HAS_ENUMERABLE;
         if status {
             self.attributes.0 |= PropertyAttributes::ENUMERABLE;
         } else {
@@ -186,6 +211,7 @@ where
 
     #[must_use]
     pub fn configurable(mut self, status: bool) -> Self {
+        self.attributes.0 |= PropertyAttributes::HAS_CONFIGURABLE;
         if status {
             self.attributes.0 |= PropertyAttributes::CONFIGURABLE;
         } else {
@@ -195,12 +221,12 @@ where
     }
 
     // apply PropertyDescriptor to JS Object with key
-    pub fn apply_to<K>(mut self, obj: &JSObject<V>, k: K)
+    pub fn apply_to<K>(mut self, obj: &JSObject<V>, k: K) -> JSResult<()>
     where
         K: for<'a> Into<PropertyKey<'a, V>>,
         V: JSObjectOps,
     {
-        let ctx = &obj.get_ctx();
+        let ctx = &obj.context();
         let undefined = V::create_undefined(ctx.as_ref()); // UNDEFINED
 
         let value = self
@@ -227,6 +253,7 @@ where
         let key = k.into().into_value(ctx);
 
         obj.as_value()
-            .define_property(key, value, getter, setter, self.attributes);
+            .define_property(key, value, getter, setter, self.attributes)
+            .map_err(|thrown| Self::thrown_error(ctx, thrown))
     }
 }

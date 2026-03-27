@@ -158,7 +158,7 @@ fn file(path: String) -> JSResult<RongFile> {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    let rong = ctx.rong();
+    let rong = ctx.host_namespace();
 
     ctx.register_hidden_class::<RongFile>()?;
 

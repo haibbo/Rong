@@ -1,5 +1,6 @@
 use crate::{ArkJSValue, arkjs};
-use rong_core::{JSObjectOps, JSValueImpl, PropertyAttributes};
+use rong_core::engine::JSObjectOps;
+use rong_core::{JSValueImpl, PropertyAttributes};
 
 impl JSObjectOps for ArkJSValue {
     fn new_object(ctx: &Self::Context) -> Self {
@@ -69,7 +70,7 @@ impl JSObjectOps for ArkJSValue {
         }
     }
 
-    fn del_property(&self, key: Self) -> bool {
+    fn del_property(&self, key: Self) -> Result<bool, Self> {
         unsafe {
             let mut result = false;
             let status = arkjs::OH_JSVM_DeleteProperty(
@@ -78,11 +79,17 @@ impl JSObjectOps for ArkJSValue {
                 *key.as_raw_value(),
                 &mut result,
             );
-            status == arkjs::JSVM_Status_JSVM_OK && result
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                Ok(result)
+            } else {
+                let mut exception: arkjs::JSVM_Value = std::ptr::null_mut();
+                arkjs::OH_JSVM_GetAndClearLastException(self.env, &mut exception);
+                Err(ArkJSValue::from_owned_raw(self.env, exception).with_exception())
+            }
         }
     }
 
-    fn has_property(&self, key: Self) -> bool {
+    fn has_property(&self, key: Self) -> Result<bool, Self> {
         unsafe {
             let mut has_property = false;
             let status = arkjs::OH_JSVM_HasProperty(
@@ -91,11 +98,17 @@ impl JSObjectOps for ArkJSValue {
                 *key.as_raw_value(),
                 &mut has_property,
             );
-            status == arkjs::JSVM_Status_JSVM_OK && has_property
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                Ok(has_property)
+            } else {
+                let mut exception: arkjs::JSVM_Value = std::ptr::null_mut();
+                arkjs::OH_JSVM_GetAndClearLastException(self.env, &mut exception);
+                Err(ArkJSValue::from_owned_raw(self.env, exception).with_exception())
+            }
         }
     }
 
-    fn set_property(&self, key: Self, value: Self) -> bool {
+    fn set_property(&self, key: Self, value: Self) -> Result<(), Self> {
         unsafe {
             let status = arkjs::OH_JSVM_SetProperty(
                 self.env,
@@ -103,7 +116,13 @@ impl JSObjectOps for ArkJSValue {
                 *key.as_raw_value(),
                 *value.as_raw_value(),
             );
-            status == arkjs::JSVM_Status_JSVM_OK
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                Ok(())
+            } else {
+                let mut exception: arkjs::JSVM_Value = std::ptr::null_mut();
+                arkjs::OH_JSVM_GetAndClearLastException(self.env, &mut exception);
+                Err(ArkJSValue::from_owned_raw(self.env, exception).with_exception())
+            }
         }
     }
 
@@ -139,7 +158,7 @@ impl JSObjectOps for ArkJSValue {
         _getter: Self,
         _setter: Self,
         attributes: PropertyAttributes,
-    ) -> bool {
+    ) -> Result<(), Self> {
         unsafe {
             let descriptor = arkjs::JSVM_PropertyDescriptor {
                 utf8name: std::ptr::null(),
@@ -156,20 +175,30 @@ impl JSObjectOps for ArkJSValue {
             };
 
             let status = arkjs::OH_JSVM_DefineProperties(self.env, self.value, 1, &descriptor);
-            status == arkjs::JSVM_Status_JSVM_OK
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                Ok(())
+            } else {
+                let mut exception: arkjs::JSVM_Value = std::ptr::null_mut();
+                arkjs::OH_JSVM_GetAndClearLastException(self.env, &mut exception);
+                Err(ArkJSValue::from_owned_raw(self.env, exception).with_exception())
+            }
         }
     }
 
-    fn get_property(&self, key: Self) -> Option<Self> {
+    fn get_property(&self, key: Self) -> Result<Option<Self>, Self> {
         unsafe {
             let mut result: arkjs::JSVM_Value = std::ptr::null_mut();
             let status =
                 arkjs::OH_JSVM_GetProperty(self.env, self.value, *key.as_raw_value(), &mut result);
 
             if status == arkjs::JSVM_Status_JSVM_OK && !result.is_null() {
-                Some(ArkJSValue::from_owned_raw(self.env, result))
+                Ok(Some(ArkJSValue::from_owned_raw(self.env, result)))
+            } else if status == arkjs::JSVM_Status_JSVM_OK {
+                Ok(None)
             } else {
-                None
+                let mut exception: arkjs::JSVM_Value = std::ptr::null_mut();
+                arkjs::OH_JSVM_GetAndClearLastException(self.env, &mut exception);
+                Err(ArkJSValue::from_owned_raw(self.env, exception).with_exception())
             }
         }
     }
@@ -187,13 +216,15 @@ impl JSObjectOps for ArkJSValue {
         }
     }
 
-    fn get_own_property_names(&self) -> Option<Vec<Self>> {
+    fn get_own_property_names(&self) -> Result<Vec<Self>, Self> {
         unsafe {
             let mut property_names: arkjs::JSVM_Value = std::ptr::null_mut();
             let status = arkjs::OH_JSVM_GetPropertyNames(self.env, self.value, &mut property_names);
 
             if status != arkjs::JSVM_Status_JSVM_OK {
-                return None;
+                let mut exception: arkjs::JSVM_Value = std::ptr::null_mut();
+                arkjs::OH_JSVM_GetAndClearLastException(self.env, &mut exception);
+                return Err(ArkJSValue::from_owned_raw(self.env, exception).with_exception());
             }
 
             // Get array length
@@ -201,7 +232,9 @@ impl JSObjectOps for ArkJSValue {
             let status = arkjs::OH_JSVM_GetArrayLength(self.env, property_names, &mut length);
 
             if status != arkjs::JSVM_Status_JSVM_OK {
-                return None;
+                let mut exception: arkjs::JSVM_Value = std::ptr::null_mut();
+                arkjs::OH_JSVM_GetAndClearLastException(self.env, &mut exception);
+                return Err(ArkJSValue::from_owned_raw(self.env, exception).with_exception());
             }
 
             let mut properties = Vec::with_capacity(length as usize);
@@ -215,7 +248,7 @@ impl JSObjectOps for ArkJSValue {
                 }
             }
 
-            Some(properties)
+            Ok(properties)
         }
     }
 }

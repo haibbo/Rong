@@ -81,7 +81,7 @@ where
 
     /// Get the raw JS value at the given index.
     pub fn get_value(&self, index: u32) -> JSResult<JSValue<V>> {
-        let ctx = self.get_ctx();
+        let ctx = self.context();
         self.as_value()
             .get_index(index)
             .try_map(|value| JSValue::from_raw(&ctx, value))
@@ -99,11 +99,11 @@ where
     where
         T: FromJSValue<V>,
     {
-        if index >= self.len()? {
+        if !self.has_index(index)? {
             return Ok(None);
         }
 
-        let ctx = self.get_ctx();
+        let ctx = self.context();
         let value = self.get_value(index)?;
         T::from_js_value(&ctx, value).map(Some)
     }
@@ -113,18 +113,18 @@ where
     where
         T: IntoJSValue<V>,
     {
-        let ctx = self.get_ctx();
+        let ctx = self.context();
         self.set_value(index, value.into_js_value(&ctx))
     }
 
     /// Delete an array index using primitive object semantics.
-    pub fn delete(&self, index: u32) -> bool {
-        self.0.del(index)
+    pub fn delete(&self, index: u32) -> JSResult<bool> {
+        self.0.delete(index)
     }
 
     /// Check whether an index is present using primitive object semantics.
-    pub fn has_index(&self, index: u32) -> bool {
-        self.0.has(index)
+    pub fn has_index(&self, index: u32) -> JSResult<bool> {
+        self.0.has_property(index)
     }
 
     /// Push a raw JS value using primitive index writes.
@@ -139,21 +139,21 @@ where
     where
         T: IntoJSValue<V>,
     {
-        let ctx = self.get_ctx();
+        let ctx = self.context();
         self.push_value(value.into_js_value(&ctx))
     }
 
     /// Pop a raw JS value using primitive index operations.
     pub fn pop_value(&self) -> JSResult<JSValue<V>> {
         let len = self.len()?;
-        let ctx = self.get_ctx();
+        let ctx = self.context();
         if len == 0 {
             return Ok(JSValue::undefined(&ctx));
         }
 
         let index = len - 1;
         let value = self.get_value(index)?;
-        self.delete(index);
+        self.delete(index)?;
         self.0.set("length", index)?;
         Ok(value)
     }
@@ -167,7 +167,7 @@ where
             return Ok(None);
         }
 
-        let ctx = self.get_ctx();
+        let ctx = self.context();
         let value = self.pop_value()?;
         T::from_js_value(&ctx, value).map(Some)
     }
@@ -238,7 +238,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.count {
-            let ctx = self.array.get_ctx();
+            let ctx = self.array.context();
             let result = self
                 .array
                 .get_value(self.index)
@@ -331,8 +331,13 @@ where
             let index = self.index;
             self.index += 1;
 
-            if self.array.has_index(index) {
-                let ctx = self.array.get_ctx();
+            let has_index = match self.array.has_index(index) {
+                Ok(has_index) => has_index,
+                Err(err) => return Some(Err(err)),
+            };
+
+            if has_index {
+                let ctx = self.array.context();
                 let value = match self.array.get_value(index) {
                     Ok(value) => value,
                     Err(err) => return Some(Err(err)),

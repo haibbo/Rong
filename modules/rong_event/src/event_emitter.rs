@@ -74,7 +74,7 @@ impl FromJSValue<JSEngineValue> for EventKey {
 impl IntoJSValue<JSEngineValue> for EventKey {
     fn into_js_value(self, ctx: &JSContext) -> JSValue {
         match self {
-            EventKey::String(k) => JSValue::from(ctx, k),
+            EventKey::String(k) => JSValue::from_rust(ctx, k),
             EventKey::Symbol(k) => k.into_js_value(ctx),
         }
     }
@@ -174,7 +174,7 @@ where
             Err(err) => {
                 let key = EventKey::String(String::from("error"));
                 let err = err.to_string();
-                let value = JSValue::from(ctx, err.as_str());
+                let value = JSValue::from_rust(ctx, err.as_str());
 
                 match M::do_emit(this, key.clone(), Rest(vec![value])) {
                     Ok(has) if has => Ok(true),
@@ -206,7 +206,8 @@ where
             },
         )?
         .name("on")?;
-        proto.set("on", on.clone())?.set("addListener", on)?;
+        proto.set("on", on.clone())?;
+        proto.set("addListener", on)?;
 
         // method: once
         let once = JSFunc::new(
@@ -220,7 +221,8 @@ where
 
         // method: off and removeListener
         let off = JSFunc::new(ctx, Self::remove_event_listener)?.name("off")?;
-        proto.set("off", off.clone())?.set("removeListener", off)?;
+        proto.set("off", off.clone())?;
+        proto.set("removeListener", off)?;
 
         // methods: prependListener, prependOnceListener
         let prepend = JSFunc::new(
@@ -237,9 +239,8 @@ where
             },
         )?
         .name("prependOnceListener")?;
-        proto
-            .set("prependListener", prepend)?
-            .set("prependOnceListener", prepend_once)?;
+        proto.set("prependListener", prepend)?;
+        proto.set("prependOnceListener", prepend_once)?;
 
         // method: eventNames
         let event_names = JSFunc::new(ctx, Self::event_names)?.name("eventNames")?;

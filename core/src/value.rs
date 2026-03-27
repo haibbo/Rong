@@ -126,25 +126,25 @@ where
         self.inner
     }
 
-    /// Get the context associated with this JSValue
-    pub fn get_ctx(&self) -> JSContext<V::Context> {
+    /// Returns the context associated with this value.
+    pub fn context(&self) -> JSContext<V::Context> {
         JSContext::from_borrowed_raw_ptr(self.as_value().as_raw_context())
     }
 
-    /// Converts  Rust value into a `JSValue`.
-    pub fn from<T>(ctx: &JSContext<V::Context>, val: T) -> Self
+    /// Converts a Rust value into a `JSValue`.
+    pub fn from_rust<T>(ctx: &JSContext<V::Context>, val: T) -> Self
     where
         T: IntoJSValue<V>,
     {
         <T as IntoJSValue<V>>::into_js_value(val, ctx)
     }
 
-    /// Try to converts JSValue to Rust value
-    pub fn try_into<T>(self) -> JSResult<T>
+    /// Converts a JavaScript value into a Rust value.
+    pub fn to_rust<T>(self) -> JSResult<T>
     where
         T: FromJSValue<V>,
     {
-        let ctx = self.get_ctx();
+        let ctx = self.context();
         T::from_js_value(&ctx, self)
     }
 
@@ -314,28 +314,28 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.type_of() {
             JSValueType::Boolean => {
-                if let Ok(val) = self.clone().try_into::<bool>() {
+                if let Ok(val) = self.clone().to_rust::<bool>() {
                     write!(f, "{}", val)
                 } else {
                     write!(f, "boolean")
                 }
             }
             JSValueType::Number => {
-                if let Ok(val) = self.clone().try_into::<f64>() {
+                if let Ok(val) = self.clone().to_rust::<f64>() {
                     write!(f, "{}", val)
                 } else {
                     write!(f, "number")
                 }
             }
             JSValueType::String => {
-                if let Ok(val) = self.clone().try_into::<String>() {
+                if let Ok(val) = self.clone().to_rust::<String>() {
                     write!(f, "{}", val)
                 } else {
                     write!(f, "string")
                 }
             }
             JSValueType::Date => {
-                if let Ok(val) = self.clone().try_into::<String>() {
+                if let Ok(val) = self.clone().to_rust::<String>() {
                     write!(f, "{}", val)
                 } else {
                     write!(f, "Date")

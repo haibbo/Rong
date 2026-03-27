@@ -50,11 +50,13 @@ pub enum JSCallable<V: JSValueImpl> {
 /// - V: The JavaScript value type
 /// - P: Parameter types tuple
 /// - K: marker type to avoid rustc complain confiction implementation
+#[doc(hidden)]
 pub trait IntoJSCallable<V: JSValueImpl, P, K> {
     fn into_js_callable(self) -> JSCallable<V>;
 }
 
 /// same as IntoJSCallable, but it's for once callable function
+#[doc(hidden)]
 pub trait IntoOnceJSCallable<V: JSValueImpl, P, K> {
     fn into_js_callable(self) -> JSCallable<V>;
 }
@@ -62,9 +64,13 @@ pub trait IntoOnceJSCallable<V: JSValueImpl, P, K> {
 /// Marker type to let rustc happy to avoid it complain confliction implementation
 /// since Fn depends on FnMut, and FnMut depends on FnOnce, when P is the same, rustc
 /// consider confliction implementation for Fn,FnMut etc.
+#[doc(hidden)]
 pub struct KFnMut;
+#[doc(hidden)]
 pub struct KFnOnce;
+#[doc(hidden)]
 pub struct KAsyncFnMut;
+#[doc(hidden)]
 pub struct KAsyncFnOnce;
 
 impl<V: JSValueImpl> RustFunc<V> {

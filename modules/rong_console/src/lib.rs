@@ -124,13 +124,12 @@ fn console_writer_is_tty() -> bool {
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     let console = JSObject::new(ctx);
 
-    console
-        .set("clear", JSFunc::new(ctx, clear)?)?
-        .set("log", JSFunc::new(ctx, verbose)?)?
-        .set("error", JSFunc::new(ctx, error)?)?
-        .set("warn", JSFunc::new(ctx, warn)?)?
-        .set("info", JSFunc::new(ctx, info)?)?
-        .set("debug", JSFunc::new(ctx, debug)?)?;
+    console.set("clear", JSFunc::new(ctx, clear)?)?;
+    console.set("log", JSFunc::new(ctx, verbose)?)?;
+    console.set("error", JSFunc::new(ctx, error)?)?;
+    console.set("warn", JSFunc::new(ctx, warn)?)?;
+    console.set("info", JSFunc::new(ctx, info)?)?;
+    console.set("debug", JSFunc::new(ctx, debug)?)?;
 
     ctx.register_class::<Console>()?;
     ctx.global().set("console", console)?;
@@ -192,7 +191,7 @@ fn format_values_internal(result: &mut String, args: Rest<JSValue>) {
         // Handle formatted strings
         if index == 0
             && size > 1
-            && let Ok(format_str) = arg.clone().try_into::<String>()
+            && let Ok(format_str) = arg.clone().to_rust::<String>()
         {
             let mut chars = format_str.chars().peekable();
             while let Some(c) = chars.next() {
@@ -200,7 +199,7 @@ fn format_values_internal(result: &mut String, args: Rest<JSValue>) {
                     match chars.next() {
                         Some('s') => {
                             if let Some((_, next_arg)) = iter.next() {
-                                if let Ok(str) = next_arg.clone().try_into::<String>() {
+                                if let Ok(str) = next_arg.clone().to_rust::<String>() {
                                     result.push_str(&str);
                                 } else {
                                     format_raw_inner(result, next_arg, &mut HashSet::default(), 0);
@@ -212,7 +211,7 @@ fn format_values_internal(result: &mut String, args: Rest<JSValue>) {
                         }
                         Some('d') | Some('i') => {
                             if let Some((_, next_arg)) = iter.next() {
-                                if let Ok(num) = next_arg.clone().try_into::<f64>() {
+                                if let Ok(num) = next_arg.clone().to_rust::<f64>() {
                                     result.push_str(&num.trunc().to_string());
                                 } else {
                                     format_raw_inner(result, next_arg, &mut HashSet::default(), 0);
@@ -224,7 +223,7 @@ fn format_values_internal(result: &mut String, args: Rest<JSValue>) {
                         }
                         Some('f') => {
                             if let Some((_, next_arg)) = iter.next() {
-                                if let Ok(num) = next_arg.clone().try_into::<f64>() {
+                                if let Ok(num) = next_arg.clone().to_rust::<f64>() {
                                     result.push_str(&num.to_string());
                                 } else {
                                     format_raw_inner(result, next_arg, &mut HashSet::default(), 0);
@@ -297,25 +296,25 @@ fn format_raw_inner(
         JSValueType::Null => result.push_str("null"),
 
         JSValueType::Boolean => {
-            if let Ok(b) = value.try_into::<bool>() {
+            if let Ok(b) = value.to_rust::<bool>() {
                 result.push_str(if b { "true" } else { "false" });
             }
         }
 
         JSValueType::Number => {
-            if let Ok(n) = value.try_into::<f64>() {
+            if let Ok(n) = value.to_rust::<f64>() {
                 result.push_str(&n.to_string());
             }
         }
 
         JSValueType::BigInt => {
-            if let Ok(s) = value.try_into::<String>() {
+            if let Ok(s) = value.to_rust::<String>() {
                 result.push_str(&s);
             }
         }
 
         JSValueType::String => {
-            if let Ok(s) = value.try_into::<String>() {
+            if let Ok(s) = value.to_rust::<String>() {
                 if depth > 0 {
                     result.push('"');
                     result.push_str(&escape_string(&s));
@@ -327,7 +326,7 @@ fn format_raw_inner(
         }
 
         JSValueType::Date => {
-            if let Ok(s) = value.try_into::<String>() {
+            if let Ok(s) = value.to_rust::<String>() {
                 result.push_str(&s);
             }
         }
@@ -502,7 +501,7 @@ fn format_object(
             }
             first = false;
 
-            if let Ok(key_str) = entry.key().clone().try_into::<String>() {
+            if let Ok(key_str) = entry.key().clone().to_rust::<String>() {
                 if needs_quotes(&key_str) {
                     result.push('"');
                     result.push_str(&escape_string(&key_str));

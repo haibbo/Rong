@@ -48,14 +48,14 @@ Most common conversions you'll need:
 
 ```rust
 // Rust → JavaScript
-let js_num = JSValue::from(&ctx, 42);
-let js_str = JSValue::from(&ctx, "hello");
+let js_num = JSValue::from_rust(&ctx, 42);
+let js_str = JSValue::from_rust(&ctx, "hello");
 let js_bool = true.into_js_value(&ctx);
 
 // JavaScript → Rust
-let num: i32 = js_value.try_into()?;
-let s: String = js_value.try_into()?;
-let b: bool = js_value.try_into()?;
+let num: i32 = js_value.to_rust()?;
+let s: String = js_value.to_rust()?;
+let b: bool = js_value.to_rust()?;
 
 // Working with objects
 let obj = JSObject::new(&ctx);
@@ -196,11 +196,11 @@ Operations available on JavaScript objects.
 ```rust
 pub trait JSObjectOps: JSValueConversion + JSTypeOf {
     fn new_object(ctx: &Self::Context) -> Self;
-    fn get_property(&self, key: Self) -> Option<Self>;
-    fn set_property(&self, key: Self, value: Self) -> bool;
-    fn del_property(&self, key: Self) -> bool;
-    fn has_property(&self, key: Self) -> bool;
-    fn get_own_property_names(&self) -> Option<Vec<Self>>;
+    fn get_property(&self, key: Self) -> Result<Option<Self>, Self>;
+    fn set_property(&self, key: Self, value: Self) -> Result<(), Self>;
+    fn del_property(&self, key: Self) -> Result<bool, Self>;
+    fn has_property(&self, key: Self) -> Result<bool, Self>;
+    fn get_own_property_names(&self) -> Result<Vec<Self>, Self>;
     // ...
 }
 ```
@@ -253,12 +253,12 @@ pub struct JSValue<V: JSValueImpl> {
 
 | Method                 | Description                                   |
 | :---                   | :---                                          |
-| `try_into::<T>(self)`  | Convert to Rust type `T` (uses `FromJSValue`) |
-| `from(&ctx, val)`      | Create from Rust value (uses `IntoJSValue`)   |
+| `to_rust::<T>(self)`   | Convert to Rust type `T` (uses `FromJSValue`) |
+| `from_rust(&ctx, val)` | Create from Rust value (uses `IntoJSValue`)   |
 | `from_raw(ctx, value)` | Create from raw engine value                  |
 | `into_value(self)`     | Extract raw engine value                      |
 | `as_value(&self)`      | Borrow raw engine value                       |
-| `get_ctx(&self)`       | Get associated context                        |
+| `context(&self)`       | Get associated context                        |
 | `undefined(ctx)`       | Create JS `undefined`                         |
 | `null(ctx)`            | Create JS `null`                              |
 | `into_object(self)`    | Convert to `JSObject` if applicable           |
@@ -858,32 +858,32 @@ let arr = JSArray::new(&ctx)?;
 ### Converting Values
 
 ```rust
-// JS → Rust: using try_into (most common pattern)
+// JS → Rust: using to_rust (most common pattern)
 let value: JSValue<V> = /* ... */;
 
-// Note: try_into() consumes the JSValue, so clone() if you need to keep the original
+// Note: to_rust() consumes the JSValue, so clone() if you need to keep the original
 // With type annotation
-let s: String = value.clone().try_into()?;
+let s: String = value.clone().to_rust()?;
 
 // With turbofish syntax
-let s = value.clone().try_into::<String>()?;
-let n = value.clone().try_into::<i32>()?;
-let b = value.clone().try_into::<bool>()?;
+let s = value.clone().to_rust::<String>()?;
+let n = value.clone().to_rust::<i32>()?;
+let b = value.clone().to_rust::<bool>()?;
 
 // Pattern matching (common in conditional logic)
-if let Ok(s) = value.clone().try_into::<String>() {
+if let Ok(s) = value.clone().to_rust::<String>() {
     println!("Got string: {}", s);
 }
 
 // If you don't need the value afterward, no clone needed
-let msg: String = value.try_into().unwrap_or_default();
+let msg: String = value.to_rust().unwrap_or_default();
 
 // Using FromJSValue directly (less common)
 let num = i32::from_js_value(&ctx, value)?;
 
 // Rust → JS
-let js_value = JSValue::from(&ctx, 42);
-let js_value = JSValue::from(&ctx, "hello");
+let js_value = JSValue::from_rust(&ctx, 42);
+let js_value = JSValue::from_rust(&ctx, "hello");
 let js_value = true.into_js_value(&ctx);
 ```
 
@@ -901,8 +901,8 @@ let name: String = obj.get("name")?;
 let age: i32 = obj.get("age")?;
 
 // Check and delete
-if obj.has("temp") {
-    obj.del("temp");
+if obj.has_property("temp")? {
+    obj.delete("temp")?;
 }
 
 // Iterate
@@ -941,7 +941,7 @@ let vec: Vec<i32> = Vec::from_js_value(&ctx, arr.into_js_value(&ctx))?;
 let value: JSValue<V> = /* ... */;
 
 if value.is_string() {
-    let s: String = value.try_into()?;
+    let s: String = value.to_rust()?;
 }
 
 match value.type_of() {
@@ -1014,18 +1014,18 @@ obj.set("key", opt)?;
 
 ## Common Pitfalls
 
-### 1. `try_into()` Consumes the Value
+### 1. `to_rust()` Consumes the Value
 
-The `try_into()` method takes ownership of `JSValue`. If you need the value multiple times, clone it first:
+The `to_rust()` method takes ownership of `JSValue`. If you need the value multiple times, clone it first:
 
 ```rust
-// Wrong: value is consumed after first try_into()
-let s: String = value.try_into()?;
-let n: i32 = value.try_into()?;  // Error: value already moved
+// Wrong: value is consumed after first to_rust()
+let s: String = value.to_rust()?;
+let n: i32 = value.to_rust()?;  // Error: value already moved
 
 // Correct: clone before consuming
-let s: String = value.clone().try_into()?;
-let n: i32 = value.try_into()?;  // OK, uses original
+let s: String = value.clone().to_rust()?;
+let n: i32 = value.to_rust()?;  // OK, uses original
 ```
 
 ### 2. Integer Overflow is Silent
@@ -1034,8 +1034,8 @@ Smaller integer types (`i8`, `u8`, etc.) are converted via intermediate types an
 
 ```rust
 // JS number 300 → i8 will truncate
-let big_number = JSValue::from(&ctx, 300_i32);
-let small: i8 = big_number.try_into()?;  // Result: 44, not 300!
+let big_number = JSValue::from_rust(&ctx, 300_i32);
+let small: i8 = big_number.to_rust()?;  // Result: 44, not 300!
 ```
 
 If you need overflow checking, convert to the intermediate type first and validate.
@@ -1067,15 +1067,15 @@ fn returns_null<V>() -> JSValue<V> {
 Conversion fails at runtime if the JavaScript type doesn't match:
 
 ```rust
-let js_string = JSValue::from(&ctx, "hello");
-let num: Result<i32, _> = js_string.try_into();  // Err(TypeError)
+let js_string = JSValue::from_rust(&ctx, "hello");
+let num: Result<i32, _> = js_string.to_rust();  // Err(TypeError)
 ```
 
 Use type checking before conversion if the type is uncertain:
 
 ```rust
 if value.is_number() {
-    let n: i32 = value.try_into()?;
+    let n: i32 = value.to_rust()?;
 }
 ```
 

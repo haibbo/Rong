@@ -7,7 +7,7 @@ fn exit(status: u32) {
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    let rong = ctx.rong();
+    let rong = ctx.host_namespace();
 
     let args = env::args().collect::<Vec<String>>();
     let rong_args = match args.get(1).map(|s| s.as_str()) {

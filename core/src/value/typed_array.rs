@@ -296,7 +296,7 @@ where
             .as_value()
             .get_array_buffer()
             .ok_or_else(RongJSError::NotJSArrayBuffer)?;
-        let ctx = self.get_ctx();
+        let ctx = self.context();
         JSArrayBuffer::from_js_value(&ctx, JSValue::from_raw(&ctx, buffer))
     }
 

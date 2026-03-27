@@ -209,7 +209,8 @@ fn test_typed_array_buffer_sharing() {
         let array2 = JSTypedArray::<i8>::from_array_buffer(ctx, buffer.clone(), 0, None)?;
 
         // Set them as global variables
-        ctx.global().set("array1", array1)?.set("array2", array2)?;
+        ctx.global().set("array1", array1)?;
+        ctx.global().set("array2", array2)?;
 
         // Modify through one view and check it's visible in the other
         let _: JSValue = ctx.eval(Source::from_bytes(

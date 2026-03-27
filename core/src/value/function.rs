@@ -6,7 +6,7 @@ use crate::{
 use std::ops::Deref;
 
 mod args;
-pub use args::{IntoJSArgs, JSArgsVec};
+pub use args::IntoJSArgs;
 
 #[derive(PartialEq, Eq, Hash)]
 pub struct JSFunc<V: JSValueImpl>(JSObject<V>);
@@ -48,7 +48,7 @@ where
 
 impl<V: JSObjectOps> JSFunc<V> {
     fn call_with_argv(&self, this: Option<JSObject<V>>, argv: &[V]) -> V {
-        let ctx = &self.get_ctx();
+        let ctx = &self.context();
         let this = match this {
             Some(obj) => obj.into_value(),
             None => V::create_undefined(ctx.as_ref()),
@@ -60,7 +60,7 @@ impl<V: JSObjectOps> JSFunc<V> {
     where
         Args: IntoJSArgs<V>,
     {
-        let ctx = &self.get_ctx();
+        let ctx = &self.context();
         let argv = args.into_js_args(ctx);
         self.call_with_argv(this, &argv)
     }
@@ -81,12 +81,9 @@ impl<V: JSObjectOps> JSFunc<V> {
     ///
     /// # Example
     /// ```rust,no_run
-    /// use rong_core::{JSEngine, JSFunc, JSObjectOps, JSResult};
+    /// use rong_core::prelude::*;
     ///
-    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
-    /// where
-    ///     E::Value: JSObjectOps + 'static,
-    /// {
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()> {
     ///     let runtime = E::runtime();
     ///     let ctx = runtime.context();
     ///     let _func = JSFunc::<E::Value>::new(&ctx, |x: i32| x + 1)?;
@@ -124,12 +121,9 @@ impl<V: JSObjectOps> JSFunc<V> {
     ///
     /// # Examples
     /// ```rust,no_run
-    /// use rong_core::{JSEngine, JSArrayBufferOps, JSFunc, JSObjectOps, JSResult};
+    /// use rong_core::prelude::*;
     ///
-    /// fn demo<E: JSEngine + 'static>() -> JSResult<()>
-    /// where
-    ///     E::Value: JSArrayBufferOps + JSObjectOps + 'static,
-    /// {
+    /// fn demo<E: JSEngine + 'static>() -> JSResult<()> {
     ///     let runtime = E::runtime();
     ///     let ctx = runtime.context();
     ///     let func = JSFunc::<E::Value>::new(&ctx, |x: i32| x + 1)?;
@@ -165,12 +159,9 @@ impl<V: JSObjectOps> JSFunc<V> {
     ///
     /// # Examples
     /// ```rust,no_run
-    /// use rong_core::{JSEngine, JSArrayBufferOps, JSFunc, JSObjectOps, JSResult, JSTypeOf};
+    /// use rong_core::prelude::*;
     ///
-    /// async fn demo<E: JSEngine + 'static>() -> JSResult<()>
-    /// where
-    ///     E::Value: JSArrayBufferOps + JSObjectOps + JSTypeOf + 'static,
-    /// {
+    /// async fn demo<E: JSEngine + 'static>() -> JSResult<()> {
     ///     let runtime = E::runtime();
     ///     let ctx = runtime.context();
     ///     let func = JSFunc::<E::Value>::new(&ctx, |x: i32| x + 1)?;
@@ -185,7 +176,7 @@ impl<V: JSObjectOps> JSFunc<V> {
         R: FromJSValue<V> + 'static,
         V: JSObjectOps + JSTypeOf + 'static,
     {
-        let ctx = &self.get_ctx();
+        let ctx = &self.context();
         let result = self.call_raw(this, args);
 
         if result.is_promise() {
@@ -198,15 +189,15 @@ impl<V: JSObjectOps> JSFunc<V> {
 
     /// set name of JS Function
     pub fn name(self, name: &str) -> JSResult<Self> {
-        let ctx = &self.0.get_ctx();
-        let name_value = JSValue::from(ctx, name);
+        let ctx = &self.0.context();
+        let name_value = JSValue::from_rust(ctx, name);
         // Per JS spec, Function#name is non-writable, non-enumerable, configurable
         PropertyDescriptor::builder()
             .value(name_value)
             .writable(false)
             .enumerable(false)
             .configurable(true)
-            .apply_to(&self.0, "name");
+            .apply_to(&self.0, "name")?;
         Ok(self)
     }
 
@@ -225,14 +216,14 @@ where
 {
     fn into_js(self, ctx: &JSContext<V::Context>) -> JSResult<JSFunc<V>> {
         let length = self.parameter_required_count();
-        let class = Class::get::<RustFunc<V>>(ctx)?;
+        let class = Class::lookup::<RustFunc<V>>(ctx)?;
         let obj = class.instance::<RustFunc<V>>(self);
-        let len_value = crate::JSValue::from(ctx, length as i32);
+        let len_value = crate::JSValue::from_rust(ctx, length as i32);
         crate::PropertyDescriptor::builder()
             .value(len_value)
             .enumerable(false)
             .configurable(false)
-            .apply_to(&obj, "length");
+            .apply_to(&obj, "length")?;
         Ok(JSFunc(obj))
     }
 }

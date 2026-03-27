@@ -40,7 +40,7 @@ mod tests {
                 let tx = tx.clone();
                 spawn_local(async move {
                     let value = recv.recv().await;
-                    let reason: String = value.try_into().unwrap();
+                    let reason: String = value.to_rust().unwrap();
                     println!("Got reason:{}", reason);
                     tx.send(reason).await.unwrap();
                 });

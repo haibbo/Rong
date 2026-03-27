@@ -106,7 +106,7 @@ impl SQLite {
                 .map_err(|e| sqlite_error(e.to_string()))?;
         }
         let stmt = Statement::create(self.conn.clone(), sql);
-        Ok(Class::get::<Statement>(&ctx)?.instance(stmt))
+        Ok(Class::lookup::<Statement>(&ctx)?.instance(stmt))
     }
 
     /// Run a function inside a transaction. Commits on success, rolls back on error.
@@ -202,13 +202,13 @@ fn js_value_to_sqlite(val: &JSValue) -> JSResult<Value> {
         return Ok(Value::Null);
     }
     if val.is_boolean() {
-        let b: bool = val.clone().try_into()?;
+        let b: bool = val.clone().to_rust()?;
         return Ok(Value::Integer(b as i64));
     }
     if val.is_bigint() {
         let s: String = val
             .clone()
-            .try_into()
+            .to_rust()
             .map_err(|_| sqlite_error("Invalid bigint parameter"))?;
         let n: i64 = s
             .parse()
@@ -216,20 +216,20 @@ fn js_value_to_sqlite(val: &JSValue) -> JSResult<Value> {
         return Ok(Value::Integer(n));
     }
     if val.is_number() {
-        let n: f64 = val.clone().try_into()?;
+        let n: f64 = val.clone().to_rust()?;
         if n.fract() == 0.0 && n >= i64::MIN as f64 && n <= i64::MAX as f64 {
             return Ok(Value::Integer(n as i64));
         }
         return Ok(Value::Real(n));
     }
     if val.is_string() {
-        let s: String = val.clone().try_into()?;
+        let s: String = val.clone().to_rust()?;
         return Ok(Value::Text(s));
     }
     if val.is_array_buffer() {
         let ab: JSArrayBuffer = val
             .clone()
-            .try_into()
+            .to_rust()
             .map_err(|_| sqlite_error("invalid ArrayBuffer"))?;
         return Ok(Value::Blob(ab.as_bytes().to_vec()));
     }
@@ -267,7 +267,7 @@ pub(crate) fn set_sqlite_value(
         Value::Blob(b) => {
             let ab = JSArrayBuffer::from_bytes(ctx, b)
                 .map_err(|e| sqlite_error(format!("ArrayBuffer: {}", e)))?;
-            obj.set(key, JSValue::from(ctx, ab))?;
+            obj.set(key, JSValue::from_rust(ctx, ab))?;
         }
     }
     Ok(())
@@ -277,13 +277,13 @@ pub(crate) fn set_sqlite_value(
 pub(crate) fn sqlite_value_to_js(ctx: &JSContext, val: &Value) -> JSResult<JSValue> {
     match val {
         Value::Null => Ok(JSValue::null(ctx)),
-        Value::Integer(n) => Ok(JSValue::from(ctx, *n)),
-        Value::Real(n) => Ok(JSValue::from(ctx, *n)),
-        Value::Text(s) => Ok(JSValue::from(ctx, s.as_str())),
+        Value::Integer(n) => Ok(JSValue::from_rust(ctx, *n)),
+        Value::Real(n) => Ok(JSValue::from_rust(ctx, *n)),
+        Value::Text(s) => Ok(JSValue::from_rust(ctx, s.as_str())),
         Value::Blob(b) => {
             let ab = JSArrayBuffer::from_bytes(ctx, b)
                 .map_err(|e| sqlite_error(format!("ArrayBuffer: {}", e)))?;
-            Ok(JSValue::from(ctx, ab))
+            Ok(JSValue::from_rust(ctx, ab))
         }
     }
 }
@@ -327,7 +327,7 @@ pub(crate) fn query_rows(
         for (i, val) in row.iter().enumerate() {
             set_sqlite_value(ctx, &obj, &col_names[i], val)?;
         }
-        result.push(JSValue::from(ctx, obj))?;
+        result.push(JSValue::from_rust(ctx, obj))?;
     }
     Ok(result)
 }

@@ -133,7 +133,7 @@ impl Request {
     #[js_method(constructor)]
     pub(crate) fn new(input: JSValue, request_init: Optional<RequestInit>) -> JSResult<Self> {
         // Parse input - can be a URL string or another Request object
-        let mut request = if let Ok(url_str) = input.clone().try_into::<String>() {
+        let mut request = if let Ok(url_str) = input.clone().to_rust::<String>() {
             let url = Uri::try_from(url_str.as_str()).map_err(|_| {
                 HostError::new(
                     rong::error::E_INVALID_ARG,
@@ -314,7 +314,7 @@ impl Request {
             && let Some(obj) = body.0.clone().into_object()
             && let Ok(formdata) = obj.borrow::<FormData>()
         {
-            return Ok(Class::get::<FormData>(&ctx)?.instance(formdata.clone()));
+            return Ok(Class::lookup::<FormData>(&ctx)?.instance(formdata.clone()));
         }
 
         let bytes = if let Some(body) = &self.body {
@@ -328,7 +328,7 @@ impl Request {
             .get("Content-Type".to_string())?
             .unwrap_or_default();
         let form = FormData::from_bytes(&bytes, &content_type)?;
-        Ok(Class::get::<FormData>(&ctx)?.instance(form))
+        Ok(Class::lookup::<FormData>(&ctx)?.instance(form))
     }
 
     #[js_method(gc_mark)]
@@ -397,7 +397,7 @@ impl Request {
             consumed: Cell::new(false),
         };
 
-        let class = Class::get::<Request>(ctx)?;
+        let class = Class::lookup::<Request>(ctx)?;
         Ok(class.instance(request))
     }
 }

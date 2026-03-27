@@ -107,7 +107,7 @@ Register functions using `JSFunc::new()` and attach them to global objects or mo
 
 ```rust
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    let rong = ctx.rong();
+    let rong = ctx.host_namespace();
 
     // Register async function
     let rename_fn = JSFunc::new(ctx, rename)?.name("rename")?;
@@ -687,7 +687,7 @@ async fn exists(path: String) -> bool {
 }
 
 pub fn init_fs(ctx: &JSContext) -> JSResult<()> {
-    let rong = ctx.rong();
+    let rong = ctx.host_namespace();
 
     let read_fn = JSFunc::new(ctx, read_file)?.name("readFile")?;
     rong.set("readFile", read_fn)?;

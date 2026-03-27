@@ -226,7 +226,7 @@ async fn chdir(directory: String) -> JSResult<()> {
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    let rong = ctx.rong();
+    let rong = ctx.host_namespace();
 
     ctx.register_hidden_class::<DirEntry>()?;
 

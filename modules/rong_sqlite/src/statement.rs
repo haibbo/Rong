@@ -102,7 +102,7 @@ impl Statement {
                 for (i, val) in row.iter().enumerate() {
                     set_sqlite_value(&ctx, &obj, &col_names[i], val)?;
                 }
-                Ok(JSValue::from(&ctx, obj))
+                Ok(JSValue::from_rust(&ctx, obj))
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(JSValue::null(&ctx)),
             Err(e) => Err(sqlite_error(e.to_string())),

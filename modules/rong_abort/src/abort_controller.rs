@@ -29,7 +29,7 @@ impl AbortController {
         }
         abort.set_reason(reason);
 
-        let obj = Class::get::<AbortSignal>(&ctx)?.instance(abort.clone());
+        let obj = Class::lookup::<AbortSignal>(&ctx)?.instance(abort.clone());
         AbortSignal::broadcast_abort(&ctx, This(obj))?;
         Ok(())
     }

@@ -69,7 +69,7 @@ impl S3File {
     async fn json(&self, ctx: JSContext) -> JSResult<JSValue> {
         let text = Self::text(self).await?;
         let obj = JSObject::from_json_string(&ctx, &text)?;
-        Ok(JSValue::from(&ctx, obj))
+        Ok(JSValue::from_rust(&ctx, obj))
     }
 
     #[js_method]
@@ -83,7 +83,7 @@ impl S3File {
         let data = self.apply_range(response.bytes());
         let ab = JSArrayBuffer::from_bytes(&ctx, data)
             .map_err(|e| s3_error(format!("ArrayBuffer: {}", e)))?;
-        Ok(JSValue::from(&ctx, ab))
+        Ok(JSValue::from_rust(&ctx, ab))
     }
 
     #[js_method(rename = "arrayBuffer")]
@@ -204,7 +204,7 @@ impl S3File {
             range_start: Some(start as u64),
             range_end: end.0.map(|v| v as u64),
         };
-        let obj = Class::get::<S3File>(&ctx)?.instance(file);
+        let obj = Class::lookup::<S3File>(&ctx)?.instance(file);
         Ok(obj)
     }
 
@@ -233,14 +233,14 @@ pub(crate) fn resolve_body(data: &JSValue) -> JSResult<(Vec<u8>, Option<String>)
     if data.is_string() {
         let s: String = data
             .clone()
-            .try_into()
+            .to_rust()
             .map_err(|_| type_error("invalid string"))?;
         return Ok((s.into_bytes(), Some("text/plain;charset=utf-8".to_string())));
     }
     if data.is_array_buffer() {
         let ab: JSArrayBuffer = data
             .clone()
-            .try_into()
+            .to_rust()
             .map_err(|_| type_error("invalid ArrayBuffer"))?;
         return Ok((ab.as_bytes().to_vec(), None));
     }

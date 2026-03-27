@@ -283,7 +283,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 
     // Create the singleton process instance
     let process = Process::new();
-    let process_obj: JSObject = JSValue::from(ctx, process).try_into()?;
+    let process_obj: JSObject = JSValue::from_rust(ctx, process).to_rust()?;
 
     // Attach static singletons (stdin, stdout, stderr, env) to the process instance
     // This ensures identity equality (process.env === process.env)

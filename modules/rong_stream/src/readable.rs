@@ -659,7 +659,7 @@ pub struct JSReadableStream(pub JSObject);
 
 impl JSReadableStream {
     pub fn new(ctx: &JSContext, stream: ReadableStream) -> JSResult<Self> {
-        let obj = rong::Class::get::<ReadableStream>(ctx)?.instance(stream);
+        let obj = rong::Class::lookup::<ReadableStream>(ctx)?.instance(stream);
         install_instance_async_iter(ctx, &obj)?;
         Ok(Self(obj))
     }

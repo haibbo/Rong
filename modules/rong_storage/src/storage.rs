@@ -222,7 +222,7 @@ impl Storage {
         // Convert value to JSON string to preserve type information
         let value_str = if value.is_string() {
             // For strings, store as JSON string to preserve type
-            let s: String = value.clone().try_into().map_err(|_| {
+            let s: String = value.clone().to_rust().map_err(|_| {
                 HostError::new(rong::error::E_INVALID_ARG, "Failed to convert string value")
                     .with_name("TypeError")
             })?;
@@ -234,7 +234,7 @@ impl Storage {
             })?
         } else if value.is_number() {
             // First get as f64 to avoid truncation issues
-            let f: f64 = value.clone().try_into().map_err(|_| {
+            let f: f64 = value.clone().to_rust().map_err(|_| {
                 HostError::new(rong::error::E_INVALID_ARG, "Failed to convert number value")
                     .with_name("TypeError")
             })?;
@@ -278,14 +278,14 @@ impl Storage {
             }
         } else if value.is_bigint() {
             // Handle BigInt values (i64/u64)
-            if let Ok(i) = value.clone().try_into::<i64>() {
+            if let Ok(i) = value.clone().to_rust::<i64>() {
                 serde_json::to_string(&i).map_err(|e| {
                     HostError::new(
                         rong::error::E_INTERNAL,
                         format!("Failed to serialize bigint i64: {}", e),
                     )
                 })?
-            } else if let Ok(u) = value.clone().try_into::<u64>() {
+            } else if let Ok(u) = value.clone().to_rust::<u64>() {
                 serde_json::to_string(&u).map_err(|e| {
                     HostError::new(
                         rong::error::E_INTERNAL,
@@ -300,7 +300,7 @@ impl Storage {
                 );
             }
         } else if value.is_boolean() {
-            let b: bool = value.clone().try_into().map_err(|_| {
+            let b: bool = value.clone().to_rust().map_err(|_| {
                 HostError::new(
                     rong::error::E_INVALID_ARG,
                     "Failed to convert boolean value",
@@ -322,7 +322,7 @@ impl Storage {
             )
             .with_name("TypeError")
             .into());
-        } else if let Ok(date) = value.clone().try_into::<JSDate>() {
+        } else if let Ok(date) = value.clone().to_rust::<JSDate>() {
             // Handle Date objects by storing timestamp with type marker
             let timestamp = date.get_time().map_err(|e| {
                 HostError::new(
@@ -341,16 +341,16 @@ impl Storage {
                     format!("Failed to serialize Date: {}", e),
                 )
             })?
-        } else if let Ok(obj) = value.clone().try_into::<JSObject>() {
+        } else if let Ok(obj) = value.clone().to_rust::<JSObject>() {
             // Handle objects by converting to JSON string
-            obj.json_stringify().map_err(|e| {
+            obj.to_json_string().map_err(|e| {
                 HostError::new(
                     rong::error::E_INVALID_ARG,
                     format!("Failed to stringify object: {}", e),
                 )
                 .with_name("TypeError")
             })?
-        } else if let Ok(s) = value.clone().try_into::<String>() {
+        } else if let Ok(s) = value.clone().to_rust::<String>() {
             // Fallback: convert to string
             serde_json::to_string(&s).map_err(|e| {
                 HostError::new(
@@ -497,20 +497,20 @@ impl Storage {
                     match serde_json::from_str::<serde_json::Value>(&value_str) {
                         Ok(json_value) => {
                             match json_value {
-                                serde_json::Value::String(s) => Ok(JSValue::from(&ctx, s)),
+                                serde_json::Value::String(s) => Ok(JSValue::from_rust(&ctx, s)),
                                 serde_json::Value::Number(n) => {
                                     // Let JSValue::from handle the intelligent number conversion
                                     if let Some(i) = n.as_i64() {
-                                        Ok(JSValue::from(&ctx, i))
+                                        Ok(JSValue::from_rust(&ctx, i))
                                     } else if let Some(u) = n.as_u64() {
-                                        Ok(JSValue::from(&ctx, u))
+                                        Ok(JSValue::from_rust(&ctx, u))
                                     } else if let Some(f) = n.as_f64() {
-                                        Ok(JSValue::from(&ctx, f))
+                                        Ok(JSValue::from_rust(&ctx, f))
                                     } else {
-                                        Ok(JSValue::from(&ctx, value_str))
+                                        Ok(JSValue::from_rust(&ctx, value_str))
                                     }
                                 }
-                                serde_json::Value::Bool(b) => Ok(JSValue::from(&ctx, b)),
+                                serde_json::Value::Bool(b) => Ok(JSValue::from_rust(&ctx, b)),
                                 serde_json::Value::Null => Ok(JSValue::null(&ctx)),
                                 serde_json::Value::Object(ref obj) => {
                                     // Check if this is a Date object
@@ -542,7 +542,7 @@ impl Storage {
                         }
                         Err(_) => {
                             // If not valid JSON, return as string
-                            Ok(JSValue::from(&ctx, value_str))
+                            Ok(JSValue::from_rust(&ctx, value_str))
                         }
                     }
                 }
@@ -676,7 +676,7 @@ impl Storage {
 
             // Convert to JS iterator and then to JSValue
             let iter = keys.to_js_iter(&ctx)?;
-            Ok(JSValue::from(&ctx, iter))
+            Ok(JSValue::from_rust(&ctx, iter))
         })
     }
 
