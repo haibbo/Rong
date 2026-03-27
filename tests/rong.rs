@@ -8,7 +8,7 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn test_call_simple() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build()?;
+    let rong = Rong::<RongJS>::builder().shared().build()?;
     let result = rong
         .call(|_runtime, _receiver| async {
             let value = 10 + 20;
@@ -21,7 +21,7 @@ async fn test_call_simple() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_send_usize_message() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build()?;
+    let rong = Rong::<RongJS>::builder().shared().build()?;
     let worker = rong.worker(0)?;
     let received = Arc::new(Mutex::new(None::<usize>));
     let received_clone = received.clone();
@@ -45,7 +45,7 @@ async fn test_send_usize_message() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_send_string_message() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build()?;
+    let rong = Rong::<RongJS>::builder().shared().build()?;
     let worker = rong.worker(0)?;
     let received = Arc::new(Mutex::new(None::<String>));
     let received_clone = received.clone();
@@ -76,7 +76,7 @@ async fn test_send_custom_message() -> JSResult<()> {
         name: String,
     }
 
-    let rong = Rong::<RongJS>::builder().build()?;
+    let rong = Rong::<RongJS>::builder().shared().build()?;
     let worker = rong.worker(0)?;
     let received = Arc::new(Mutex::new(None::<MyCustomData>));
     let received_clone = received.clone();
@@ -107,7 +107,7 @@ async fn test_send_custom_message() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_worker_termination() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build()?;
+    let rong = Rong::<RongJS>::builder().shared().build()?;
     let worker = rong.worker(0)?;
     let started = Arc::new(AtomicBool::new(false));
     let started_clone = started.clone();
@@ -139,7 +139,7 @@ async fn test_worker_termination() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_enqueue_js_invoke_queue() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build()?;
+    let rong = Rong::<RongJS>::builder().shared().build()?;
     rong.call(|runtime, _receiver| async move {
         let ctx = runtime.context();
         let script = r#"(() => {
@@ -192,7 +192,7 @@ async fn test_enqueue_js_invoke_queue() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_spawn_waits_for_idle_worker() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().workers(1).build()?;
+    let rong = Rong::<RongJS>::builder().shared().workers(1).build()?;
 
     let first = rong
         .spawn::<_, _, ()>(async move |_runtime, _receiver| {
@@ -217,7 +217,7 @@ async fn test_spawn_waits_for_idle_worker() -> JSResult<()> {
 
 #[tokio::test]
 async fn test_reentrant_rong_call_blocking_returns_error() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build()?;
+    let rong = Rong::<RongJS>::builder().shared().build()?;
     let rong_clone = rong.clone();
     let nested_error = Arc::new(Mutex::new(None::<String>));
     let nested_error_clone = nested_error.clone();
@@ -241,8 +241,45 @@ async fn test_reentrant_rong_call_blocking_returns_error() -> JSResult<()> {
 }
 
 #[tokio::test]
-async fn test_scheduler_makes_progress_under_burst_enqueue() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build()?;
+async fn test_reentrant_pinned_rong_call_blocking_returns_error() -> JSResult<()> {
+    let workers = Rong::<RongJS>::builder()
+        .pinned::<String, usize>()
+        .workers(1)
+        .build()?;
+    let workers_clone = workers.clone();
+    let nested_error = Arc::new(Mutex::new(None::<String>));
+    let nested_error_clone = nested_error.clone();
+
+    workers
+        .call(
+            "alpha".to_owned(),
+            move |_runtime, _key, state, _receiver| async move {
+                let err = workers_clone
+                    .call_blocking(
+                        "alpha".to_owned(),
+                        |_runtime, _key, state, _receiver| async move {
+                            (Ok::<_, rong::RongJSError>(state.unwrap_or(0) + 1), state)
+                        },
+                    )
+                    .expect_err("reentrant PinnedRong::call_blocking should fail");
+                *nested_error_clone.lock().unwrap() = Some(err.to_string());
+                (Ok(()), state)
+            },
+        )
+        .await?;
+
+    let message = nested_error.lock().unwrap().clone().unwrap_or_default();
+    assert!(
+        message.contains("PinnedRong::call_blocking") || message.contains("Rong worker thread"),
+        "unexpected reentrant error: {message}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_invoke_queue_makes_progress_under_burst_enqueue() -> JSResult<()> {
+    let rong = Rong::<RongJS>::builder().shared().build()?;
     let observed = Arc::new(AtomicUsize::new(0));
     let observed_clone = observed.clone();
 
@@ -293,15 +330,15 @@ async fn test_scheduler_makes_progress_under_burst_enqueue() -> JSResult<()> {
 
     assert!(
         observed.load(Ordering::SeqCst) > 0,
-        "scheduler failed to make progress during burst enqueue"
+        "invoke queue failed to make progress during burst enqueue"
     );
 
     Ok(())
 }
 
 #[tokio::test]
-async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build()?;
+async fn test_invoke_queue_does_not_block_on_pending_js_promise() -> JSResult<()> {
+    let rong = Rong::<RongJS>::builder().shared().build()?;
     let started = Arc::new(AtomicUsize::new(0));
     let observed = Arc::new(AtomicUsize::new(0));
     let started_clone = started.clone();
@@ -319,9 +356,9 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
 
         let slow: JSFunc = ctx.eval(Source::from_bytes(
             r#"(async function () {
-                globalThis.__scheduler_started = 1;
+                globalThis.__invoke_started = 1;
                 await sleepMs(200);
-                globalThis.__scheduler_finished = 1;
+                globalThis.__invoke_finished = 1;
             })"#,
         ))?;
 
@@ -342,7 +379,7 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
 
         tokio::time::timeout(Duration::from_millis(100), async {
             while started_clone.load(Ordering::SeqCst) == 0 {
-                if let Ok(started_flag) = ctx.global().get::<_, i32>("__scheduler_started")
+                if let Ok(started_flag) = ctx.global().get::<_, i32>("__invoke_started")
                     && started_flag == 1
                 {
                     started.store(1, Ordering::SeqCst);
@@ -362,7 +399,7 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
 
         tokio::time::timeout(Duration::from_secs(1), async {
             loop {
-                if let Ok(finished_flag) = ctx.global().get::<_, i32>("__scheduler_finished")
+                if let Ok(finished_flag) = ctx.global().get::<_, i32>("__invoke_finished")
                     && finished_flag == 1
                 {
                     break;
@@ -382,8 +419,8 @@ async fn test_scheduler_does_not_block_on_pending_js_promise() -> JSResult<()> {
 }
 
 #[tokio::test]
-async fn test_scheduler_event_async_handler_keeps_last_wins_ordering() -> JSResult<()> {
-    let rong = Rong::<RongJS>::builder().build()?;
+async fn test_invoke_queue_event_async_handler_keeps_last_wins_ordering() -> JSResult<()> {
+    let rong = Rong::<RongJS>::builder().shared().build()?;
 
     rong.call(|runtime, _receiver| async move {
         let ctx = runtime.context();
@@ -442,6 +479,79 @@ async fn test_scheduler_event_async_handler_keeps_last_wins_ordering() -> JSResu
         Ok(())
     })
     .await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_pinned_rong_reuses_worker_state_for_the_same_key() -> JSResult<()> {
+    let workers = Rong::<RongJS>::builder()
+        .pinned::<String, usize>()
+        .workers(2)
+        .task_queue_capacity(4)
+        .build()?;
+
+    let first = workers
+        .spawn("alpha".to_owned(), |_, _, state, _| async move {
+            let next = state.unwrap_or(0) + 1;
+            (Ok(next), Some(next))
+        })
+        .await?;
+    let first_worker = first.worker_id();
+    assert_eq!(first.join().await?, 1);
+
+    let second = workers
+        .spawn("alpha".to_owned(), |_, _, state, _| async move {
+            let next = state.unwrap_or(0) + 1;
+            (Ok(next), Some(next))
+        })
+        .await?;
+    assert_eq!(second.worker_id(), first_worker);
+    assert_eq!(second.join().await?, 2);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_pinned_rong_routes_other_keys_without_sharing_state() -> JSResult<()> {
+    let workers = Rong::<RongJS>::builder()
+        .pinned::<String, usize>()
+        .workers(2)
+        .task_queue_capacity(4)
+        .build()?;
+
+    let alpha = "alpha".to_owned();
+    let alpha_worker = workers.worker_id_for_key(&alpha);
+    let other = (0..64)
+        .map(|index| format!("beta-{index}"))
+        .find(|candidate| workers.worker_id_for_key(candidate) != alpha_worker)
+        .expect("expected another key to map to a different worker");
+
+    let alpha_task = workers
+        .spawn(alpha.clone(), |_, _, state, _| async move {
+            let next = state.unwrap_or(0) + 1;
+            (Ok(next), Some(next))
+        })
+        .await?;
+    assert_eq!(alpha_task.worker_id(), alpha_worker);
+    assert_eq!(alpha_task.join().await?, 1);
+
+    let beta_task = workers
+        .spawn(other.clone(), |_, _, state, _| async move {
+            let next = state.unwrap_or(100) + 1;
+            (Ok(next), Some(next))
+        })
+        .await?;
+    assert_ne!(beta_task.worker_id(), alpha_worker);
+    assert_eq!(beta_task.join().await?, 101);
+
+    let beta_again = workers
+        .spawn(other, |_, _, state, _| async move {
+            let next = state.unwrap_or(100) + 1;
+            (Ok(next), Some(next))
+        })
+        .await?;
+    assert_eq!(beta_again.join().await?, 102);
 
     Ok(())
 }
