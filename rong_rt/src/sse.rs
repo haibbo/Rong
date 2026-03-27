@@ -257,7 +257,7 @@ pub fn connect_sse(
     let (close_tx, close_rx) = oneshot::channel::<()>();
     let (opened_tx, opened_rx) = oneshot::channel::<Result<String, String>>();
 
-    crate::spawn(async move {
+    crate::RongExecutor::global().spawn(async move {
         run_sse_worker(options, abort_rx, close_rx, events_tx, Some(opened_tx)).await;
     });
 
@@ -756,7 +756,7 @@ mod tests {
 
     #[test]
     fn connect_convenience_opens_and_receives_small_event() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_sse_server().await;
             let url = format!("http://{}/live-small", addr);
@@ -784,7 +784,7 @@ mod tests {
 
     #[test]
     fn connect_options_builder_sends_headers_and_last_event_id() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_sse_server().await;
             let url = format!("http://{}/headers", addr);

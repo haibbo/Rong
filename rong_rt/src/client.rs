@@ -243,7 +243,7 @@ pub async fn send_request_with_coalesce(
     timeout_override: Option<Duration>,
 ) -> Result<HttpResponse, String> {
     let client = client()?;
-    let join = crate::spawn(async move {
+    let join = crate::RongExecutor::global().spawn(async move {
         process_request(
             client,
             request,

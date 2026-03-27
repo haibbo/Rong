@@ -182,7 +182,7 @@ pub fn request_upload(
         mpsc::channel::<Result<UploadEvent, String>>(UPLOAD_EVENT_CHAN_CAP);
     let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
 
-    crate::spawn(async move {
+    crate::RongExecutor::global().spawn(async move {
         run_upload_worker(options, abort_rx, cancel_rx, events_tx).await;
     });
 
@@ -434,7 +434,7 @@ mod tests {
 
     #[test]
     fn spawn_upload_reports_progress_and_success() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_upload_server().await;
             let path = std::env::temp_dir().join(format!(
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn upload_convenience_returns_response() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_upload_server().await;
             let path = std::env::temp_dir().join(format!(

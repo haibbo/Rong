@@ -106,7 +106,7 @@ fn request_download_inner(
 
     let url = url.into();
     let dest = dest.into();
-    crate::spawn(async move {
+    crate::RongExecutor::global().spawn(async move {
         let res = download_resource(&url, &dest, abort_rx, sink, timeout_override).await;
         let _ = completion_tx.send(res);
     });
@@ -276,7 +276,7 @@ mod tests {
 
     #[test]
     fn spawn_download_with_options_succeeds() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let content = b"hello download";
             let addr = spawn_file_server(content).await;
@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn download_convenience_succeeds() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let content = b"hello direct download";
             let addr = spawn_file_server(content).await;
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn download_with_timeout_expires() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_slow_server(300).await;
             let url = format!("http://{}/slow", addr);

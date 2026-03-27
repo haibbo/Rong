@@ -443,7 +443,7 @@ mod tests {
 
     #[test]
     fn send_bytes_collects_body() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_server().await;
             let url = format!("http://{}/bytes", addr);
@@ -457,7 +457,7 @@ mod tests {
 
     #[test]
     fn send_json_parses_body() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_server().await;
             let url = format!("http://{}/json", addr);
@@ -472,7 +472,7 @@ mod tests {
 
     #[test]
     fn send_stream_collects_streaming_body() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_server().await;
             let url = format!("http://{}/stream", addr);
@@ -487,7 +487,7 @@ mod tests {
 
     #[test]
     fn post_json_bytes_sends_json_headers_and_body() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_server().await;
             let url = format!("http://{}/echo-json", addr);
@@ -511,7 +511,7 @@ mod tests {
 
     #[test]
     fn post_json_serializes_request_and_decodes_response() {
-        let handle = crate::handle();
+        let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_server().await;
             let url = format!("http://{}/echo-json", addr);

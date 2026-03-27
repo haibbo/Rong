@@ -12,12 +12,15 @@ pub use rong_core::{
     install_async_iterator_symbol, install_iterator_symbol,
 };
 // Re-export selected runtime API from rong_core::rong so downstream crates use `rong::...`
-pub use rong_core::rong::{Rong, Worker, WorkerMessage, spawn};
+pub use rong_core::rong::{Rong, RongBuildError, Worker, WorkerMessage, spawn_local};
 
 // Re-export user-agent helpers.
 pub use rong_rt::sse;
 pub use rong_rt::upload;
-pub use rong_rt::{DEFAULT_USER_AGENT, get_user_agent, set_user_agent};
+pub use rong_rt::{
+    DEFAULT_USER_AGENT, InstallGlobalExecutorError, RongExecutor, RongExecutorBuildError,
+    RongExecutorBuilder, get_user_agent, set_user_agent,
+};
 // Re-export selected scheduler APIs (module remains internal to core)
 pub use rong_core::{JsInvokePriority, enqueue_js_invoke};
 
