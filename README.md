@@ -1,9 +1,11 @@
-# Rong (融) - Multi-Engine JavaScript Runtime for Rust
+# Rong (融) - JavaScript Runtime for Rust
 
 [![Rust](https://img.shields.io/badge/rust-1.90+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-APACHE)
 
-**Rong** (融, meaning "fusion" in Chinese) is a specialized JavaScript runtime for Rust designed for **LingXia App** and **microservices** in constrained environments. It provides a lightweight, secure JavaScript execution environment optimized for specific use cases rather than general-purpose Node.js replacement.
+**Rong** is a JavaScript runtime for Rust with a unified API over multiple JS
+engines. It is designed for embedding, Rust-driven JS APIs, and long-lived
+worker runtimes.
 
 ## 🌟 Why "Rong" (融)?
 
@@ -24,9 +26,9 @@ In Chinese culture, "融" represents natural harmony and coexistence - perfectly
 - **ArkJS** - HarmonyOS JavaScript engine 🚧 **In Development**
 
 ### Developer Experience
-- **Zero-cost abstractions** - Minimal runtime overhead
-- **Type-safe bindings** - Rust's type system ensures memory safety
-- **Async/await support** - Full Promise and async iterator integration
+- **Type-safe bindings** - Rust's type system helps keep host bindings safe
+- **Async/await support** - Promise and async iterator integration
+- **Worker pools** - Shared and pinned execution models
 - **Rich module ecosystem** - Built-in modules for common tasks
 
 ### Architecture
@@ -67,7 +69,56 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-For more examples including class bindings, async functions, and advanced features, see the [Module Development Guide](docs/module_development.md).
+This is the lowest-level embedding path: create a runtime, create a context,
+and evaluate JavaScript directly.
+
+## Common Usage: Worker Pools
+
+Most applications move one step up from raw `RongJS::runtime()` and use a worker
+pool:
+
+- `shared()` for stateless work that can run on any available worker
+- `pinned::<K, S>()` for keyed work that must stay on the same long-lived worker
+
+```rust
+use rong::{Rong, RongJS, Source};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let rong = Rong::<RongJS>::builder().shared().workers(2).build()?;
+    let value: i32 = rong.call(|runtime, _receiver| async move {
+        let ctx = runtime.context();
+        ctx.eval(Source::from_bytes(b"21 * 2"))
+    }).await?;
+
+    println!("JS result: {value}");
+    Ok(())
+}
+```
+
+You must choose an execution model explicitly. There is no implicit
+`builder().build()` default.
+
+## Advanced Runtime Control
+
+Most users do not need to construct `RongExecutor` directly. Rong host services
+and worker pools use the process-global executor, and a default one is created
+on first use.
+
+Reach for `RongExecutor::builder()` only when you need to:
+
+- customize host executor thread count or thread names
+- install a custom global executor up front
+- submit host-side async work directly with `RongExecutor::spawn(...)`
+
+## Examples and Guides
+
+- [`examples/src/worker.rs`](examples/src/worker.rs) for a runnable shared worker example
+- [`examples/src/point.rs`](examples/src/point.rs) for class bindings
+- [`examples/src/executor.rs`](examples/src/executor.rs) for custom `RongExecutor` setup
+- [Worker Execution Model](docs/internals/worker_execution_model.md) for `shared` vs `pinned`
+- [Module Development Guide](docs/internals/module_development.md) for writing
+  Rust-driven JS APIs, classes, and modules
 
 ### Engine Selection
 
@@ -110,13 +161,12 @@ Rong comes with a rich set of built-in modules:
 
 ## 📚 Documentation
 
-Comprehensive guides for working with Rong:
-
 - **[Contributing Guide](CONTRIBUTING.md)** - Local setup, verification, hooks, and release workflow
-- **[Module Development Guide](docs/module_development.md)** - Learn how to create Rust-driven JavaScript APIs and classes
-- **[Value System Guide](docs/value_system.md)** - Understand type conversion between Rust and JavaScript
-- **[Error Handling Guide](docs/error_handling.md)** - Best practices for error handling
-- **[Testing Guide](docs/testing.md)** - How to run and write tests
+- **[Module Development Guide](docs/internals/module_development.md)** - Learn how to create Rust-driven JavaScript APIs and classes
+- **[Worker Execution Model](docs/internals/worker_execution_model.md)** - Understand `shared` vs `pinned` workers and internal runtime boundaries
+- **[Value System Guide](docs/internals/value_system.md)** - Understand type conversion between Rust and JavaScript
+- **[Error Handling Guide](docs/internals/error_handling.md)** - Best practices for error handling
+- **[Testing Guide](docs/internals/testing.md)** - How to run and write tests
 
 ## 📄 License
 
