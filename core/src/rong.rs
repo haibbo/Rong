@@ -4,7 +4,8 @@ use std::cell::Cell;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
+use thiserror::Error;
 use tokio::sync::{Mutex as TokioMutex, Notify, mpsc, oneshot};
 use tracing::{Instrument, Span, debug, error, info, info_span, warn};
 
@@ -78,7 +79,7 @@ struct WorkerLoopContext {
     free_signal: Arc<Notify>,
     any_worker_free: Arc<Notify>,
     worker_span: Span,
-    ready_tx: oneshot::Sender<()>,
+    ready_tx: oneshot::Sender<Result<(), String>>,
 }
 
 /// Enum to differentiate how results are handled
@@ -107,13 +108,14 @@ struct UserAsyncTask<E: JSEngine + 'static> {
 ///
 /// Represents a dedicated thread with the following characteristics:
 /// - Runs a single user-provided asynchronous function at a time
-/// - Creates a fresh JavaScript runtime for each user function to ensure isolation
+/// - Reuses one JavaScript runtime per worker thread
 /// - Supports message passing to the currently executing async function
 /// - Maintains a state (Free/Busy) to indicate availability
 /// - Has a signal for when the worker becomes free
 ///
 /// `Worker` is cheaply cloneable (all fields are `Arc` or channel senders).
-/// Clones share the same underlying thread — only `Rong::shutdown` terminates threads.
+/// Clones share the same underlying thread — only dropping the last `Rong`
+/// handle shuts workers down.
 pub struct Worker<E: JSEngine + 'static> {
     /// Worker ID (index in the worker pool)
     id: usize,
@@ -135,8 +137,11 @@ pub struct Worker<E: JSEngine + 'static> {
     /// Signal for when the worker becomes free
     free_signal: Arc<Notify>,
 
-    /// Parent Rong instance
-    rong: Arc<Rong<E>>,
+    /// Capacity for the per-task message channel created by `spawn` / `block_on`.
+    message_queue_capacity: usize,
+
+    /// Join handle for the dedicated worker thread.
+    thread_handle: Arc<StdMutex<Option<std::thread::JoinHandle<()>>>>,
 }
 
 impl<E: JSEngine + 'static> Worker<E> {
@@ -170,7 +175,7 @@ impl<E: JSEngine + 'static> Worker<E> {
     ///
     /// This method returns immediately and does not wait for the async function to complete.
     /// The submitted function can access the JavaScript runtime and receive messages.
-    pub fn spawn_future<F, Fut, R>(&self, future_fn: F) -> JSResult<()>
+    pub fn spawn<F, Fut, R>(&self, future_fn: F) -> JSResult<()>
     where
         F: FnOnce(JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
         Fut: Future<Output = JSResult<R>> + 'static,
@@ -191,7 +196,7 @@ impl<E: JSEngine + 'static> Worker<E> {
         );
 
         // Setup message passing channels for this task.
-        let (task_message_tx, task_message_rx) = mpsc::channel(self.rong.message_queue_size);
+        let (task_message_tx, task_message_rx) = mpsc::channel(self.message_queue_capacity);
         let message_receiver = MessageReceiver::new(task_message_rx);
 
         // Create task with Spawn mechanism
@@ -220,7 +225,7 @@ impl<E: JSEngine + 'static> Worker<E> {
 
     /// Execute a user's async function and wait for the result
     ///
-    /// This is equivalent to spawn_future + join, but provides a synchronous interface.
+    /// This is equivalent to `spawn` + join, but provides a synchronous interface.
     /// The method blocks until the async function completes and returns its result.
     /// Use this when you need to execute an async function and immediately use its return value.
     pub fn block_on<F, Fut, R>(&self, future_fn: F) -> JSResult<R>
@@ -263,7 +268,7 @@ impl<E: JSEngine + 'static> Worker<E> {
             },
         );
 
-        let (task_message_tx, task_message_rx) = mpsc::channel(self.rong.message_queue_size);
+        let (task_message_tx, task_message_rx) = mpsc::channel(self.message_queue_capacity);
         let message_receiver = MessageReceiver::new(task_message_rx);
 
         let task = UserAsyncTask {
@@ -365,98 +370,147 @@ pub struct WorkerInfo {
     pub state: WorkerState,
 }
 
-/// Builder for Rong instances
+/// Errors returned when constructing a [`Rong`] worker pool.
+#[derive(Debug, Error)]
+pub enum RongBuildError {
+    #[error("workers must be greater than 0")]
+    InvalidWorkers,
+    #[error("task queue capacity must be greater than 0")]
+    InvalidTaskQueueCapacity,
+    #[error("message queue capacity must be greater than 0")]
+    InvalidMessageQueueCapacity,
+    #[error("worker {worker_id} failed to start: {reason}")]
+    WorkerStart { worker_id: usize, reason: String },
+}
+
+impl From<RongBuildError> for crate::RongJSError {
+    fn from(value: RongBuildError) -> Self {
+        HostError::new(crate::error::E_INTERNAL, value.to_string()).into()
+    }
+}
+
+/// Builder for [`Rong`] worker pools.
 ///
-/// Provides a fluent interface for configuring and creating Rong instances
-/// with customized worker pools and queue sizes.
+/// Provides a fluent interface for configuring how many JS workers are started
+/// and how much queue capacity each worker receives.
 pub struct RongBuilder<E: JSEngine + 'static> {
-    worker_count: usize,
-    task_queue_size: usize,
-    message_queue_size: usize,
+    workers: usize,
+    task_queue_capacity: usize,
+    message_queue_capacity: usize,
     _marker: PhantomData<E>,
 }
 
 impl<E: JSEngine + 'static> RongBuilder<E> {
     fn new() -> Self {
         Self {
-            worker_count: 1,
-            task_queue_size: 100,
-            message_queue_size: 512,
+            workers: 1,
+            task_queue_capacity: 100,
+            message_queue_capacity: 512,
             _marker: PhantomData,
         }
     }
 
     /// Set the number of JS worker threads. Defaults to 1.
-    pub fn with_num_workers(mut self, count: usize) -> Self {
-        assert!(count >= 1, "At least one worker thread is required");
-        self.worker_count = count;
+    pub fn workers(mut self, count: usize) -> Self {
+        self.workers = count;
         self
     }
 
-    /// Set task queue size for each worker.
+    /// Set task queue capacity for each worker.
     ///
-    /// Controls how many tasks can be queued per worker before backpressure occurs.
-    pub fn with_task_queue_size(mut self, size: usize) -> Self {
-        self.task_queue_size = size;
+    /// Controls how many tasks can be queued per worker before backpressure
+    /// occurs.
+    pub fn task_queue_capacity(mut self, size: usize) -> Self {
+        self.task_queue_capacity = size;
         self
     }
 
-    /// Set message queue size for each worker.
+    /// Set message queue capacity for each worker.
     ///
-    /// Controls how many messages can be buffered via `post_message` before dropping.
-    pub fn with_message_queue_size(mut self, size: usize) -> Self {
-        self.message_queue_size = size;
+    /// Controls how many messages can be buffered via [`Worker::post_message`]
+    /// before backpressure or drops occur.
+    pub fn message_queue_capacity(mut self, size: usize) -> Self {
+        self.message_queue_capacity = size;
         self
     }
 
-    /// Build and start a Rong instance.
+    /// Build and start a Rong worker pool.
     ///
-    /// Initializes the worker pool. The background I/O runtime (`rong_rt`) is
-    /// lazily started on first use with `available_parallelism()` threads.
-    pub fn build(self) -> Arc<Rong<E>> {
-        let rong = Arc::new(Rong {
-            workers: Arc::new(TokioMutex::new(Vec::with_capacity(self.worker_count))),
-            worker_count: self.worker_count,
-            task_queue_size: self.task_queue_size,
-            message_queue_size: self.message_queue_size,
+    /// Initializes the worker pool. Host-side services use the shared
+    /// `rong_rt::RongExecutor`.
+    pub fn build(self) -> Result<Rong<E>, RongBuildError> {
+        if self.workers == 0 {
+            return Err(RongBuildError::InvalidWorkers);
+        }
+        if self.task_queue_capacity == 0 {
+            return Err(RongBuildError::InvalidTaskQueueCapacity);
+        }
+        if self.message_queue_capacity == 0 {
+            return Err(RongBuildError::InvalidMessageQueueCapacity);
+        }
+
+        let inner = Arc::new(RongInner {
+            workers: Arc::new(TokioMutex::new(Vec::with_capacity(self.workers))),
+            worker_count: self.workers,
+            task_queue_capacity: self.task_queue_capacity,
+            message_queue_capacity: self.message_queue_capacity,
             any_worker_free: Arc::new(Notify::new()),
         });
 
-        rong.initialize_workers();
-        rong
+        if let Err(err) = inner.initialize_workers() {
+            let rong = Rong {
+                inner: inner.clone(),
+            };
+            let _ = rong.shutdown();
+            return Err(err);
+        }
+        Ok(Rong { inner })
     }
 }
 
-/// Rong - JS runtime container manager
-///
-/// Thread pool manager for JavaScript runtimes. Provides:
-/// - Thread pool management for multiple JS runtimes
-/// - Automatic task assignment to idle JS runtimes
-/// - Efficient JavaScript execution avoiding frequent thread creation
-/// - Message passing to running tasks
-///
-/// Each worker in the pool runs in its own dedicated thread with its own
-/// JavaScript runtime, ensuring isolation and thread safety.
-pub struct Rong<E: JSEngine + 'static> {
+struct RongInner<E: JSEngine + 'static> {
     workers: Arc<TokioMutex<Vec<Worker<E>>>>,
     worker_count: usize,
-    task_queue_size: usize,
-    message_queue_size: usize,
+    task_queue_capacity: usize,
+    message_queue_capacity: usize,
     /// Signalled (via `notify_one`) whenever any worker transitions to Free.
     /// `notify_one` stores a permit when no one is waiting, so no wake is lost.
     any_worker_free: Arc<Notify>,
 }
 
+/// Handle to a JS worker pool.
+///
+/// `Rong` is a cheap, cloneable handle around a shared pool of dedicated
+/// worker threads. Each worker owns one JavaScript runtime and executes one
+/// submitted task at a time.
+///
+/// The pool provides:
+/// - Thread pool management for multiple JS runtimes
+/// - Automatic task assignment to idle JS runtimes
+/// - Efficient JavaScript execution avoiding frequent thread creation
+/// - Message passing to running tasks
+pub struct Rong<E: JSEngine + 'static> {
+    inner: Arc<RongInner<E>>,
+}
+
+impl<E: JSEngine + 'static> Clone for Rong<E> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
 impl<E: JSEngine + 'static> Rong<E> {
-    /// Create a new builder to configure and build a Rong instance.
+    /// Create a new builder to configure and build a Rong worker pool.
     pub fn builder() -> RongBuilder<E> {
         RongBuilder::new()
     }
 
-    /// Execute a user's async function and wait for the result.
+    /// Execute a task on the next available worker and wait for the result.
     ///
-    /// Automatically gets a free worker (waiting if necessary) and executes the
-    /// async function on it, blocking until the function completes.
+    /// This is the high-level convenience entry point when you do not need to
+    /// manually acquire a specific [`Worker`].
     pub fn block_on<F, Fut, R>(&self, future_fn: F) -> JSResult<R>
     where
         F: FnOnce(JSRuntime<E::Runtime>, MessageReceiver) -> Fut + Send + 'static,
@@ -466,21 +520,25 @@ impl<E: JSEngine + 'static> Rong<E> {
         let worker = futures::executor::block_on(self.get_worker_wait())?;
         worker.block_on(future_fn)
     }
+}
 
-    /// Initialize the worker pool
-    fn initialize_workers(self: &Arc<Self>) {
+impl<E: JSEngine + 'static> RongInner<E> {
+    /// Initialize the worker pool and wait until every worker is ready.
+    fn initialize_workers(self: &Arc<Self>) -> Result<(), RongBuildError> {
         let mut ready_receivers = Vec::with_capacity(self.worker_count);
 
         futures::executor::block_on(async {
             let mut workers_guard = self.workers.lock().await;
 
             for i in 0..self.worker_count {
-                let (task_tx, task_rx) = mpsc::channel(self.task_queue_size);
+                let (task_tx, task_rx) = mpsc::channel(self.task_queue_capacity);
                 let terminate_signal = Arc::new(Notify::new());
-                let (worker_message_tx, worker_message_rx) = mpsc::channel(self.message_queue_size);
+                let (worker_message_tx, worker_message_rx) =
+                    mpsc::channel(self.message_queue_capacity);
 
                 let state = Arc::new(TokioMutex::new(WorkerState::Free));
                 let free_signal = Arc::new(Notify::new());
+                let thread_handle = Arc::new(StdMutex::new(None));
 
                 let worker = Worker {
                     id: i,
@@ -490,7 +548,8 @@ impl<E: JSEngine + 'static> Rong<E> {
                     message_tx: worker_message_tx,
                     state: state.clone(),
                     free_signal: free_signal.clone(),
-                    rong: self.clone(),
+                    message_queue_capacity: self.message_queue_capacity,
+                    thread_handle: thread_handle.clone(),
                 };
 
                 workers_guard.push(worker);
@@ -500,19 +559,25 @@ impl<E: JSEngine + 'static> Rong<E> {
                 let any_free_clone = self.any_worker_free.clone();
                 let worker_span = info_span!("rong.worker", worker_id = i);
 
-                let (ready_tx, ready_rx) = oneshot::channel::<()>();
-                ready_receivers.push(ready_rx);
+                let (ready_tx, ready_rx) = oneshot::channel::<Result<(), String>>();
+                ready_receivers.push((i, ready_rx));
 
-                std::thread::spawn(move || {
+                let handle = std::thread::spawn(move || {
                     let _worker_entered = worker_span.enter();
                     info!(target: "rong", "worker thread started");
                     INSIDE_WORKER.with(|flag| flag.set(true));
 
-                    let rt = tokio::runtime::Builder::new_current_thread()
+                    let rt = match tokio::runtime::Builder::new_current_thread()
                         .enable_all()
                         .thread_name(format!("worker-{}", i))
                         .build()
-                        .expect("Failed to create worker runtime");
+                    {
+                        Ok(rt) => rt,
+                        Err(err) => {
+                            let _ = ready_tx.send(Err(err.to_string()));
+                            return;
+                        }
+                    };
 
                     rt.block_on(async {
                         Self::run_worker_loop(
@@ -532,14 +597,27 @@ impl<E: JSEngine + 'static> Rong<E> {
                     });
                     info!(target: "rong", "worker thread stopped");
                 });
+                *thread_handle.lock().unwrap() = Some(handle);
             }
         });
 
         // Wait for all worker threads to finish JS runtime initialization
         // before returning, so workers are truly ready to accept tasks.
-        for rx in ready_receivers {
-            let _ = futures::executor::block_on(rx);
+        for (worker_id, rx) in ready_receivers {
+            match futures::executor::block_on(rx) {
+                Ok(Ok(())) => {}
+                Ok(Err(reason)) => {
+                    return Err(RongBuildError::WorkerStart { worker_id, reason });
+                }
+                Err(err) => {
+                    return Err(RongBuildError::WorkerStart {
+                        worker_id,
+                        reason: err.to_string(),
+                    });
+                }
+            }
         }
+        Ok(())
     }
 
     /// Core processing loop for a worker thread.
@@ -570,7 +648,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                 let js_runtime = E::runtime();
 
                 // Signal that this worker is ready to accept tasks.
-                let _ = ready_tx.send(());
+                let _ = ready_tx.send(Ok(()));
 
                 // Start the microtask polling runner for engines that need it.
                 // The runner lives for the lifetime of the worker, not per-task.
@@ -582,7 +660,7 @@ impl<E: JSEngine + 'static> Rong<E> {
                             "rong.microtasks",
                             worker_id = worker_id
                         );
-                        Some(spawn(
+                        Some(spawn_local(
                             async move {
                                 let mut interval = tokio::time::interval(
                                     std::time::Duration::from_millis(50),
@@ -653,7 +731,8 @@ impl<E: JSEngine + 'static> Rong<E> {
                                 let (abortable_future, abort_handle) = futures::future::abortable(user_future);
                                 current_task_abort_handle = Some(abort_handle);
 
-                                let task_handle = spawn(abortable_future.instrument(task_span.clone()));
+                                let task_handle =
+                                    spawn_local(abortable_future.instrument(task_span.clone()));
                                 current_task_join_handle = Some(task_handle);
 
                             } else {
@@ -735,10 +814,14 @@ impl<E: JSEngine + 'static> Rong<E> {
             })
             .await;
     }
+}
 
-    /// Try to get a free worker immediately. Returns an error if none are free.
+impl<E: JSEngine + 'static> Rong<E> {
+    /// Try to acquire a free worker immediately.
+    ///
+    /// Returns an error when all workers are currently busy.
     pub async fn get_worker(&self) -> JSResult<Worker<E>> {
-        let workers_guard = self.workers.lock().await;
+        let workers_guard = self.inner.workers.lock().await;
 
         for worker in workers_guard.iter() {
             let mut state_guard = worker.state.lock().await;
@@ -781,13 +864,13 @@ impl<E: JSEngine + 'static> Rong<E> {
             // No free worker — wait for any worker to become free.
             // `notify_one` stores a permit when no one is waiting, so a wake
             // that fires between get_worker() and this await is not lost.
-            self.any_worker_free.notified().await;
+            self.inner.any_worker_free.notified().await;
         }
     }
 
-    /// Get the count of free workers in the pool
+    /// Return the number of workers currently in the `Free` state.
     pub async fn free_workers_count(&self) -> usize {
-        let workers = self.workers.lock().await;
+        let workers = self.inner.workers.lock().await;
         let mut count = 0;
         for w in workers.iter() {
             if *w.state.lock().await == WorkerState::Free {
@@ -797,15 +880,15 @@ impl<E: JSEngine + 'static> Rong<E> {
         count
     }
 
-    /// Get total number of workers in the pool
+    /// Return the total number of workers in the pool.
     pub async fn total_workers_count(&self) -> usize {
-        let workers = self.workers.lock().await;
+        let workers = self.inner.workers.lock().await;
         workers.len()
     }
 
-    /// Wait for all workers to become free
+    /// Wait until all workers in the pool become free.
     pub async fn join_all(&self) -> JSResult<()> {
-        let workers_guard = self.workers.lock().await;
+        let workers_guard = self.inner.workers.lock().await;
         let workers_to_join = workers_guard.iter().cloned().collect::<Vec<_>>();
         drop(workers_guard);
 
@@ -821,28 +904,62 @@ impl<E: JSEngine + 'static> Rong<E> {
     ///
     /// Sends termination signals to all workers, regardless of their state.
     fn shutdown(&self) -> JSResult<()> {
-        futures::executor::block_on(async {
-            let workers = self.workers.lock().await;
+        let thread_handles = futures::executor::block_on(async {
+            let workers = self.inner.workers.lock().await;
+            let mut thread_handles = Vec::with_capacity(workers.len());
             for worker in workers.iter() {
                 if let Err(e) = worker.terminate() {
                     warn!(target: "rong", worker_id = worker.id, error = ?e, "failed to terminate worker");
                 }
+                thread_handles.push((worker.id, worker.thread_handle.clone()));
             }
+            thread_handles
         });
+
+        for (worker_id, thread_handle) in thread_handles {
+            let handle = {
+                let mut guard = thread_handle.lock().unwrap();
+                guard.take()
+            };
+
+            if let Some(handle) = handle {
+                if handle.thread().id() == std::thread::current().id() {
+                    warn!(
+                        target: "rong",
+                        worker_id,
+                        "skipping join on current worker thread during shutdown"
+                    );
+                    continue;
+                }
+
+                if let Err(err) = handle.join() {
+                    warn!(
+                        target: "rong",
+                        worker_id,
+                        error = ?err,
+                        "worker thread panicked during shutdown"
+                    );
+                }
+            }
+        }
+
         Ok(())
     }
 }
 
 impl<E: JSEngine + 'static> Drop for Rong<E> {
     fn drop(&mut self) {
-        let _ = self.shutdown();
+        if Arc::strong_count(&self.inner) == 1 {
+            let _ = self.shutdown();
+        }
     }
 }
 
-/// Spawn a local async task
+/// Spawn a task onto the current thread's `LocalSet`.
 ///
-/// Convenience wrapper around `tokio::task::spawn_local`.
-pub fn spawn<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+/// This helper is for work that must stay on the current JS worker thread. It
+/// does not use [`rong_rt::RongExecutor`].
+pub fn spawn_local<F>(future: F) -> tokio::task::JoinHandle<F::Output>
 where
     F: Future + 'static,
 {
@@ -859,11 +976,12 @@ impl<E: JSEngine + 'static> Clone for Worker<E> {
             message_tx: self.message_tx.clone(),
             state: self.state.clone(),
             free_signal: self.free_signal.clone(),
-            rong: self.rong.clone(),
+            message_queue_capacity: self.message_queue_capacity,
+            thread_handle: self.thread_handle.clone(),
         }
     }
 }
 
 // NOTE: Worker::Drop intentionally does NOT send terminate signals.
 // Worker is Clone — every clone would kill the shared thread on drop.
-// Only Rong::shutdown (called from Rong::Drop) terminates worker threads.
+// Only dropping the last `Rong` handle shuts worker threads down.

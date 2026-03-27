@@ -124,9 +124,9 @@ fn main() -> Result<(), RongJSError> {
         }
     };
 
-    // Create a single Rong instance for all commands
+    // Create a single Rong worker pool for commands that execute JS
     if matches!(command, Command::Help | Command::Version) {
-        // No need to create a Rong instance for these simple commands
+        // No need to create a Rong worker pool for these simple commands
         match command {
             Command::Help => {
                 usage();
@@ -140,9 +140,9 @@ fn main() -> Result<(), RongJSError> {
         // Give workers the same module set as the main context
         rong_modules::worker::set_initializer(rong_modules::init);
 
-        // For commands that need JS execution, use a single Rong instance
+        // For commands that need JS execution, use a single Rong worker pool
         Rong::<RongJS>::builder()
-            .build()
+            .build()?
             .block_on(async |runtime, _receiver| {
                 let ctx = runtime.context();
                 // Initialize all modules

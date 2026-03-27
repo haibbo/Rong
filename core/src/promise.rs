@@ -1,4 +1,4 @@
-use crate::rong::spawn;
+use crate::rong::spawn_local;
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSErrorFactory, JSFunc, JSObject,
     JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl, RongJSError, function::JSParameterType,
@@ -119,7 +119,7 @@ where
         let (promise, resolve, reject) = ctx.promise()?;
 
         // Spawn a new async task to handle the future and keep `root` alive
-        spawn(async move {
+        spawn_local(async move {
             let result = future.await;
             // Keep the optional root alive until the future completes
             let _keep_root_alive = root;

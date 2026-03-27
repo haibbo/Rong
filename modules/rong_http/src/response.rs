@@ -194,7 +194,7 @@ impl Response {
             Some(BodyKind::Buffered(b)) => {
                 let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(1);
                 let bytes = b.clone();
-                rong::spawn(async move {
+                rong::spawn_local(async move {
                     let _ = tx.send(Ok(bytes)).await;
                 });
                 if let Ok(jsrs) = JSReadableStream::from_receiver(&ctx, rx) {
@@ -209,7 +209,7 @@ impl Response {
                 // Materialize JS body into a one-shot stream
                 let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(1);
                 let body_clone = body.clone();
-                rong::spawn(async move {
+                rong::spawn_local(async move {
                     match body_clone.bytes().await {
                         Ok(bytes) => {
                             let _ = tx.send(Ok(bytes)).await;

@@ -8,10 +8,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
     let num_workers = 4;
-    let rong = Rong::<RongJS>::builder()
-        .with_num_workers(num_workers)
-        .build();
-    info!(num_workers, "Rong instance created");
+    let rong = Rong::<RongJS>::builder().workers(num_workers).build()?;
+    info!(num_workers, "Rong worker pool created");
 
     let mut workers = Vec::with_capacity(num_workers);
     for _ in 0..num_workers {
@@ -33,7 +31,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "Designating worker for interval task"
     );
 
-    interval_worker.spawn_future(async move |runtime, _receiver| -> JSResult<()> {
+    interval_worker.spawn(async move |runtime, _receiver| -> JSResult<()> {
         info!(worker_id = interval_worker_id, "Interval task started");
         let ctx = runtime.context();
         // Optional: Initialize modules if needed
@@ -63,7 +61,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     for worker in workers.iter().skip(1) {
         let worker = worker.clone();
         let worker_id = worker.id();
-        worker.spawn_future(async move |runtime, mut receiver| -> JSResult<()> {
+        worker.spawn(async move |runtime, mut receiver| -> JSResult<()> {
             info!(worker_id, "Expr task waiting for expression");
             let ctx = runtime.context();
 

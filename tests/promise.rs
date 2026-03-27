@@ -173,7 +173,7 @@ fn test_promise_into_future_resolve() {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
                 callback.call::<_, ()>(None, ()).unwrap();
             };
-            spawn(future);
+            spawn_local(future);
         })?;
         ctx.global().set("setTimeout", set_timeout)?;
 
@@ -204,7 +204,7 @@ fn test_promise_into_future_reject_error() {
                 tokio::time::sleep(Duration::from_millis(delay as u64)).await;
                 callback.call::<_, ()>(None, ()).unwrap();
             };
-            spawn(future);
+            spawn_local(future);
         })?;
         ctx.global().set("setTimeout", set_timeout)?;
 

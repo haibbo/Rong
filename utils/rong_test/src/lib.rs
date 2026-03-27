@@ -62,7 +62,7 @@ pub fn run<F: FnOnce(&JSContext) -> JSResult<()>>(f: F) {
 #[macro_export]
 macro_rules! async_run {
     ($user_fn:expr) => {{
-        let rong = Rong::<RongJS>::builder().build();
+        let rong = Rong::<RongJS>::builder().build().unwrap();
 
         let block_on_closure = |runtime: JSRuntime, _receiver| {
             let ctx = runtime.context();

@@ -1,4 +1,4 @@
-use crate::rong::spawn;
+use crate::rong::spawn_local;
 use crate::{
     IntoJSValue, JSArrayOps, JSContext, JSErrorFactory, JSFunc, JSObject, JSObjectOps, JSResult,
     JSSymbol, JSTypeOf, JSValue, RongJSError,
@@ -200,7 +200,7 @@ where
             match ctx.promise() {
                 Ok((promise, resolve, reject)) => {
                     let iter = iterator_instance.clone();
-                    spawn(async move {
+                    spawn_local(async move {
                         match iter.next().await {
                             Ok(result) => {
                                 let _ = resolve.call::<_, ()>(None, (result,));
@@ -229,7 +229,7 @@ where
             let stream = stream_handle.clone();
             match ctx.promise() {
                 Ok((promise, resolve, _reject)) => {
-                    spawn(async move {
+                    spawn_local(async move {
                         // Lock and replace with an empty stream to release resources
                         let mut guard = stream.lock().await;
                         *guard = Box::pin(futures::stream::empty());
