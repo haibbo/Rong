@@ -139,6 +139,8 @@ fn build_quickjs(out_dir: &Path) {
     // Include paths
     build.include("quickjs-ng");
     build.include("patch");
+    build.define("QUICKJS_NG_BUILD", None);
+    build.define("_GNU_SOURCE", None);
 
     // Optimization
     if profile == "release" {
@@ -159,7 +161,6 @@ fn build_quickjs(out_dir: &Path) {
     build.file(&merged); // quickjs.c + extra.c merged
     build.file("quickjs-ng/libregexp.c");
     build.file("quickjs-ng/libunicode.c");
-    build.file("quickjs-ng/cutils.c");
     build.file("quickjs-ng/dtoa.c");
     build.file("patch/qjs.c");
     build.file("patch/inline.c");

@@ -6,91 +6,95 @@
 
 JSValue QJS_NewBool(JSContext *ctx, bool val)
 {
-    return JS_MKVAL(JS_TAG_BOOL, (val != 0));
+    return JS_NewBool(ctx, val);
 }
 
 JSValue QJS_NewInt32(JSContext *ctx, int32_t val)
 {
-    return JS_MKVAL(JS_TAG_INT, val);
+    return JS_NewInt32(ctx, val);
 }
 
 JSValue QJS_NewFloat64(JSContext *ctx, double val)
 {
-    return __JS_NewFloat64(val);
+    return JS_NewFloat64(ctx, val);
 }
 
 JSValue QJS_NewUint32(JSContext *ctx, uint32_t val)
 {
-    JSValue v;
-    if (val <= INT32_MAX) {
-        v = JS_NewInt32(ctx, (int32_t)val);
-    } else {
-        v = JS_NewFloat64(ctx, (double)val);
-    }
-    return v;
+    return JS_NewUint32(ctx, val);
 }
 
 int QJS_ToUint32(JSContext *ctx, uint32_t *pres, JSValue val)
 {
-    return JS_ToInt32(ctx, (int32_t*)pres, val);
+    return JS_ToUint32(ctx, pres, val);
 }
 
 
 bool QJS_IsNumber(JSContext *ctx, JSValue v)
 {
-    int tag = JS_VALUE_GET_TAG(v);
-    return tag == JS_TAG_INT || JS_TAG_IS_FLOAT64(tag);
+    (void)ctx;
+    return JS_IsNumber(v);
 }
 
 bool QJS_IsBigInt(JSContext *ctx, JSValue v)
 {
-    return JS_VALUE_GET_TAG(v) == JS_TAG_BIG_INT;
+    (void)ctx;
+    return JS_IsBigInt(v);
 }
 
 bool QJS_IsBool(JSContext *ctx, JSValue v)
 {
-    return JS_VALUE_GET_TAG(v) == JS_TAG_BOOL;
+    (void)ctx;
+    return JS_IsBool(v);
 }
 
 
 bool QJS_IsUndefined(JSContext *ctx, JSValue v)
 {
-    return JS_VALUE_GET_TAG(v) == JS_TAG_UNDEFINED;
+    (void)ctx;
+    return JS_IsUndefined(v);
 }
 
 JSValue QJS_NewUndefined(JSContext *ctx)
 {
-    return JS_MKVAL(JS_TAG_UNDEFINED, 0);
+    (void)ctx;
+    return JS_UNDEFINED;
 }
 
 JSValue QJS_NewNull(JSContext *ctx)
 {
-    return JS_MKVAL(JS_TAG_NULL, 0);
+    (void)ctx;
+    return JS_NULL;
 }
 
 
 bool QJS_IsException(JSContext *ctx, JSValue v)
 {
-    return JS_VALUE_GET_TAG(v) == JS_TAG_EXCEPTION;
+    (void)ctx;
+    return JS_IsException(v);
 }
 
 bool QJS_IsNull(JSContext *ctx, JSValue v)
 {
-    return JS_VALUE_GET_TAG(v) == JS_TAG_NULL;
+    (void)ctx;
+    return JS_IsNull(v);
 }
 
 
 bool QJS_IsString(JSContext *ctx, JSValue v)
 {
-    return JS_VALUE_GET_TAG(v) == JS_TAG_STRING;
+    (void)ctx;
+    return JS_IsString(v);
 }
 
 bool QJS_IsSymbol(JSContext *ctx, JSValue v)
 {
-    return JS_VALUE_GET_TAG(v) == JS_TAG_SYMBOL;
+    (void)ctx;
+    return JS_IsSymbol(v);
 }
 
 bool QJS_IsObject(JSContext *ctx, JSValue v)
 {
-    return JS_VALUE_GET_TAG(v) == JS_TAG_OBJECT;
+    (void)ctx;
+    return JS_IsObject(v);
 }
