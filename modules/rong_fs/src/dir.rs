@@ -52,6 +52,7 @@ struct MkdirOptions {
     // If true, parent folders will be created if they don't exist
     recursive: Option<bool>,
     // Permissions to set on the created directory
+    #[cfg(unix)]
     mode: Option<u32>,
 }
 

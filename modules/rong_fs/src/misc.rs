@@ -19,14 +19,13 @@ async fn symlink(old_path: String, new_path: String) -> JSResult<()> {
         match fs::metadata(&resolved_old).await {
             Ok(metadata) => {
                 if metadata.is_dir() {
-                    tokio::fs::symlink_dir(&resolved_old, &resolved_new)
+                    tokio::fs::symlink_dir(&resolved_old, &resolved_new).await
                 } else {
-                    tokio::fs::symlink_file(&resolved_old, &resolved_new)
+                    tokio::fs::symlink_file(&resolved_old, &resolved_new).await
                 }
             }
             Err(e) => Err(e),
         }
-        .await
         .map_err(|e| HostError::new("FS_IO", format!("Failed to create symlink: {}", e)).into())
     }
 }

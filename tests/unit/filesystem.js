@@ -1,6 +1,18 @@
 describe("Filesystem", () => {
+  const isWindows = !!(
+    typeof process !== "undefined" &&
+    process &&
+    process.env &&
+    (process.env.OS === "Windows_NT" || !!process.env.ComSpec)
+  );
+
   function normalizePath(p) {
-    return String(p).replace(/\\/g, "/");
+    let normalized = String(p).replace(/\\/g, "/");
+    normalized = normalized.replace(/^\/\/\?\//, "");
+    if (isWindows) {
+      normalized = normalized.toLowerCase();
+    }
+    return normalized;
   }
 
   function getTempPath(filename) {
@@ -268,7 +280,7 @@ describe("Filesystem", () => {
     assert.equal(info.size, content.length, "Size should match content length");
     assert(typeof info.modified === "number", "modified should be a number");
     assert(typeof info.accessed === "number", "accessed should be a number");
-    if (info.mode !== undefined) {
+    if (info.mode != null) {
       assert(typeof info.mode === "number", "mode should be a number");
     }
 
@@ -1126,7 +1138,7 @@ describe("Filesystem", () => {
     } catch (e) {
       const message = String(e?.message || e);
       if (
-        /not permitted|operation not permitted|privilege|not held by the client/i.test(
+        /not permitted|operation not permitted|privilege|not held by the client|1314|所需的特权/i.test(
           message,
         )
       ) {

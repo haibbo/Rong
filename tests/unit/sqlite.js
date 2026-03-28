@@ -1,6 +1,6 @@
 function tempDbPath(prefix = "rong_sqlite") {
   const rand = Math.random().toString(16).slice(2);
-  return `/tmp/${prefix}_${Date.now()}_${rand}.db`;
+  return `target/${prefix}_${Date.now()}_${rand}.db`;
 }
 
 describe("SQLite — construction", () => {

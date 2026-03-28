@@ -445,7 +445,29 @@ fn kill_child_process_group(pid: u32) {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+async fn terminate_child_process(child: &mut Child) {
+    // `cmd /C` can outlive its direct child on timeout unless we terminate the tree.
+    let terminated_tree = if let Some(pid) = child.id() {
+        Command::new("taskkill.exe")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .await
+            .map(|status| status.success())
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
+    if !terminated_tree {
+        let _ = child.start_kill();
+    }
+}
+
+#[cfg(all(not(unix), not(windows)))]
 fn kill_child_process_group(_pid: u32) {}
 
 async fn read_all(
@@ -464,6 +486,7 @@ async fn run_command_with_output(
     mut child: Child,
     timeout: Option<u64>,
 ) -> JSResult<(std::process::ExitStatus, Vec<u8>, Vec<u8>)> {
+    #[cfg(not(windows))]
     let child_pid = child.id();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
@@ -475,9 +498,15 @@ async fn run_command_with_output(
         match tokio::time::timeout(Duration::from_millis(timeout_ms), child.wait()).await {
             Ok(res) => res.map_err(|e| HostError::new(rong::error::E_IO, e.to_string()))?,
             Err(_) => {
-                let _ = child.start_kill();
-                if let Some(pid) = child_pid {
-                    kill_child_process_group(pid);
+                #[cfg(windows)]
+                terminate_child_process(&mut child).await;
+
+                #[cfg(not(windows))]
+                {
+                    let _ = child.start_kill();
+                    if let Some(pid) = child_pid {
+                        kill_child_process_group(pid);
+                    }
                 }
                 let _ = child.wait().await;
                 let _ = stdout_task.await;
@@ -625,7 +654,7 @@ fn spawn(
                     cmd = kill_rx.recv() => {
                         match cmd {
                             Some(ChildCommand::Kill) => {
-                                let _ = child.start_kill();
+                                terminate_child_process(&mut child).await;
                             }
                             None => {
                                 break;
@@ -821,6 +850,12 @@ mod tests {
 
     #[test]
     fn test_child_process() {
+        let workspace_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .expect("workspace root");
+        std::env::set_current_dir(&workspace_root).expect("set cwd");
+
         async_run!(|ctx: JSContext| async move {
             install_process_env(&ctx)?;
             rong_encoding::init(&ctx)?;

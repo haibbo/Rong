@@ -169,12 +169,15 @@ describe("EventEmitter", () => {
     });
 
     it("should handle async listeners", async () => {
+      let started = false;
       let resolved = false;
       emitter.on("test", async () => {
+        started = true;
         await new Promise((resolve) => setTimeout(resolve, 10));
         resolved = true;
       });
       emitter.emit("test");
+      expect(started).toBeTruthy();
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(resolved).toBeTruthy();
     });

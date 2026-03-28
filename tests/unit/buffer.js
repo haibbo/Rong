@@ -1,4 +1,6 @@
 describe("Buffer", () => {
+  const CLOCK_SKEW_MS = 20;
+
   // Helper function for array comparison
   async function assertArrayBufferEquals(buffer1, buffer2, message) {
     const arr1 = new Uint8Array(buffer1);
@@ -117,14 +119,15 @@ describe("Buffer", () => {
         type: { actual: file.type, expected: "text/plain" },
         lastModified: {
           actual: file.lastModified,
-          expectedRange: [now, after],
+          expectedRange: [now - CLOCK_SKEW_MS, after + CLOCK_SKEW_MS],
         },
       });
 
       assert.equal(file.name, "test.txt", "Filename should match");
       assert.equal(file.type, "text/plain", "MIME type should match");
       assert(
-        file.lastModified >= now && file.lastModified <= after,
+        file.lastModified >= now - CLOCK_SKEW_MS &&
+          file.lastModified <= after + CLOCK_SKEW_MS,
         "Last modified time should be captured during construction",
       );
     });

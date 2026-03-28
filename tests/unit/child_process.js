@@ -1,9 +1,147 @@
+const isWindows = process.env.OS === "Windows_NT" || !!process.env.ComSpec;
+const tempDir = isWindows
+  ? (process.env.TEMP || process.env.TMP || "C:\\Windows\\Temp")
+  : "/tmp";
+const ARG_PREFIX = "RONG_ARG:";
+function echoProcess(text) {
+  if (isWindows) {
+    return ["cmd", ["/C", `echo ${text}`]];
+  }
+  return ["echo", [text]];
+}
+
+function cwdProcess() {
+  if (isWindows) {
+    return ["cmd", ["/C", "cd"]];
+  }
+  return ["pwd", []];
+}
+
+function stdinEchoProcess() {
+  if (isWindows) {
+    return [
+      "powershell",
+      [
+        "-NoProfile",
+        "-Command",
+        "[Console]::Out.Write([Console]::In.ReadToEnd())",
+      ],
+    ];
+  }
+  return ["cat", []];
+}
+
+function longRunningProcess(seconds) {
+  if (isWindows) {
+    return [
+      "powershell",
+      ["-NoProfile", "-Command", `Start-Sleep -Seconds ${seconds}`],
+    ];
+  }
+  return ["sleep", [String(seconds)]];
+}
+
+function echoFileProcess(...parts) {
+  if (isWindows) {
+    return [process.env.ComSpec || "cmd.exe", ["/C", "echo", ...parts]];
+  }
+  return ["/bin/echo", parts];
+}
+
+function exactArgsFileProcess(...parts) {
+  if (isWindows) {
+    return [
+      "powershell",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "tests/unit/print-args.ps1",
+        ...parts,
+      ],
+    ];
+  }
+  return [
+    "/bin/sh",
+    [
+      "tests/unit/print-args.sh",
+      ...parts,
+    ],
+  ];
+}
+
+function cwdFileProcess() {
+  if (isWindows) {
+    return ["cmd", ["/C", "cd"]];
+  }
+  return ["/bin/pwd", []];
+}
+
+function timeoutFileProcess(seconds) {
+  if (isWindows) {
+    return [
+      "powershell",
+      ["-NoProfile", "-Command", `Start-Sleep -Seconds ${seconds}`],
+    ];
+  }
+  return ["/bin/sleep", [String(seconds)]];
+}
+
+function shellEnvEcho(name) {
+  return isWindows ? `echo %${name}%` : `echo $${name}`;
+}
+
+function shellPwd() {
+  return isWindows ? "cd" : "pwd";
+}
+
+function shellSleep(seconds) {
+  if (isWindows) {
+    return `ping -n ${seconds + 1} 127.0.0.1 > nul`;
+  }
+  return `sleep ${seconds}`;
+}
+
+function splitOutputLines(output) {
+  return output
+    .replace(/\r/g, "")
+    .replace(/\u0000/g, "")
+    .split("\n")
+    .filter((line, index, lines) => !(index === lines.length - 1 && line === ""));
+}
+
+function extractPrintedArgs(output) {
+  return splitOutputLines(output)
+    .map((line) => {
+      const index = line.indexOf(ARG_PREFIX);
+      return index >= 0 ? line.slice(index + ARG_PREFIX.length) : null;
+    })
+    .filter((line) => line !== null);
+}
+
+async function countWindowsProcessesWithMarker(marker) {
+  if (!isWindows) {
+    return 0;
+  }
+
+  const result = await child_process.execFile("powershell", [
+    "-NoProfile",
+    "-Command",
+    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $marker = $args[0]; $self = $PID; (Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $self -and $_.CommandLine -like ('*' + $marker + '*') }).Count",
+    marker,
+  ]);
+
+  return Number.parseInt(result.stdout.trim() || "0", 10) || 0;
+}
+
 describe("Child Process", () => {
   it("hides internal child process classes from global scope", async () => {
     assert.equal(typeof ChildProcess, "undefined");
     assert.equal(typeof ExecResult, "undefined");
 
-    const child = child_process.spawn("echo", ["hello"]);
+    const [command, args] = echoProcess("hello");
+    const child = child_process.spawn(command, args);
     let childFailed = false;
     try {
       new child.constructor();
@@ -38,16 +176,17 @@ describe("Child Process", () => {
     });
 
     it("should support cwd option", async () => {
-      const result = await child_process.exec("pwd", { cwd: "/tmp" });
+      const result = await child_process.exec(shellPwd(), {
+        cwd: tempDir,
+      });
       assert.ok(
-        result.stdout.includes("/tmp") ||
-          result.stdout.includes("/private/tmp"),
-        "should execute in /tmp directory",
+        result.stdout.toLowerCase().includes(tempDir.toLowerCase()),
+        `should execute in ${tempDir}`,
       );
     });
 
     it("should support env option", async () => {
-      const result = await child_process.exec("echo $TEST_CHILD_VAR", {
+      const result = await child_process.exec(shellEnvEcho("TEST_CHILD_VAR"), {
         env: { TEST_CHILD_VAR: "hello_from_env", PATH: process.env.PATH },
       });
       assert.ok(
@@ -61,9 +200,7 @@ describe("Child Process", () => {
       process.env.CHILD_PROCESS_TEST_VAR = "modified_value_123";
 
       // Spawn child without explicit env option - should inherit modified process.env
-      const result = await child_process.exec(
-        "echo $CHILD_PROCESS_TEST_VAR",
-      );
+      const result = await child_process.exec(shellEnvEcho("CHILD_PROCESS_TEST_VAR"));
       assert.ok(
         result.stdout.includes("modified_value_123"),
         "child should receive modified process.env",
@@ -86,16 +223,28 @@ describe("Child Process", () => {
 
     it("should support timeout option", async () => {
       const start = Date.now();
+      const marker = `rong_child_timeout_${Date.now()}`;
       try {
-        await child_process.exec("sleep 10", { timeout: 100 });
+        const command = isWindows
+          ? `powershell -NoProfile -Command "Start-Sleep -Seconds 10 # ${marker}"`
+          : shellSleep(10);
+        await child_process.exec(command, { timeout: 100 });
         assert.fail("should have timed out");
       } catch (e) {
         const elapsed = Date.now() - start;
-        assert.ok(elapsed < 1000, "should timeout quickly");
+        assert.ok(
+          elapsed < (isWindows ? 3000 : 1000),
+          "should timeout quickly",
+        );
         assert.ok(
           e.message.includes("timed out") || e.code === "ETIMEDOUT",
           "should have timeout error",
         );
+        if (isWindows) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          const remaining = await countWindowsProcessesWithMarker(marker);
+          assert.equal(remaining, 0, "timeout should terminate the full process tree");
+        }
       }
     });
 
@@ -107,60 +256,42 @@ describe("Child Process", () => {
 
   describe("execFile", () => {
     it("should execute a file directly", async () => {
-      const result = await child_process.execFile("/bin/echo", [
-        "hello",
-        "world",
-      ]);
+      const [file, args] = echoFileProcess("hello", "world");
+      const result = await child_process.execFile(file, args);
       assert.ok(
-        result.stdout.includes("hello world"),
-        "stdout should contain 'hello world'",
+        result.stdout.includes("hello") && result.stdout.includes("world"),
+        "stdout should contain both arguments",
       );
       assert.equal(result.code, 0, "exit code should be 0");
     });
 
     it("should pass arguments correctly", async () => {
-      const result = await child_process.execFile("/bin/echo", [
-        "-n",
-        "test",
-      ]);
-      assert.ok(result.stdout.includes("test"), "stdout should contain 'test'");
+      const [file, args] = exactArgsFileProcess("test");
+      const result = await child_process.execFile(file, args);
+      expect(extractPrintedArgs(result.stdout)).toEqual(["test"]);
     });
 
     it("should support cwd option", async () => {
-      const result = await child_process.execFile("/bin/pwd", [], {
-        cwd: "/tmp",
-      });
+      const [file, args] = cwdFileProcess();
+      const result = await child_process.execFile(file, args, { cwd: tempDir });
       assert.ok(
-        result.stdout.includes("/tmp") ||
-          result.stdout.includes("/private/tmp"),
-        "should execute in /tmp directory",
+        result.stdout.toLowerCase().includes(tempDir.toLowerCase()),
+        `should execute in ${tempDir}`,
       );
     });
 
     it("should handle special characters in arguments", async () => {
-      const result = await child_process.execFile("/bin/echo", [
-        "hello world",
-        "foo'bar",
-        'baz"qux',
-      ]);
-      assert.ok(
-        result.stdout.includes("hello world"),
-        "should handle spaces in args",
-      );
-      assert.ok(
-        result.stdout.includes("foo'bar"),
-        "should handle single quotes in args",
-      );
-      assert.ok(
-        result.stdout.includes('baz"qux'),
-        "should handle double quotes in args",
-      );
+      const expected = ["hello world", "foo'bar", 'baz"qux'];
+      const [file, args] = exactArgsFileProcess(...expected);
+      const result = await child_process.execFile(file, args);
+      expect(extractPrintedArgs(result.stdout)).toEqual(expected);
     });
 
     it("should support timeout option", async () => {
       const start = Date.now();
       try {
-        await child_process.execFile("/bin/sleep", ["10"], { timeout: 100 });
+        const [file, args] = timeoutFileProcess(10);
+        await child_process.execFile(file, args, { timeout: 100 });
         assert.fail("should have timed out");
       } catch (e) {
         const elapsed = Date.now() - start;
@@ -175,14 +306,16 @@ describe("Child Process", () => {
 
   describe("spawn", () => {
     it("should spawn a process and return ChildProcess object", async () => {
-      const child = child_process.spawn("echo", ["hello"]);
+      const [command, args] = echoProcess("hello");
+      const child = child_process.spawn(command, args);
       assert.ok(child !== null, "should return a ChildProcess object");
       assert.ok(typeof child.pid === "number", "should have pid property");
       await child.wait();
     });
 
     it("should have stdin, stdout and stderr streams", async () => {
-      const child = child_process.spawn("cat", []);
+      const [command, args] = stdinEchoProcess();
+      const child = child_process.spawn(command, args);
       assert.ok(child.stdin !== null, "should have stdin");
       assert.ok(child.stdout !== null, "should have stdout");
       assert.ok(child.stderr !== null, "should have stderr");
@@ -206,7 +339,8 @@ describe("Child Process", () => {
     });
 
     it("should write to stdin and read from stdout", async () => {
-      const child = child_process.spawn("cat", []);
+      const [command, args] = stdinEchoProcess();
+      const child = child_process.spawn(command, args);
 
       // Write to stdin
       const writer = child.stdin.getWriter();
@@ -232,7 +366,8 @@ describe("Child Process", () => {
     });
 
     it("should read stdout data via stream", async () => {
-      const child = child_process.spawn("echo", ["hello streaming"]);
+      const [command, args] = echoProcess("hello streaming");
+      const child = child_process.spawn(command, args);
       const reader = child.stdout.getReader();
       let output = "";
       const decoder = new TextDecoder();
@@ -250,7 +385,11 @@ describe("Child Process", () => {
     });
 
     it("should support shell option", async () => {
-      const child = child_process.spawn("echo $HOME", [], { shell: true });
+      const child = child_process.spawn(
+        isWindows ? "echo %USERPROFILE%" : "echo $HOME",
+        [],
+        { shell: true },
+      );
       const reader = child.stdout.getReader();
       let output = "";
       const decoder = new TextDecoder();
@@ -265,7 +404,8 @@ describe("Child Process", () => {
     });
 
     it("should support cwd option", async () => {
-      const child = child_process.spawn("pwd", [], { cwd: "/tmp" });
+      const [command, args] = cwdProcess();
+      const child = child_process.spawn(command, args, { cwd: tempDir });
       const reader = child.stdout.getReader();
       let output = "";
       const decoder = new TextDecoder();
@@ -277,13 +417,14 @@ describe("Child Process", () => {
       }
 
       assert.ok(
-        output.includes("/tmp") || output.includes("/private/tmp"),
-        "should execute in /tmp directory",
+        output.toLowerCase().includes(tempDir.toLowerCase()),
+        `should execute in ${tempDir}`,
       );
     });
 
     it("should get exitCode via wait()", async () => {
-      const child = child_process.spawn("echo", ["test"]);
+      const [command, args] = echoProcess("test");
+      const child = child_process.spawn(command, args);
       const code = await child.wait();
       assert.equal(code, 0, "exitCode should be 0");
     });
@@ -295,7 +436,8 @@ describe("Child Process", () => {
     });
 
     it("should emit exit event", async () => {
-      const child = child_process.spawn("echo", ["test"]);
+      const [command, args] = echoProcess("test");
+      const child = child_process.spawn(command, args);
       const code = await new Promise((resolve) => {
         child.once("exit", resolve);
       });
@@ -305,14 +447,16 @@ describe("Child Process", () => {
 
   describe("ChildProcess properties", () => {
     it("should have pid after spawn", async () => {
-      const child = child_process.spawn("echo", ["test"]);
+      const [command, args] = echoProcess("test");
+      const child = child_process.spawn(command, args);
       assert.ok(typeof child.pid === "number", "pid should be a number");
       assert.ok(child.pid > 0, "pid should be positive");
       await child.wait();
     });
 
     it("should have kill method", async () => {
-      const child = child_process.spawn("sleep", ["10"]);
+      const [command, args] = longRunningProcess(10);
+      const child = child_process.spawn(command, args);
       assert.ok(typeof child.kill === "function", "should have kill method");
       // Kill the sleep process with default SIGTERM
       const result = child.kill();
@@ -321,21 +465,24 @@ describe("Child Process", () => {
     });
 
     it("should support kill with signal name", async () => {
-      const child = child_process.spawn("sleep", ["10"]);
+      const [command, args] = longRunningProcess(10);
+      const child = child_process.spawn(command, args);
       const result = child.kill("SIGKILL");
       assert.equal(result, true, "kill with SIGKILL should return true");
       await child.wait();
     });
 
     it("should support kill with signal number", async () => {
-      const child = child_process.spawn("sleep", ["10"]);
+      const [command, args] = longRunningProcess(10);
+      const child = child_process.spawn(command, args);
       const result = child.kill("9"); // SIGKILL
       assert.equal(result, true, "kill with signal number should return true");
       await child.wait();
     });
 
     it("should have wait method", async () => {
-      const child = child_process.spawn("echo", ["test"]);
+      const [command, args] = echoProcess("test");
+      const child = child_process.spawn(command, args);
       assert.ok(typeof child.wait === "function", "should have wait method");
       await child.wait();
     });
@@ -343,25 +490,29 @@ describe("Child Process", () => {
 
   describe("EventEmitter interface", () => {
     it("should have on method", async () => {
-      const child = child_process.spawn("echo", ["test"]);
+      const [command, args] = echoProcess("test");
+      const child = child_process.spawn(command, args);
       assert.ok(typeof child.on === "function", "should have on method");
       await child.wait();
     });
 
     it("should have once method", async () => {
-      const child = child_process.spawn("echo", ["test"]);
+      const [command, args] = echoProcess("test");
+      const child = child_process.spawn(command, args);
       assert.ok(typeof child.once === "function", "should have once method");
       await child.wait();
     });
 
     it("should have off method", async () => {
-      const child = child_process.spawn("echo", ["test"]);
+      const [command, args] = echoProcess("test");
+      const child = child_process.spawn(command, args);
       assert.ok(typeof child.off === "function", "should have off method");
       await child.wait();
     });
 
     it("should have emit method", async () => {
-      const child = child_process.spawn("echo", ["test"]);
+      const [command, args] = echoProcess("test");
+      const child = child_process.spawn(command, args);
       assert.ok(typeof child.emit === "function", "should have emit method");
       await child.wait();
     });

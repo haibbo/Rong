@@ -10,6 +10,7 @@ pub(crate) struct FileSinkOptions {
     /// If true, open file in append mode. Default is truncate (overwrite).
     pub(crate) append: Option<bool>,
     /// Unix file permissions mode.
+    #[cfg(unix)]
     pub(crate) mode: Option<u32>,
 }
 

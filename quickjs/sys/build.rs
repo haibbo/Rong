@@ -120,6 +120,7 @@ fn merge_quickjs_source(out_dir: &Path) -> PathBuf {
 
 fn build_quickjs(out_dir: &Path) {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
     let profile = env::var("PROFILE").unwrap();
 
     let mut build = cc::Build::new();
@@ -153,6 +154,16 @@ fn build_quickjs(out_dir: &Path) {
 
     // Warnings
     build.warnings(true);
+
+    if target_os == "windows" {
+        build.define("WIN32_LEAN_AND_MEAN", None);
+        build.define("NOMINMAX", None);
+    }
+    if target_os == "windows" && target_env == "msvc" {
+        build.flag_if_supported("/std:c11");
+        build.flag_if_supported("/experimental:c11atomics");
+        build.flag_if_supported("/J");
+    }
 
     // Merge quickjs.c + extra.c (extra.c accesses quickjs internals)
     let merged = merge_quickjs_source(out_dir);

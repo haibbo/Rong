@@ -51,11 +51,10 @@ impl JSTypedArrayOps for QJSValue {
 
     fn get_kind(&self) -> Option<JSTypedArrayKind> {
         unsafe {
-            // Get the type as i32 first since QuickJS returns -1 for non-typed arrays
+            // QuickJS returns -1 for non-typed arrays, so keep the raw signed value.
             let array_type = qjs::JS_GetTypedArrayType(self.value);
 
-            // Now convert to u32 since we know it's non-negative
-            match array_type as u32 {
+            match array_type {
                 qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C => Some(JSTypedArrayKind::Uint8Clamped),
                 qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT8 => Some(JSTypedArrayKind::Int8),
                 qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8 => Some(JSTypedArrayKind::Uint8),
