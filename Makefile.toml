@@ -11,32 +11,155 @@ command = "cargo"
 args = ["fmt", "--all", "--", "--check"]
 
 [tasks.check-engine]
+linux_alias = "check-engine-unix"
+mac_alias = "check-engine-unix"
+windows_alias = "check-engine-windows"
+
+[tasks.check-engine-unix]
 script_runner = "@shell"
 script = '''
 set -euo pipefail
 
+workspace_args="${WORKSPACE_ARGS}"
+host_target=""
+while IFS= read -r line; do
+  case "${line}" in
+    host:*)
+      host_target="${line#host: }"
+      break
+      ;;
+  esac
+done <<EOF
+$(rustc -vV)
+EOF
+
 if [ "${ENGINE}" = "quickjs" ]; then
-  cargo check ${WORKSPACE_ARGS} --lib --bins --tests
+  case "${host_target}" in
+    *apple*)
+      ;;
+    *)
+      workspace_args="${workspace_args} --exclude rong_jscore --exclude rong_jscore_sys"
+      ;;
+  esac
+fi
+
+if [ "${ENGINE}" = "quickjs" ]; then
+  cargo check ${workspace_args} --lib --bins --tests
 else
-  cargo check ${WORKSPACE_ARGS} --lib --bins --tests --no-default-features --features "${ENGINE},tls-aws-lc"
+  cargo check ${workspace_args} --lib --bins --tests --no-default-features --features "${ENGINE},tls-aws-lc"
 fi
 '''
+
+[tasks.check-engine-windows]
+command = "powershell"
+args = [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    '''
+$ErrorActionPreference = "Stop"
+$workspaceArgs = @($env:WORKSPACE_ARGS -split '\s+' | Where-Object { $_ })
+if ($workspaceArgs.Count -eq 0) {
+    $workspaceArgs = @(
+        "--workspace"
+        "--exclude"
+        "rong_arkjs"
+        "--exclude"
+        "rong_arkjs_sys"
+    )
+}
+
+if ($env:ENGINE -eq "quickjs") {
+    $workspaceArgs += @("--exclude", "rong_jscore", "--exclude", "rong_jscore_sys")
+    & cargo check @workspaceArgs --lib --bins --tests
+} else {
+    & cargo check @workspaceArgs --lib --bins --tests --no-default-features --features "$($env:ENGINE),tls-aws-lc"
+}
+''',
+]
 
 [tasks.clippy-engine]
+linux_alias = "clippy-engine-unix"
+mac_alias = "clippy-engine-unix"
+windows_alias = "clippy-engine-windows"
+
+[tasks.clippy-engine-unix]
 script_runner = "@shell"
 script = '''
 set -euo pipefail
 
+workspace_args="${WORKSPACE_ARGS}"
+host_target=""
+while IFS= read -r line; do
+  case "${line}" in
+    host:*)
+      host_target="${line#host: }"
+      break
+      ;;
+  esac
+done <<EOF
+$(rustc -vV)
+EOF
+
 if [ "${ENGINE}" = "quickjs" ]; then
-  cargo clippy ${WORKSPACE_ARGS} --lib --bins --tests -- -D warnings
+  case "${host_target}" in
+    *apple*)
+      ;;
+    *)
+      workspace_args="${workspace_args} --exclude rong_jscore --exclude rong_jscore_sys"
+      ;;
+  esac
+fi
+
+if [ "${ENGINE}" = "quickjs" ]; then
+  cargo clippy ${workspace_args} --lib --bins --tests -- -D warnings
 else
-  cargo clippy ${WORKSPACE_ARGS} --lib --bins --tests --no-default-features --features "${ENGINE},tls-aws-lc" -- -D warnings
+  cargo clippy ${workspace_args} --lib --bins --tests --no-default-features --features "${ENGINE},tls-aws-lc" -- -D warnings
 fi
 '''
 
+[tasks.clippy-engine-windows]
+command = "powershell"
+args = [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    '''
+$ErrorActionPreference = "Stop"
+$workspaceArgs = @($env:WORKSPACE_ARGS -split '\s+' | Where-Object { $_ })
+if ($workspaceArgs.Count -eq 0) {
+    $workspaceArgs = @(
+        "--workspace"
+        "--exclude"
+        "rong_arkjs"
+        "--exclude"
+        "rong_arkjs_sys"
+    )
+}
+
+if ($env:ENGINE -eq "quickjs") {
+    $workspaceArgs += @("--exclude", "rong_jscore", "--exclude", "rong_jscore_sys")
+    & cargo clippy @workspaceArgs --lib --bins --tests -- -D warnings
+} else {
+    & cargo clippy @workspaceArgs --lib --bins --tests --no-default-features --features "$($env:ENGINE),tls-aws-lc" -- -D warnings
+}
+''',
+]
+
 [tasks.test-engine]
+linux_alias = "test-engine-unix"
+mac_alias = "test-engine-unix"
+windows_alias = "test-engine-windows"
+
+[tasks.test-engine-unix]
 command = "bash"
 args = ["test.sh", "-e", "${ENGINE}"]
+
+[tasks.test-engine-windows]
+command = "powershell"
+args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "test.windows.ps1", "-e", "${ENGINE}"]
 
 [tasks.pre-commit]
 dependencies = ["fmt-check", "check-engine", "clippy-engine"]
@@ -45,6 +168,11 @@ dependencies = ["fmt-check", "check-engine", "clippy-engine"]
 dependencies = ["fmt-check", "check-engine", "clippy-engine", "test-engine"]
 
 [tasks.ci-verify-all]
+linux_alias = "ci-verify-all-unix"
+mac_alias = "ci-verify-all-unix"
+windows_alias = "ci-verify-all-windows"
+
+[tasks.ci-verify-all-unix]
 script_runner = "@shell"
 script = '''
 set -euo pipefail
@@ -54,3 +182,24 @@ for engine in ${ENGINES}; do
   ENGINE="${engine}" cargo make ci-verify
 done
 '''
+
+[tasks.ci-verify-all-windows]
+command = "powershell"
+args = [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    '''
+$ErrorActionPreference = "Stop"
+$engines = @("quickjs")
+
+foreach ($engine in $engines) {
+    Write-Host "==> ci-verify ($engine)"
+    $env:ENGINE = $engine
+    & cargo make ci-verify
+}
+
+Remove-Item Env:ENGINE -ErrorAction SilentlyContinue
+''',
+]
