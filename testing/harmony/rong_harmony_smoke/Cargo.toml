@@ -1,0 +1,30 @@
+[package]
+name = "rong_harmony_smoke"
+version = "0.2.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/LingXia-Dev/Rong"
+homepage = "https://github.com/LingXia-Dev/Rong"
+rust-version = "1.90"
+publish = false
+description = "Thin NAPI glue: exposes an HTTP control plane for HarmonyOS ArkJS smoke runs"
+
+[lib]
+name = "rong_harmony_smoke"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+rong_test_device = { path = "../../rong_test_device" }
+rong_test_harness = { path = "../../rong_test_harness" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+hyper = { version = "1.8.1", features = ["server", "http1"] }
+hyper-util = { version = "0.1.20", features = ["tokio"] }
+http-body-util = "0.1.3"
+tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros", "net", "sync"] }
+
+[target.'cfg(target_env = "ohos")'.dependencies]
+napi-ohos = "1.1"
+napi-derive-ohos = "1.1"
+ohos_hilog = "0.1.3"

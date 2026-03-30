@@ -31,6 +31,7 @@ log_warning() {
 
 # Available engines
 ENGINES=("quickjs" "jscore")
+SUPPORTED_ENGINES=("quickjs" "jscore" "arkjs")
 
 # Cleanup function to kill child processes
 cleanup() {
@@ -85,7 +86,7 @@ print_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  -e, --engine ENGINE           Run tests for specific engine (quickjs, jscore, all)"
+    echo "  -e, --engine ENGINE           Run tests for specific engine (quickjs, jscore, arkjs, all)"
     echo "  -t, --test TEST               Run specific test (core test name or module name)"
     echo "  -c, --core                    Run only core tests"
     echo "  -m, --modules                 Run only module tests"
@@ -97,9 +98,27 @@ print_usage() {
     echo "  $0 -k                         # Run all tests, continue on failures"
     echo "  $0 -e quickjs                 # Run all tests on QuickJS"
     echo "  $0 -e jscore -c               # Run core tests on JavaScriptCore"
+    echo "  $0 -e arkjs                   # Show how to run ArkJS device-side tests"
     echo "  $0 -t iterator                # Run iterator tests on all engines"
     echo "  $0 -t rong_http               # Run rong_http module tests on all engines"
     echo "  $0 -k -m                      # Run all module tests, continue on error"
+}
+
+print_arkjs_instructions() {
+    echo -e "${BLUE}================================${NC}"
+    echo -e "${BLUE}  ArkJS Test Flow${NC}"
+    echo -e "${BLUE}================================${NC}"
+    echo "ArkJS tests run on a HarmonyOS device via the smoke app."
+    echo ""
+    echo "Run:"
+    echo "  ./testing/harmony/dev.sh"
+    echo ""
+    echo "The script prints the JSON-derived test summary on the PC."
+    echo "For debug logs only:"
+    echo "  hdc hilog | grep RongSmoke"
+    echo ""
+    echo "The device-side smoke run includes the generated tests from tests/*.rs,"
+    echo "including the Rong worker/runtime cases from tests/rong.rs."
 }
 
 run_core_test() {
@@ -260,10 +279,14 @@ done
 
 # Validate engine filter
 if [[ -n "$ENGINE_FILTER" && "$ENGINE_FILTER" != "all" ]]; then
-    if [[ ! " ${ENGINES[@]} " =~ " ${ENGINE_FILTER} " ]]; then
+    if [[ ! " ${SUPPORTED_ENGINES[@]} " =~ " ${ENGINE_FILTER} " ]]; then
         log_error "Unknown engine: $ENGINE_FILTER"
-        echo "Available engines: ${ENGINES[*]}"
+        echo "Available engines: ${SUPPORTED_ENGINES[*]}"
         exit 1
+    fi
+    if [[ "$ENGINE_FILTER" == "arkjs" ]]; then
+        print_arkjs_instructions
+        exit 0
     fi
     ENGINES=("$ENGINE_FILTER")
 fi

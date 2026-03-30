@@ -9,11 +9,13 @@ description = "On-device test suite generated from tests/*.rs via build.rs sourc
 
 [dependencies]
 rong_test_harness = { workspace = true }
+
+[build-dependencies]
+regex = "1"
+
+[target.'cfg(target_env = "ohos")'.dependencies]
 rong = { workspace = true, default-features = false, features = ["arkjs"] }
 rong_macro = { workspace = true }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "macros", "sync"] }
 futures = { workspace = true }
 bytes = { workspace = true }
-
-[build-dependencies]
-regex = "1"

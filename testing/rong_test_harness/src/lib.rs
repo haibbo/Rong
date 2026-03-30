@@ -1,6 +1,9 @@
 use serde::Serialize;
 use std::time::Instant;
 
+pub type AsyncTestFuture = std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>>>>;
+pub type AsyncTestFn = fn() -> AsyncTestFuture;
+
 /// A single test entry: name + a function that runs it.
 pub struct TestEntry {
     pub name: &'static str,
@@ -10,7 +13,7 @@ pub struct TestEntry {
 /// Sync or async test function.
 pub enum TestFn {
     Sync(fn() -> Result<(), String>),
-    Async(fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>>>>),
+    Async(AsyncTestFn),
 }
 
 /// Outcome of a single test.
@@ -44,10 +47,6 @@ pub struct TestReport {
     pub cases: Vec<TestCaseResult>,
 }
 
-/// Log callback — harness calls this for each event.
-/// The runner (NAPI layer) provides an implementation that writes to hilog or stdout.
-pub type LogFn = fn(level: LogLevel, msg: &str);
-
 #[derive(Debug, Clone, Copy)]
 pub enum LogLevel {
     Info,
@@ -55,7 +54,10 @@ pub enum LogLevel {
 }
 
 /// Runs a set of tests with optional filtering and log output.
-pub fn run_tests(tests: &[TestEntry], filter: &str, log: LogFn) -> TestReport {
+pub fn run_tests<F>(tests: &[TestEntry], filter: &str, log: F) -> TestReport
+where
+    F: Fn(LogLevel, &str),
+{
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

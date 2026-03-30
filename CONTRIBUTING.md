@@ -98,7 +98,7 @@ bash test.sh -e jscore
 For HarmonyOS device-side verification, use:
 
 ```bash
-./harmony/dev.sh
+./testing/harmony/dev.sh
 ```
 
 ## Release Flow

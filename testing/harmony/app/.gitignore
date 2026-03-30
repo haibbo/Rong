@@ -1,0 +1,8 @@
+.hvigor
+entry/build
+entry/oh_modules
+entry/oh-package-lock.json5
+oh-package-lock.json5
+entry/libs/arm64-v8a/librong_harmony_smoke.so
+../rong_harmony_smoke/target
+../rong_harmony_smoke/Cargo.lock

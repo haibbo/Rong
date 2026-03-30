@@ -20,6 +20,7 @@ members = [
     "modules/rong_s3",
     "rong_modules", "rong_cli"
 ]
+exclude = ["testing/harmony/rong_harmony_smoke"]
 
 [workspace.package]
 version = "0.2.0"

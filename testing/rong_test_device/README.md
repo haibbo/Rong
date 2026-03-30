@@ -48,5 +48,5 @@ fn new_feature_works() {
 }
 ```
 
-Next `cargo build -p rong_test_device` (or `./harmony/dev.sh`) automatically
+Next `cargo build -p rong_test_device` (or `./testing/harmony/dev.sh`) automatically
 includes it in the on-device test suite. Zero extra work.

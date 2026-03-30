@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "EntryAbility_desc",
+      "value": "Rong Harmony smoke-test shell"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Rong Smoke"
+    },
+    {
+      "name": "module_desc",
+      "value": "Minimal shell app for ArkJS smoke tests"
+    }
+  ]
+}
