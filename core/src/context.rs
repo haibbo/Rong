@@ -13,6 +13,25 @@ use std::sync::{LazyLock, RwLock};
 
 pub(crate) mod thrown_store;
 
+/// Describes how a JavaScript engine registered promise handlers.
+///
+/// `core` owns the polling state machine and microtask draining. Engines only
+/// report which registration path they performed so the shared layer can apply
+/// the right follow-up behavior.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum PromiseHandlerRegistration {
+    /// The engine did not install any native handlers. `core` must fall back to
+    /// `promise.then(onFulfilled, onRejected)`.
+    #[default]
+    JavaScriptOnly,
+    /// The engine installed native handlers and no JavaScript fallback is needed.
+    NativeOnly,
+    /// The engine installed native handlers, but `core` should install a
+    /// JavaScript `.then()` backup if the promise is still pending after the
+    /// first microtask drain.
+    NativeWithJavaScriptFallbackIfPending,
+}
+
 /// JSContextImpl represents a JavaScript context
 ///
 /// # Safety
@@ -87,6 +106,21 @@ pub trait JSContextImpl {
     /// - The resolve function to fulfill the promise
     /// - The reject function to reject the promise
     fn promise(&self) -> (Self::Value, Self::Value, Self::Value);
+
+    /// Registers resolve/reject handlers on a promise at the engine level.
+    ///
+    /// Engines can override this to use native APIs. The shared `core` future
+    /// machinery will later drain microtasks and apply any declared JS fallback,
+    /// so implementations should focus on registration and avoid embedding shared
+    /// scheduling policy here.
+    fn register_promise_handlers(
+        &self,
+        _promise: &Self::Value,
+        _on_fulfilled: &Self::Value,
+        _on_rejected: &Self::Value,
+    ) -> PromiseHandlerRegistration {
+        PromiseHandlerRegistration::JavaScriptOnly
+    }
 
     /// Compiles JavaScript source code into bytecode format
     ///
@@ -281,7 +315,8 @@ impl<C: JSContextImpl> JSContext<C> {
     ///     // Use ctx for the duration of the callback
     /// }
     /// ```
-    pub(crate) fn from_borrowed_raw_ptr(ptr: &C::RawContext) -> Self {
+    #[doc(hidden)]
+    pub fn from_borrowed_raw_ptr(ptr: &C::RawContext) -> Self {
         let data = Self::_get_opaque(ptr);
         if data.is_null() {
             panic!("[JSContext] opaque is empty");

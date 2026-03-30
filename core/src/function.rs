@@ -143,6 +143,11 @@ impl<V: JSValueImpl> Constructor<V> {
     {
         Self(RustFunc::new(f))
     }
+
+    /// Calls the constructor with provided parameter accessor, returning JS result
+    pub fn call(&mut self, accessor: &mut ParamsAccessor<V>) -> JSResult<V> {
+        self.0.call(accessor)
+    }
 }
 
 impl<V> JSClass<V> for RustFunc<V>
@@ -150,6 +155,7 @@ where
     V: JSValueImpl + crate::JSObjectOps + 'static,
 {
     const NAME: &'static str = "RustFunc";
+    const CALLABLE: bool = true;
 
     fn data_constructor() -> Constructor<V> {
         // RustFunction class don't need data constructor

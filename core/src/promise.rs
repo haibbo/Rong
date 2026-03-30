@@ -1,7 +1,8 @@
 use crate::rong::spawn_local;
 use crate::{
     FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSErrorFactory, JSFunc, JSObject,
-    JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl, RongJSError, function::JSParameterType,
+    JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl, PromiseHandlerRegistration, RongJSError,
+    function::JSParameterType,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -257,6 +258,58 @@ enum PromiseState<T> {
 
 impl<V: JSValueImpl, T> Unpin for PromiseFuture<V, T> {}
 
+fn promise_state_is_pending<T>(state: &Rc<RefCell<PromiseState<T>>>) -> bool {
+    matches!(&*state.borrow(), PromiseState::Pending(_))
+}
+
+fn attach_js_promise_handlers<V>(
+    promise: &Promise<V>,
+    resolve: &JSFunc<V>,
+    reject: &JSFunc<V>,
+) -> JSResult<()>
+where
+    V: JSValueImpl + JSObjectOps + 'static,
+{
+    promise
+        .then()?
+        .call::<_, ()>(Some(promise.obj.clone()), (resolve.clone(), reject.clone()))
+}
+
+fn register_future_handlers<V, T>(
+    ctx: &JSContext<V::Context>,
+    promise: &Promise<V>,
+    resolve: &JSFunc<V>,
+    reject: &JSFunc<V>,
+    state: &Rc<RefCell<PromiseState<T>>>,
+) -> JSResult<()>
+where
+    V: JSValueImpl + JSObjectOps + 'static,
+    <V::Context as crate::JSContextImpl>::Runtime: 'static,
+{
+    match ctx.as_ref().register_promise_handlers(
+        promise.obj.as_value(),
+        resolve.as_value(),
+        reject.as_value(),
+    ) {
+        PromiseHandlerRegistration::JavaScriptOnly => {
+            attach_js_promise_handlers(promise, resolve, reject)?;
+            drain_microtasks::<V>(ctx);
+        }
+        PromiseHandlerRegistration::NativeOnly => {
+            drain_microtasks::<V>(ctx);
+        }
+        PromiseHandlerRegistration::NativeWithJavaScriptFallbackIfPending => {
+            drain_microtasks::<V>(ctx);
+            if promise_state_is_pending(state) {
+                attach_js_promise_handlers(promise, resolve, reject)?;
+                drain_microtasks::<V>(ctx);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 impl<V: JSValueImpl + 'static> Promise<V> {
     /// Converts the Promise into a Future that resolves to a value of type T.
     ///
@@ -311,6 +364,9 @@ where
             let resolve = JSFunc::new(ctx, move |ctx: JSContext<V::Context>, value: JSValue<V>| {
                 //println!("resolve callback called");
                 let mut state = resolve_state.borrow_mut();
+                if !matches!(&*state, PromiseState::Pending(_)) {
+                    return;
+                }
 
                 let resolved = T::from_js_value(&ctx, value);
 
@@ -329,6 +385,9 @@ where
                 move |_ctx: JSContext<V::Context>, reason: JSValue<V>| {
                     //println!("reject callback called");
                     let mut state = reject_state.borrow_mut();
+                    if !matches!(&*state, PromiseState::Pending(_)) {
+                        return;
+                    }
                     if let PromiseState::Pending(waker) = std::mem::replace(
                         &mut *state,
                         PromiseState::Resolved(Err(RongJSError::from_thrown_value(reason))),
@@ -339,15 +398,23 @@ where
             )
             .unwrap();
 
-            // Register resolve handlers
-            this.promise
-                .then()?
-                .call::<_, ()>(Some(this.promise.obj.clone()), (resolve,))?;
+            register_future_handlers(ctx, &this.promise, &resolve, &reject, &state)?;
 
-            // Also register catch handler for unhandled rejections
-            this.promise
-                .catch()?
-                .call::<_, ()>(Some(this.promise.obj.clone()), (reject,))?;
+            // If the callback already fired during the microtask drain above,
+            // return the result immediately instead of pending forever.
+            if let Some(state) = &this.state {
+                let s = state.borrow();
+                if matches!(&*s, PromiseState::Resolved(_)) {
+                    drop(s);
+                    let mut s = state.borrow_mut();
+                    match std::mem::replace(&mut *s, PromiseState::Pending(cx.waker().clone())) {
+                        PromiseState::Resolved(result) => return Poll::Ready(result),
+                        other => {
+                            *s = other;
+                        }
+                    }
+                }
+            }
 
             return Poll::Pending;
         }

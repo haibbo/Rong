@@ -1,7 +1,7 @@
 use crate::function::{Constructor, FromParams, IntoJSCallable, ParamsAccessor, RustFunc};
 use crate::{
     FromJSValue, HostError, JSArrayOps, JSContext, JSContextImpl, JSErrorFactory,
-    JSExceptionThrower, JSFunc, JSObject, JSObjectOps, JSResult, JSValue, JSValueImpl,
+    JSExceptionThrower, JSFunc, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl,
     PropertyDescriptor, PropertyKey, RongJSError,
 };
 
@@ -14,6 +14,10 @@ use std::ops::Deref;
 pub trait JSClass<V: JSValueImpl>: Sized + 'static {
     // the name of class constructor
     const NAME: &'static str;
+
+    /// Whether instances of this class can be called as functions.
+    /// Override to `true` for callable classes (e.g. RustFunc).
+    const CALLABLE: bool = false;
 
     /// Returns the data constructor function for this class
     fn data_constructor() -> Constructor<V>;
@@ -52,32 +56,61 @@ pub trait JSClass<V: JSValueImpl>: Sized + 'static {
 
 #[doc(hidden)]
 pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
-    fn constructor(ctx: &V::Context, this: V, args: Vec<V>) -> V
+    /// Shared constructor body that builds or returns the instance value.
+    ///
+    /// Engines with different native constructor ABIs can reuse this and keep
+    /// their post-construction wiring local. For example, QuickJS/JSC call
+    /// `constructor()`, while ArkJS calls `construct_value()` directly and
+    /// finishes prototype synchronization in its own callback.
+    fn construct_value(ctx: &V::Context, this: V, args: Vec<V>) -> Result<V, V>
     where
         V::Context: JSErrorFactory + JSExceptionThrower,
-        V: JSObjectOps + JSArrayOps,
+        V: JSObjectOps + JSArrayOps + JSTypeOf,
     {
         let ctx = &JSContext::from_borrowed_raw_ptr(ctx.as_raw());
         let mut accessor = ParamsAccessor::new(ctx, this.clone(), args);
 
         if this.is_undefined() {
             match Self::call_without_new().0.call(&mut accessor) {
-                Ok(v) => return v,
-                Err(e) => return e.throw_js_exception(ctx),
+                Ok(v) => return Ok(v),
+                Err(e) => return Err(e.throw_js_exception(ctx)),
             }
         }
 
         let instance = match Self::data_constructor().0.call(&mut accessor) {
             Ok(v) => {
                 if v.is_exception() {
-                    return v;
+                    return Err(v);
                 }
                 v
             }
-            Err(e) => return e.throw_js_exception(ctx),
+            Err(e) => return Err(e.throw_js_exception(ctx)),
         };
 
-        let instance = match JSObject::from_js_value(ctx, JSValue::from_raw(ctx, instance)) {
+        match JSObject::from_js_value(ctx, JSValue::from_raw(ctx, instance)) {
+            Ok(obj) => Ok(obj.into_value()),
+            Err(e) => Err(e.throw_js_exception(ctx)),
+        }
+    }
+
+    /// Default constructor adapter for engines whose constructor callback
+    /// receives the JS constructor object as `this`.
+    fn constructor(ctx: &V::Context, this: V, args: Vec<V>) -> V
+    where
+        V::Context: JSErrorFactory + JSExceptionThrower,
+        V: JSObjectOps + JSArrayOps + JSTypeOf,
+    {
+        let value = match Self::construct_value(ctx, this.clone(), args) {
+            Ok(value) => value,
+            Err(value) => return value,
+        };
+
+        if this.is_undefined() {
+            return value;
+        }
+
+        let ctx = &JSContext::from_borrowed_raw_ptr(ctx.as_raw());
+        let instance = match JSObject::from_js_value(ctx, JSValue::from_raw(ctx, value)) {
             Ok(obj) => obj,
             Err(e) => return e.throw_js_exception(ctx),
         };

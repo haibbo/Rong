@@ -15,7 +15,7 @@ mod worker_thread;
 
 pub mod engine {
     pub use crate::class::JSClassExt;
-    pub use crate::context::{JSContextImpl, JSRawContext};
+    pub use crate::context::{JSContextImpl, JSRawContext, PromiseHandlerRegistration};
     pub use crate::runtime::{JSEngine, JSRuntimeImpl};
     pub use crate::value::{
         JSArrayBufferOps, JSArrayOps, JSErrorFactory, JSExceptionThrower, JSObjectOps, JSTypeOf,
@@ -32,7 +32,7 @@ pub mod advanced {
 pub use invoke::{JsInvokePriority, enqueue_js_invoke};
 
 pub use class::{Class, ClassSetup, JSClass};
-pub use context::JSContext;
+pub use context::{JSContext, PromiseHandlerRegistration};
 pub use error::{HostError, JSResult, RongJSError, illegal_constructor};
 pub use function::Constructor;
 pub use iterator::{

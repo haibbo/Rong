@@ -66,6 +66,9 @@ pub trait JSValueImpl: Clone + PartialEq + Hash {
     fn into_raw_value(self) -> Self::RawValue;
 
     fn as_raw_value(&self) -> &Self::RawValue;
+    fn raw_value_for_api(&self) -> Self::RawValue {
+        *self.as_raw_value()
+    }
     fn as_raw_context(&self) -> &<Self::Context as JSContextImpl>::RawContext;
 
     /// Create JavaScript null value
@@ -268,7 +271,13 @@ macro_rules! impl_js_converter {
             type Error = RongJSError;
             fn try_into(self) -> Result<$out_type, Self::Error> {
                 let mut result: $out_type = Default::default();
-                if unsafe { $to_fn(*self.as_raw_context(), *self.as_raw_value(), &mut result) } < 0
+                if unsafe {
+                    $to_fn(
+                        *self.as_raw_context(),
+                        self.raw_value_for_api(),
+                        &mut result,
+                    )
+                } < 0
                 {
                     Err($crate::HostError::new(
                         $crate::error::E_TYPE,
