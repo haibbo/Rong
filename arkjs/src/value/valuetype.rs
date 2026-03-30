@@ -8,14 +8,14 @@ impl JSTypeOf for ArkJSValue {
     }
 
     fn is_error(&self) -> bool {
-        // Limitation: can not verify error as ArkJSValue is from JS
         if self._is_err() {
             return true;
         }
 
+        let value = self.resolve_handle();
         unsafe {
             let mut result = false;
-            let status = arkjs::OH_JSVM_IsError(self.env, self.value, &mut result);
+            let status = arkjs::OH_JSVM_IsError(self.env, value, &mut result);
             status == arkjs::JSVM_Status_JSVM_OK && result
         }
     }
@@ -24,9 +24,10 @@ impl JSTypeOf for ArkJSValue {
         if !self.is_object() {
             return false;
         }
+        let value = self.resolve_handle();
         unsafe {
             let mut result = false;
-            let status = arkjs::OH_JSVM_IsArray(self.env, self.value, &mut result);
+            let status = arkjs::OH_JSVM_IsArray(self.env, value, &mut result);
             status == arkjs::JSVM_Status_JSVM_OK && result
         }
     }
@@ -35,9 +36,10 @@ impl JSTypeOf for ArkJSValue {
         if !self.is_object() {
             return false;
         }
+        let value = self.resolve_handle();
         unsafe {
             let mut result = false;
-            let status = arkjs::OH_JSVM_IsArraybuffer(self.env, self.value, &mut result);
+            let status = arkjs::OH_JSVM_IsArraybuffer(self.env, value, &mut result);
             status == arkjs::JSVM_Status_JSVM_OK && result
         }
     }
@@ -47,9 +49,10 @@ impl JSTypeOf for ArkJSValue {
             return false;
         }
 
+        let value = self.resolve_handle();
         unsafe {
             let mut result = false;
-            let status = arkjs::OH_JSVM_IsPromise(self.env, self.value, &mut result);
+            let status = arkjs::OH_JSVM_IsPromise(self.env, value, &mut result);
             status == arkjs::JSVM_Status_JSVM_OK && result
         }
     }
@@ -59,78 +62,83 @@ impl JSTypeOf for ArkJSValue {
             return false;
         }
 
+        let value = self.resolve_handle();
         unsafe {
             let mut result = false;
-            let status = arkjs::OH_JSVM_IsDate(self.env, self.value, &mut result);
+            let status = arkjs::OH_JSVM_IsDate(self.env, value, &mut result);
             status == arkjs::JSVM_Status_JSVM_OK && result
         }
     }
 
     fn is_undefined(&self) -> bool {
+        let value = self.resolve_handle();
         unsafe {
             let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_UNDEFINED;
-            let status = arkjs::OH_JSVM_Typeof(self.env, self.value, &mut value_type);
+            let status = arkjs::OH_JSVM_Typeof(self.env, value, &mut value_type);
             status == arkjs::JSVM_Status_JSVM_OK
                 && value_type == arkjs::JSVM_ValueType_JSVM_UNDEFINED
         }
     }
 
     fn is_null(&self) -> bool {
+        let value = self.resolve_handle();
         unsafe {
             let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_NULL;
-            let status = arkjs::OH_JSVM_Typeof(self.env, self.value, &mut value_type);
+            let status = arkjs::OH_JSVM_Typeof(self.env, value, &mut value_type);
             status == arkjs::JSVM_Status_JSVM_OK && value_type == arkjs::JSVM_ValueType_JSVM_NULL
         }
     }
 
     fn is_boolean(&self) -> bool {
+        let value = self.resolve_handle();
         unsafe {
             let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_BOOLEAN;
-            let status = arkjs::OH_JSVM_Typeof(self.env, self.value, &mut value_type);
+            let status = arkjs::OH_JSVM_Typeof(self.env, value, &mut value_type);
             status == arkjs::JSVM_Status_JSVM_OK && value_type == arkjs::JSVM_ValueType_JSVM_BOOLEAN
         }
     }
 
     fn is_number(&self) -> bool {
+        let value = self.resolve_handle();
         unsafe {
             let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_NUMBER;
-            let status = arkjs::OH_JSVM_Typeof(self.env, self.value, &mut value_type);
+            let status = arkjs::OH_JSVM_Typeof(self.env, value, &mut value_type);
             status == arkjs::JSVM_Status_JSVM_OK && value_type == arkjs::JSVM_ValueType_JSVM_NUMBER
         }
     }
 
     fn is_bigint(&self) -> bool {
+        let value = self.resolve_handle();
         unsafe {
             let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_BIGINT;
-            let status = arkjs::OH_JSVM_Typeof(self.env, self.value, &mut value_type);
+            let status = arkjs::OH_JSVM_Typeof(self.env, value, &mut value_type);
             status == arkjs::JSVM_Status_JSVM_OK && value_type == arkjs::JSVM_ValueType_JSVM_BIGINT
         }
     }
 
     fn is_string(&self) -> bool {
+        let value = self.resolve_handle();
         unsafe {
             let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_STRING;
-            let status = arkjs::OH_JSVM_Typeof(self.env, self.value, &mut value_type);
+            let status = arkjs::OH_JSVM_Typeof(self.env, value, &mut value_type);
             status == arkjs::JSVM_Status_JSVM_OK && value_type == arkjs::JSVM_ValueType_JSVM_STRING
         }
     }
 
     fn is_symbol(&self) -> bool {
+        let value = self.resolve_handle();
         unsafe {
             let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_SYMBOL;
-            let status = arkjs::OH_JSVM_Typeof(self.env, self.value, &mut value_type);
+            let status = arkjs::OH_JSVM_Typeof(self.env, value, &mut value_type);
             status == arkjs::JSVM_Status_JSVM_OK && value_type == arkjs::JSVM_ValueType_JSVM_SYMBOL
         }
     }
 
     fn is_function(&self) -> bool {
-        if !self.is_object() {
-            return false;
-        }
-
+        let value = self.resolve_handle();
         unsafe {
-            let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_FUNCTION;
-            let status = arkjs::OH_JSVM_Typeof(self.env, self.value, &mut value_type);
+            let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_UNDEFINED;
+            let status = arkjs::OH_JSVM_Typeof(self.env, value, &mut value_type);
             status == arkjs::JSVM_Status_JSVM_OK
                 && value_type == arkjs::JSVM_ValueType_JSVM_FUNCTION
         }
@@ -139,10 +147,12 @@ impl JSTypeOf for ArkJSValue {
     fn is_object(&self) -> bool {
         self._is_object()
             || unsafe {
-                let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_OBJECT;
-                let status = arkjs::OH_JSVM_Typeof(self.env, self.value, &mut value_type);
+                let value = self.resolve_handle();
+                let mut value_type: arkjs::JSVM_ValueType = arkjs::JSVM_ValueType_JSVM_UNDEFINED;
+                let status = arkjs::OH_JSVM_Typeof(self.env, value, &mut value_type);
                 status == arkjs::JSVM_Status_JSVM_OK
-                    && value_type == arkjs::JSVM_ValueType_JSVM_OBJECT
+                    && (value_type == arkjs::JSVM_ValueType_JSVM_OBJECT
+                        || value_type == arkjs::JSVM_ValueType_JSVM_FUNCTION)
             }
     }
 
@@ -151,9 +161,10 @@ impl JSTypeOf for ArkJSValue {
             return false;
         }
 
+        let value = self.resolve_handle();
         unsafe {
             let mut result = false;
-            let status = arkjs::OH_JSVM_IsConstructor(self.env, self.value, &mut result);
+            let status = arkjs::OH_JSVM_IsConstructor(self.env, value, &mut result);
             status == arkjs::JSVM_Status_JSVM_OK && result
         }
     }

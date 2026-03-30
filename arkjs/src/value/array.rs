@@ -18,22 +18,29 @@ impl JSArrayOps for ArkJSValue {
     fn get_index(&self, index: u32) -> Self {
         unsafe {
             let mut result: arkjs::JSVM_Value = std::ptr::null_mut();
-            let status = arkjs::OH_JSVM_GetElement(self.env, self.value, index, &mut result);
+            let status =
+                arkjs::OH_JSVM_GetElement(self.env, self.resolve_handle(), index, &mut result);
             if status == arkjs::JSVM_Status_JSVM_OK {
                 ArkJSValue::from_owned_raw(self.env, result)
             } else {
                 // Return exception
                 let mut exception: arkjs::JSVM_Value = std::ptr::null_mut();
                 arkjs::OH_JSVM_GetAndClearLastException(self.env, &mut exception);
-                ArkJSValue::from_owned_raw(self.env, exception).with_exception()
+                ArkJSValue::from_owned_raw(self.env, exception)
+                    .protect()
+                    .with_exception()
             }
         }
     }
 
     fn set_index(&self, index: u32, value: Self) -> Self {
         unsafe {
-            let status =
-                arkjs::OH_JSVM_SetElement(self.env, self.value, index, *value.as_raw_value());
+            let status = arkjs::OH_JSVM_SetElement(
+                self.env,
+                self.resolve_handle(),
+                index,
+                value.resolve_handle(),
+            );
 
             if status == arkjs::JSVM_Status_JSVM_OK {
                 let mut undefined: arkjs::JSVM_Value = std::ptr::null_mut();
@@ -43,7 +50,9 @@ impl JSArrayOps for ArkJSValue {
                 // Return exception
                 let mut exception: arkjs::JSVM_Value = std::ptr::null_mut();
                 arkjs::OH_JSVM_GetAndClearLastException(self.env, &mut exception);
-                ArkJSValue::from_owned_raw(self.env, exception).with_exception()
+                ArkJSValue::from_owned_raw(self.env, exception)
+                    .protect()
+                    .with_exception()
             }
         }
     }

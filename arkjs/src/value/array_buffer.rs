@@ -17,9 +17,15 @@ impl JSArrayBufferOps for ArkJSValue {
                 &mut array_buffer,
             );
 
-            if status == arkjs::JSVM_Status_JSVM_OK && !buffer_data.is_null() {
-                // Copy data into the buffer
-                std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer_data as *mut u8, bytes.len());
+            if status == arkjs::JSVM_Status_JSVM_OK {
+                // Copy data into the buffer (skip for empty buffers where buffer_data may be null)
+                if !bytes.is_empty() && !buffer_data.is_null() {
+                    std::ptr::copy_nonoverlapping(
+                        bytes.as_ptr(),
+                        buffer_data as *mut u8,
+                        bytes.len(),
+                    );
+                }
                 ArkJSValue::from_owned_raw(ctx.to_raw(), array_buffer).with_object()
             } else {
                 Self::create_undefined(ctx)
@@ -42,15 +48,12 @@ impl JSArrayBufferOps for ArkJSValue {
         }
 
         unsafe {
+            let value = self.resolve_handle();
             let mut data: *mut std::ffi::c_void = ptr::null_mut();
             let mut byte_length: usize = 0;
 
-            let status = arkjs::OH_JSVM_GetArraybufferInfo(
-                self.env,
-                self.value,
-                &mut data,
-                &mut byte_length,
-            );
+            let status =
+                arkjs::OH_JSVM_GetArraybufferInfo(self.env, value, &mut data, &mut byte_length);
 
             if status == arkjs::JSVM_Status_JSVM_OK {
                 byte_length
@@ -67,15 +70,12 @@ impl JSArrayBufferOps for ArkJSValue {
         }
 
         unsafe {
+            let value = self.resolve_handle();
             let mut data: *mut std::ffi::c_void = ptr::null_mut();
             let mut byte_length: usize = 0;
 
-            let status = arkjs::OH_JSVM_GetArraybufferInfo(
-                self.env,
-                self.value,
-                &mut data,
-                &mut byte_length,
-            );
+            let status =
+                arkjs::OH_JSVM_GetArraybufferInfo(self.env, value, &mut data, &mut byte_length);
 
             if status == arkjs::JSVM_Status_JSVM_OK && !data.is_null() {
                 slice::from_raw_parts(data as *const u8, byte_length)
@@ -92,15 +92,12 @@ impl JSArrayBufferOps for ArkJSValue {
         }
 
         unsafe {
+            let value = self.resolve_handle();
             let mut data: *mut std::ffi::c_void = ptr::null_mut();
             let mut byte_length: usize = 0;
 
-            let status = arkjs::OH_JSVM_GetArraybufferInfo(
-                self.env,
-                self.value,
-                &mut data,
-                &mut byte_length,
-            );
+            let status =
+                arkjs::OH_JSVM_GetArraybufferInfo(self.env, value, &mut data, &mut byte_length);
 
             if status == arkjs::JSVM_Status_JSVM_OK && !data.is_null() {
                 slice::from_raw_parts_mut(data as *mut u8, byte_length)

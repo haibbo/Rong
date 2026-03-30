@@ -33,26 +33,27 @@ pub mod function {
         KAsyncFnOnce, KFnMut, KFnOnce, Optional, ParamsAccessor, Rest, This,
     };
 
-    #[cfg(any(feature = "quickjs", feature = "jscore"))]
+    #[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
     pub type ThisMut<T> = rong_core::function::ThisMut<T, crate::JSEngineValue>;
 
-    #[cfg(any(feature = "quickjs", feature = "jscore"))]
+    #[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
     pub type JSClassRef<T> = rong_core::function::JSClassRef<T, crate::JSEngineValue>;
 
-    #[cfg(not(any(feature = "quickjs", feature = "jscore")))]
+    #[cfg(not(any(feature = "quickjs", feature = "jscore", feature = "arkjs")))]
     pub type ThisMut<T> = rong_core::function::ThisMut<T, ()>;
 
-    #[cfg(not(any(feature = "quickjs", feature = "jscore")))]
+    #[cfg(not(any(feature = "quickjs", feature = "jscore", feature = "arkjs")))]
     pub type JSClassRef<T> = rong_core::function::JSClassRef<T, ()>;
 }
 
-#[cfg(all(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(
+    all(feature = "quickjs", feature = "jscore"),
+    all(feature = "quickjs", feature = "arkjs"),
+    all(feature = "jscore", feature = "arkjs"),
+))]
 compile_error!(
-    "`rong` engine features are mutually exclusive: enable exactly one of `quickjs` or `jscore`."
+    "`rong` engine features are mutually exclusive: enable exactly one of `quickjs`, `jscore`, or `arkjs`."
 );
-
-#[cfg(feature = "arkjs")]
-compile_error!("`arkjs` engine is not available on crates.io yet. Use `quickjs` or `jscore`.");
 
 #[cfg(feature = "quickjs")]
 mod engine {
@@ -60,64 +61,70 @@ mod engine {
     pub type RongJS = QuickJS;
 }
 
-#[cfg(all(not(feature = "quickjs"), feature = "jscore"))]
+#[cfg(all(not(feature = "quickjs"), not(feature = "arkjs"), feature = "jscore"))]
 mod engine {
     use rong_jscore::JavaScriptCore;
     pub type RongJS = JavaScriptCore;
 }
 
+#[cfg(all(not(feature = "quickjs"), not(feature = "jscore"), feature = "arkjs"))]
+mod engine {
+    use rong_arkjs::HarmonyArkJS;
+    pub type RongJS = HarmonyArkJS;
+}
+
 // When no engine is selected, the engine types are not available
 // This allows the crate to compile for modules that don't use the engine directly
-#[cfg(all(not(feature = "quickjs"), not(feature = "jscore")))]
+#[cfg(not(any(feature = "quickjs", feature = "jscore", feature = "arkjs")))]
 mod engine {}
 
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub use engine::*;
 
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSEngineValue = <RongJS as JSEngine>::Value;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSEngineContext = <RongJS as JSEngine>::Context;
 
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSContext = CoreJSContext<<RongJS as JSEngine>::Context>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSRuntime = CoreJSRuntime<<RongJS as JSEngine>::Runtime>;
 
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSValue = CoreJSValue<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSObject = CoreJSObject<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSSymbol = CoreJSSymbol<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSFunc = CoreJSFunc<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSDate = CoreJSDate<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type Class = CoreClass<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type Promise = CorePromise<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSException = CoreJSException<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSArray = CoreJSArray<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSArrayBuffer = CoreJSArrayBuffer<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSBytes = CoreJSBytes<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type AnyJSTypedArray = CoreAnyJSTypedArray<JSEngineValue>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSTypedArray<T = u8> = CoreJSTypedArray<JSEngineValue, T>;
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type PropertyDescriptor = CorePropertyDescriptor<JSEngineValue>;
 
 // re-export macro public symbols to rong
 pub use rong_macro::{FromJSObj, FromJSValue, IntoJSObj, js_class, js_export, js_method};
 
 /// A Trait for conversion from JavaScript values.
-#[cfg(any(feature = "quickjs", feature = "jscore"))]
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub trait TryFromJSValue: Sized {
     fn try_from_js(_value: JSValue) -> JSResult<Self>;
 }
