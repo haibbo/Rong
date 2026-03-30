@@ -46,7 +46,6 @@ git config --local core.hooksPath .githooks
 
 - Publishes all workspace crates in dependency order
 - Requires `CARGO_REGISTRY_TOKEN`
-- Excludes: rong_arkjs* (WIP), rong_cli, rong_test, examples
 - Smart waiting: polls crates.io until each package is indexed
 - `--yes` skips the confirmation prompt (useful for CI)
 

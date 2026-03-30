@@ -4,7 +4,7 @@ skip_crate_env_info = true
 [env]
 ENGINE = "quickjs"
 ENGINES = "quickjs jscore"
-WORKSPACE_ARGS = "--workspace --exclude rong_arkjs --exclude rong_arkjs_sys"
+WORKSPACE_ARGS = "--workspace --exclude rong_arkjs --exclude rong_arkjs_sys --exclude rong_test_device"
 
 [tasks.fmt-check]
 command = "cargo"
@@ -67,6 +67,8 @@ if ($workspaceArgs.Count -eq 0) {
         "rong_arkjs"
         "--exclude"
         "rong_arkjs_sys"
+        "--exclude"
+        "rong_test_device"
     )
 }
 
@@ -136,6 +138,8 @@ if ($workspaceArgs.Count -eq 0) {
         "rong_arkjs"
         "--exclude"
         "rong_arkjs_sys"
+        "--exclude"
+        "rong_test_device"
     )
 }
 

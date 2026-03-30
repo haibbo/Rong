@@ -5,7 +5,9 @@ members = [
     "quickjs", "quickjs/sys",
     "javascriptcore", "javascriptcore/sys",
     "arkjs", "arkjs/sys",
-    "utils/rong_test",
+    "testing/rong_test",
+    "testing/rong_test_harness",
+    "testing/rong_test_device",
     "examples",
     "rong_rt",
     "modules/rong_timer",
@@ -41,7 +43,9 @@ rong_jscore_sys = { path = "javascriptcore/sys"   , version = "0.2.0" }
 rong_arkjs = { path = "arkjs"   , version = "0.2.0" }
 rong_arkjs_sys = { path = "arkjs/sys"   , version = "0.2.0" }
 rong_macro = { path = "macro"   , version = "0.2.0" }
-rong_test = { path = "utils/rong_test", default-features = false }
+rong_test = { path = "testing/rong_test", default-features = false }
+rong_test_harness = { path = "testing/rong_test_harness" }
+rong_test_device = { path = "testing/rong_test_device" }
 rong_modules = { path = "rong_modules"   , version = "0.2.0" }
 rong_rt = { path = "rong_rt"   , version = "0.2.0" }
 
@@ -121,7 +125,7 @@ rong_core = { workspace = true }
 rong_rt = { workspace = true }
 rong_quickjs = { workspace = true, optional = true }
 rong_jscore = { workspace = true, optional = true }
-# rong_arkjs = { workspace = true, optional = true }  # Not published to crates.io yet
+rong_arkjs = { workspace = true, optional = true }
 rong_macro = { workspace = true }
 tokio = { workspace = true }
 futures = { workspace = true }
@@ -132,7 +136,7 @@ futures = { workspace = true }
 default = ["quickjs"]
 quickjs = ["dep:rong_quickjs", "rong_test/quickjs"]
 jscore = ["dep:rong_jscore", "rong_test/jscore"]
-arkjs = []  # Placeholder: arkjs engine not available on crates.io yet
+arkjs = ["dep:rong_arkjs", "rong_test/arkjs"]
 
 [dev-dependencies]
 rong_test = { workspace = true }

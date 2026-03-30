@@ -6,11 +6,24 @@ edition.workspace = true
 description = "ArkJS FFI bindings for RongJS"
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/rong_arkjs_sys"
+rust-version.workspace = true
 readme.workspace = true
-publish = false
+keywords.workspace = true
+categories.workspace = true
+include = [
+    "Cargo.toml",
+    "build.rs",
+    "src/**",
+]
+
 [lib]
 test = false
 doctest = false
+
+[package.metadata.docs.rs]
+no-default-features = true
 
 [build-dependencies]
 bindgen = "0.72"

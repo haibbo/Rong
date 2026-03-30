@@ -26,12 +26,12 @@ CRATES=(
   # Layer 2 - System bindings
   "rong_quickjs_sys"
   "rong_jscore_sys"
-  # "rong_arkjs_sys"  # TODO: Not ready yet
+  "rong_arkjs_sys"
 
   # Layer 3 - Engine backends
   "rong_quickjs"
   "rong_jscore"
-  # "rong_arkjs"  # TODO: Not ready yet
+  "rong_arkjs"
 
   # Layer 4 - Main runtime
   "rong"

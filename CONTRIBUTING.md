@@ -55,7 +55,11 @@ What these tasks do:
 - `ci-verify`: `pre-commit` checks plus `bash test.sh -e <engine>`
 - `ci-verify-all`: runs `ci-verify` sequentially for `quickjs` and `jscore`
 
-The shared tasks intentionally exclude `rong_arkjs` and `rong_arkjs_sys` for now, and they check `lib/bin/test` targets instead of `--all-targets`. That keeps the main CI gate focused on supported engines and avoids example-only regressions from blocking normal work.
+The shared tasks exclude `rong_arkjs`, `rong_arkjs_sys`, and the device-only
+`rong_test_device` crate from the default host CI gate. On this macOS-focused
+host flow, ArkJS is validated through the on-device `rong_test_device` path
+instead. The tasks also check `lib/bin/test` targets instead of `--all-targets`
+to avoid example-only regressions from blocking normal work.
 
 ## Git Hooks
 
@@ -82,13 +86,19 @@ Run them manually:
 
 - `quickjs`: default local and CI engine
 - `jscore`: secondary CI engine
-- `arkjs`: work in progress, not part of the default verification gate
+- `arkjs`: tested on-device via `rong_test_device`; not part of the default host verification gate
 
 For ad hoc engine tests, the lower-level runner remains available:
 
 ```bash
 bash test.sh -e quickjs
 bash test.sh -e jscore
+```
+
+For HarmonyOS device-side verification, use:
+
+```bash
+./harmony/dev.sh
 ```
 
 ## Release Flow

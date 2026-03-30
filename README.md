@@ -23,7 +23,7 @@ In Chinese culture, "融" represents natural harmony and coexistence - perfectly
 ### Multi-Engine Support
 - **QuickJS** - Lightweight and fast
 - **JavaScriptCore** - WebKit's production-ready engine
-- **ArkJS** - HarmonyOS JavaScript engine 🚧 **In Development**
+- **ArkJS** - HarmonyOS JavaScript engine
 
 ### Developer Experience
 - **Type-safe bindings** - Rust's type system helps keep host bindings safe
@@ -134,7 +134,13 @@ Switch to JavaScriptCore explicitly:
 cargo run -p rong_cli --no-default-features --features jscore,tls-aws-lc
 ```
 
-`quickjs` and `jscore` are mutually exclusive. If both are enabled, build fails fast.
+Build for ArkJS explicitly on HarmonyOS/OpenHarmony targets:
+
+```bash
+cargo build --no-default-features --features arkjs --target aarch64-unknown-linux-ohos
+```
+
+`quickjs`, `jscore`, and `arkjs` are mutually exclusive. If multiple engines are enabled, build fails fast.
 For TLS backend selection, use `tls-aws-lc` (default) or `tls-ring`.
 
 ## 📦 Built-in Modules

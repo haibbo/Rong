@@ -1,6 +1,15 @@
 use std::env;
 use std::path::PathBuf;
 
+fn write_placeholder_bindings() {
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    std::fs::write(
+        out_path.join("bindings.rs"),
+        "// Placeholder bindings generated for non-Harmony/doc builds.\n",
+    )
+    .expect("Couldn't write placeholder bindings!");
+}
+
 fn harmony_setup() {
     let ndk = env::var("OHOS_NDK_HOME").expect("OHOS_NDK_HOME is not set!");
     unsafe {
@@ -20,7 +29,22 @@ fn harmony_setup() {
 }
 
 fn main() {
-    // This binding is only for HarmonyOS Ark JS
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    let docs_rs = env::var_os("DOCS_RS").is_some();
+
+    if docs_rs {
+        println!("cargo:warning=Generating placeholder ArkJS bindings for docs.rs");
+        write_placeholder_bindings();
+        return;
+    }
+
+    if target_os != "linux" || target_env != "ohos" {
+        write_placeholder_bindings();
+        return;
+    }
+
+    // This binding is only for HarmonyOS Ark JS.
     harmony_setup();
     build_harmony_arkjs();
 }
