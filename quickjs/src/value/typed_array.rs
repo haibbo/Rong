@@ -55,19 +55,39 @@ impl JSTypedArrayOps for QJSValue {
             let array_type = qjs::JS_GetTypedArrayType(self.value);
 
             match array_type {
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C => Some(JSTypedArrayKind::Uint8Clamped),
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT8 => Some(JSTypedArrayKind::Int8),
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8 => Some(JSTypedArrayKind::Uint8),
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT16 => Some(JSTypedArrayKind::Int16),
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT16 => Some(JSTypedArrayKind::Uint16),
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT32 => Some(JSTypedArrayKind::Int32),
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT32 => Some(JSTypedArrayKind::Uint32),
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_INT64 => Some(JSTypedArrayKind::BigInt64),
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64 => {
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C as i32 => {
+                    Some(JSTypedArrayKind::Uint8Clamped)
+                }
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT8 as i32 => {
+                    Some(JSTypedArrayKind::Int8)
+                }
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8 as i32 => {
+                    Some(JSTypedArrayKind::Uint8)
+                }
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT16 as i32 => {
+                    Some(JSTypedArrayKind::Int16)
+                }
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT16 as i32 => {
+                    Some(JSTypedArrayKind::Uint16)
+                }
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT32 as i32 => {
+                    Some(JSTypedArrayKind::Int32)
+                }
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT32 as i32 => {
+                    Some(JSTypedArrayKind::Uint32)
+                }
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_INT64 as i32 => {
+                    Some(JSTypedArrayKind::BigInt64)
+                }
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64 as i32 => {
                     Some(JSTypedArrayKind::BigUint64)
                 }
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32 => Some(JSTypedArrayKind::Float32),
-                qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64 => Some(JSTypedArrayKind::Float64),
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32 as i32 => {
+                    Some(JSTypedArrayKind::Float32)
+                }
+                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64 as i32 => {
+                    Some(JSTypedArrayKind::Float64)
+                }
                 _ => None,
             }
         }
