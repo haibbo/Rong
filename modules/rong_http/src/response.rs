@@ -3,15 +3,26 @@ use http::{Method, Uri, header};
 
 use rong::{function::Optional, *};
 
-use crate::body::{BodyKind, HttpBody};
+use crate::body::{BodyKind, HostBody, HostBodyStream, HttpBody};
 use crate::formdata::FormData;
 use crate::header::Headers;
 use rong_abort::AbortReceiver;
 use rong_buffer::Blob;
-use rong_stream::{JSReadableStream, readable_stream_is_locked};
+use rong_stream::{
+    JSReadableStream, ReadableStream, readable_stream_is_locked, readable_stream_take_receiver,
+};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use tokio::sync::mpsc;
+
+#[derive(Debug)]
+pub struct ResponseParts {
+    pub url: String,
+    pub method: String,
+    pub status: u16,
+    pub headers: http::HeaderMap<http::header::HeaderValue>,
+    pub body: HostBody,
+}
 
 #[derive(Default)]
 #[js_export]
@@ -145,7 +156,7 @@ impl Response {
         }
         // Fallback: before materialization, channel not taken means not used
         match &self.body {
-            Some(BodyKind::Channel(inner)) => inner.lock().map(|g| g.is_none()).unwrap_or(true),
+            Some(BodyKind::Channel(inner)) => inner.is_consumed().unwrap_or(true),
             _ => false,
         }
     }
@@ -155,21 +166,52 @@ impl Response {
         self.type_.clone()
     }
 
+    fn has_streaming_body(&self) -> bool {
+        if matches!(self.body, Some(BodyKind::Channel(_))) {
+            return true;
+        }
+        match &self.body {
+            Some(BodyKind::JS(body)) => body
+                .0
+                .clone()
+                .into_object()
+                .is_some_and(|obj| obj.borrow::<ReadableStream>().is_ok()),
+            _ => false,
+        }
+    }
+
+    fn clone_body_kind(&self) -> Option<BodyKind> {
+        match &self.body {
+            Some(BodyKind::Buffered(bytes)) => Some(BodyKind::Buffered(bytes.clone())),
+            Some(BodyKind::JS(body)) => Some(BodyKind::JS(body.clone())),
+            Some(BodyKind::Channel(_)) | None => None,
+        }
+    }
+
     #[js_method]
-    fn clone(&self) -> Self {
-        Self {
+    fn clone(&self) -> JSResult<Self> {
+        if self.has_streaming_body() {
+            return Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "Response.clone() does not support streaming bodies; tee the stream before cloning",
+            )
+            .with_name("TypeError")
+            .into());
+        }
+
+        Ok(Self {
             url: self.url.clone(),
             method: self.method.clone(),
             headers: self.headers.clone(),
             status: self.status,
             status_text: self.status_text.clone(),
-            body: self.body.clone(),
+            body: self.clone_body_kind(),
             consumed: Rc::new(Cell::new(self.consumed.get())),
             redirected: self.redirected,
             type_: self.type_.clone(),
             abort_receiver: self.abort_receiver.clone(),
             body_stream: Rc::new(RefCell::new(None)),
-        }
+        })
     }
 
     #[js_method(getter)]
@@ -183,7 +225,11 @@ impl Response {
         match &self.body {
             Some(BodyKind::Channel(inner)) => {
                 // Do not consume the receiver on property access; build a stream from the shared slot
-                if let Ok(jsrs) = JSReadableStream::from_shared_receiver(&ctx, inner.clone()) {
+                if inner.is_consumed().unwrap_or(true) {
+                    return None;
+                }
+                if let Ok(jsrs) = JSReadableStream::from_shared_receiver(&ctx, inner.shared_slot())
+                {
                     let obj = jsrs.into_object();
                     self.body_stream.replace(Some(obj.clone()));
                     Some(obj)
@@ -232,14 +278,16 @@ impl Response {
     }
 
     async fn body_to_bytes_parts(
-        body: Option<BodyKind>,
+        body: Option<&BodyKind>,
         headers: http::HeaderMap,
         body_stream: Option<JSObject>,
         abort_receiver: Option<AbortReceiver>,
     ) -> JSResult<Bytes> {
         match body {
             Some(BodyKind::JS(body)) => body.bytes().await,
-            Some(BodyKind::Buffered(bytes)) => crate::body::decompress_bytes(bytes, &headers),
+            Some(BodyKind::Buffered(bytes)) => {
+                crate::body::decompress_bytes(bytes.clone(), &headers)
+            }
             Some(BodyKind::Channel(inner)) => {
                 let mut collected = Vec::new();
                 // Pre-reserve capacity using Content-Length when available
@@ -263,9 +311,9 @@ impl Response {
 
                 // Fallback to internal channel if stream is not materialized
                 if rx_opt.is_none() {
-                    rx_opt = inner.lock().map(|mut g| g.take()).map_err(|_| {
-                        HostError::new(rong::error::E_INTERNAL, "Failed to lock channel body")
-                    })?;
+                    rx_opt = inner
+                        .try_take_receiver()
+                        .map_err(|error| HostError::new(rong::error::E_INTERNAL, error))?;
                 }
 
                 if let Some(mut rx) = rx_opt {
@@ -314,7 +362,7 @@ impl Response {
             body_stream.as_ref().cloned()
         };
         Self::body_to_bytes_parts(
-            self.body.clone(),
+            self.body.as_ref(),
             self.headers.as_header_map().clone(),
             body_stream,
             self.abort_receiver.clone(),
@@ -475,36 +523,50 @@ impl Response {
 }
 
 impl Response {
-    /// Construct a JS `Response` object directly from Rust parts, bypassing the JS constructor.
-    ///
-    /// This is intended for host runtimes that already have buffered response parts and want to
-    /// expose a standard `Response` object to JavaScript without rebuilding it through JS glue.
-    pub fn from_parts(
-        ctx: &JSContext,
-        url: &str,
-        method: &str,
-        status: u16,
-        headers: http::HeaderMap<http::header::HeaderValue>,
-        body: Option<&[u8]>,
-    ) -> JSResult<JSObject> {
-        let uri = Uri::try_from(url).map_err(|_| {
-            HostError::new(rong::error::E_INVALID_ARG, format!("Invalid URL: {url}"))
+    fn from_response_parts(ctx: &JSContext, parts: ResponseParts) -> JSResult<JSObject> {
+        let ResponseParts {
+            url,
+            method,
+            status: status_code,
+            headers,
+            body,
+        } = parts;
+        let uri = Uri::try_from(url.as_str()).map_err(|_| {
+            HostError::new(rong::error::E_INVALID_ARG, format!("Invalid URL: {}", url))
                 .with_name("TypeError")
         })?;
         let http_method = Method::from_bytes(method.as_bytes()).map_err(|_| {
             HostError::new(
                 rong::error::E_INVALID_ARG,
-                format!("Invalid method: {method}"),
+                format!("Invalid method: {}", method),
             )
             .with_name("TypeError")
         })?;
-        let status = http::StatusCode::from_u16(status).map_err(|_| {
+        let status = http::StatusCode::from_u16(status_code).map_err(|_| {
             HostError::new(
                 rong::error::E_INVALID_ARG,
-                format!("Invalid status code: {status}"),
+                format!("Invalid status code: {}", status_code),
             )
             .with_name("RangeError")
         })?;
+
+        let body = match body {
+            HostBody::Empty => None,
+            HostBody::Bytes(bytes) => Some(BodyKind::Buffered(bytes)),
+            HostBody::Stream(slot) => {
+                if slot.is_consumed().map_err(|error| {
+                    HostError::new(rong::error::E_INVALID_STATE, error).with_name("TypeError")
+                })? {
+                    return Err(HostError::new(
+                        rong::error::E_INVALID_STATE,
+                        "streaming response body already consumed",
+                    )
+                    .with_name("TypeError")
+                    .into());
+                }
+                Some(BodyKind::Channel(slot))
+            }
+        };
 
         let response = Response {
             url: uri,
@@ -512,7 +574,7 @@ impl Response {
             headers: Headers::from_header_map(headers),
             status: status.as_u16(),
             status_text: status.canonical_reason().unwrap_or("").to_string(),
-            body: body.map(|bytes| BodyKind::Buffered(Bytes::copy_from_slice(bytes))),
+            body,
             consumed: Rc::new(Cell::new(false)),
             redirected: false,
             type_: "default".to_string(),
@@ -560,17 +622,12 @@ impl Response {
 }
 
 impl Response {
-    /// Extract status, headers, and body from a JS Response object directly via Rust,
-    /// bypassing JS property access and async `arrayBuffer()` calls.
-    ///
-    /// Returns `(status, headers, body)`. Headers are returned as a `HeaderMap`,
-    /// preserving type safety and avoiding String round-trips.
-    pub async fn extract(
-        obj: &JSObject,
-    ) -> JSResult<(u16, http::HeaderMap<http::header::HeaderValue>, Vec<u8>)> {
-        let (status, headers, body_kind, body_stream, abort_receiver) = {
+    async fn extract_response_parts(obj: &JSObject) -> JSResult<ResponseParts> {
+        let (url, method, status, headers, body_kind, body_stream, abort_receiver) = {
             let response = obj.borrow::<Response>()?;
             (
+                response.url.to_string(),
+                response.method.to_string(),
                 response.status,
                 response.headers.as_header_map().clone(),
                 response.body.clone(),
@@ -578,12 +635,63 @@ impl Response {
                 response.abort_receiver.clone(),
             )
         };
-        let body =
-            Self::body_to_bytes_parts(body_kind, headers.clone(), body_stream, abort_receiver)
-                .await?
-                .to_vec();
 
-        Ok((status, headers, body))
+        let body = match body_kind.as_ref() {
+            None => HostBody::Empty,
+            Some(BodyKind::Buffered(bytes)) => HostBody::Bytes(bytes.clone()),
+            Some(BodyKind::Channel(inner)) => {
+                HostBody::Stream(HostBodyStream::from_shared_slot(inner.shared_slot()))
+            }
+            Some(BodyKind::JS(body)) => {
+                if let Some(obj) = body.0.clone().into_object()
+                    && let Ok(stream) = obj.borrow::<ReadableStream>()
+                {
+                    let receiver = readable_stream_take_receiver(&stream).ok_or_else(|| {
+                        HostError::new(
+                            rong::error::E_INVALID_STATE,
+                            "ReadableStream response body already used",
+                        )
+                    })?;
+                    HostBody::Stream(HostBodyStream::from_receiver(receiver))
+                } else {
+                    let bytes = Self::body_to_bytes_parts(
+                        Some(&BodyKind::JS(body.clone())),
+                        headers.clone(),
+                        body_stream,
+                        abort_receiver,
+                    )
+                    .await?;
+                    HostBody::Bytes(bytes)
+                }
+            }
+        };
+
+        Ok(ResponseParts {
+            url,
+            method,
+            status,
+            headers,
+            body,
+        })
+    }
+}
+
+impl ResponseParts {
+    /// Construct a JS `Response` object directly from Rust-owned response parts.
+    ///
+    /// Stream bodies are single-consumer. If the supplied `HostBody` stream has
+    /// already been taken, this returns an error instead of silently replacing
+    /// the body with an empty stream.
+    pub fn into_js_object(self, ctx: &JSContext) -> JSResult<JSObject> {
+        Response::from_response_parts(ctx, self)
+    }
+
+    /// Extract Rust-owned response parts from a JS `Response` object.
+    ///
+    /// Buffered bodies are returned as `HostBody::Bytes`. Stream bodies are
+    /// returned as `HostBody::Stream` and remain single-consumer.
+    pub async fn from_js_object(obj: &JSObject) -> JSResult<Self> {
+        Response::extract_response_parts(obj).await
     }
 }
 

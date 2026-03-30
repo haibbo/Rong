@@ -5,7 +5,7 @@ use http_body_util::{BodyExt, Full, StreamBody, combinators::BoxBody};
 use hyper::body::Bytes;
 use rong::{function::Optional, *};
 use std::io::Error;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::sync::{Notify, oneshot};
 use tokio_stream::{StreamExt as _, wrappers::ReceiverStream};
 
@@ -342,7 +342,7 @@ pub async fn fetch(input: JSValue, init: Optional<RequestInit>) -> JSResult<Resp
         let body_kind = match net_resp.body {
             client::HttpBody::Small(bytes) => crate::body::BodyKind::Buffered(bytes),
             client::HttpBody::Stream(rx) => {
-                crate::body::BodyKind::Channel(Arc::new(Mutex::new(Some(rx))))
+                crate::body::BodyKind::Channel(crate::body::HostBodyStream::from_receiver(rx))
             }
             client::HttpBody::Empty => crate::body::BodyKind::Buffered(Bytes::new()),
         };

@@ -4,12 +4,7 @@ use http_body_util::combinators::BoxBody;
 use std::io::Error;
 use tokio::sync::oneshot;
 
-pub use rong_rt::http::{
-    BytesResponse, HttpBody, HttpError, HttpErrorKind, HttpResponse, JsonResponse, RequestOptions,
-    clear_proxy, collect_body, default_timeout, post_json, post_json_bytes, proxy,
-    reset_default_timeout, send, send_bytes, send_json, send_json_bytes, send_json_request,
-    send_stream, set_default_timeout, set_proxy,
-};
+pub(crate) use rong_rt::http::{HttpBody, HttpError, HttpResponse, RequestOptions};
 
 pub(crate) async fn send_fetch_request(
     request: HttpRequest<BoxBody<Bytes, Error>>,

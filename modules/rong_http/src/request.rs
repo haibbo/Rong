@@ -1,13 +1,21 @@
 use http::{Method, Uri};
 use rong::{function::Optional, *};
 
-use crate::body::HttpBody;
+use crate::body::{HostBody, HttpBody};
 use crate::formdata::FormData;
 use crate::header::Headers;
 use rong_abort::AbortSignal;
-use rong_stream::{ReadableStream, readable_stream_is_locked};
+use rong_stream::{JSReadableStream, ReadableStream, readable_stream_is_locked};
 use rong_url::URL;
 use std::cell::Cell;
+
+#[derive(Debug)]
+pub struct RequestParts {
+    pub url: String,
+    pub method: String,
+    pub headers: http::HeaderMap<http::header::HeaderValue>,
+    pub body: HostBody,
+}
 
 #[js_export]
 pub struct Request {
@@ -23,6 +31,34 @@ pub struct Request {
 impl Request {
     pub(crate) fn abort_signal(&self) -> Option<&AbortSignal> {
         self.signal.as_ref()
+    }
+
+    fn has_streaming_body(&self) -> bool {
+        self.body
+            .as_ref()
+            .and_then(|body| body.0.clone().into_object())
+            .is_some_and(|obj| obj.borrow::<ReadableStream>().is_ok())
+    }
+
+    fn try_clone(&self) -> JSResult<Self> {
+        if self.has_streaming_body() {
+            return Err(HostError::new(
+                rong::error::E_INVALID_STATE,
+                "Request.clone() does not support streaming bodies; tee the stream before cloning",
+            )
+            .with_name("TypeError")
+            .into());
+        }
+
+        Ok(Self {
+            method: self.method.clone(),
+            url: self.url.clone(),
+            headers: self.headers.clone(),
+            body: self.body.clone(),
+            redirect: self.redirect.clone(),
+            signal: self.signal.clone(),
+            consumed: Cell::new(self.consumed.get()),
+        })
     }
 
     /// Extract domain from the request URL
@@ -148,7 +184,7 @@ impl Request {
             }
         } else if let Some(obj) = input.into_object() {
             if let Ok(req) = obj.borrow::<Request>() {
-                req.clone()
+                req.try_clone()?
             } else if let Ok(url) = obj.borrow::<URL>() {
                 // Convert URL to string first, then parse as Uri
                 let url_str = url.to_string();
@@ -242,16 +278,8 @@ impl Request {
     }
 
     #[js_method]
-    fn clone(&self) -> Self {
-        Self {
-            method: self.method.clone(),
-            url: self.url.clone(),
-            headers: self.headers.clone(),
-            body: self.body.clone(),
-            redirect: self.redirect.clone(),
-            signal: self.signal.clone(),
-            consumed: Cell::new(self.consumed.get()),
-        }
+    fn clone(&self) -> JSResult<Self> {
+        self.try_clone()
     }
 
     #[js_method]
@@ -357,35 +385,48 @@ impl Default for Request {
 }
 
 impl Request {
-    /// Construct a JS `Request` object directly from Rust parts, bypassing JS constructor.
-    ///
-    /// Accepts a `HeaderMap` directly — no string round-trips.
-    pub fn from_parts(
-        ctx: &JSContext,
-        url: &str,
-        method: &str,
-        headers: http::HeaderMap<http::header::HeaderValue>,
-        body: Option<&[u8]>,
-    ) -> JSResult<JSObject> {
-        let uri = Uri::try_from(url).map_err(|_| {
-            HostError::new(rong::error::E_INVALID_ARG, format!("Invalid URL: {url}"))
+    fn from_request_parts(ctx: &JSContext, parts: RequestParts) -> JSResult<JSObject> {
+        let RequestParts {
+            url,
+            method,
+            headers,
+            body,
+        } = parts;
+        let uri = Uri::try_from(url.as_str()).map_err(|_| {
+            HostError::new(rong::error::E_INVALID_ARG, format!("Invalid URL: {}", url))
                 .with_name("TypeError")
         })?;
         let http_method = Method::from_bytes(method.as_bytes()).map_err(|_| {
             HostError::new(
                 rong::error::E_INVALID_ARG,
-                format!("Invalid method: {method}"),
+                format!("Invalid method: {}", method),
             )
             .with_name("TypeError")
         })?;
 
-        let http_body = body.map(|b| {
-            HttpBody(
-                JSArrayBuffer::from_bytes(ctx, b)
-                    .unwrap()
-                    .into_js_value(ctx),
-            )
-        });
+        let http_body = match body {
+            HostBody::Empty => None,
+            HostBody::Bytes(bytes) => Some(HttpBody(
+                JSArrayBuffer::from_bytes(ctx, bytes.as_ref())?.into_js_value(ctx),
+            )),
+            HostBody::Stream(slot) => {
+                if slot.is_consumed().map_err(|error| {
+                    HostError::new(rong::error::E_INVALID_STATE, error).with_name("TypeError")
+                })? {
+                    return Err(HostError::new(
+                        rong::error::E_INVALID_STATE,
+                        "streaming request body already consumed",
+                    )
+                    .with_name("TypeError")
+                    .into());
+                }
+                Some(HttpBody(
+                    JSReadableStream::from_shared_receiver(ctx, slot.shared_slot())?
+                        .into_object()
+                        .into_js_value(),
+                ))
+            }
+        };
 
         let request = Request {
             url: uri,
@@ -399,6 +440,17 @@ impl Request {
 
         let class = Class::lookup::<Request>(ctx)?;
         Ok(class.instance(request))
+    }
+}
+
+impl RequestParts {
+    /// Construct a JS `Request` object directly from Rust-owned request parts.
+    ///
+    /// Stream bodies are single-consumer. If the supplied `HostBody` already
+    /// had its stream taken, this returns an error instead of silently
+    /// replacing the body with an empty stream.
+    pub fn into_js_object(self, ctx: &JSContext) -> JSResult<JSObject> {
+        Request::from_request_parts(ctx, self)
     }
 }
 
