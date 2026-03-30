@@ -28,6 +28,6 @@ arkjs = ["rong/arkjs"]
 
 [dev-dependencies]
 rong_test = { workspace = true }
-rong_assert = { path = "../rong_assert", version = "0.2.0" }
-rong_console = { path = "../rong_console", version = "0.2.0" }
-rong_timer = { path = "../rong_timer", version = "0.2.0" }
+rong_assert = { workspace = true }
+rong_console = { workspace = true }
+rong_timer = { workspace = true }

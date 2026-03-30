@@ -64,11 +64,11 @@ tls-aws-lc = ["rong_rt/tls-aws-lc"]
 tls-ring = ["rong_rt/tls-ring"]
 
 [dev-dependencies]
-rong_test = { path = "../../utils/rong_test", features = ["http"] }
-rong_encoding = { path = "../rong_encoding" }
-rong_console = { path = "../rong_console" }
-rong_assert = { path = "../rong_assert" }
-rong_timer = { path = "../rong_timer" }
+rong_test = { workspace = true, features = ["http"] }
+rong_encoding = { workspace = true }
+rong_console = { workspace = true }
+rong_assert = { workspace = true }
+rong_timer = { workspace = true }
 tokio-stream = { workspace = true }
 serde_json = { workspace = true }
-rong_fs = { path = "../rong_fs" }
+rong_fs = { workspace = true }

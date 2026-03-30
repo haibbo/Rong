@@ -30,7 +30,7 @@ jscore = ["rong/jscore", "rong_abort/jscore", "rong_exception/jscore"]
 arkjs = ["rong/arkjs", "rong_abort/arkjs", "rong_exception/arkjs"]
 
 [dev-dependencies]
-rong_test = { path = "../../utils/rong_test" }
-rong_encoding = { path = "../rong_encoding" }
-rong_console = { path = "../rong_console" }
-rong_assert = { path = "../rong_assert" }
+rong_test = { workspace = true }
+rong_encoding = { workspace = true }
+rong_console = { workspace = true }
+rong_assert = { workspace = true }

@@ -24,6 +24,6 @@ jscore = ["rong/jscore"]
 arkjs = ["rong/arkjs"]
 
 [dev-dependencies]
-rong_test = { path = "../../utils/rong_test" }
-rong_assert = { path = "../rong_assert" }
-rong_console = { path = "../rong_console" }
+rong_test = { workspace = true }
+rong_assert = { workspace = true }
+rong_console = { workspace = true }
