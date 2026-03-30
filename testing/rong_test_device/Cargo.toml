@@ -1,0 +1,19 @@
+[package]
+name = "rong_test_device"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "On-device test suite generated from tests/*.rs via build.rs source transformation"
+
+[dependencies]
+rong_test_harness = { workspace = true }
+rong = { workspace = true, default-features = false, features = ["arkjs"] }
+rong_macro = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "macros", "sync"] }
+futures = { workspace = true }
+bytes = { workspace = true }
+
+[build-dependencies]
+regex = "1"
