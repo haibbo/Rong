@@ -53,8 +53,6 @@ CRATES=(
   # Layer 7 - Advanced modules
   "rong_fs"
   "rong_storage"
-  "rong_process"
-  "rong_child_process"
   "rong_http"
   "rong_redis"
   "rong_sqlite"

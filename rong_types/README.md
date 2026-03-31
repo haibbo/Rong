@@ -36,7 +36,7 @@ Add to your `tsconfig.json`:
 
 Notes:
 
-- This enables global typings; you should not `import` runtime modules like `'child_process'` or `'http'` (those are Rong globals, not Node modules).
+- This enables global typings; you should not `import` runtime modules like `'http'` (those are Rong globals, not Node modules).
 - Ensure your `tsconfig.json` `lib` includes `"DOM"` if you want DOM globals (e.g. `URL`, `ReadableStream`) to be typed.
 - `Worker` uses the DOM global type name. The package exports `RongWorker`/`RongWorkerMessageEvent`/`RongWorkerErrorEvent` for the precise Rong subset when you want stricter annotations.
 - The package only supports the root export `@lingxia/rong`; `src/*` and `dist/*` are not public import paths.

@@ -6,7 +6,6 @@
  */
 
 import type { AssertFunction } from './assert';
-import type { ChildProcessModule } from './child_process';
 import type {
   DirEntry,
   FileOpenOptions,
@@ -16,7 +15,6 @@ import type {
   SeekMode,
   UTimeOptions,
 } from './fs';
-import type { Process } from './process';
 import type { RedisClientConstructor } from './redis';
 import type { SSEConstructor } from './sse';
 import type { StorageConstructor, StorageModule } from './storage';
@@ -58,16 +56,6 @@ declare global {
     readonly Storage: StorageConstructor;
     readonly storage: StorageModule;
   };
-
-  /**
-   * Process object - Access to process information and environment
-   */
-  const process: Process;
-
-  /**
-   * Child Process module - Node.js compatible child process spawning (globalThis.child_process)
-   */
-  const child_process: ChildProcessModule;
 
   /**
    * Base64 decode - Decode base64 string to binary string
