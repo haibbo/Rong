@@ -4,6 +4,96 @@ use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use std::io::{self, IsTerminal, Read};
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[derive(Clone, Default)]
+struct ReplOutputState {
+    needs_newline: Arc<AtomicBool>,
+}
+
+impl ReplOutputState {
+    fn record_write(&self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+        let needs_newline = !matches!(bytes.last(), Some(b'\n' | b'\r'));
+        self.needs_newline.store(needs_newline, Ordering::SeqCst);
+    }
+
+    fn take_needs_newline(&self) -> bool {
+        self.needs_newline.swap(false, Ordering::SeqCst)
+    }
+}
+
+fn js_value_to_output_bytes(value: &JSValue, label: &str) -> JSResult<Vec<u8>> {
+    if let Some(obj) = value.clone().into_object() {
+        if let Some(typed_array) = AnyJSTypedArray::from_object(obj.clone()) {
+            let bytes = typed_array.byte_view().ok_or_else(|| {
+                HostError::new(
+                    rong::error::E_TYPE,
+                    format!("{label} contains an invalid TypedArray"),
+                )
+                .with_name("TypeError")
+            })?;
+            return Ok(bytes.to_vec());
+        }
+        if let Some(array_buffer) = JSArrayBuffer::from_object(obj) {
+            return Ok(array_buffer.to_vec());
+        }
+    }
+
+    value
+        .clone()
+        .to_rust::<String>()
+        .map(|text| text.into_bytes())
+        .map_err(|_| {
+            HostError::new(
+                rong::error::E_TYPE,
+                format!("{label} must be a string, ArrayBuffer, or TypedArray"),
+            )
+            .with_name("TypeError")
+            .into()
+        })
+}
+
+fn install_repl_stdio_tracking(ctx: &JSContext) -> JSResult<()> {
+    wrap_output_handle(ctx, "stdout")?;
+    wrap_output_handle(ctx, "stderr")?;
+    Ok(())
+}
+
+fn wrap_output_handle(ctx: &JSContext, name: &'static str) -> JSResult<()> {
+    let handle = ctx.host_namespace().get::<_, JSObject>(name)?;
+    let original_write = handle.get::<_, JSFunc>("write")?;
+    let tracked_handle = handle.clone();
+    let tracked_state = ctx
+        .get_state::<ReplOutputState>()
+        .cloned()
+        .unwrap_or_else(|| {
+            let state = ReplOutputState::default();
+            ctx.set_state(state.clone());
+            state
+        });
+
+    handle.set(
+        "write",
+        JSFunc::new(ctx, move |value: JSValue| {
+            let bytes = js_value_to_output_bytes(&value, name)?;
+            original_write.call::<_, ()>(Some(tracked_handle.clone()), (value,))?;
+            tracked_state.record_write(&bytes);
+            Ok(())
+        })?
+        .name("write")?,
+    )?;
+    Ok(())
+}
+
+fn take_repl_output_needs_newline(ctx: &JSContext) -> bool {
+    ctx.get_state::<ReplOutputState>()
+        .map(ReplOutputState::take_needs_newline)
+        .unwrap_or(false)
+}
 
 fn print_help() {
     println!(
@@ -222,6 +312,7 @@ pub async fn run(ctx: &JSContext) -> JSResult<()> {
     // Set up completion state
     let completion_state = completer::new_completion_state();
     completer::update_completions(ctx, &completion_state);
+    install_repl_stdio_tracking(ctx)?;
 
     let helper = ReplHelper::new(ctx.clone(), completion_state.clone());
     let mut rl = Editor::new().map_err(|e| {
@@ -245,6 +336,9 @@ pub async fn run(ctx: &JSContext) -> JSResult<()> {
     let mut buf = String::new();
 
     loop {
+        if take_repl_output_needs_newline(ctx) {
+            println!();
+        }
         let prompt = if buf.is_empty() { "rong> " } else { "...> " };
 
         let readline = rl.readline(prompt);
