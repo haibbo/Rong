@@ -1,17 +1,12 @@
 //! Timer implementation
 //!
-//! This module provides both sync and async timer functionality:
-//! - Sync timers are mounted on the global object:
-//!   - setTimeout/clearTimeout (sync)
-//!   - setInterval/clearInterval (sync)
-//! - Async timers are mounted under global.timer:
-//!   - setTimeout/clearTimeout (async)
-//!   - setInterval/clearInterval (async)
-//!   - setImmediate (async)
-//!
-//! # Features
-//! - Sync timers for traditional callback-based usage
-//! - Async timers that return Promises for modern async/await patterns
+//! This module provides timer functionality in two shapes:
+//! - Callback timers mounted on the global object:
+//!   - setTimeout/clearTimeout
+//!   - setInterval/clearInterval
+//! - Bun-style sleep helpers mounted on `globalThis.Rong`:
+//!   - Rong.sleep
+//!   - Rong.sleepSync
 //!
 //! # Limitations
 //! - Unlike Web APIs, this implementation does not support passing additional arguments
@@ -33,7 +28,7 @@ use tokio::sync::Notify;
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 
-mod promise;
+mod sleep;
 
 fn lock_poison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|e| e.into_inner())
@@ -348,7 +343,7 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     global.set("setInterval", set_interval)?;
     global.set("clearInterval", clear_interval)?;
 
-    promise::init(ctx)?;
+    sleep::init(ctx)?;
     Ok(())
 }
 
@@ -359,6 +354,21 @@ mod tests {
     use std::rc::Rc;
     use std::sync::atomic::{AtomicI32, Ordering};
     use tokio::time::sleep;
+
+    fn run_unit_suite(unit: &str) {
+        let unit = unit.to_string();
+        async_run!(|ctx: JSContext| async move {
+            init(&ctx).unwrap();
+
+            rong_console::init(&ctx)?;
+            rong_assert::init(&ctx)?;
+
+            let passed = UnitJSRunner::load_script(&ctx, &unit).await?.run().await?;
+            assert!(passed);
+
+            Ok(())
+        })
+    }
 
     #[test]
     fn test_set_interval_without_cancel() {
@@ -394,19 +404,8 @@ mod tests {
 
     #[test]
     fn test_timer() {
-        async_run!(|ctx: JSContext| async move {
-            init(&ctx).unwrap();
-
-            rong_console::init(&ctx)?;
-            rong_assert::init(&ctx)?;
-
-            let passed = UnitJSRunner::load_script(&ctx, "timer.js")
-                .await?
-                .run()
-                .await?;
-            assert!(passed);
-
-            Ok(())
-        })
+        for unit in ["timer.js", "sleep.js"] {
+            run_unit_suite(unit);
+        }
     }
 }

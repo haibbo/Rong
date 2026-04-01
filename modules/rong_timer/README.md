@@ -1,6 +1,6 @@
 # rong_timer
 
-Timer APIs including standard callbacks and promise-based alternatives.
+Timer APIs including standard callback timers plus Bun-aligned sleep helpers on `Rong`.
 
 ## JS APIs
 
@@ -8,6 +8,5 @@ Timer APIs including standard callbacks and promise-based alternatives.
 - `clearTimeout(id)` — cancel a timeout
 - `setInterval(callback, delay?)` — execute a callback repeatedly at an interval; returns a timer ID
 - `clearInterval(id)` — cancel an interval
-- `timers.setTimeout(delay?)` — promise-based timeout, resolves with a timestamp
-- `timers.setImmediate()` — promise-based immediate, resolves with a timestamp
-- `timers.setInterval(delay?)` — async iterator that yields timestamps on each interval tick
+- `Rong.sleep(delay?)` — Bun-style async sleep; accepts milliseconds or a `Date`
+- `Rong.sleepSync(delay?)` — Bun-style synchronous sleep; blocks the current thread
