@@ -505,7 +505,8 @@ fn decorate_writable(stream_obj: &JSObject) -> JSResult<()> {
         JSValue::from_rust(&ctx, true),
     )?;
 
-    let writer_slot: Rc<RefCell<Option<WritableStreamDefaultWriter>>> = Rc::new(RefCell::new(None));
+    let writer_slot: Rc<RefCell<Option<Rc<WritableStreamDefaultWriter>>>> =
+        Rc::new(RefCell::new(None));
 
     let write_stream = stream_obj.clone();
     let write_writer_slot = writer_slot.clone();
@@ -521,13 +522,14 @@ fn decorate_writable(stream_obj: &JSObject) -> JSResult<()> {
                         let stream = write_stream.borrow::<WritableStream>()?;
                         stream.get_writer()?
                     };
-                    *write_writer_slot.borrow_mut() = Some(writer);
+                    *write_writer_slot.borrow_mut() = Some(Rc::new(writer));
                 }
                 let payload = js_value_to_bytes(&value, "stdin")?.ok_or_else(|| {
                     type_error("stdin must be a string, ArrayBuffer, or TypedArray")
                 })?;
                 let typed = bytes_to_uint8_array(&write_stream.context(), payload)?;
-                if let Some(writer) = write_writer_slot.borrow().as_ref() {
+                let writer = write_writer_slot.borrow().as_ref().cloned();
+                if let Some(writer) = writer {
                     writer
                         .write(typed.into_any().into_js_value(&write_stream.context()))
                         .await?;
@@ -561,9 +563,10 @@ fn decorate_writable(stream_obj: &JSObject) -> JSResult<()> {
                         let stream = end_stream.borrow::<WritableStream>()?;
                         stream.get_writer()?
                     };
-                    *end_writer_slot.borrow_mut() = Some(writer);
+                    *end_writer_slot.borrow_mut() = Some(Rc::new(writer));
                 }
-                if let Some(writer) = end_writer_slot.borrow().as_ref() {
+                let writer = end_writer_slot.borrow().as_ref().cloned();
+                if let Some(writer) = writer {
                     writer.close().await?;
                 }
                 Ok(())
@@ -809,6 +812,32 @@ fn spawn_sync(
     Ok(result)
 }
 
+#[cfg(target_os = "windows")]
+fn escape_cmd_literal(text: &str) -> String {
+    if text.is_empty() {
+        return "\"\"".to_string();
+    }
+
+    let needs_wrapping =
+        text.contains(char::is_whitespace) || text.contains(|c: char| "^&|<>()%".contains(c));
+
+    if !needs_wrapping {
+        return text.to_string();
+    }
+
+    let escaped = text.replace('%', "%%").replace('"', "\"\"");
+    format!("\"{escaped}\"")
+}
+
+#[cfg(not(target_os = "windows"))]
+fn escape_cmd_literal(text: &str) -> String {
+    if text.is_empty() {
+        return "''".to_string();
+    }
+
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+
 fn shell_escape_value(value: JSValue) -> JSResult<String> {
     if let Some(obj) = value.clone().into_object() {
         if let Some(array) = JSArray::from_object(obj.clone()) {
@@ -825,10 +854,7 @@ fn shell_escape_value(value: JSValue) -> JSResult<String> {
     }
 
     let text = value.to_string();
-    if text.is_empty() {
-        return Ok("''".to_string());
-    }
-    Ok(format!("'{}'", text.replace('\'', "'\\''")))
+    Ok(escape_cmd_literal(&text))
 }
 
 fn compose_shell_command(strings: JSArray, values: Rest<JSValue>) -> JSResult<String> {
@@ -859,7 +885,7 @@ fn shell_default_cwd(ctx: JSContext, path: Optional<String>) -> JSResult<JSValue
     if let Some(path) = path.0 {
         state.cwd = Some(path);
         ctx.set_service(state);
-        return Ok(ctx.host_namespace().get::<_, JSValue>("$")?);
+        return ctx.host_namespace().get::<_, JSValue>("$");
     }
     Ok(match state.cwd {
         Some(path) => JSValue::from_rust(&ctx, path),
@@ -872,7 +898,7 @@ fn shell_default_env(ctx: JSContext, env: Optional<JSObject>) -> JSResult<JSValu
     if let Some(env_obj) = env.0 {
         state.env = Some(normalize_env_map(&env_obj)?);
         ctx.set_service(state);
-        return Ok(ctx.host_namespace().get::<_, JSValue>("$")?);
+        return ctx.host_namespace().get::<_, JSValue>("$");
     }
 
     if let Some(env_map) = state.env {
