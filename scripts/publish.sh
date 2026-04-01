@@ -60,8 +60,9 @@ CRATES=(
   "rong_s3"
   # Layer 8 - Meta package
   "rong_modules"
+  "rong_cli"
 
-  # NOTE: rong_test, rong_cli, and examples are NOT published
+  # NOTE: rong_test and examples are NOT published
 )
 
 usage() {

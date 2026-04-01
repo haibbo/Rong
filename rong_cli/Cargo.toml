@@ -5,8 +5,10 @@ edition.workspace = true
 description = "Command-line interface for RongJS"
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+documentation = "https://docs.rs/rong_cli"
 readme.workspace = true
-publish = false
 
 [[bin]]
 name = "rong"

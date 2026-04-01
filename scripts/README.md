@@ -44,7 +44,7 @@ git config --local core.hooksPath .githooks
 ./scripts/publish.sh [--no-verify] [--allow-dirty] [--yes]
 ```
 
-- Publishes all workspace crates in dependency order
+- Publishes all publishable workspace crates in dependency order, including `rong_cli`
 - Requires `CARGO_REGISTRY_TOKEN`
 - Smart waiting: polls crates.io until each package is indexed
 - `--yes` skips the confirmation prompt (useful for CI)
