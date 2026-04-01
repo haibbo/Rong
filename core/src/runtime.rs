@@ -9,6 +9,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+const RONG_VERSION: &str = env!("CARGO_PKG_VERSION");
+const RONG_REVISION: Option<&str> = option_env!("RONG_GIT_REVISION");
+
 pub trait JSRuntimeImpl {
     /// The raw runtime handle type associated with this runtime.
     type RawRuntime;
@@ -91,6 +94,12 @@ impl<R: JSRuntimeImpl + 'static> JSRuntime<R> {
         ctx.global()
             .set("Rong", ctx.host_namespace())
             .expect("Failed to add Rong object");
+        ctx.host_namespace()
+            .set("version", RONG_VERSION)
+            .expect("Failed to add Rong.version");
+        ctx.host_namespace()
+            .set("revision", RONG_REVISION.unwrap_or("unknown"))
+            .expect("Failed to add Rong.revision");
 
         ctx
     }
