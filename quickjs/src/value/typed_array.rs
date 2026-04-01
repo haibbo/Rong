@@ -2,6 +2,11 @@ use crate::QJSValue;
 use crate::qjs;
 use rong_core::{JSTypedArrayKind, JSTypedArrayOps, JSValueImpl};
 
+#[inline]
+fn typed_array_tag(tag: qjs::JSTypedArrayEnum) -> i64 {
+    tag as i64
+}
+
 impl JSTypedArrayOps for QJSValue {
     fn from_array_buffer(
         ctx: &Self::Context,
@@ -51,41 +56,43 @@ impl JSTypedArrayOps for QJSValue {
 
     fn get_kind(&self) -> Option<JSTypedArrayKind> {
         unsafe {
-            // QuickJS returns -1 for non-typed arrays, so keep the raw signed value.
-            let array_type = qjs::JS_GetTypedArrayType(self.value);
+            // QuickJS returns -1 for non-typed arrays. Bindgen may expose
+            // `JSTypedArrayEnum` as either signed or unsigned depending on the target,
+            // so compare everything through i64 for a portable match.
+            let array_type = i64::from(qjs::JS_GetTypedArrayType(self.value));
 
             match array_type {
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C) => {
                     Some(JSTypedArrayKind::Uint8Clamped)
                 }
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT8 as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT8) => {
                     Some(JSTypedArrayKind::Int8)
                 }
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8 as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8) => {
                     Some(JSTypedArrayKind::Uint8)
                 }
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT16 as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT16) => {
                     Some(JSTypedArrayKind::Int16)
                 }
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT16 as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT16) => {
                     Some(JSTypedArrayKind::Uint16)
                 }
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT32 as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT32) => {
                     Some(JSTypedArrayKind::Int32)
                 }
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT32 as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT32) => {
                     Some(JSTypedArrayKind::Uint32)
                 }
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_INT64 as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_INT64) => {
                     Some(JSTypedArrayKind::BigInt64)
                 }
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64 as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64) => {
                     Some(JSTypedArrayKind::BigUint64)
                 }
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32 as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32) => {
                     Some(JSTypedArrayKind::Float32)
                 }
-                x if x == qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64 as i32 => {
+                x if x == typed_array_tag(qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64) => {
                     Some(JSTypedArrayKind::Float64)
                 }
                 _ => None,
