@@ -29,13 +29,13 @@ device tests.
 2. Or run the full device flow:
 
 ```bash
-./testing/harmony/dev.sh
+./testing/harmony/dev.sh test
 ```
 
 3. Run a single case or subset from the PC by setting a filter before launch:
 
 ```bash
-TEST_FILTER=rong.test_call_simple ./testing/harmony/dev.sh
+TEST_FILTER=rong.test_call_simple ./testing/harmony/dev.sh test
 ```
 
 4. For debugging, watch runner logs:

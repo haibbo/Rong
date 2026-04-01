@@ -111,7 +111,7 @@ print_arkjs_instructions() {
     echo "ArkJS tests run on a HarmonyOS device via the smoke app."
     echo ""
     echo "Run:"
-    echo "  ./testing/harmony/dev.sh"
+    echo "  ./testing/harmony/dev.sh test"
     echo ""
     echo "The script prints the JSON-derived test summary on the PC."
     echo "For debug logs only:"

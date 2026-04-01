@@ -27,7 +27,7 @@ DO_START=true
 usage() {
   cat <<'EOF'
 Usage:
-  ./testing/harmony/dev.sh [options]
+  ./testing/harmony/dev.sh [test] [options]
 
 Default behavior:
   1. Build the Rust .so
@@ -47,12 +47,17 @@ Environment:
   TEST_TIMEOUT_SECS  HTTP readiness and test timeout (default: 60)
 
 Options:
+  test           Build, install, start, and run device-side tests
   --rust-only    Only build and stage the .so
   --no-install   Build app but do not install/start it
   --no-start     Install app but do not start it
   -h, --help     Show this help
 EOF
 }
+
+if [ "${1:-}" = "test" ]; then
+  shift
+fi
 
 for arg in "$@"; do
   case "$arg" in
