@@ -1,5 +1,5 @@
 use crate::{JSCContext, JSCValue, jsc};
-use rong_core::{JSClass, JSClassExt, JSContextImpl, JSTypeOf, JSValueImpl};
+use rong_core::{JSClass, JSClassExt, JSContext, JSContextImpl, JSTypeOf, JSValueImpl, Source};
 use std::collections::HashMap;
 use std::ffi::{CString, c_char};
 use std::ptr;
@@ -14,6 +14,23 @@ use std::sync::{LazyLock, RwLock};
 /// The mapping is thread-safe through RwLock and initialized lazily
 static CLASS: LazyLock<RwLock<HashMap<usize, usize>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+
+#[derive(Clone)]
+struct PublicConstructorFactory(JSCValue);
+
+const PUBLIC_CONSTRUCTOR_FACTORY: &[u8] = br#"
+(function(nativeCtor, callWithoutNew) {
+    function HostClass(...args) {
+        if (new.target) {
+            return Reflect.construct(nativeCtor, args, new.target);
+        }
+        return callWithoutNew(...args);
+    }
+
+    HostClass.prototype = nativeCtor.prototype;
+    return HostClass;
+})
+"#;
 
 /// Retrieves the class reference associated with a given constructor
 //
@@ -60,6 +77,42 @@ where
     }
 
     value.into_raw_value() as jsc::JSObjectRef
+}
+
+unsafe extern "C" fn call_without_new<JC>(
+    ctx: jsc::JSContextRef,
+    _function: jsc::JSObjectRef,
+    _this_object: jsc::JSObjectRef,
+    argument_count: usize,
+    arguments: *const jsc::JSValueRef,
+    exception: *mut jsc::JSValueRef,
+) -> jsc::JSValueRef
+where
+    JC: JSClass<JSCValue>,
+{
+    let ctx = JSCContext::from_borrowed_raw(ctx as _);
+    let args: Vec<JSCValue> = if !arguments.is_null() {
+        (0..argument_count)
+            .map(|i| unsafe { JSCValue::from_borrowed_raw(ctx.to_raw(), *arguments.add(i)) })
+            .collect()
+    } else {
+        vec![]
+    };
+
+    let value =
+        <JC as JSClassExt<JSCValue>>::constructor(&ctx, JSCValue::create_undefined(&ctx), args);
+    if value.is_exception() {
+        if !exception.is_null() {
+            unsafe {
+                *exception = value.into_raw_value();
+            }
+        }
+        unsafe {
+            return jsc::JSValueMakeUndefined(ctx.to_raw());
+        }
+    }
+
+    value.into_raw_value()
 }
 
 unsafe extern "C" fn finalizer<JC>(object: jsc::JSObjectRef)
@@ -138,6 +191,104 @@ unsafe extern "C" fn has_instance(
     false
 }
 
+unsafe fn set_function_name(
+    ctx: *mut jsc::OpaqueJSContext,
+    function: jsc::JSObjectRef,
+    class_name_cstr: &CString,
+) {
+    unsafe {
+        let name_key = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
+        let class_name = jsc::JSStringCreateWithUTF8CString(class_name_cstr.as_ptr());
+        let name_value = jsc::JSValueMakeString(ctx, class_name);
+        jsc::JSObjectSetProperty(
+            ctx,
+            function,
+            name_key,
+            name_value,
+            jsc::kJSPropertyAttributeReadOnly | jsc::kJSPropertyAttributeDontEnum,
+            ptr::null_mut(),
+        );
+        jsc::JSStringRelease(name_key);
+        jsc::JSStringRelease(class_name);
+    }
+}
+
+unsafe fn set_prototype_constructor(
+    ctx: *mut jsc::OpaqueJSContext,
+    function: jsc::JSObjectRef,
+    constructor: jsc::JSObjectRef,
+) {
+    unsafe {
+        let prototype_key = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
+        let prototype = jsc::JSObjectGetProperty(ctx, function, prototype_key, ptr::null_mut());
+        let prototype = jsc::JSValueToObject(ctx, prototype, ptr::null_mut());
+        let constructor_key = jsc::JSStringCreateWithUTF8CString(c"constructor".as_ptr());
+        jsc::JSObjectSetProperty(
+            ctx,
+            prototype,
+            constructor_key,
+            constructor,
+            jsc::kJSPropertyAttributeDontEnum,
+            ptr::null_mut(),
+        );
+        jsc::JSStringRelease(constructor_key);
+        jsc::JSStringRelease(prototype_key);
+    }
+}
+
+fn build_public_constructor<JC>(
+    ctx: &JSCContext,
+    native_ctor: jsc::JSObjectRef,
+    class_name_cstr: &CString,
+) -> JSCValue
+where
+    JC: JSClass<JSCValue>,
+{
+    let call_without_new = unsafe {
+        jsc::JSObjectMakeFunctionWithCallback(
+            ctx.to_raw(),
+            ptr::null_mut(),
+            Some(call_without_new::<JC>),
+        )
+    };
+    let factory = get_public_constructor_factory(ctx);
+    if factory.is_exception() {
+        return JSCValue::from_owned_obj(ctx.to_raw(), native_ctor);
+    }
+
+    let public_ctor = ctx.call(
+        &factory,
+        JSCValue::create_undefined(ctx),
+        &[
+            JSCValue::from_borrowed_obj(ctx.to_raw(), native_ctor),
+            JSCValue::from_owned_obj(ctx.to_raw(), call_without_new),
+        ],
+    );
+    if public_ctor.is_exception() || !public_ctor.is_object() {
+        return JSCValue::from_owned_obj(ctx.to_raw(), native_ctor);
+    }
+
+    let public_ctor_obj = public_ctor.as_obj();
+    unsafe {
+        set_function_name(ctx.to_raw(), public_ctor_obj, class_name_cstr);
+        set_prototype_constructor(ctx.to_raw(), public_ctor_obj, public_ctor_obj);
+    }
+    JSCValue::from_owned_obj(ctx.to_raw(), public_ctor_obj)
+}
+
+fn get_public_constructor_factory(ctx: &JSCContext) -> JSCValue {
+    let host_ctx = JSContext::<JSCContext>::from_borrowed_raw_ptr(ctx.as_raw());
+    if let Some(factory) = host_ctx.get_state::<PublicConstructorFactory>() {
+        return factory.0.clone();
+    }
+
+    let factory = ctx.eval(Source::from_bytes(PUBLIC_CONSTRUCTOR_FACTORY));
+    if !factory.is_exception() {
+        host_ctx.set_state(PublicConstructorFactory(factory.clone()));
+    }
+    factory
+}
+
 /// Registers a JavaScript class with the given context and class name.
 ///
 /// This function creates a JavaScript class using the provided class name,
@@ -156,7 +307,7 @@ where
     JC: JSClass<JSCValue>,
 {
     let class_name_cstr = CString::new(class_name).unwrap();
-    let ctx = ctx.to_raw();
+    let ctx_raw = ctx.to_raw();
 
     unsafe {
         // It is not possible to use JS subclassing with objects created from
@@ -183,60 +334,18 @@ where
         };
 
         let js_export = jsc::JSClassCreate(&class_def);
-        let constructor =
-            jsc::JSObjectMakeConstructor(ctx, js_export, Some(generic_constructor::<JC>));
-
-        // set constructor'name to class name
-        let name_key = jsc::JSStringCreateWithUTF8CString(c"name".as_ptr());
-        let class_name = jsc::JSStringCreateWithUTF8CString(class_name_cstr.as_ptr());
-        let name_value = jsc::JSValueMakeString(ctx, class_name);
-        jsc::JSObjectSetProperty(
-            ctx,
-            constructor,
-            name_key,
-            name_value,
-            jsc::kJSPropertyAttributeReadOnly | jsc::kJSPropertyAttributeDontEnum,
-            ptr::null_mut(),
-        );
-        jsc::JSStringRelease(name_key);
-        jsc::JSStringRelease(class_name);
-
-        // set JC.constructor to Function
-        let function = get_constructor(ctx, c"Function".as_ptr());
-        let constructor_key = jsc::JSStringCreateWithUTF8CString(c"constructor".as_ptr());
-        jsc::JSObjectSetProperty(
-            ctx,
-            constructor,
-            constructor_key,
-            function,
-            jsc::kJSPropertyAttributeDontEnum,
-            ptr::null_mut(),
-        );
-
-        // set constructor's prototype.constructor to constructor
-        let prototype_key = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
-        let prototype = jsc::JSObjectGetProperty(ctx, constructor, prototype_key, ptr::null_mut());
-        let prototype = jsc::JSValueToObject(ctx, prototype, ptr::null_mut());
-        jsc::JSObjectSetProperty(
-            ctx,
-            prototype,
-            constructor_key,
-            constructor,
-            jsc::kJSPropertyAttributeDontEnum,
-            ptr::null_mut(),
-        );
-
-        jsc::JSStringRelease(prototype_key);
-        jsc::JSStringRelease(constructor_key);
+        let native_ctor =
+            jsc::JSObjectMakeConstructor(ctx_raw, js_export, Some(generic_constructor::<JC>));
+        let constructor = build_public_constructor::<JC>(ctx, native_ctor, &class_name_cstr);
 
         // constructor built by JSObjectMakeConstructor does not support JSObjectSetProperty, we
         // have to setup map ourelf
         CLASS
             .write()
             .unwrap()
-            .insert(constructor as usize, js_export as usize);
+            .insert(constructor.as_value() as usize, js_export as usize);
 
-        JSCValue::from_owned_obj(ctx, constructor)
+        constructor
     }
 }
 

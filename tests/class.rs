@@ -133,19 +133,83 @@ fn constructor() {
         assert!(!Class::instance_of::<Point>(&obj));
 
         assert_eq!(
-            ctx.eval::<String>(Source::from_bytes(b"Point.constructor.name"))?,
-            "Function"
+            ctx.eval::<String>(Source::from_bytes(b"typeof Point"))?,
+            "function"
         );
-
         assert!(ctx.eval::<bool>(Source::from_bytes(b"Point.prototype.constructor==Point"))?);
-
-        // JSC: it's object currently
-        // assert_eq!(
-        //     ctx.eval::<String>(Source::from_bytes(b"typeof Point"))?,
-        //     "function"
-        // );
+        assert!(ctx.eval::<bool>(Source::from_bytes(b"Point.constructor === Function"))?);
+        assert!(ctx.eval::<bool>(Source::from_bytes(b"Point instanceof Function"))?);
 
         assert!(ctx.eval::<bool>(Source::from_bytes(b"point instanceof Point"))?);
+        Ok(())
+    });
+}
+
+#[test]
+fn hidden_constructor_on_rong_namespace() {
+    run(|ctx| {
+        ctx.register_hidden_class::<Point>()?;
+        let ctor = Class::lookup::<Point>(ctx)?.clone();
+        ctx.host_namespace().set("HiddenPoint", ctor)?;
+
+        assert_eq!(
+            ctx.eval::<String>(Source::from_bytes(b"typeof HiddenPoint"))?,
+            "undefined"
+        );
+        assert!(ctx.eval::<bool>(Source::from_bytes(b"globalThis.HiddenPoint === undefined"))?);
+        assert_eq!(
+            ctx.eval::<String>(Source::from_bytes(b"typeof Rong.HiddenPoint"))?,
+            "function"
+        );
+        assert!(ctx.eval::<bool>(Source::from_bytes(
+            b"Rong.HiddenPoint.constructor === Function"
+        ))?);
+        assert!(ctx.eval::<bool>(Source::from_bytes(b"Rong.HiddenPoint instanceof Function"))?);
+        assert!(ctx.eval::<bool>(Source::from_bytes(
+            b"Rong.HiddenPoint.prototype.constructor === Rong.HiddenPoint"
+        ))?);
+
+        let point = ctx.eval::<JSObject>(Source::from_bytes(
+            b"let point = new Rong.HiddenPoint(4, 5); point",
+        ))?;
+        let point = borrow_point(&point)?;
+        assert_eq!(point.x, 4);
+        assert_eq!(point.y, 5);
+
+        assert!(ctx.eval::<bool>(Source::from_bytes(
+            b"(new Rong.HiddenPoint(1, 2)) instanceof Rong.HiddenPoint"
+        ))?);
+
+        let result = ctx.eval::<i32>(Source::from_bytes(
+            br#"
+            class ColorPoint extends Rong.HiddenPoint {
+                constructor(x, y, color) {
+                    super(x, y);
+                    this.color = color;
+                }
+                getColor() {
+                    return this.color;
+                }
+            }
+
+            let p = new ColorPoint(2, 3, 0x5fa5);
+            if (!(ColorPoint.prototype.__proto__ === Rong.HiddenPoint.prototype)) {
+                throw new Error("Prototype chain broken");
+            }
+            if (!(ColorPoint.__proto__ === Rong.HiddenPoint)) {
+                throw new Error("Constructor chain broken");
+            }
+
+            let added = p.add(new Rong.HiddenPoint(1, 2));
+            if (added.x !== 3 || added.y !== 5) {
+                throw new Error("Inherited method failed");
+            }
+
+            p.getColor()
+            "#,
+        ))?;
+        assert_eq!(result, 0x5fa5);
+
         Ok(())
     });
 }
