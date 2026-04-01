@@ -1,11 +1,11 @@
 # rong_redis
 
-Async Redis client. Exposed as global `RedisClient`.
+Async Redis client. Exposed as `Rong.RedisClient`.
 
 ## JS APIs
 
-- `RedisClient` — global Redis client class
-  - `new RedisClient(url)` — create a client with an explicit Redis URL
+- `Rong.RedisClient` — Redis client class
+  - `new Rong.RedisClient(url)` — create a client with an explicit Redis URL
   - `connect()` — explicitly connect (optional, commands auto-connect)
   - `close()` — close the connection
   - `connected` — whether a connection is currently held

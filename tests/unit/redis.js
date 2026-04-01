@@ -12,15 +12,21 @@ describe("RedisClient — connection", () => {
     assert.equal(globalThis.RedisSubscription, undefined);
   });
 
+  it("does not expose RedisClient on globalThis", () => {
+    assert.equal(typeof RedisClient, "undefined");
+    assert.equal(globalThis.RedisClient, undefined);
+    assert.equal(typeof Rong.RedisClient, "function");
+  });
+
   beforeEach(() => {
-    client = new RedisClient(REDIS_URL);
+    client = new Rong.RedisClient(REDIS_URL);
   });
   afterEach(() => client.close());
 
   it("requires an explicit URL", () => {
     let threw = false;
     try {
-      new RedisClient();
+      new Rong.RedisClient();
     } catch (e) {
       threw = true;
       assert.equal(e.name, "TypeError");
@@ -55,7 +61,7 @@ describe("RedisClient — connection", () => {
   });
 
   it("throws a TypeError for invalid URL", async () => {
-    const broken = new RedisClient("not a redis url");
+    const broken = new Rong.RedisClient("not a redis url");
     let threw = false;
     try {
       await broken.connect();
@@ -74,7 +80,7 @@ describe("RedisClient — strings", () => {
   let client;
 
   beforeEach(async () => {
-    client = new RedisClient(REDIS_URL);
+    client = new Rong.RedisClient(REDIS_URL);
     await client.del("test:key");
   });
   afterEach(() => client.close());
@@ -105,7 +111,7 @@ describe("RedisClient — TTL", () => {
   let client;
 
   beforeEach(async () => {
-    client = new RedisClient(REDIS_URL);
+    client = new Rong.RedisClient(REDIS_URL);
     await client.del("test:ttl");
   });
   afterEach(() => client.close());
@@ -131,7 +137,7 @@ describe("RedisClient — numeric", () => {
   let client;
 
   beforeEach(async () => {
-    client = new RedisClient(REDIS_URL);
+    client = new Rong.RedisClient(REDIS_URL);
     await client.del("test:counter");
   });
   afterEach(() => client.close());
@@ -151,7 +157,7 @@ describe("RedisClient — hashes", () => {
   let client;
 
   beforeEach(async () => {
-    client = new RedisClient(REDIS_URL);
+    client = new Rong.RedisClient(REDIS_URL);
     await client.del("test:hash");
   });
   afterEach(() => client.close());
@@ -207,7 +213,7 @@ describe("RedisClient — sets", () => {
   let client;
 
   beforeEach(async () => {
-    client = new RedisClient(REDIS_URL);
+    client = new Rong.RedisClient(REDIS_URL);
     await client.del("test:set");
   });
   afterEach(() => client.close());
@@ -252,7 +258,7 @@ describe("RedisClient — lists", () => {
   let client;
 
   beforeEach(async () => {
-    client = new RedisClient(REDIS_URL);
+    client = new Rong.RedisClient(REDIS_URL);
     await client.del("test:list");
   });
   afterEach(() => client.close());
@@ -292,7 +298,7 @@ describe("RedisClient — raw send", () => {
   let client;
 
   beforeEach(async () => {
-    client = new RedisClient(REDIS_URL);
+    client = new Rong.RedisClient(REDIS_URL);
     await client.del("test:key");
     await client.del("test:counter");
   });
@@ -336,8 +342,8 @@ describe("RedisClient — pub/sub", () => {
   let subscriptions;
 
   beforeEach(async () => {
-    pub_client = new RedisClient(REDIS_URL);
-    sub_client = new RedisClient(REDIS_URL);
+    pub_client = new Rong.RedisClient(REDIS_URL);
+    sub_client = new Rong.RedisClient(REDIS_URL);
     subscriptions = [];
   });
 

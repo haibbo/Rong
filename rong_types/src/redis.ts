@@ -3,7 +3,7 @@
  *
  * @example
  * ```typescript
- * const client = new RedisClient("redis://localhost:6379");
+ * const client = new Rong.RedisClient("redis://localhost:6379");
  * await client.set("key", "value");
  * const val = await client.get("key"); // "value"
  * client.close();
@@ -156,9 +156,9 @@ export interface RedisClientConstructor {
    *
    * @example
    * ```typescript
-   * const client = new RedisClient();
-   * const client = new RedisClient("redis://localhost:6379");
-   * const client = new RedisClient("redis://user:pass@host:6379/0");
+   * const client = new Rong.RedisClient();
+   * const client = new Rong.RedisClient("redis://localhost:6379");
+   * const client = new Rong.RedisClient("redis://user:pass@host:6379/0");
    * ```
    */
   new (url?: string): RedisClientInstance;

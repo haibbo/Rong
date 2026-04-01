@@ -19,7 +19,7 @@ const CHANNEL = args[0] || "bench:pubsub";
 const TOTAL = parseInt(args[1]) || 10000;
 const CONCURRENCY = parseInt(args[2]) || 50; // in-flight publishes
 
-const client = new RedisClient(REDIS_URL);
+const client = new Rong.RedisClient(REDIS_URL);
 
 async function main() {
   console.log(

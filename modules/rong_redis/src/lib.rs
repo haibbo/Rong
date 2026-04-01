@@ -2,7 +2,7 @@
 //!
 //! Redis client API inspired by Bun's RedisClient, adapted for RongJS.
 //!
-//! Provides `RedisClient` as a global class with promise-based methods
+//! Provides `Rong.RedisClient` with promise-based methods
 //! for strings, hashes, sets, lists, pub/sub, and raw commands.
 
 use rong::*;
@@ -10,14 +10,16 @@ use rong::*;
 mod redis;
 pub use redis::*;
 
-/// Initialize the Redis module — exposes `RedisClient` globally.
+/// Initialize the Redis module — exposes `Rong.RedisClient`.
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<RedisClient>()?;
+    ctx.register_hidden_class::<RedisClient>()?;
     ctx.register_hidden_class::<RedisSubscription>()?;
+    let ctor = Class::lookup::<RedisClient>(ctx)?.clone();
+    ctx.host_namespace().set("RedisClient", ctor)?;
 
     ctx.eval::<()>(Source::from_bytes(
         r#"(function() {
-            const proto = RedisClient.prototype;
+            const proto = Rong.RedisClient.prototype;
             const _subscribe = proto.subscribe;
             proto.subscribe = function subscribe(channel, options) {
                 return options === undefined
@@ -198,7 +200,7 @@ mod tests {
             };
 
             // Create a pre-configured client with namespace prefix from Rust,
-            // then inject it as a global `redis` — JS never calls `new RedisClient`.
+            // then inject it as a global `redis` — JS never calls `new Rong.RedisClient`.
             let client = RedisClient::new(url, Some("app1:".to_string()));
             let js_client = Class::lookup::<RedisClient>(&ctx)?.instance(client);
             ctx.global().set("redis", js_client)?;

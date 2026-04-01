@@ -1,6 +1,6 @@
 // Redis namespace prefix tests.
 // The Rust harness injects a pre-configured `redis` global with namespace prefix "app1:".
-// JS never calls `new RedisClient` — it uses the injected instance directly.
+// JS never calls `new Rong.RedisClient` here — it uses the injected instance directly.
 
 describe("Redis namespace prefix", () => {
   afterEach(async () => {
@@ -20,7 +20,7 @@ describe("Redis namespace prefix", () => {
     await redis.set("mykey", "namespaced");
 
     // Create a raw client (no namespace) to verify isolation
-    const raw = new RedisClient(TEST_REDIS_URL);
+    const raw = new Rong.RedisClient(TEST_REDIS_URL);
     try {
       // Raw client should NOT see the key under "mykey"
       assert.equal(await raw.get("mykey"), null);

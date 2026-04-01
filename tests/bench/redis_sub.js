@@ -19,7 +19,7 @@ const args =
 const CHANNEL = args[0] || "bench:pubsub";
 const REPORT_INTERVAL = parseInt(args[1]) || 2000;
 
-const client = new RedisClient(REDIS_URL);
+const client = new Rong.RedisClient(REDIS_URL);
 
 // ── Stats ────────────────────────────────────────────────────────────
 

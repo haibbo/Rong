@@ -12,7 +12,7 @@ const REDIS_URL =
   (typeof process !== "undefined" && process.env?.REDIS_URL) ||
   "redis://127.0.0.1:6379";
 
-const client = new RedisClient(REDIS_URL);
+const client = new Rong.RedisClient(REDIS_URL);
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -185,8 +185,8 @@ async function testPubSub() {
   console.log("\n[pub/sub — in-process sanity check]");
   console.log("  (For real stress test, use tests/bench/redis_pub.js + redis_sub.js in separate terminals)");
 
-  const subscriber = new RedisClient(REDIS_URL);
-  const publisher = new RedisClient(REDIS_URL);
+  const subscriber = new Rong.RedisClient(REDIS_URL);
+  const publisher = new Rong.RedisClient(REDIS_URL);
 
   // ── Correctness ────────────────────────────────────────────────
   const sub = await subscriber.subscribe("stress:ch");
