@@ -1,0 +1,54 @@
+const isWindows = Rong.env.OS === "Windows_NT" || !!Rong.env.ComSpec;
+const tempDir = isWindows
+  ? (Rong.env.TEMP || Rong.env.TMP || "C:\\Windows\\Temp")
+  : "/tmp";
+
+describe("Rong Shell", () => {
+  it("Rong.$ supports text() and escaped interpolation", async () => {
+    const message = "shell hello world";
+    const text = await Rong.$`echo ${message}`.text();
+    assert.ok(text.includes(message));
+  });
+
+  it("Rong.$ supports json()", async () => {
+    const value = await Rong.$`echo ${'{"ok":true,"count":2}'}`.json();
+    assert.equal(value.ok, true);
+    assert.equal(value.count, 2);
+  });
+
+  it("Rong.$ supports nothrow()", async () => {
+    const result = await Rong.$(
+      isWindows ? "cmd /C exit 7" : "sh -c 'exit 7'",
+    ).nothrow();
+    assert.equal(result.exitCode, 7);
+    assert.equal(result.success, false);
+  });
+
+  it("Rong.$ supports cwd()", async () => {
+    const text = await Rong.$(isWindows ? "cd" : "pwd").cwd(tempDir).text();
+    assert.ok(text.toLowerCase().includes(tempDir.toLowerCase()));
+  });
+
+  it("Rong.$ supports blob()", async () => {
+    const message = "blob-shell-output";
+    const blob = await Rong.$`echo ${message}`.blob();
+    const text = await blob.text();
+    assert.ok(text.includes(message));
+  });
+
+  it("Rong.$ throws ShellError with command metadata", async () => {
+    let error = null;
+    try {
+      await Rong.$(isWindows ? "cmd /C exit 9" : "sh -c 'exit 9'");
+    } catch (thrown) {
+      error = thrown;
+    }
+
+    assert.ok(error);
+    assert.equal(error.name, "ShellError");
+    assert.equal(error.exitCode, 9);
+    assert.equal(error.command, isWindows ? "cmd /C exit 9" : "sh -c 'exit 9'");
+    assert.ok(error.stderr instanceof Uint8Array);
+    assert.ok(error.stdout instanceof Uint8Array);
+  });
+});

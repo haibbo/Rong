@@ -1,0 +1,58 @@
+[package]
+name = "rong_command"
+version.workspace = true
+edition.workspace = true
+
+description = "Command execution APIs for RongJS"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/rong_command"
+readme = "README.md"
+
+[dependencies]
+rong = { workspace = true }
+rong_abort = { workspace = true }
+rong_buffer = { workspace = true }
+rong_encoding = { workspace = true }
+rong_event = { workspace = true }
+rong_stream = { workspace = true }
+tokio = { workspace = true }
+
+[features]
+default = []
+quickjs = [
+    "rong/quickjs",
+    "rong_abort/quickjs",
+    "rong_buffer/quickjs",
+    "rong_encoding/quickjs",
+    "rong_event/quickjs",
+    "rong_stream/quickjs",
+]
+jscore = [
+    "rong/jscore",
+    "rong_abort/jscore",
+    "rong_buffer/jscore",
+    "rong_encoding/jscore",
+    "rong_event/jscore",
+    "rong_stream/jscore",
+]
+arkjs = [
+    "rong/arkjs",
+    "rong_abort/arkjs",
+    "rong_buffer/arkjs",
+    "rong_encoding/arkjs",
+    "rong_event/arkjs",
+    "rong_stream/arkjs",
+]
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+rong_assert = { workspace = true }
+rong_console = { workspace = true }
+rong_test = { workspace = true }
