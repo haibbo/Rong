@@ -51,6 +51,26 @@ function Get-CoreTests {
 }
 
 function Get-ModuleTests {
+    if (-not (Test-Path "modules")) {
+        return @()
+    }
+
+    $moduleDirs = @(
+        Get-ChildItem "modules" -Directory |
+        Where-Object {
+            $_.Name -ne "" -and
+            $_.Name -ne "modules" -and
+            $_.Name -notmatch "^\." -and
+            (Test-Path (Join-Path $_.FullName "Cargo.toml"))
+        } |
+        ForEach-Object { $_.Name } |
+        Sort-Object -Unique
+    )
+
+    if ($moduleDirs.Count -gt 0) {
+        return $moduleDirs
+    }
+
     try {
         $metadataJson = & cargo metadata --no-deps --format-version 1 2>$null
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($metadataJson)) {
@@ -70,16 +90,7 @@ function Get-ModuleTests {
             Sort-Object -Unique
         )
     } catch {
-        if (-not (Test-Path "modules")) {
-            return @()
-        }
-
-        return @(
-            Get-ChildItem "modules" -Directory |
-            Where-Object { $_.Name -ne "" -and $_.Name -ne "modules" -and $_.Name -notmatch "^\." } |
-            ForEach-Object { $_.Name } |
-            Sort-Object
-        )
+        return @()
     }
 }
 
@@ -228,10 +239,21 @@ if ($Engine -eq "quickjs") {
     $engines = @("quickjs")
 }
 
-$coreTests = Get-CoreTests
-$moduleTests = Get-ModuleTests
-
 Print-Header
+Log-Info "Discovering test targets..."
+
+$coreTests = @()
+$moduleTests = @()
+
+if (-not $Modules) {
+    $coreTests = Get-CoreTests
+}
+
+if (-not $Core) {
+    $moduleTests = Get-ModuleTests
+}
+
+Log-Info ("Discovered {0} core tests and {1} module tests" -f $coreTests.Count, $moduleTests.Count)
 
 foreach ($engineName in $engines) {
     Write-Host ""

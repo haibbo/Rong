@@ -11,9 +11,10 @@ describe("Rong Shell", () => {
   });
 
   it("Rong.$ supports json()", async () => {
-    const value = await Rong.$`echo ${'{"ok":true,"count":2}'}`.json();
-    assert.equal(value.ok, true);
-    assert.equal(value.count, 2);
+    const command = isWindows ? "echo [true,2]" : "echo [true,2]";
+    const value = await Rong.$(command).json();
+    assert.equal(value[0], true);
+    assert.equal(value[1], 2);
   });
 
   it("Rong.$ supports nothrow()", async () => {

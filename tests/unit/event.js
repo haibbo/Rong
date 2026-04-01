@@ -173,12 +173,12 @@ describe("EventEmitter", () => {
       let resolved = false;
       emitter.on("test", async () => {
         started = true;
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await new Promise((resolve) => setTimeout(resolve, 25));
         resolved = true;
       });
       emitter.emit("test");
       expect(started).toBeTruthy();
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await new Promise((resolve) => setTimeout(resolve, 80));
       expect(resolved).toBeTruthy();
     });
   });

@@ -261,21 +261,14 @@ describe("Abort to fetch", () => {
     signal = controller.signal;
   });
 
-  const waitForFetchStart = async (startFlag) => {
-    while (!startFlag) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-  };
-
   it("should abort fetch request", async () => {
-    let fetchStarted = false;
     const fetchPromise = (async () => {
-      fetchStarted = true;
       return await fetch(`${TEST_SERVER_URL}/delay`, { signal });
     })();
 
-    await waitForFetchStart(fetchStarted);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Abort on the next turn so the request has been created, without racing a
+    // short server delay on slower Windows machines.
+    await Promise.resolve();
     controller.abort();
 
     try {
@@ -322,14 +315,11 @@ describe("Abort to fetch", () => {
     assert.equal(signal.aborted, false);
     assert.equal(signal.reason, undefined);
 
-    let fetchStarted = false;
     const fetchPromise = (async () => {
-      fetchStarted = true;
       return await fetch(`${TEST_SERVER_URL}/delay`, { signal });
     })();
 
-    await waitForFetchStart(fetchStarted);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await Promise.resolve();
     controller.abort(reason);
 
     assert.equal(signal.aborted, true);
