@@ -7,17 +7,12 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 enum StreamMode {
+    #[default]
     Pipe,
     Ignore,
     Inherit,
-}
-
-impl Default for StreamMode {
-    fn default() -> Self {
-        Self::Pipe
-    }
 }
 
 impl StreamMode {

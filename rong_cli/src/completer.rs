@@ -78,17 +78,14 @@ impl ReplHelper {
 
     /// Get properties for well-known objects or safe property chains.
     fn get_object_properties(&self, obj_name: &str) -> Vec<String> {
-        match obj_name {
-            "globalThis" => {
-                let state = self.state.borrow();
-                return state
-                    .globals
-                    .iter()
-                    .filter(|g| !g.starts_with("__"))
-                    .cloned()
-                    .collect();
-            }
-            _ => {}
+        if obj_name == "globalThis" {
+            let state = self.state.borrow();
+            return state
+                .globals
+                .iter()
+                .filter(|g| !g.starts_with("__"))
+                .cloned()
+                .collect();
         }
 
         if !Self::is_safe_property_expr(obj_name) {

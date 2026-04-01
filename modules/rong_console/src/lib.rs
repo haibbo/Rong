@@ -878,7 +878,7 @@ fn format_error(result: &mut String, obj: JSObject, depth: usize) {
     result.push_str(&headline);
 }
 
-fn console_state<'a>(ctx: &'a JSContext) -> &'a ConsoleRuntimeState {
+fn console_state(ctx: &JSContext) -> &ConsoleRuntimeState {
     if ctx.get_state::<ConsoleRuntimeState>().is_none() {
         ctx.set_state(ConsoleRuntimeState::default());
     }
