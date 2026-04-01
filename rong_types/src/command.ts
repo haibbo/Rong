@@ -44,6 +44,11 @@ export interface RongReadableProcessStream extends ReadableStream<Uint8Array> {
   lines(): AsyncIterableIterator<string>;
 }
 
+export interface RongOutputHandle {
+  write(chunk: string | ArrayBuffer | ArrayBufferView): void;
+  flush(): void;
+}
+
 export interface RongWritableProcessStream extends WritableStream<Uint8Array> {
   write(chunk: string | ArrayBuffer | ArrayBufferView): Promise<this>;
   flush(): Promise<void>;

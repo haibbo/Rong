@@ -404,7 +404,7 @@ fn make_lines_iterator(ctx: &JSContext, text: String) -> JSResult<JSObject> {
     Ok(iter)
 }
 
-fn decorate_readable(stream_obj: &JSObject) -> JSResult<()> {
+pub(crate) fn decorate_readable(stream_obj: &JSObject) -> JSResult<()> {
     if stream_obj.has_property("__rongProcessReadable")? {
         return Ok(());
     }
@@ -983,7 +983,7 @@ impl ShellCommand {
         }
 
         if !self.quiet && !payload.stderr.is_empty() {
-            io::write_stderr_native(String::from_utf8_lossy(&payload.stderr).to_string());
+            io::write_stderr_bytes_native(&payload.stderr);
         }
 
         Ok(payload)

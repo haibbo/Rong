@@ -13,8 +13,10 @@ import type {
 } from './compression';
 import type {
   RongEnvMap,
+  RongOutputHandle,
   RongShellError,
   RongShellTag,
+  RongReadableProcessStream,
   RongSpawnOptions,
   RongSpawnOptionsWithCmd,
   RongSubprocess,
@@ -73,6 +75,9 @@ declare global {
     readonly argv: string[];
     readonly args: string[];
     readonly env: RongEnvMap;
+    readonly stdin: RongReadableProcessStream;
+    readonly stdout: RongOutputHandle;
+    readonly stderr: RongOutputHandle;
     spawn(cmd: string[], options?: RongSpawnOptions): RongSubprocess;
     spawn(options: RongSpawnOptionsWithCmd): RongSubprocess;
     spawnSync(cmd: string[], options?: RongSpawnOptions): RongSyncSubprocess;

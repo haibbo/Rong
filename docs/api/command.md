@@ -18,6 +18,21 @@ console.log(Rong.argv); // full argv
 console.log(Rong.args); // argv.slice(2)
 ```
 
+## `Rong.stdin` / `Rong.stdout` / `Rong.stderr`
+
+`Rong.stdin` is a readable byte stream with the same helpers used by subprocess output streams:
+
+```javascript
+const text = await Rong.stdin.text();
+```
+
+`Rong.stdout` and `Rong.stderr` are runtime output handles:
+
+```javascript
+Rong.stdout.write("hello\n");
+Rong.stderr.write(new TextEncoder().encode("warn\n"));
+```
+
 ## `Rong.spawn()`
 
 ```javascript
