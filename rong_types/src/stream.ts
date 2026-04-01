@@ -60,9 +60,6 @@
  *
  * ### Pipe streams
  * ```typescript
- * // Pipe stdin to stdout
- * await process.stdin.pipeTo(process.stdout);
- *
  * // Pipe file to file
  * const source = await Rong.file('/source.txt').open({ read: true });
  * const dest = await Rong.file('/dest.txt').open({ write: true, create: true });

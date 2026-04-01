@@ -7,8 +7,22 @@
 
 import type { AssertFunction } from './assert';
 import type {
+  RongGzipCompressOptions,
+  RongCompressionInput,
+  RongZstdCompressOptions,
+} from './compression';
+import type {
+  RongEnvMap,
+  RongShellError,
+  RongShellTag,
+  RongSpawnOptions,
+  RongSpawnOptionsWithCmd,
+  RongSubprocess,
+  RongSyncSubprocess,
+} from './command';
+import type { RongSleepValue } from './timer';
+import type {
   DirEntry,
-  FileOpenOptions,
   MkdirOptions,
   RemoveOptions,
   RongFile,
@@ -17,11 +31,12 @@ import type {
 } from './fs';
 import type { RedisClientConstructor } from './redis';
 import type { SSEConstructor } from './sse';
-import type { StorageConstructor, StorageModule } from './storage';
+import type { S3Client } from './s3';
+import type { SQLite } from './sqlite';
 
 declare global {
   /**
-   * Rong runtime namespace - Core APIs for file system and storage
+   * Rong runtime namespace - host APIs exposed by the Rong runtime
    */
   const Rong: {
     // Core file API
@@ -52,9 +67,47 @@ declare global {
     realPath(path: string): Promise<string>;
     readonly SeekMode: typeof SeekMode;
 
-    // Storage
-    readonly Storage: StorageConstructor;
-    readonly storage: StorageModule;
+    // Runtime APIs
+    readonly version: string;
+    readonly revision: string;
+    readonly argv: string[];
+    readonly args: string[];
+    readonly env: RongEnvMap;
+    spawn(cmd: string[], options?: RongSpawnOptions): RongSubprocess;
+    spawn(options: RongSpawnOptionsWithCmd): RongSubprocess;
+    spawnSync(cmd: string[], options?: RongSpawnOptions): RongSyncSubprocess;
+    spawnSync(options: RongSpawnOptionsWithCmd): RongSyncSubprocess;
+    sleep(delay?: RongSleepValue): Promise<void>;
+    sleepSync(delay?: number): void;
+    zstdCompress(
+      data: RongCompressionInput,
+      options?: RongZstdCompressOptions
+    ): Promise<Uint8Array>;
+    zstdCompressSync(
+      data: RongCompressionInput,
+      options?: RongZstdCompressOptions
+    ): Uint8Array;
+    zstdDecompress(data: RongCompressionInput): Promise<Uint8Array>;
+    zstdDecompressSync(data: RongCompressionInput): Uint8Array;
+    gzip(
+      data: RongCompressionInput,
+      options?: RongGzipCompressOptions
+    ): Promise<Uint8Array>;
+    gzipSync(
+      data: RongCompressionInput,
+      options?: RongGzipCompressOptions
+    ): Uint8Array;
+    gunzip(data: RongCompressionInput): Promise<Uint8Array>;
+    gunzipSync(data: RongCompressionInput): Uint8Array;
+    readonly $: RongShellTag;
+    readonly ShellError: {
+      new (message: string): RongShellError;
+      prototype: RongShellError;
+    };
+    readonly RedisClient: RedisClientConstructor;
+    readonly S3Client: typeof S3Client;
+    readonly SQLite: typeof SQLite;
+    readonly SSE: SSEConstructor;
   };
 
   /**
@@ -72,25 +125,6 @@ declare global {
    */
   const assert: AssertFunction;
 
-  /**
-   * RedisClient - Async Redis client
-   */
-  const RedisClient: RedisClientConstructor;
-
-  /**
-   * S3Client - S3-compatible object storage client
-   */
-  const S3Client: typeof import('./s3').S3Client;
-
-  /**
-   * SQLite - Embedded SQLite database (sync API)
-   */
-  const SQLite: typeof import('./sqlite').SQLite;
-
-  /**
-   * SSE - Server-Sent Events async iterator client
-   */
-  const SSE: SSEConstructor;
 }
 
 export {};

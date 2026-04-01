@@ -152,14 +152,13 @@ export interface RedisClientConstructor {
   /**
    * Create a new Redis client.
    *
-   * @param url - Redis URL (defaults to `REDIS_URL` / `VALKEY_URL` env var, or `redis://127.0.0.1:6379`)
+   * @param url - Explicit Redis URL.
    *
    * @example
    * ```typescript
-   * const client = new Rong.RedisClient();
    * const client = new Rong.RedisClient("redis://localhost:6379");
    * const client = new Rong.RedisClient("redis://user:pass@host:6379/0");
    * ```
    */
-  new (url?: string): RedisClientInstance;
+  new (url: string): RedisClientInstance;
 }

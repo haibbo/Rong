@@ -5,9 +5,11 @@ Persistent key-value storage.
 ## Open
 
 ```javascript
-const store = await Rong.storage.open("mydb");
-// or
-const store = new Rong.Storage("./data.db");
+const store = new Storage("./data.db");
+const strict = new Storage("./strict.db", {
+  maxKeySize: 128,
+  maxValueSize: 1024 * 1024,
+});
 ```
 
 ## Operations
@@ -46,3 +48,9 @@ for (const key of await store.list("user:")) {
 ```javascript
 const info = await store.info();
 ```
+
+## Notes
+
+- The standard Rong runtime exposes a global `Storage` constructor.
+- `Rong.Storage` and `Rong.storage.open(...)` are not part of the default runtime API.
+- Embedders may choose to inject a preconfigured global `storage` instance, but that is host-specific.

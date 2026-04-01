@@ -137,6 +137,7 @@ for (const [name, value] of h.entries()) {
 | `append(name, value)` | Append value |
 | `delete(name)` | Delete |
 | `has(name)` | Check existence |
+| `getSetCookie()` | Get all `Set-Cookie` header values (Rong extension) |
 | `entries()` | Iterate `[name, value]` |
 | `keys()` | Iterate names |
 | `values()` | Iterate values |
@@ -147,7 +148,7 @@ for (const [name, value] of h.entries()) {
 ## SSE (Server-Sent Events)
 
 ```javascript
-const sse = new SSE("https://api.example.com/events", {
+const sse = new Rong.SSE("https://api.example.com/events", {
   headers: { Authorization: "Bearer token" },
   signal: AbortSignal.timeout(60000),
   reconnect: {

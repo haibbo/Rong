@@ -21,6 +21,12 @@
  * const text = await Rong.file('/path/to/file.txt').text();
  * await Rong.write('/output.txt', 'Hello World');
  *
+ * // Runtime
+ * console.log(Rong.argv);
+ * console.log(Rong.env.PATH);
+ *
+ * // Commands
+ * const child = Rong.spawn(['ls', '-la']);
  *
  * // HTTP
  * const response = await fetch('https://api.example.com');
@@ -33,6 +39,8 @@
 import './global';
 
 // Core runtime modules
+export * from './compression';
+export * from './command';
 export * from './stream';
 export * from './encoding';
 export * from './storage';

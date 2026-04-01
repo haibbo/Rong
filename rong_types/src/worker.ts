@@ -21,8 +21,8 @@ export interface RongWorkerErrorEvent {
 }
 
 export interface RongWorker {
-  onmessage: ((event: RongWorkerMessageEvent) => void) | null;
-  onerror: ((event: RongWorkerErrorEvent) => void) | null;
+  onmessage: ((event: RongWorkerMessageEvent) => void) | undefined;
+  onerror: ((event: RongWorkerErrorEvent) => void) | undefined;
   postMessage(data: unknown): void;
   terminate(): void;
 }

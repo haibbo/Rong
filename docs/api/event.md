@@ -21,6 +21,8 @@ target.addEventListener("click", handler, { once: true });
 target.removeEventListener("click", handler);
 ```
 
+`once` is supported. The `capture` flag is currently accepted for compatibility but not implemented.
+
 ## Event & CustomEvent
 
 ```javascript

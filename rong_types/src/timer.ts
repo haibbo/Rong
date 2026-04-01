@@ -5,23 +5,7 @@
 
 export type TimerCallback = () => void;
 export type TimerId = number;
-
-export interface TimersNamespace {
-  /**
-   * Promise-based timeout that resolves with a timestamp (ms since epoch).
-   */
-  setTimeout(delay?: number): Promise<number>;
-
-  /**
-   * Promise-based immediate that resolves with a timestamp (ms since epoch).
-   */
-  setImmediate(): Promise<number>;
-
-  /**
-   * Async iterator that yields timestamps (ms since epoch) on each interval tick.
-   */
-  setInterval(delay?: number): AsyncIterableIterator<number>;
-}
+export type RongSleepValue = number | Date;
 
 declare global {
   /**
@@ -51,11 +35,6 @@ declare global {
    * @param id - Timer ID returned by setInterval
    */
   function clearInterval(id: TimerId): void;
-
-  /**
-   * Promise-based timer namespace
-   */
-  const timers: TimersNamespace;
 }
 
 export {};

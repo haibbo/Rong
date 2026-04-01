@@ -2,7 +2,10 @@
  * Storage module type definitions
  * Corresponds to: modules/rong_storage
  *
- * IMPORTANT: Storage is accessed via `Rong.storage.open(path)` or `new Rong.Storage(path)`
+ * IMPORTANT: The standard Rong runtime exposes a global `Storage` constructor.
+ * It does not provide `Rong.Storage` or `Rong.storage.open(...)` by default.
+ * This package does not redeclare the global `Storage` name because it would
+ * conflict with the DOM `Storage` type from `lib.dom.d.ts`.
  */
 
 export interface StorageInfo {
@@ -45,20 +48,4 @@ export interface StorageOptionsInput {
   maxDataSize?: number;
 }
 
-export interface StorageModule {
-  /**
-   * Open a storage database at the given path
-   * @param path - Path to the database file
-   * @returns Storage instance
-   *
-   * @example
-   * ```typescript
-   * const storage = await Rong.storage.open('/path/to/db.sqlite');
-   * await storage.set('key', 'value');
-   * ```
-   */
-  open(path: string, options?: StorageOptionsInput): Promise<Storage>;
-}
-
-// Note: Storage is accessed via Rong.storage.open() or new Rong.Storage()
 export {};

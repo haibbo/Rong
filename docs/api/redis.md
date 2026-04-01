@@ -1,11 +1,11 @@
 # Redis
 
-Async Redis client for JavaScript. Exposed as global `RedisClient`.
+Async Redis client for JavaScript. Exposed as `Rong.RedisClient`.
 
 ## Quick Start
 
 ```javascript
-const client = new RedisClient("redis://127.0.0.1:6379");
+const client = new Rong.RedisClient("redis://127.0.0.1:6379");
 await client.connect();
 
 await client.set("key", "value");
@@ -16,10 +16,10 @@ client.close();
 
 ## Connection
 
-`RedisClient` requires an explicit Redis URL.
+`Rong.RedisClient` requires an explicit Redis URL.
 
 ```javascript
-const client = new RedisClient("redis://127.0.0.1:6379");
+const client = new Rong.RedisClient("redis://127.0.0.1:6379");
 
 await client.connect();
 client.connected; // true
@@ -94,8 +94,8 @@ await client.srem("tags", "rust");        // 1
 `subscribe()` returns an async iterator, not an event emitter.
 
 ```javascript
-const pub = new RedisClient("redis://127.0.0.1:6379");
-const subClient = new RedisClient("redis://127.0.0.1:6379");
+const pub = new Rong.RedisClient("redis://127.0.0.1:6379");
+const subClient = new Rong.RedisClient("redis://127.0.0.1:6379");
 
 const sub = await subClient.subscribe("notifications");
 
@@ -139,7 +139,7 @@ await client.send("INCRBY", ["counter", "10"]);      // bigint or number
 
 | Method | Description |
 |--------|-------------|
-| `new RedisClient(url)` | Create a client with an explicit Redis URL |
+| `new Rong.RedisClient(url)` | Create a client with an explicit Redis URL |
 | `connect()` | Establish a connection eagerly |
 | `close()` | Close the connection and active subscriptions |
 | `connected` | Whether the client currently holds an open connection |

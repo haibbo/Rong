@@ -9,12 +9,11 @@ TypeScript type definitions for the Rong JavaScript runtime (globals injected by
 
 ## Runtime Export Map (high level)
 
-Rong injects a small set of globals:
+- `Rong` namespace: file system, storage, runtime metadata, command APIs, timer helpers, compression helpers, and host constructors such as `RedisClient`, `S3Client`, `SQLite`, and `SSE`
+- Globals added by Rong modules include `fetch`, `assert`, `atob`, `btoa`, `Worker`, `setTimeout`, `clearTimeout`, `setInterval`, and `clearInterval`
+- Additional Web-standard globals such as `Request`, `Response`, `Headers`, `FormData`, `URL`, `ReadableStream`, `WritableStream`, `Blob`, `File`, `AbortController`, and `DOMException` are also provided when the corresponding runtime modules are enabled
 
-- `Rong` namespace: file system + storage
-- Globals: `process`, `child_process`, `fetch`, `timers`, `assert`, `atob`, `btoa`, `RedisClient`, `S3Client`, `SQLite`, `SSE`, `Worker`
-
-Rong also implements/extends a subset of Web APIs; the type package relies on TypeScript’s DOM libs for base types like `URL`, `ReadableStream`, `AbortController`, etc.
+The type package relies on TypeScript’s DOM libs for shared Web API base types.
 
 ## Installation
 
@@ -39,11 +38,12 @@ Notes:
 - This enables global typings; you should not `import` runtime modules like `'http'` (those are Rong globals, not Node modules).
 - Ensure your `tsconfig.json` `lib` includes `"DOM"` if you want DOM globals (e.g. `URL`, `ReadableStream`) to be typed.
 - `Worker` uses the DOM global type name. The package exports `RongWorker`/`RongWorkerMessageEvent`/`RongWorkerErrorEvent` for the precise Rong subset when you want stricter annotations.
+- Rong’s runtime `Storage` constructor intentionally is not redeclared globally in the type package, because the DOM lib already owns the global `Storage` name. Use the exported `Storage`/`StorageConstructor` types as local annotations when needed.
 - The package only supports the root export `@lingxia/rong`; `src/*` and `dist/*` are not public import paths.
 
 ## Accuracy notes (common gotchas)
 
-- Storage is not `localStorage`-compatible. Use `await Rong.storage.open(path)` or `new Rong.Storage(path)`, then `set/get/delete/clear/list/info`.
+- Storage is not `localStorage`-compatible. The standard runtime exposes `new Storage(path, options?)`; embedders may also inject a preconfigured `storage` instance, but that is not part of the default runtime surface.
 - Directory listing is `Rong.readDir(...)` (async iterator), not `Rong.readdir(...)`.
 - HTTP is the global `fetch(...)` API. There is no `http` namespace and no `download` JS API.
 

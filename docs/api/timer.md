@@ -1,6 +1,6 @@
 # Timer
 
-Timer functions in both callback and Promise styles.
+Timer functions for callback-style scheduling.
 
 ## Callback Style
 
@@ -24,30 +24,25 @@ const id = setInterval(() => {
 clearInterval(id); // stop
 ```
 
-## Promise Style
+## Async / Sync Waiting
 
-Available via the `timers` namespace:
+### `Rong.sleep(delay?)`
 
-### timers.setTimeout(delay?)
-
-```javascript
-const timestamp = await timers.setTimeout(1000);
-console.log("1 second later", timestamp);
-```
-
-### timers.setImmediate()
+Asynchronously waits for a number of milliseconds or until a target `Date`.
 
 ```javascript
-const timestamp = await timers.setImmediate();
+await Rong.sleep(100);
+await Rong.sleep(new Date(Date.now() + 500));
 ```
 
-### timers.setInterval(delay?)
+Use this on hot runtime paths, in request handling, and anywhere blocking the current JS thread would be undesirable.
 
-Returns an async iterator:
+### `Rong.sleepSync(delay?)`
+
+Synchronously blocks the current JS thread for the given number of milliseconds.
 
 ```javascript
-for await (const timestamp of timers.setInterval(1000)) {
-  console.log("tick", timestamp);
-  if (shouldStop) break;
-}
+Rong.sleepSync(25);
 ```
+
+Use this only in tests, short scripts, startup-time work, or other paths where blocking is acceptable.

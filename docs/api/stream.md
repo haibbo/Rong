@@ -1,4 +1,4 @@
-# Streams — ReadableStream / WritableStream
+# Streams — ReadableStream / WritableStream / CompressionStream / DecompressionStream
 
 Web Streams API with async iteration, piping, and teeing.
 
@@ -49,6 +49,8 @@ await readable.pipeTo(writable, {
   preventCancel: false,
   signal: controller.signal,
 });
+
+const transformed = readable.pipeThrough(new CompressionStream("gzip"));
 ```
 
 ### Tee
@@ -65,6 +67,7 @@ const [branch1, branch2] = stream.tee();
 | `getReader()` | Acquire reader (locks the stream) |
 | `cancel(reason?)` | Cancel the stream |
 | `pipeTo(dest, options?)` | Pipe to WritableStream |
+| `pipeThrough(transform, options?)` | Pipe through an object exposing `readable` and `writable` |
 | `tee()` | Split into two streams |
 | `[Symbol.asyncIterator]` | Supports `for await...of` |
 
@@ -134,3 +137,45 @@ const response = await fetch(sourceUrl);
 const writable = file.writer();
 await response.body.pipeTo(writable);
 ```
+
+---
+
+## `CompressionStream`
+
+Supported formats:
+
+- `"gzip"`
+- `"deflate"`
+- `"deflate-raw"`
+
+```javascript
+const compressed = source.pipeThrough(new CompressionStream("gzip"));
+```
+
+### Properties
+
+| Method / Property | Description |
+|-------------------|-------------|
+| `readable` | Compressed output `ReadableStream` |
+| `writable` | Input `WritableStream` |
+
+---
+
+## `DecompressionStream`
+
+Supported formats:
+
+- `"gzip"`
+- `"deflate"`
+- `"deflate-raw"`
+
+```javascript
+const decompressed = source.pipeThrough(new DecompressionStream("gzip"));
+```
+
+### Properties
+
+| Method / Property | Description |
+|-------------------|-------------|
+| `readable` | Decompressed output `ReadableStream` |
+| `writable` | Input `WritableStream` |
