@@ -165,6 +165,264 @@ describe("ReadableStream pipeTo", () => {
     await rs.pipeTo(ws, { preventClose: true });
     expect(closed).toBe(false);
   });
+
+  it("aborts the destination when write fails", async () => {
+    const rs = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("boom"));
+        controller.close();
+      },
+    });
+
+    let aborted = false;
+    const ws = new WritableStream({
+      write() {
+        throw new Error("sink write failed");
+      },
+      abort() {
+        aborted = true;
+      },
+    });
+
+    let failed = false;
+    try {
+      await rs.pipeTo(ws);
+    } catch (error) {
+      failed = true;
+      expect(error instanceof Error).toBe(true);
+    }
+
+    expect(failed).toBe(true);
+    expect(aborted).toBe(true);
+  });
+
+  it("respects preventAbort when write fails", async () => {
+    const rs = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("boom"));
+        controller.close();
+      },
+    });
+
+    let aborted = false;
+    const ws = new WritableStream({
+      write() {
+        throw new Error("sink write failed");
+      },
+      abort() {
+        aborted = true;
+      },
+    });
+
+    let failed = false;
+    try {
+      await rs.pipeTo(ws, { preventAbort: true });
+    } catch (error) {
+      failed = true;
+      expect(error instanceof Error).toBe(true);
+    }
+
+    expect(failed).toBe(true);
+    expect(aborted).toBe(false);
+  });
+
+  it("releases locks when the abort signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort("stop");
+
+    const rs = new ReadableStream({});
+    const ws = new WritableStream({});
+
+    let failed = false;
+    try {
+      await rs.pipeTo(ws, { signal: controller.signal });
+    } catch (error) {
+      failed = true;
+    }
+
+    expect(failed).toBe(true);
+
+    const reader = rs.getReader();
+    reader.releaseLock();
+
+    const writer = ws.getWriter();
+    await writer.releaseLock();
+  });
+});
+
+describe("ReadableStream pipeThrough", () => {
+  it("pipes through a transform pair and returns the readable side", async () => {
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+
+    const source = new ReadableStream({
+      start(controller) {
+        controller.enqueue(enc.encode("hello"));
+        controller.enqueue(enc.encode(" world"));
+        controller.close();
+      },
+    });
+
+    const transformedChunks = [];
+    let transformController = null;
+    const transform = {
+      writable: new WritableStream({
+        write(chunk) {
+          transformedChunks.push(dec.decode(chunk).toUpperCase());
+        },
+        close() {
+          transformController.enqueue(
+            enc.encode(transformedChunks.join("")),
+          );
+          transformController.close();
+        },
+      }),
+      readable: new ReadableStream({
+        start(controller) {
+          transformController = controller;
+        },
+      }),
+    };
+
+    const output = source.pipeThrough(transform);
+    expect(output).toBe(transform.readable);
+
+    const reader = output.getReader();
+    const { done, value } = await reader.read();
+    expect(done).toBe(false);
+    expect(dec.decode(value)).toBe("HELLO WORLD");
+
+    const finalRead = await reader.read();
+    expect(finalRead.done).toBe(true);
+  });
+
+  it("validates transform.readable", () => {
+    const rs = new ReadableStream({});
+
+    expect(() =>
+      rs.pipeThrough({
+        readable: {},
+        writable: new WritableStream({}),
+      }),
+    ).toThrow(TypeError);
+  });
+
+  it("throws when the source stream is already locked", () => {
+    const rs = new ReadableStream({});
+    rs.getReader();
+
+    expect(() =>
+      rs.pipeThrough(new CompressionStream("gzip")),
+    ).toThrow(TypeError);
+  });
+
+  it("throws when transform.writable is already locked", () => {
+    const source = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("hello"));
+        controller.close();
+      },
+    });
+    const transform = new CompressionStream("gzip");
+    transform.writable.getWriter();
+
+    expect(() => source.pipeThrough(transform)).toThrow(TypeError);
+  });
+
+  it("respects preventClose for the transform writable side", async () => {
+    const source = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("x"));
+        controller.close();
+      },
+    });
+
+    let closed = false;
+    const transform = {
+      writable: new WritableStream({
+        write() {},
+        close() {
+          closed = true;
+        },
+      }),
+      readable: new ReadableStream({}),
+    };
+
+    source.pipeThrough(transform, { preventClose: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(closed).toBe(false);
+  });
+
+  it("aborts transform.writable when piping fails", async () => {
+    const source = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("boom"));
+        controller.close();
+      },
+    });
+
+    let aborted = false;
+    const transform = {
+      writable: new WritableStream({
+        write() {
+          throw new Error("transform write failed");
+        },
+        abort() {
+          aborted = true;
+        },
+      }),
+      readable: new ReadableStream({}),
+    };
+
+    source.pipeThrough(transform);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(aborted).toBe(true);
+  });
+
+  it("respects preventAbort when transform.writable fails", async () => {
+    const source = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("boom"));
+        controller.close();
+      },
+    });
+
+    let aborted = false;
+    const transform = {
+      writable: new WritableStream({
+        write() {
+          throw new Error("transform write failed");
+        },
+        abort() {
+          aborted = true;
+        },
+      }),
+      readable: new ReadableStream({}),
+    };
+
+    source.pipeThrough(transform, { preventAbort: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(aborted).toBe(false);
+  });
+
+  it("does not leak locks when the abort signal is already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort("stop");
+
+    const source = new ReadableStream({});
+    const transform = new CompressionStream("gzip");
+
+    const output = source.pipeThrough(transform, { signal: controller.signal });
+    expect(output).toBe(transform.readable);
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    const reader = source.getReader();
+    reader.releaseLock();
+
+    const writer = transform.writable.getWriter();
+    await writer.releaseLock();
+  });
 });
 
 describe("ReadableStream async iterator", () => {

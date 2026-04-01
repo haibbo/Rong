@@ -81,7 +81,7 @@ impl ReadableStream {
 }
 
 // Options for pipeTo
-#[derive(FromJSObj, Default)]
+#[derive(FromJSObj, Default, Clone)]
 struct PipeToOptions {
     #[rename = "preventClose"]
     prevent_close: Option<bool>,
@@ -128,7 +128,7 @@ impl ReadableStream {
     }
 
     #[js_method(rename = "getReader")]
-    fn get_reader(&self) -> JSResult<ReadableStreamDefaultReader> {
+    pub fn get_reader(&self) -> JSResult<ReadableStreamDefaultReader> {
         let mut guard = self
             .rx_slot
             .lock()
@@ -172,29 +172,38 @@ impl ReadableStream {
         dest: JSClassRef<WritableStream>,
         options: function::Optional<PipeToOptions>,
     ) -> JSResult<()> {
-        let opts = options.0.unwrap_or_default();
+        let reader = self.get_reader()?;
+        let writer = dest.borrow()?.get_writer()?;
+        Self::pipe_to_with_handles(ctx, reader, writer, options.0).await
+    }
+
+    async fn pipe_to_with_handles(
+        ctx: JSContext,
+        reader: ReadableStreamDefaultReader,
+        mut writer: crate::writable::WritableStreamDefaultWriter,
+        opts: Option<PipeToOptions>,
+    ) -> JSResult<()> {
+        let opts = opts.unwrap_or_default();
         let prevent_close = opts.prevent_close.unwrap_or(false);
         let prevent_abort = opts.prevent_abort.unwrap_or(false);
         let prevent_cancel = opts.prevent_cancel.unwrap_or(false);
-
-        if let Some(sig) = &opts.signal
+        let mut pipe_err = if let Some(sig) = &opts.signal
             && sig.aborted()
         {
-            return Err(RongJSError::from_thrown_value(sig.get_reason()));
-        }
-
-        // Acquire reader and writer
-        let reader = self.get_reader()?;
-        let mut writer = dest.borrow()?.get_writer()?;
+            Some(RongJSError::from_thrown_value(sig.get_reason()))
+        } else {
+            None
+        };
+        let pre_aborted = pipe_err.is_some();
 
         // Fast path: if this ReadableStream is channel-backed and the writer is channel-backed,
         // forward bytes directly between channels without constructing JS ArrayBuffers.
-        if let Some(mut rx) = readable_stream_take_receiver(self)
+        if pipe_err.is_none()
             && let Some((tx, done_rx)) =
                 crate::writable::WritableStreamDefaultWriter::take_channel(&mut writer)
+            && let Some(mut rx) = reader.take_channel()
         {
             let mut abort_rx = opts.signal.as_ref().map(|s| s.subscribe());
-            let mut pipe_err: Option<RongJSError> = None;
 
             // Pump in Rust
             loop {
@@ -242,24 +251,22 @@ impl ReadableStream {
                 }
             }
 
-            // Release locks (ignore errors)
-            let _ = reader.release_lock();
-            let _ = writer.release_lock().await;
-
-            // Abort writer on error if needed
             if let Some(e) = pipe_err {
-                if !prevent_abort {
+                if !prevent_abort && !pre_aborted {
                     let _ = writer.abort().await;
                 }
+                let _ = reader.release_lock();
+                let _ = writer.release_lock().await;
                 return Err(e);
             }
+            let _ = reader.release_lock();
+            let _ = writer.release_lock().await;
             return Ok(());
         }
 
         // Fallback: JS-level pump
-        let mut pipe_err: Option<RongJSError> = None;
         let mut abort_rx = opts.signal.as_ref().map(|s| s.subscribe());
-        loop {
+        while pipe_err.is_none() {
             // Race read vs abort (if provided)
             let res_obj = if let Some(rx) = &mut abort_rx {
                 tokio::select! {
@@ -294,18 +301,64 @@ impl ReadableStream {
                 break;
             }
         }
-        if pipe_err.is_none() && !prevent_close {
+        if let Some(e) = pipe_err {
+            if !prevent_abort && !pre_aborted {
+                let _ = writer.abort().await;
+            }
+            let _ = reader.release_lock();
+            let _ = writer.release_lock().await;
+            return Err(e);
+        }
+        if !prevent_close {
             let _ = writer.close().await;
         }
         let _ = reader.release_lock();
         let _ = writer.release_lock().await;
-        if let Some(e) = pipe_err {
-            if !prevent_abort {
-                let _ = writer.abort().await;
-            }
-            return Err(e);
-        }
         Ok(())
+    }
+
+    #[js_method(rename = "pipeThrough")]
+    fn pipe_through(
+        &self,
+        ctx: JSContext,
+        transform: JSObject,
+        options: function::Optional<PipeToOptions>,
+    ) -> JSResult<JSObject> {
+        let readable = transform.get::<_, JSObject>("readable").map_err(|_| {
+            HostError::new(
+                rong::error::E_TYPE,
+                "pipeThrough expects an object with readable and writable",
+            )
+            .with_name("TypeError")
+        })?;
+        if readable.borrow::<ReadableStream>().is_err() {
+            return Err(HostError::new(
+                rong::error::E_TYPE,
+                "transform.readable must be a ReadableStream",
+            )
+            .with_name("TypeError")
+            .into());
+        }
+
+        let writable = transform
+            .get::<_, JSClassRef<WritableStream>>("writable")
+            .map_err(|_| {
+                HostError::new(
+                    rong::error::E_TYPE,
+                    "pipeThrough expects an object with readable and writable",
+                )
+                .with_name("TypeError")
+            })?;
+
+        let pipe_ctx = ctx.clone();
+        let pipe_options = options.0;
+        let reader = self.get_reader()?;
+        let writer = writable.borrow()?.get_writer()?;
+        rong::spawn_local(async move {
+            let _ = Self::pipe_to_with_handles(pipe_ctx, reader, writer, pipe_options).await;
+        });
+
+        Ok(readable)
     }
 
     /// Split this ReadableStream into two identical branches.
@@ -391,7 +444,7 @@ impl ReadableStreamDefaultReader {
     }
 
     #[js_method]
-    async fn read(&self, ctx: JSContext) -> JSResult<JSObject> {
+    pub async fn read(&self, ctx: JSContext) -> JSResult<JSObject> {
         // Take the receiver out to avoid holding the lock across await
         let mut rx_opt = {
             let mut slot = self
@@ -451,7 +504,7 @@ impl ReadableStreamDefaultReader {
     }
 
     #[js_method(rename = "releaseLock")]
-    fn release_lock(&self) -> JSResult<()> {
+    pub fn release_lock(&self) -> JSResult<()> {
         // Take receiver out
         let rx_opt = {
             let mut slot = self
@@ -491,6 +544,12 @@ impl ReadableStreamDefaultReader {
     where
         F: FnMut(&JSValue),
     {
+    }
+}
+
+impl ReadableStreamDefaultReader {
+    pub(crate) fn take_channel(&self) -> Option<StreamReceiver> {
+        self.rx.lock().ok()?.take()
     }
 }
 
@@ -736,21 +795,29 @@ mod tests {
     use super::*;
     use rong_test::*;
 
-    #[test]
-    fn test_stream_js() {
+    fn run_stream_suite(unit: &str) {
+        let unit = unit.to_string();
         async_run!(|ctx: JSContext| async move {
             rong_assert::init(&ctx)?;
+            rong_abort::init(&ctx)?;
             rong_console::init(&ctx)?;
             rong_encoding::init(&ctx)?;
             rong_timer::init(&ctx)?;
             crate::init(&ctx)?;
 
-            let passed = UnitJSRunner::load_script(&ctx, "stream.js")
-                .await?
-                .run()
-                .await?;
+            let passed = UnitJSRunner::load_script(&ctx, &unit).await?.run().await?;
             assert!(passed);
             Ok(())
         });
+    }
+
+    #[test]
+    fn test_stream_js() {
+        run_stream_suite("stream.js");
+    }
+
+    #[test]
+    fn test_stream_compression_js() {
+        run_stream_suite("stream_compression.js");
     }
 }

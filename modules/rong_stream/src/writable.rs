@@ -113,7 +113,7 @@ impl WritableStream {
     }
 
     #[js_method(rename = "getWriter")]
-    pub(crate) fn get_writer(&self) -> JSResult<WritableStreamDefaultWriter> {
+    pub fn get_writer(&self) -> JSResult<WritableStreamDefaultWriter> {
         let mut guard = self
             .tx_slot
             .lock()
@@ -198,7 +198,7 @@ impl WritableStreamDefaultWriter {
     }
 
     #[js_method]
-    pub(crate) async fn write(&self, chunk: JSValue) -> JSResult<()> {
+    pub async fn write(&self, chunk: JSValue) -> JSResult<()> {
         // Surface background error if any
         if let Ok(err_guard) = self.err_slot.lock()
             && let Some(e) = err_guard.as_ref()
@@ -263,7 +263,7 @@ impl WritableStreamDefaultWriter {
     }
 
     #[js_method]
-    pub(crate) async fn close(&self) -> JSResult<()> {
+    pub async fn close(&self) -> JSResult<()> {
         // If JS sink has close
         let sink_obj = self.sink_obj.borrow().clone();
         if let Some(sink_obj) = sink_obj
@@ -296,14 +296,21 @@ impl WritableStreamDefaultWriter {
     }
 
     #[js_method]
-    pub(crate) async fn abort(&self) -> JSResult<()> {
+    pub async fn abort(&self) -> JSResult<()> {
+        let sink_obj = self.sink_obj.borrow().clone();
+        if let Some(sink_obj) = sink_obj
+            && let Ok(abort_fn) = sink_obj.get::<_, JSFunc>("abort")
+        {
+            let _r: JSValue = abort_fn.call_async(None, ()).await?;
+        }
+
         let mut slot = self.tx.lock().await;
         *slot = None;
         Ok(())
     }
 
     #[js_method(rename = "releaseLock")]
-    pub(crate) async fn release_lock(&self) -> JSResult<()> {
+    pub async fn release_lock(&self) -> JSResult<()> {
         // Take JS sink (if any) first so we don't hold a RefCell borrow across await.
         let sink_opt = self.sink_obj.borrow_mut().take();
 
