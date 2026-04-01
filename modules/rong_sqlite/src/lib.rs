@@ -333,8 +333,10 @@ pub(crate) fn query_rows(
 }
 
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<SQLite>()?;
+    ctx.register_hidden_class::<SQLite>()?;
     ctx.register_hidden_class::<Statement>()?;
+    let ctor = Class::lookup::<SQLite>(ctx)?.clone();
+    ctx.host_namespace().set("SQLite", ctor)?;
     Ok(())
 }
 

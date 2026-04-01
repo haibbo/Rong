@@ -62,7 +62,7 @@ export type SQLiteParams = SQLiteParam[];
  *
  * @example
  * ```typescript
- * const db = new SQLite("mydb.sqlite");
+ * const db = new Rong.SQLite("mydb.sqlite");
  *
  * db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
  * db.run("INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30]);

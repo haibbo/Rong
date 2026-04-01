@@ -1,13 +1,13 @@
 # rong_sqlite
 
-Embedded SQLite database with synchronous JS API. Exposed as global `SQLite`.
+Embedded SQLite database with synchronous JS API. Exposed as `Rong.SQLite`.
 Uses `rusqlite` with bundled SQLite and prefers WAL for file-backed databases
 when available.
 
 ## JS APIs
 
-- `SQLite` — global SQLite database class
-  - `new SQLite(filename?)` — open a database (defaults to `":memory:"`)
+- `Rong.SQLite` — SQLite database class
+  - `new Rong.SQLite(filename?)` — open a database (defaults to `":memory:"`)
   - `exec(sql)` — execute one or more statements (DDL/schema)
   - `run(sql, params?)` — execute a statement, returns `{ changes, lastInsertRowid }`
   - `query(sql, params?)` — query rows as array of objects

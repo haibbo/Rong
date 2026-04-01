@@ -8,7 +8,7 @@ describe("SQLite — construction", () => {
     assert.equal(typeof Statement, "undefined");
     assert.equal(globalThis.Statement, undefined);
 
-    const db = new SQLite();
+    const db = new Rong.SQLite();
     const stmt = db.prepare("SELECT 1");
     let failed = false;
     try {
@@ -20,27 +20,33 @@ describe("SQLite — construction", () => {
     db.close();
   });
 
+  it("does not expose SQLite on globalThis", () => {
+    assert.equal(typeof SQLite, "undefined");
+    assert.equal(globalThis.SQLite, undefined);
+    assert.equal(typeof Rong.SQLite, "function");
+  });
+
   it("opens in-memory database by default", () => {
-    const db = new SQLite();
+    const db = new Rong.SQLite();
     assert.equal(db.filename, ":memory:");
     assert.equal(db.inTransaction, false);
     db.close();
   });
 
   it("opens in-memory database with explicit :memory:", () => {
-    const db = new SQLite(":memory:");
+    const db = new Rong.SQLite(":memory:");
     assert.equal(db.filename, ":memory:");
     db.close();
   });
 
   it("is instance of SQLite", () => {
-    const db = new SQLite();
-    assert(db instanceof SQLite);
+    const db = new Rong.SQLite();
+    assert(db instanceof Rong.SQLite);
     db.close();
   });
 
   it("close is idempotent", () => {
-    const db = new SQLite();
+    const db = new Rong.SQLite();
     db.close();
     db.close();
   });
@@ -50,12 +56,12 @@ describe("SQLite — file-backed", () => {
   it("persists data across reopen", () => {
     const filename = tempDbPath();
 
-    let db = new SQLite(filename);
+    let db = new Rong.SQLite(filename);
     db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)");
     db.run("INSERT INTO users (name) VALUES (?)", ["Alice"]);
     db.close();
 
-    db = new SQLite(filename);
+    db = new Rong.SQLite(filename);
     const rows = db.query("SELECT * FROM users");
     assert.equal(rows.length, 1);
     assert.equal(rows[0].name, "Alice");
@@ -65,7 +71,7 @@ describe("SQLite — file-backed", () => {
 
 describe("SQLite — exec", () => {
   let db;
-  beforeEach(() => { db = new SQLite(); });
+  beforeEach(() => { db = new Rong.SQLite(); });
   afterEach(() => db.close());
 
   it("creates tables", () => {
@@ -96,7 +102,7 @@ describe("SQLite — exec", () => {
 describe("SQLite — run & query", () => {
   let db;
   beforeEach(() => {
-    db = new SQLite();
+    db = new Rong.SQLite();
     db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER, score REAL)");
   });
   afterEach(() => db.close());
@@ -141,7 +147,7 @@ describe("SQLite — run & query", () => {
 describe("SQLite — prepared statements", () => {
   let db;
   beforeEach(() => {
-    db = new SQLite();
+    db = new Rong.SQLite();
     db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, age INTEGER)");
     db.run("INSERT INTO users (name, age) VALUES (?, ?)", ["Alice", 30]);
     db.run("INSERT INTO users (name, age) VALUES (?, ?)", ["Bob", 25]);
@@ -199,7 +205,7 @@ describe("SQLite — prepared statements", () => {
 describe("SQLite — transactions", () => {
   let db;
   beforeEach(() => {
-    db = new SQLite();
+    db = new Rong.SQLite();
     db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)");
   });
   afterEach(() => db.close());
@@ -254,7 +260,7 @@ describe("SQLite — transactions", () => {
 
 describe("SQLite — type handling", () => {
   let db;
-  beforeEach(() => { db = new SQLite(); });
+  beforeEach(() => { db = new Rong.SQLite(); });
   afterEach(() => db.close());
 
   it("handles NULL values", () => {
@@ -329,7 +335,7 @@ describe("SQLite — type handling", () => {
 
 describe("SQLite — error handling", () => {
   it("throws on closed database", () => {
-    const db = new SQLite();
+    const db = new Rong.SQLite();
     db.close();
     let threw = false;
     try { db.exec("SELECT 1"); } catch (e) {
@@ -340,7 +346,7 @@ describe("SQLite — error handling", () => {
   });
 
   it("throws on unsupported parameter types", () => {
-    const db = new SQLite();
+    const db = new Rong.SQLite();
     db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, val TEXT)");
     let threw = false;
     try {
@@ -355,7 +361,7 @@ describe("SQLite — error handling", () => {
   });
 
   it("prepared statements throw after database close", () => {
-    const db = new SQLite();
+    const db = new Rong.SQLite();
     const stmt = db.prepare("SELECT 1 AS n");
     db.close();
 
