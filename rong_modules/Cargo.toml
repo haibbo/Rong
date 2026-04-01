@@ -12,6 +12,7 @@ keywords.workspace = true
 categories.workspace = true
 documentation = "https://docs.rs/rong_modules"
 readme = "README.md"
+
 [dependencies]
 rong = { workspace = true }
 rong_timer = { workspace = true, optional = true }
@@ -27,8 +28,8 @@ rong_buffer = { workspace = true, optional = true }
 rong_fs = { workspace = true, optional = true }
 rong_storage = { workspace = true, optional = true }
 rong_stream = { workspace = true, optional = true }
-rong_process = { workspace = true, optional = true }
-rong_child_process = { workspace = true, optional = true }
+rong_compression = { workspace = true, optional = true }
+rong_command = { workspace = true, optional = true }
 rong_redis = { workspace = true, optional = true }
 rong_sqlite = { workspace = true, optional = true }
 rong_worker = { workspace = true, optional = true }
@@ -40,7 +41,6 @@ default = []
 quickjs = [
     "rong/quickjs",
     "rong_timer?/quickjs",
-
     "rong_http?/quickjs",
     "rong_encoding?/quickjs",
     "rong_event?/quickjs",
@@ -53,17 +53,12 @@ quickjs = [
     "rong_fs?/quickjs",
     "rong_storage?/quickjs",
     "rong_stream?/quickjs",
-    "rong_process?/quickjs",
-    "rong_child_process?/quickjs",
-    "rong_redis?/quickjs",
-    "rong_sqlite?/quickjs",
+    "rong_compression?/quickjs",
     "rong_worker?/quickjs",
-    "rong_s3?/quickjs",
 ]
 jscore = [
     "rong/jscore",
     "rong_timer?/jscore",
-
     "rong_http?/jscore",
     "rong_encoding?/jscore",
     "rong_event?/jscore",
@@ -76,17 +71,12 @@ jscore = [
     "rong_fs?/jscore",
     "rong_storage?/jscore",
     "rong_stream?/jscore",
-    "rong_process?/jscore",
-    "rong_child_process?/jscore",
-    "rong_redis?/jscore",
-    "rong_sqlite?/jscore",
+    "rong_compression?/jscore",
     "rong_worker?/jscore",
-    "rong_s3?/jscore",
 ]
 arkjs = [
     "rong/arkjs",
     "rong_timer?/arkjs",
-
     "rong_http?/arkjs",
     "rong_encoding?/arkjs",
     "rong_event?/arkjs",
@@ -99,13 +89,10 @@ arkjs = [
     "rong_fs?/arkjs",
     "rong_storage?/arkjs",
     "rong_stream?/arkjs",
-    "rong_process?/arkjs",
-    "rong_child_process?/arkjs",
-    "rong_redis?/arkjs",
-    "rong_sqlite?/arkjs",
+    "rong_compression?/arkjs",
     "rong_worker?/arkjs",
-    "rong_s3?/arkjs",
 ]
+
 tls-aws-lc = ["rong_http?/tls-aws-lc"]
 tls-ring = ["rong_http?/tls-ring"]
 
@@ -123,8 +110,8 @@ all = [
     "fs",
     "storage",
     "stream",
-    "process",
-    "child_process",
+    "compression",
+    "command",
     "redis",
     "sqlite",
     "worker",
@@ -144,8 +131,8 @@ buffer = ["rong_buffer"]
 fs = ["rong_fs"]
 storage = ["rong_storage"]
 stream = ["rong_stream"]
-process = ["rong_process"]
-child_process = ["rong_child_process"]
+compression = ["rong_compression"]
+command = ["rong_command"]
 redis = ["rong_redis"]
 sqlite = ["rong_sqlite"]
 worker = ["rong_worker"]

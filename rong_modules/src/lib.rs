@@ -11,6 +11,12 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     #[cfg(feature = "stream")]
     rong_stream::init(ctx)?;
 
+    #[cfg(feature = "compression")]
+    rong_compression::init(ctx)?;
+
+    #[cfg(feature = "command")]
+    rong_command::init(ctx)?;
+
     #[cfg(feature = "http")]
     rong_http::init(ctx)?;
 
@@ -43,12 +49,6 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 
     #[cfg(feature = "storage")]
     rong_storage::init(ctx)?;
-
-    #[cfg(feature = "process")]
-    rong_process::init(ctx)?;
-
-    #[cfg(feature = "child_process")]
-    rong_child_process::init(ctx)?;
 
     #[cfg(feature = "redis")]
     rong_redis::init(ctx)?;
