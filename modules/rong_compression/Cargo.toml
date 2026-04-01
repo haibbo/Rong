@@ -1,0 +1,36 @@
+[package]
+name = "rong_compression"
+version.workspace = true
+edition.workspace = true
+
+description = "Compression utilities for RongJS"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/rong_compression"
+readme = "README.md"
+
+[lib]
+name = "rong_compression"
+path = "src/lib.rs"
+
+[dependencies]
+rong = { workspace = true }
+tokio = { workspace = true }
+flate2 = { workspace = true }
+zstd = "0.13.2"
+
+[dev-dependencies]
+rong_assert = { workspace = true }
+rong_console = { workspace = true }
+rong_encoding = { workspace = true }
+rong_test = { workspace = true }
+
+[features]
+default = []
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+arkjs = ["rong/arkjs"]
