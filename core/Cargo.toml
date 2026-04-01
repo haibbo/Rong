@@ -12,6 +12,7 @@ keywords.workspace = true
 categories.workspace = true
 documentation = "https://docs.rs/rong_core"
 readme = "README.md"
+
 [dependencies]
 futures = { workspace = true }
 thiserror = { workspace = true }

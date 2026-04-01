@@ -1,7 +1,7 @@
 use crate::rong::spawn_local;
 use crate::{
     IntoJSValue, JSArrayOps, JSContext, JSErrorFactory, JSFunc, JSObject, JSObjectOps, JSResult,
-    JSSymbol, JSTypeOf, JSValue, RongJSError,
+    JSSymbol, JSTypeOf, JSValue, RongJSError, function::This,
 };
 use futures::{Stream, StreamExt};
 use std::cell::RefCell;
@@ -103,8 +103,10 @@ where
             .global()
             .get::<_, JSObject<V>>("Symbol")?
             .get::<_, JSSymbol<V>>("iterator")?;
-        let obj_clone = obj.clone();
-        obj.set(symbol, JSFunc::new(ctx, move || obj_clone.clone())?)?;
+        obj.set(
+            symbol,
+            JSFunc::new(ctx, |this: This<JSObject<V>>| this.0.clone())?,
+        )?;
         Ok(())
     }
 
@@ -255,8 +257,10 @@ where
             .global()
             .get::<_, JSObject<V>>("Symbol")?
             .get::<_, JSSymbol<V>>("asyncIterator")?;
-        let obj_clone = obj.clone();
-        obj.set(symbol, JSFunc::new(ctx, move || obj_clone.clone())?)?;
+        obj.set(
+            symbol,
+            JSFunc::new(ctx, |this: This<JSObject<V>>| this.0.clone())?,
+        )?;
         Ok(())
     }
 
@@ -353,8 +357,10 @@ pub fn install_async_iterator_symbol<V: JSObjectOps + 'static>(
         .global()
         .get::<_, JSObject<V>>("Symbol")?
         .get::<_, JSSymbol<V>>("asyncIterator")?;
-    let obj_clone = obj.clone();
-    obj.set(symbol, JSFunc::new(ctx, move || obj_clone.clone())?)?;
+    obj.set(
+        symbol,
+        JSFunc::new(ctx, |this: This<JSObject<V>>| this.0.clone())?,
+    )?;
     Ok(())
 }
 
@@ -370,7 +376,9 @@ pub fn install_iterator_symbol<V: JSObjectOps + 'static>(
         .global()
         .get::<_, JSObject<V>>("Symbol")?
         .get::<_, JSSymbol<V>>("iterator")?;
-    let obj_clone = obj.clone();
-    obj.set(symbol, JSFunc::new(ctx, move || obj_clone.clone())?)?;
+    obj.set(
+        symbol,
+        JSFunc::new(ctx, |this: This<JSObject<V>>| this.0.clone())?,
+    )?;
     Ok(())
 }
