@@ -25,7 +25,7 @@ impl Headers {
 #[js_class]
 impl Headers {
     #[js_method(constructor)]
-    pub fn new(init: Optional<JSValue>) -> JSResult<Self> {
+    pub(crate) fn new(init: Optional<JSValue>) -> JSResult<Self> {
         let mut headers = HeaderMap::new();
 
         if let Some(init) = init.0 {
@@ -145,7 +145,7 @@ impl Headers {
     /// existing header inside a Headers object, or adds the header if it does not
     /// already exist.
     #[js_method]
-    pub fn append(&mut self, name: String, value: String) {
+    pub(crate) fn append(&mut self, name: String, value: String) {
         if let (Ok(name), Ok(value)) = (
             HeaderName::try_from(name.as_str()),
             HeaderValue::try_from(value.as_str()),
@@ -156,7 +156,7 @@ impl Headers {
 
     /// The delete() method of the Headers interface deletes a header from the current Headers object.
     #[js_method]
-    pub fn delete(&mut self, name: String) {
+    pub(crate) fn delete(&mut self, name: String) {
         if let Ok(name) = HeaderName::try_from(name.as_str()) {
             self.headers.remove(&name);
         }
@@ -170,7 +170,7 @@ impl Headers {
     /// object. If the given name is not the name of an HTTP header, this method throws
     /// a TypeError. The name is case-insensitive.
     #[js_method]
-    pub fn get(&self, name: String) -> JSResult<Option<String>> {
+    pub(crate) fn get(&self, name: String) -> JSResult<Option<String>> {
         match HeaderName::try_from(name.as_str()) {
             Ok(name) => {
                 let values: Vec<&str> = self
@@ -201,7 +201,7 @@ impl Headers {
     /// The name of the HTTP header you want to test for. If the given name is not a
     /// valid HTTP header name, this method throws a TypeError.
     #[js_method]
-    pub fn has(&self, name: String) -> JSResult<bool> {
+    pub(crate) fn has(&self, name: String) -> JSResult<bool> {
         match HeaderName::try_from(name.as_str()) {
             Ok(name) => Ok(self.headers.contains_key(&name)),
             Err(_) => Err(HostError::new(
@@ -219,7 +219,7 @@ impl Headers {
     /// The name of the HTTP header you want to set to a new value. If the given
     /// name is not the name of an HTTP header, this method throws a TypeError.
     #[js_method]
-    pub fn set(&mut self, name: String, value: String) -> JSResult<()> {
+    pub(crate) fn set(&mut self, name: String, value: String) -> JSResult<()> {
         // Check for null characters in value
         if value.contains('\0') {
             return Err(HostError::new(
@@ -255,7 +255,7 @@ impl Headers {
     /// The Headers.entries() method returns an iterator allowing to go through all
     /// key/value pairs contained in this object. Both the key and value of each pair are String objects
     #[js_method]
-    pub fn entries(&self, ctx: JSContext) -> JSResult<JSObject> {
+    fn entries(&self, ctx: JSContext) -> JSResult<JSObject> {
         let entries = self
             .headers
             .iter()
@@ -274,7 +274,7 @@ impl Headers {
     /// The Headers.keys() method returns an iterator allowing to go through all
     /// keys contained in this object. The keys are String objects.
     #[js_method]
-    pub fn keys(&self, ctx: JSContext) -> JSResult<JSObject> {
+    fn keys(&self, ctx: JSContext) -> JSResult<JSObject> {
         let keys = self
             .headers
             .keys()
@@ -288,7 +288,7 @@ impl Headers {
     /// The Headers.values() method returns an iterator allowing to go through all
     /// values contained in this object. The values are String objects
     #[js_method]
-    pub fn values(&self, ctx: JSContext) -> JSResult<JSObject> {
+    fn values(&self, ctx: JSContext) -> JSResult<JSObject> {
         let values = self
             .headers
             .values()
@@ -304,7 +304,7 @@ impl Headers {
     ///
     /// If no Set-Cookie headers are set, the method will return an empty array
     #[js_method(rename = "getSetCookie")]
-    pub fn get_set_cookie(&self) -> Vec<String> {
+    fn get_set_cookie(&self) -> Vec<String> {
         let mut cookies = Vec::new();
 
         // HeaderMap natively supports multi-value headers
@@ -319,7 +319,7 @@ impl Headers {
     /// forEach() method executes a callback function once per each key/value pair
     /// in the Headers object
     #[js_method(rename = "forEach")]
-    pub fn for_each(
+    fn for_each(
         &self,
         this: This<JSObject>, // Header Object
         callback: JSFunc,

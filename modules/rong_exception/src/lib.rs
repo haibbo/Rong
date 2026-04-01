@@ -126,7 +126,7 @@ pub struct DOMException {
 #[js_class]
 impl DOMException {
     #[js_method(constructor)]
-    pub fn new(message: Optional<String>, name: Optional<String>) -> Self {
+    fn new(message: Optional<String>, name: Optional<String>) -> Self {
         Self {
             message: message.0.unwrap_or_default(),
             name: name.0.into(),
@@ -134,17 +134,17 @@ impl DOMException {
     }
 
     #[js_method(getter)]
-    pub fn name(&self) -> String {
+    fn name(&self) -> String {
         self.name.as_str().to_string()
     }
 
     #[js_method(getter)]
-    pub fn message(&self) -> String {
+    fn message(&self) -> String {
         self.message.clone()
     }
 
     #[js_method(getter)]
-    pub fn stack(&self) -> String {
+    fn stack(&self) -> String {
         "NotImplemented".to_string()
     }
 

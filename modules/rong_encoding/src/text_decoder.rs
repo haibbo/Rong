@@ -45,7 +45,7 @@ impl TextDecoder {
     ///
     /// Returns a `TypeError` if an unsupported encoding is specified.
     #[js_method(constructor)]
-    pub fn new(label: Optional<String>, options: Optional<JSObject>) -> JSResult<Self> {
+    fn new(label: Optional<String>, options: Optional<JSObject>) -> JSResult<Self> {
         // Only support UTF-8 encoding for now
         if let Some(label) = label.0 {
             let label = label.to_lowercase();
@@ -82,19 +82,19 @@ impl TextDecoder {
 
     /// Gets the encoding used by the decoder.
     #[js_method(getter, enumerable)]
-    pub fn encoding(&self) -> String {
+    fn encoding(&self) -> String {
         self.encoding.to_string()
     }
 
     /// Gets whether the decoder is in fatal mode.
     #[js_method(getter, enumerable)]
-    pub fn fatal(&self) -> bool {
+    fn fatal(&self) -> bool {
         self.fatal
     }
 
     /// Gets whether the decoder ignores the BOM.
     #[js_method(getter, enumerable, rename = "ignoreBOM")]
-    pub fn ignore_bom(&self) -> bool {
+    fn ignore_bom(&self) -> bool {
         self.ignore_bom
     }
 
@@ -109,11 +109,7 @@ impl TextDecoder {
     ///
     /// Returns a `TypeError` if the input is invalid or if an invalid UTF-8 sequence is encountered in fatal mode.
     #[js_method]
-    pub fn decode(
-        &self,
-        input: Optional<JSObject>,
-        options: Optional<JSObject>,
-    ) -> JSResult<String> {
+    fn decode(&self, input: Optional<JSObject>, options: Optional<JSObject>) -> JSResult<String> {
         // Handle stream option
         let mut _stream = false;
         if let Some(options) = options.0

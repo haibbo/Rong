@@ -142,37 +142,37 @@ impl ChildProcess {
 #[js_class]
 impl ChildProcess {
     #[js_method(constructor)]
-    pub fn constructor() -> JSResult<Self> {
+    fn constructor() -> JSResult<Self> {
         rong::illegal_constructor("ChildProcess cannot be constructed directly. Use Rong.spawn().")
     }
 
     #[js_method(getter)]
-    pub fn pid(&self) -> Option<u32> {
+    fn pid(&self) -> Option<u32> {
         self.pid
     }
 
     #[js_method(getter, rename = "exitCode")]
-    pub fn exit_code(&self) -> Option<i32> {
+    fn exit_code(&self) -> Option<i32> {
         self.exit_code.lock().ok().and_then(|g| *g)
     }
 
     #[js_method(getter)]
-    pub fn killed(&self) -> bool {
+    fn killed(&self) -> bool {
         self.killed.load(Ordering::SeqCst)
     }
 
     #[js_method(getter, rename = "signalCode")]
-    pub fn signal_code(&self) -> Option<i32> {
+    fn signal_code(&self) -> Option<i32> {
         None
     }
 
     #[js_method(getter)]
-    pub fn success(&self) -> bool {
+    fn success(&self) -> bool {
         self.exit_code() == Some(0)
     }
 
     #[js_method(getter)]
-    pub fn exited(&self, ctx: JSContext) -> JSResult<Promise> {
+    fn exited(&self, ctx: JSContext) -> JSResult<Promise> {
         let this = self.clone();
         Promise::from_future(&ctx, None, async move { this.wait().await })
     }
@@ -181,7 +181,7 @@ impl ChildProcess {
     /// Supported signals: SIGTERM (default), SIGKILL, SIGINT, SIGHUP, SIGUSR1, SIGUSR2
     /// Returns true if the signal was sent successfully.
     #[js_method]
-    pub fn kill(&self, signal: Optional<String>) -> bool {
+    pub(crate) fn kill(&self, signal: Optional<String>) -> bool {
         let Some(pid) = self.pid else {
             return false;
         };
@@ -245,7 +245,7 @@ impl ChildProcess {
 
     /// Wait for the process to exit and return the exit code.
     #[js_method]
-    pub async fn wait(&self) -> JSResult<Option<i32>> {
+    pub(crate) async fn wait(&self) -> JSResult<Option<i32>> {
         loop {
             let notified = self.exit_notify.notified();
             if self.exited.load(Ordering::SeqCst) {
@@ -257,7 +257,7 @@ impl ChildProcess {
     }
 
     #[js_method]
-    pub fn unref(&self) {}
+    fn unref(&self) {}
 
     #[js_method(gc_mark)]
     fn gc_mark_with<F>(&self, mark_fn: F)
@@ -301,24 +301,24 @@ impl ExecResult {
 #[js_class]
 impl ExecResult {
     #[js_method(constructor)]
-    pub fn constructor() -> JSResult<Self> {
+    fn constructor() -> JSResult<Self> {
         rong::illegal_constructor(
             "ExecResult cannot be constructed directly. Use Rong.$() or Rong.spawn().",
         )
     }
 
     #[js_method(getter)]
-    pub fn stdout(&self) -> String {
+    fn stdout(&self) -> String {
         self.stdout.clone()
     }
 
     #[js_method(getter)]
-    pub fn stderr(&self) -> String {
+    fn stderr(&self) -> String {
         self.stderr.clone()
     }
 
     #[js_method(getter)]
-    pub fn code(&self) -> Option<i32> {
+    fn code(&self) -> Option<i32> {
         self.code
     }
 
@@ -836,7 +836,6 @@ pub(crate) fn exec_native(
 
 /// Initialize native child-process helpers for the Rong namespace.
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    rong_stream::init(ctx)?;
     let _ = ChildProcessTaskRegistry::ensure(ctx);
 
     ctx.register_hidden_class::<ChildProcess>()?;

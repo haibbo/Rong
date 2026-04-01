@@ -240,7 +240,7 @@ impl Request {
     }
 
     #[js_method(getter)]
-    pub fn redirect(&self) -> &'static str {
+    pub(crate) fn redirect(&self) -> &'static str {
         match self.redirect {
             RequestRedirect::Follow => "follow",
             RequestRedirect::Error => "error",

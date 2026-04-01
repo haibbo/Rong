@@ -28,7 +28,7 @@ pub struct Blob {
 #[js_class]
 impl Blob {
     #[js_method(constructor)]
-    pub fn new(parts: Optional<JSArray>, options: Optional<JSObject>) -> JSResult<Self> {
+    pub(crate) fn new(parts: Optional<JSArray>, options: Optional<JSObject>) -> JSResult<Self> {
         let mut blob_data = Vec::new();
         let mut blob_options = BlobOptions::default();
 
@@ -72,7 +72,7 @@ impl Blob {
     }
 
     #[js_method(getter, enumerable)]
-    pub fn size(&self) -> usize {
+    pub(crate) fn size(&self) -> usize {
         self.data.len()
     }
 
@@ -83,13 +83,13 @@ impl Blob {
 
     /// Returns a promise that resolves with an ArrayBuffer containing the blob's data
     #[js_method(rename = "arrayBuffer")]
-    pub async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer> {
+    pub(crate) async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer> {
         JSArrayBuffer::from_bytes(&ctx, self.data.as_ref())
     }
 
     /// Returns a promise that resolves with a text representation of the blob's data
     #[js_method]
-    pub async fn text(&self) -> JSResult<String> {
+    pub(crate) async fn text(&self) -> JSResult<String> {
         String::from_utf8(self.data.to_vec()).map_err(|e| {
             HostError::new(
                 rong::error::E_INVALID_DATA,
@@ -106,7 +106,7 @@ impl Blob {
     /// * `end` - Optional ending index where to end copying (exclusive)
     /// * `content_type` - Optional new content type for the new blob
     #[js_method]
-    pub fn slice(
+    pub(crate) fn slice(
         &self,
         start: Optional<i64>,
         end: Optional<i64>,
@@ -149,7 +149,7 @@ impl Blob {
 
     /// Returns a promise that resolves with a Uint8Array containing the blob's data
     #[js_method]
-    pub async fn bytes(&self, ctx: JSContext) -> JSResult<JSTypedArray> {
+    pub(crate) async fn bytes(&self, ctx: JSContext) -> JSResult<JSTypedArray> {
         let buffer = JSArrayBuffer::from_bytes(&ctx, self.data.as_ref())?;
         JSTypedArray::<u8>::from_array_buffer(&ctx, buffer, 0, None)
     }

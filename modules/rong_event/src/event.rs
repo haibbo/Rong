@@ -25,7 +25,7 @@ pub struct Event {
 #[js_class]
 impl Event {
     #[js_method(constructor)]
-    pub fn new(type_: String, options: Optional<EventOptions>) -> Self {
+    pub(crate) fn new(type_: String, options: Optional<EventOptions>) -> Self {
         let opts = options.0.unwrap_or_default();
         Self {
             type_,
@@ -37,25 +37,25 @@ impl Event {
 
     // Returns the type of the event
     #[js_method(getter, rename = "type")]
-    pub fn type_(&self) -> String {
+    pub(crate) fn type_(&self) -> String {
         self.type_.clone()
     }
 
     // Returns whether the event bubbles
     #[js_method(getter)]
-    pub fn bubbles(&self) -> bool {
+    pub(crate) fn bubbles(&self) -> bool {
         self.bubbles
     }
 
     // Returns whether the event can be canceled
     #[js_method(getter)]
-    pub fn cancelable(&self) -> bool {
+    pub(crate) fn cancelable(&self) -> bool {
         self.cancelable
     }
 
     // Returns whether the event will trigger listeners outside of a shadow root
     #[js_method(getter)]
-    pub fn composed(&self) -> bool {
+    pub(crate) fn composed(&self) -> bool {
         self.composed
     }
 

@@ -16,12 +16,12 @@ impl AbortController {
     }
 
     #[js_method(getter)]
-    pub fn signal(&self) -> AbortSignal {
+    fn signal(&self) -> AbortSignal {
         self.abort_signal.clone()
     }
 
     #[js_method]
-    pub fn abort(&self, ctx: JSContext, reason: Optional<JSValue>) -> JSResult<()> {
+    fn abort(&self, ctx: JSContext, reason: Optional<JSValue>) -> JSResult<()> {
         let abort = &self.abort_signal;
         if abort.aborted() {
             //only once

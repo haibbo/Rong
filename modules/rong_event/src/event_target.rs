@@ -10,7 +10,7 @@ pub struct EventTarget {
 #[js_class]
 impl EventTarget {
     #[js_method(constructor)]
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             events: EventEmitter::new(),
         }

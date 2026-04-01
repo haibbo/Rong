@@ -233,7 +233,7 @@ impl AbortSignal {
     /// The signal aborts with a TimeoutError DOMException on timeout.
     /// The "active" time in milliseconds before the returned AbortSignal will abort
     #[js_method]
-    pub fn timeout(ctx: JSContext, time: u64) -> JSResult<JSObject> {
+    fn timeout(ctx: JSContext, time: u64) -> JSResult<JSObject> {
         let signal = Self::new(&ctx);
         let timeout_error = get_reason_or_dom_exception(&ctx, None, DOMExceptionName::TIMEOUT_ERR)?;
         {
@@ -287,7 +287,7 @@ impl AbortSignal {
     }
 
     #[js_method(gc_mark)]
-    pub fn gc_mark_with<F>(&self, mut mark_fn: F)
+    fn gc_mark_with<F>(&self, mut mark_fn: F)
     where
         F: FnMut(&JSValue),
     {

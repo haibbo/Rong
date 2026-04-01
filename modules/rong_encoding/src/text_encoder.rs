@@ -27,13 +27,13 @@ pub struct TextEncoder {}
 impl TextEncoder {
     /// Creates a new `TextEncoder` instance.
     #[js_method(constructor)]
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {}
     }
 
     /// Gets the encoding used by the encoder (always "utf-8").
     #[js_method(getter, enumerable)]
-    pub fn encoding(&self) -> String {
+    fn encoding(&self) -> String {
         "utf-8".to_string()
     }
 
@@ -47,7 +47,7 @@ impl TextEncoder {
     ///
     /// A `Uint8Array` containing the UTF-8 encoded bytes of the input string.
     #[js_method]
-    pub fn encode(&self, ctx: JSContext, input: JSValue) -> JSResult<JSTypedArray> {
+    fn encode(&self, ctx: JSContext, input: JSValue) -> JSResult<JSTypedArray> {
         let input = if input.is_undefined() || input.is_null() {
             String::new()
         } else {
@@ -72,7 +72,7 @@ impl TextEncoder {
     ///
     /// An object containing the number of bytes read and written.
     #[js_method(rename = "encodeInto")]
-    pub fn encode_into(&self, ctx: JSContext, input: String, dest: JSObject) -> JSResult<JSObject> {
+    fn encode_into(&self, ctx: JSContext, input: String, dest: JSObject) -> JSResult<JSObject> {
         // First, check if dest can be converted to JSTypedArray
         if let Some(typed_array) = AnyJSTypedArray::from_object(dest) {
             // Then, check if the typed array is Uint8Array

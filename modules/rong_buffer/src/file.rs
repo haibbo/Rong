@@ -83,7 +83,7 @@ impl File {
     }
 
     #[js_method(getter)]
-    pub fn size(&self) -> usize {
+    fn size(&self) -> usize {
         self.blob.size()
     }
 
@@ -98,12 +98,12 @@ impl File {
     }
 
     #[js_method(getter, rename = "lastModified")]
-    pub fn last_modified(&self) -> f64 {
+    fn last_modified(&self) -> f64 {
         self.last_modified as f64
     }
 
     #[js_method]
-    pub fn slice(
+    fn slice(
         &self,
         start: Optional<i64>,
         end: Optional<i64>,
@@ -113,17 +113,17 @@ impl File {
     }
 
     #[js_method]
-    pub async fn text(&self) -> JSResult<String> {
+    async fn text(&self) -> JSResult<String> {
         self.blob.text().await
     }
 
     #[js_method(rename = "arrayBuffer")]
-    pub async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer> {
+    async fn array_buffer(&self, ctx: JSContext) -> JSResult<JSArrayBuffer> {
         self.blob.array_buffer(ctx).await
     }
 
     #[js_method]
-    pub async fn bytes(&self, ctx: JSContext) -> JSResult<JSTypedArray> {
+    async fn bytes(&self, ctx: JSContext) -> JSResult<JSTypedArray> {
         self.blob.bytes(ctx).await
     }
 

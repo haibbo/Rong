@@ -196,14 +196,14 @@ impl Storage {
 #[js_class]
 impl Storage {
     #[js_method(constructor)]
-    pub fn js_new(path: String, options: Optional<StorageOptionsInput>) -> JSResult<Self> {
+    fn js_new(path: String, options: Optional<StorageOptionsInput>) -> JSResult<Self> {
         let opts = options.0.map(StorageOptions::from).unwrap_or_default();
         Self::new(PathBuf::from(path), opts)
     }
 
     /// Set a key-value pair in storage
     #[js_method]
-    pub async fn set(&self, key: String, value: JSValue) -> JSResult<()> {
+    async fn set(&self, key: String, value: JSValue) -> JSResult<()> {
         let cfg = &self.config;
 
         // Validate key size
@@ -471,7 +471,7 @@ impl Storage {
 
     /// Get a value from storage
     #[js_method]
-    pub async fn get(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
+    async fn get(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
         self.with_db(|db| {
             let read_txn = db.begin_read().map_err(|e| {
                 HostError::new(
@@ -558,7 +558,7 @@ impl Storage {
 
     /// Delete a key from storage
     #[js_method]
-    pub async fn delete(&self, key: String) -> JSResult<()> {
+    async fn delete(&self, key: String) -> JSResult<()> {
         self.with_db(|db| {
             let write_txn = db.begin_write().map_err(|e| {
                 HostError::new(
@@ -590,7 +590,7 @@ impl Storage {
 
     /// Clear all data from storage
     #[js_method]
-    pub async fn clear(&self) -> JSResult<()> {
+    async fn clear(&self) -> JSResult<()> {
         self.with_db(|db| {
             let write_txn = db.begin_write().map_err(|e| {
                 HostError::new(
@@ -637,7 +637,7 @@ impl Storage {
 
     /// Storage list function that returns an iterator
     #[js_method]
-    pub async fn list(&self, ctx: JSContext, prefix: Optional<String>) -> JSResult<JSValue> {
+    async fn list(&self, ctx: JSContext, prefix: Optional<String>) -> JSResult<JSValue> {
         self.with_db(|db| {
             let read_txn = db.begin_read().map_err(|e| {
                 HostError::new(
@@ -682,7 +682,7 @@ impl Storage {
 
     /// Storage info function
     #[js_method]
-    pub async fn info(&self) -> JSResult<StorageInfo> {
+    async fn info(&self) -> JSResult<StorageInfo> {
         self.with_db(|db| {
             let read_txn = db.begin_read().map_err(|e| {
                 HostError::new(

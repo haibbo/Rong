@@ -199,7 +199,7 @@ impl RedisClient {
 #[js_class]
 impl RedisClient {
     #[js_method(constructor)]
-    pub fn constructor(url: Optional<String>) -> JSResult<Self> {
+    fn constructor(url: Optional<String>) -> JSResult<Self> {
         let url = url.0.ok_or_else(|| {
             HostError::new(
                 "E_INVALID_ARG",
@@ -213,14 +213,14 @@ impl RedisClient {
     /// Explicitly connect to the Redis server.
     /// Optional — commands auto-connect on first use.
     #[js_method]
-    pub async fn connect(&self) -> JSResult<()> {
+    async fn connect(&self) -> JSResult<()> {
         self.ensure_conn().await?;
         Ok(())
     }
 
     /// Close the connection and all subscriptions.
     #[js_method]
-    pub fn close(&self) {
+    fn close(&self) {
         let subs = self.subs.borrow_mut().drain().collect::<Vec<_>>();
         for (_, close_tx) in subs {
             if let Ok(mut guard) = close_tx.lock() {
@@ -232,14 +232,14 @@ impl RedisClient {
 
     /// Whether the client currently holds an open connection.
     #[js_method(getter)]
-    pub fn connected(&self) -> bool {
+    fn connected(&self) -> bool {
         self.conn.borrow().is_some()
     }
 
     // ── String operations ────────────────────────────────────────────
 
     #[js_method]
-    pub async fn set(&self, key: String, value: String) -> JSResult<String> {
+    async fn set(&self, key: String, value: String) -> JSResult<String> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let _: () = conn.set(&key, &value).await.map_err(redis_err)?;
@@ -247,7 +247,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn get(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
+    async fn get(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.get(&key).await.map_err(redis_err)?;
@@ -258,7 +258,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn del(&self, key: String) -> JSResult<i32> {
+    async fn del(&self, key: String) -> JSResult<i32> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let count: i32 = conn.del(&key).await.map_err(redis_err)?;
@@ -266,7 +266,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn exists(&self, key: String) -> JSResult<bool> {
+    async fn exists(&self, key: String) -> JSResult<bool> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let exists: bool = conn.exists(&key).await.map_err(redis_err)?;
@@ -274,7 +274,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn expire(&self, key: String, seconds: i64) -> JSResult<bool> {
+    async fn expire(&self, key: String, seconds: i64) -> JSResult<bool> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: bool = conn.expire(&key, seconds).await.map_err(redis_err)?;
@@ -282,7 +282,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn ttl(&self, key: String) -> JSResult<i64> {
+    async fn ttl(&self, key: String) -> JSResult<i64> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let ttl: i64 = conn.ttl(&key).await.map_err(redis_err)?;
@@ -292,7 +292,7 @@ impl RedisClient {
     // ── Numeric operations ───────────────────────────────────────────
 
     #[js_method]
-    pub async fn incr(&self, key: String) -> JSResult<i64> {
+    async fn incr(&self, key: String) -> JSResult<i64> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let val: i64 = conn.incr(&key, 1i64).await.map_err(redis_err)?;
@@ -300,7 +300,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn decr(&self, key: String) -> JSResult<i64> {
+    async fn decr(&self, key: String) -> JSResult<i64> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let val: i64 = conn.decr(&key, 1i64).await.map_err(redis_err)?;
@@ -310,7 +310,7 @@ impl RedisClient {
     // ── Hash operations ──────────────────────────────────────────────
 
     #[js_method]
-    pub async fn hset(&self, key: String, field: String, value: String) -> JSResult<i32> {
+    async fn hset(&self, key: String, field: String, value: String) -> JSResult<i32> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: i32 = conn.hset(&key, &field, &value).await.map_err(redis_err)?;
@@ -318,7 +318,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn hget(&self, ctx: JSContext, key: String, field: String) -> JSResult<JSValue> {
+    async fn hget(&self, ctx: JSContext, key: String, field: String) -> JSResult<JSValue> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.hget(&key, &field).await.map_err(redis_err)?;
@@ -329,7 +329,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn hmset(&self, key: String, fields: Vec<String>) -> JSResult<String> {
+    async fn hmset(&self, key: String, fields: Vec<String>) -> JSResult<String> {
         if !fields.len().is_multiple_of(2) {
             return Err(HostError::new(
                 "E_INVALID_ARG",
@@ -349,12 +349,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn hmget(
-        &self,
-        ctx: JSContext,
-        key: String,
-        fields: Vec<String>,
-    ) -> JSResult<JSValue> {
+    async fn hmget(&self, ctx: JSContext, key: String, fields: Vec<String>) -> JSResult<JSValue> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let mut cmd = redis::cmd("HMGET");
@@ -378,7 +373,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn hincrby(&self, key: String, field: String, increment: i64) -> JSResult<i64> {
+    async fn hincrby(&self, key: String, field: String, increment: i64) -> JSResult<i64> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let val: i64 = conn
@@ -389,7 +384,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn hincrbyfloat(&self, key: String, field: String, increment: f64) -> JSResult<f64> {
+    async fn hincrbyfloat(&self, key: String, field: String, increment: f64) -> JSResult<f64> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let val: f64 = conn
@@ -402,7 +397,7 @@ impl RedisClient {
     // ── Set operations ───────────────────────────────────────────────
 
     #[js_method]
-    pub async fn sadd(&self, key: String, member: String) -> JSResult<i32> {
+    async fn sadd(&self, key: String, member: String) -> JSResult<i32> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: i32 = conn.sadd(&key, &member).await.map_err(redis_err)?;
@@ -410,7 +405,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn srem(&self, key: String, member: String) -> JSResult<i32> {
+    async fn srem(&self, key: String, member: String) -> JSResult<i32> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: i32 = conn.srem(&key, &member).await.map_err(redis_err)?;
@@ -418,7 +413,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn sismember(&self, key: String, member: String) -> JSResult<bool> {
+    async fn sismember(&self, key: String, member: String) -> JSResult<bool> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: bool = conn.sismember(&key, &member).await.map_err(redis_err)?;
@@ -426,7 +421,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn smembers(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
+    async fn smembers(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let results: Vec<String> = conn.smembers(&key).await.map_err(redis_err)?;
@@ -438,7 +433,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn srandmember(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
+    async fn srandmember(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.srandmember(&key).await.map_err(redis_err)?;
@@ -449,7 +444,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn spop(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
+    async fn spop(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.spop(&key).await.map_err(redis_err)?;
@@ -462,7 +457,7 @@ impl RedisClient {
     // ── List operations ──────────────────────────────────────────────
 
     #[js_method]
-    pub async fn lpush(&self, key: String, value: String) -> JSResult<i32> {
+    async fn lpush(&self, key: String, value: String) -> JSResult<i32> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: i32 = conn.lpush(&key, &value).await.map_err(redis_err)?;
@@ -470,7 +465,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn rpush(&self, key: String, value: String) -> JSResult<i32> {
+    async fn rpush(&self, key: String, value: String) -> JSResult<i32> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: i32 = conn.rpush(&key, &value).await.map_err(redis_err)?;
@@ -478,7 +473,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn lpop(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
+    async fn lpop(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.lpop(&key, None).await.map_err(redis_err)?;
@@ -489,7 +484,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn rpop(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
+    async fn rpop(&self, ctx: JSContext, key: String) -> JSResult<JSValue> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let result: Option<String> = conn.rpop(&key, None).await.map_err(redis_err)?;
@@ -500,7 +495,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn lrange(
+    async fn lrange(
         &self,
         ctx: JSContext,
         key: String,
@@ -521,7 +516,7 @@ impl RedisClient {
     }
 
     #[js_method]
-    pub async fn llen(&self, key: String) -> JSResult<i64> {
+    async fn llen(&self, key: String) -> JSResult<i64> {
         let mut conn = self.ensure_conn().await?;
         let key = self.prefixed_name(&key);
         let len: i64 = conn.llen(&key).await.map_err(redis_err)?;
@@ -531,7 +526,7 @@ impl RedisClient {
     // ── Pub/Sub ──────────────────────────────────────────────────────
 
     #[js_method]
-    pub async fn publish(&self, channel: String, message: String) -> JSResult<i32> {
+    async fn publish(&self, channel: String, message: String) -> JSResult<i32> {
         let mut conn = self.ensure_conn().await?;
         let channel = self.prefixed_name(&channel);
         let result: i32 = conn.publish(&channel, &message).await.map_err(redis_err)?;
@@ -540,7 +535,7 @@ impl RedisClient {
 
     /// Subscribe to a channel and return an async-iterable subscription object.
     #[js_method]
-    pub async fn subscribe(
+    async fn subscribe(
         &self,
         ctx: JSContext,
         channel: String,
@@ -649,12 +644,7 @@ impl RedisClient {
     // ── Raw command ──────────────────────────────────────────────────
 
     #[js_method]
-    pub async fn send(
-        &self,
-        ctx: JSContext,
-        command: String,
-        args: Vec<String>,
-    ) -> JSResult<JSValue> {
+    async fn send(&self, ctx: JSContext, command: String, args: Vec<String>) -> JSResult<JSValue> {
         self.ensure_raw_command_allowed()?;
         let mut conn = self.ensure_conn().await?;
         let mut redis_cmd = redis::cmd(&command);

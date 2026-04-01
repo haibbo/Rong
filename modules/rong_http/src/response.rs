@@ -144,7 +144,7 @@ impl Response {
     }
 
     #[js_method(getter, rename = "bodyUsed")]
-    pub fn body_used(&self) -> bool {
+    fn body_used(&self) -> bool {
         if self.consumed.get() {
             return true;
         }

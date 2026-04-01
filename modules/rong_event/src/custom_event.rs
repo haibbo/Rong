@@ -24,7 +24,7 @@ pub struct CustomEvent {
 #[js_class]
 impl CustomEvent {
     #[js_method(constructor)]
-    pub fn new(type_: String, options: Optional<CustomEventOptions>) -> Self {
+    fn new(type_: String, options: Optional<CustomEventOptions>) -> Self {
         let opts = options.0.unwrap_or_default();
 
         // Create Event with the same options
@@ -43,28 +43,28 @@ impl CustomEvent {
 
     // Returns the custom data
     #[js_method(getter)]
-    pub fn detail(&self) -> Option<JSValue> {
+    fn detail(&self) -> Option<JSValue> {
         self.detail.clone()
     }
 
     // Delegate Event methods
     #[js_method(getter, rename = "type")]
-    pub fn type_(&self) -> String {
+    fn type_(&self) -> String {
         self.event.type_()
     }
 
     #[js_method(getter)]
-    pub fn bubbles(&self) -> bool {
+    fn bubbles(&self) -> bool {
         self.event.bubbles()
     }
 
     #[js_method(getter)]
-    pub fn cancelable(&self) -> bool {
+    fn cancelable(&self) -> bool {
         self.event.cancelable()
     }
 
     #[js_method(getter)]
-    pub fn composed(&self) -> bool {
+    fn composed(&self) -> bool {
         self.event.composed()
     }
 
