@@ -71,26 +71,7 @@ impl ReplHelper {
     /// Get properties for well-known objects
     fn get_object_properties(&self, obj_name: &str) -> Vec<String> {
         match obj_name {
-            "console" => vec![
-                "log",
-                "error",
-                "warn",
-                "info",
-                "debug",
-                "trace",
-                "dir",
-                "time",
-                "timeEnd",
-                "timeLog",
-                "clear",
-                "count",
-                "countReset",
-                "group",
-                "groupEnd",
-                "groupCollapsed",
-                "table",
-                "assert",
-            ],
+            "console" => vec!["clear", "debug", "error", "info", "log", "warn"],
             "Math" => vec![
                 "abs", "acos", "acosh", "asin", "asinh", "atan", "atan2", "atanh", "cbrt", "ceil",
                 "clz32", "cos", "cosh", "exp", "expm1", "floor", "fround", "hypot", "imul", "log",

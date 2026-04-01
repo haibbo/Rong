@@ -1,15 +1,15 @@
 use rong::*;
 use std::env;
 use std::path::PathBuf;
+use std::process;
 
 mod completer;
-mod extension;
 mod logging;
 mod repl;
 
 #[derive(Debug)]
 enum Command {
-    Run(PathBuf),
+    Run { path: PathBuf },
     Compile { input: PathBuf, output: PathBuf },
     Repl,
     Help,
@@ -36,35 +36,65 @@ Options:
     );
 }
 
-fn parse_args() -> Result<Command, String> {
-    let args: Vec<String> = env::args().collect();
+fn init_cli_namespace(ctx: &JSContext) -> JSResult<()> {
+    fn exit(status: u32) {
+        process::exit(status as i32);
+    }
 
+    let rong = ctx.host_namespace();
+    rong.set("exit", JSFunc::new(ctx, exit)?.name("exit")?)?;
+    Ok(())
+}
+
+fn format_runtime_error(ctx: &JSContext, err: RongJSError) -> RongJSError {
+    if let Some(thrown) = err.thrown_value(ctx)
+        && let Some(obj) = thrown.into_object()
+    {
+        let name = obj
+            .get::<_, String>("name")
+            .unwrap_or_else(|_| "Error".to_string());
+        if let Ok(message) = obj.get::<_, String>("message") {
+            return HostError::new(rong::error::E_JS_THROWN, format!("{name}: {message}")).into();
+        }
+    }
+    err
+}
+
+fn parse_args_from(args: Vec<String>) -> Result<Command, String> {
     if args.len() < 2 {
         return Ok(Command::Repl);
     }
 
-    match args[1].as_str() {
+    let index = 1;
+
+    match args[index].as_str() {
         "-h" | "--help" => Ok(Command::Help),
         "-v" | "--version" => Ok(Command::Version),
         "compile" => {
-            if args.len() < 4 {
+            if args.len() < index + 3 {
                 return Err("Missing input/output arguments for compile command".to_string());
             }
             Ok(Command::Compile {
-                input: args[2].clone().into(),
-                output: args[3].clone().into(),
+                input: args[index + 1].clone().into(),
+                output: args[index + 2].clone().into(),
             })
         }
         _ => {
             // If the argument looks like a file path (ends with .js or .rong), execute it.
-            let arg = &args[1];
+            let arg = &args[index];
             if arg.ends_with(".js") || arg.ends_with(".rong") {
-                Ok(Command::Run(arg.clone().into()))
+                Ok(Command::Run {
+                    path: arg.clone().into(),
+                })
             } else {
-                Err(format!("Unknown command: {}", args[1]))
+                Err(format!("Unknown command: {}", args[index]))
             }
         }
     }
+}
+
+fn parse_args() -> Result<Command, String> {
+    parse_args_from(env::args().collect())
 }
 
 async fn run_file(ctx: &JSContext, path: PathBuf) -> Result<(), RongJSError> {
@@ -149,18 +179,35 @@ async fn main() -> Result<(), RongJSError> {
                 let ctx = runtime.context();
                 // Initialize all modules
                 rong_modules::init(&ctx)?;
-                extension::init(&ctx)?;
+                init_cli_namespace(&ctx)?;
 
                 // Process the command with the initialized context
-                match command {
+                let result = match command {
                     Command::Repl => repl::run(&ctx).await,
-                    Command::Run(path) => run_file(&ctx, path).await,
+                    Command::Run { path } => run_file(&ctx, path).await,
                     Command::Compile { input, output } => compile_file(&ctx, input, output).await,
                     _ => unreachable!(), // Help and Version already handled
-                }
+                };
+                result.map_err(|err| format_runtime_error(&ctx, err))
             })
             .await?
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_run_command() {
+        let command =
+            parse_args_from(vec!["rong".to_string(), "app.js".to_string()]).expect("parse args");
+
+        match command {
+            Command::Run { path } => assert_eq!(path, PathBuf::from("app.js")),
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
 }
