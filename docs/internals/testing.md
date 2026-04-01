@@ -42,12 +42,10 @@ cargo test -p rong_fs --features quickjs
 - `rong_abort` - AbortController
 - `rong_url` - URL parsing
 - `rong_stream` - Stream APIs
-- `rong_process` - Process information
-- `rong_child_process` - Child process management
+- `rong_command` - Shell and subprocesses
 - `rong_storage` - Storage APIs
 - `rong_assert` - Assertion utilities
 - `rong_exception` - Exception handling
-- `rong_navigator` - Navigator APIs
 - `rong_redis` - Redis client
 - `rong_sqlite` - SQLite database
 - `rong_s3` - S3 object storage

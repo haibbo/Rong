@@ -58,7 +58,6 @@ CRATES=(
   "rong_sqlite"
   "rong_worker"
   "rong_s3"
-
   # Layer 8 - Meta package
   "rong_modules"
 

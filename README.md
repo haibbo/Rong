@@ -159,8 +159,8 @@ Rong comes with a rich set of built-in modules:
 - **rong_assert** - Assertion utilities
 - **rong_storage** - Storage APIs
 - **rong_stream** - Stream APIs
-- **rong_process** - Process information and environment
-- **rong_child_process** - Child process management
+- **rong_command** - Command execution APIs for subprocesses and shell commands
+- **rong_cron** - Cron parsing and macOS scheduled job registration
 - **rong_exception** - Exception handling
 - **rong_sqlite** - SQLite APIs
 - **rong_s3** - S3-compatible object storage APIs
