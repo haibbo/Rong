@@ -12,10 +12,12 @@ pub use file::S3File;
 
 use rong::*;
 
-/// Register S3Client globally and keep S3File internal-only.
+/// Register `Rong.S3Client` and keep S3File internal-only.
 pub fn init(ctx: &JSContext) -> JSResult<()> {
     ctx.register_hidden_class::<S3File>()?;
-    ctx.register_class::<S3Client>()?;
+    ctx.register_hidden_class::<S3Client>()?;
+    let ctor = Class::lookup::<S3Client>(ctx)?.clone();
+    ctx.host_namespace().set("S3Client", ctor)?;
 
     Ok(())
 }
@@ -135,7 +137,7 @@ mod tests {
             setup_s3_env(&ctx, &endpoint)?;
 
             // Create a pre-configured client with namespace prefix from Rust,
-            // then inject it as a global `s3` — JS never calls `new S3Client`.
+            // then inject it as a global `s3` — JS never calls `new Rong.S3Client`.
             let client = S3Client::new(test_s3_config(&endpoint), Some("app1/".to_string()));
             let js_client = Class::lookup::<S3Client>(&ctx)?.instance(client);
             ctx.global().set("s3", js_client)?;

@@ -1,6 +1,6 @@
 // S3 namespace prefix tests.
 // The Rust harness injects a pre-configured `s3` global with namespace prefix "app1/".
-// JS never calls `new S3Client` — it uses the injected instance directly.
+// JS never calls `new Rong.S3Client` here — it uses the injected instance directly.
 
 describe("S3 namespace prefix", () => {
   const KEY = `ns-test-${Date.now()}.txt`;
@@ -106,8 +106,8 @@ describe("S3 namespace prefix", () => {
   });
 
   it("file operations are isolated from non-prefixed keys", async () => {
-    // Write directly via the global S3Client (no namespace) to verify isolation
-    const raw = new S3Client({
+    // Write directly via Rong.S3Client (no namespace prefix) to verify isolation
+    const raw = new Rong.S3Client({
       accessKeyId: TEST_S3_ACCESS_KEY,
       secretAccessKey: TEST_S3_SECRET_KEY,
       bucket: TEST_S3_BUCKET,

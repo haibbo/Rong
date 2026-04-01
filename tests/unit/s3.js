@@ -7,7 +7,7 @@ const S3_SECRET_KEY = globalThis.TEST_S3_SECRET_KEY ?? "minioadmin";
 const S3_BUCKET = globalThis.TEST_S3_BUCKET ?? "test-bucket";
 
 function makeClient(overrides) {
-  return new S3Client({
+  return new Rong.S3Client({
     accessKeyId: S3_ACCESS_KEY,
     secretAccessKey: S3_SECRET_KEY,
     bucket: S3_BUCKET,
@@ -36,13 +36,19 @@ describe("S3Client", () => {
     assert(failed, "S3File should not be constructible via instance.constructor");
   });
 
+  it("does not expose S3Client on globalThis", () => {
+    assert.equal(typeof S3Client, "undefined");
+    assert.equal(globalThis.S3Client, undefined);
+    assert.equal(typeof Rong.S3Client, "function");
+  });
+
   it("constructor with explicit options", () => {
     const client = makeClient();
     assert(client, "S3Client instance created");
   });
 
   it("constructor with no arguments", () => {
-    const client = new S3Client();
+    const client = new Rong.S3Client();
     assert(client, "S3Client created without args");
   });
 
@@ -129,7 +135,7 @@ describe("S3Client", () => {
   // ─── Error handling ────────────────────────────────────────────
 
   it("error on missing credentials for network ops", async () => {
-    const client = new S3Client({
+    const client = new Rong.S3Client({
       bucket: "some-bucket",
       endpoint: S3_ENDPOINT,
     });
@@ -145,7 +151,7 @@ describe("S3Client", () => {
   });
 
   it("error on missing bucket", async () => {
-    const client = new S3Client({
+    const client = new Rong.S3Client({
       accessKeyId: S3_ACCESS_KEY,
       secretAccessKey: S3_SECRET_KEY,
       endpoint: S3_ENDPOINT,

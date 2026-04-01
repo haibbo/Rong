@@ -3,7 +3,7 @@
  * Corresponds to: modules/rong_s3
  *
  * Core API:
- *   new S3Client(options?) → S3Client
+ *   new Rong.S3Client(options?) → S3Client
  *   client.file(path) → S3File (lazy reference, no network)
  */
 
@@ -160,7 +160,7 @@ export interface S3File {
  *
  * @example
  * ```typescript
- * const client = new S3Client({
+ * const client = new Rong.S3Client({
  *   accessKeyId: "...",
  *   secretAccessKey: "...",
  *   bucket: "my-bucket",

@@ -1,11 +1,11 @@
 # rong_s3
 
-S3-compatible object storage client. Exposed as global `S3Client`.
+S3-compatible object storage client. Exposed as `Rong.S3Client`.
 
 ## JS APIs
 
-- `S3Client` — global S3 client class
-  - `new S3Client(options?)` — create a client
+- `Rong.S3Client` — S3 client class
+  - `new Rong.S3Client(options?)` — create a client
     - Options: `accessKeyId`, `secretAccessKey`, `bucket`, `region`, `endpoint`, `sessionToken`, `acl`, `virtualHostedStyle`
   - `file(path, options?)` — lazy `S3File` reference (no network request)
   - `write(path, data, options?)` — upload data, returns bytes written
