@@ -22,6 +22,37 @@ export interface Console {
   /** Log debug messages to stdout */
   debug(...args: any[]): void;
 
+  /** Log assertion failures to stderr */
+  assert(condition?: any, ...args: any[]): void;
+
+  /** Inspect a value with optional depth and length limits */
+  dir(
+    value?: any,
+    options?: {
+      depth?: number;
+      maxArrayLength?: number;
+      maxObjectKeys?: number;
+    },
+  ): void;
+
+  /** Log a stack trace */
+  trace(...args: any[]): void;
+
+  /** Start a named timer */
+  time(label?: string): void;
+
+  /** Log the elapsed time for a timer without stopping it */
+  timeLog(label?: string, ...args: any[]): void;
+
+  /** Log the elapsed time for a timer and stop it */
+  timeEnd(label?: string): void;
+
+  /** Increment and log a named counter */
+  count(label?: string): void;
+
+  /** Reset a named counter */
+  countReset(label?: string): void;
+
   /** Clear the console */
   clear(): void;
 }
