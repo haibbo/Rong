@@ -60,68 +60,25 @@ pub struct CompletionState {
 
 /// REPL helper for tab completion
 pub struct ReplHelper {
+    ctx: JSContext,
     state: Rc<RefCell<CompletionState>>,
 }
 
 impl ReplHelper {
-    pub fn new(state: Rc<RefCell<CompletionState>>) -> Self {
-        Self { state }
+    pub fn new(ctx: JSContext, state: Rc<RefCell<CompletionState>>) -> Self {
+        Self { ctx, state }
     }
 
-    /// Get properties for well-known objects
+    fn is_safe_property_expr(expr: &str) -> bool {
+        !expr.is_empty()
+            && expr
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$' || c == '.')
+    }
+
+    /// Get properties for well-known objects or safe property chains.
     fn get_object_properties(&self, obj_name: &str) -> Vec<String> {
         match obj_name {
-            "console" => vec!["clear", "debug", "error", "info", "log", "warn"],
-            "Math" => vec![
-                "abs", "acos", "acosh", "asin", "asinh", "atan", "atan2", "atanh", "cbrt", "ceil",
-                "clz32", "cos", "cosh", "exp", "expm1", "floor", "fround", "hypot", "imul", "log",
-                "log10", "log1p", "log2", "max", "min", "pow", "random", "round", "sign", "sin",
-                "sinh", "sqrt", "tan", "tanh", "trunc", "E", "LN2", "LN10", "LOG2E", "LOG10E",
-                "PI", "SQRT1_2", "SQRT2",
-            ],
-            "JSON" => vec!["parse", "stringify"],
-            "Object" => vec![
-                "assign",
-                "create",
-                "defineProperty",
-                "defineProperties",
-                "entries",
-                "freeze",
-                "fromEntries",
-                "getOwnPropertyDescriptor",
-                "getOwnPropertyDescriptors",
-                "getOwnPropertyNames",
-                "getOwnPropertySymbols",
-                "getPrototypeOf",
-                "is",
-                "isExtensible",
-                "isFrozen",
-                "isSealed",
-                "keys",
-                "preventExtensions",
-                "seal",
-                "setPrototypeOf",
-                "values",
-            ],
-            "Array" => vec!["from", "isArray", "of"],
-            "Promise" => vec!["all", "allSettled", "any", "race", "reject", "resolve"],
-            "Number" => vec![
-                "isFinite",
-                "isInteger",
-                "isNaN",
-                "isSafeInteger",
-                "parseFloat",
-                "parseInt",
-                "EPSILON",
-                "MAX_SAFE_INTEGER",
-                "MAX_VALUE",
-                "MIN_SAFE_INTEGER",
-                "MIN_VALUE",
-                "NaN",
-                "NEGATIVE_INFINITY",
-                "POSITIVE_INFINITY",
-            ],
-            "String" => vec!["fromCharCode", "fromCodePoint", "raw"],
             "globalThis" => {
                 let state = self.state.borrow();
                 return state
@@ -131,11 +88,36 @@ impl ReplHelper {
                     .cloned()
                     .collect();
             }
-            _ => vec![],
+            _ => {}
         }
-        .into_iter()
-        .map(|s| s.to_string())
-        .collect()
+
+        if !Self::is_safe_property_expr(obj_name) {
+            return vec![];
+        }
+
+        let script = format!(
+            r#"(function() {{
+                try {{
+                    const value = {obj_name};
+                    if (value == null) return [];
+                    const names = new Set();
+                    let current = value;
+                    while (current && current !== Object.prototype) {{
+                        for (const name of Object.getOwnPropertyNames(current)) {{
+                            if (!String(name).startsWith("__")) names.add(String(name));
+                        }}
+                        current = Object.getPrototypeOf(current);
+                    }}
+                    return Array.from(names).sort();
+                }} catch {{
+                    return [];
+                }}
+            }})()"#
+        );
+
+        self.ctx
+            .eval::<Vec<String>>(Source::from_bytes(script))
+            .unwrap_or_default()
     }
 }
 
@@ -238,4 +220,33 @@ pub fn update_completions(ctx: &JSContext, state: &Rc<RefCell<CompletionState>>)
 /// Create a new completion state
 pub fn new_completion_state() -> Rc<RefCell<CompletionState>> {
     Rc::new(RefCell::new(CompletionState::default()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustyline::history::DefaultHistory;
+
+    #[test]
+    fn completes_rong_properties_dynamically() {
+        let runtime = RongJS::runtime();
+        let ctx = runtime.context();
+        let rong = ctx.host_namespace();
+        rong.set("spawn", JSFunc::new(&ctx, || {}).expect("spawn fn"))
+            .expect("set spawn");
+        rong.set("sleep", JSFunc::new(&ctx, || {}).expect("sleep fn"))
+            .expect("set sleep");
+
+        let state = new_completion_state();
+        update_completions(&ctx, &state);
+        let helper = ReplHelper::new(ctx, state);
+        let history = DefaultHistory::new();
+        let (_, matches) = helper
+            .complete("Rong.", "Rong.".len(), &Context::new(&history))
+            .expect("complete");
+
+        let replacements: Vec<String> = matches.into_iter().map(|pair| pair.replacement).collect();
+        assert!(replacements.iter().any(|value| value == "spawn"));
+        assert!(replacements.iter().any(|value| value == "sleep"));
+    }
 }

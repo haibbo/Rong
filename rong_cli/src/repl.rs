@@ -76,58 +76,20 @@ fn is_complete_js(input: &str) -> bool {
     balanced && !in_single && !in_double && !in_template
 }
 
-fn ensure_inspect_fn(ctx: &JSContext) -> JSResult<JSFunc> {
-    let global = ctx.global();
-    if let Ok(existing) = global.get::<_, JSFunc>("__rong_repl_inspect") {
-        return Ok(existing);
-    }
-
-    // Inspector that handles various JavaScript values
-    let src = r#"
-        (v) => {
-          try {
-            if (v === undefined) return "undefined";
-            if (v === null) return "null";
-            const t = typeof v;
-            if (t === "string") return v;
-            if (t === "number" || t === "boolean" || t === "bigint") return String(v);
-            if (t === "function") return v.name ? `[Function: ${v.name}]` : "[Function]";
-            if (v instanceof Error) {
-              return v.toString();
-            }
-            try {
-              const s = JSON.stringify(v, null, 2);
-              if (s !== undefined) return s;
-            } catch {}
-            try { return String(v); } catch {}
-            try { return Object.prototype.toString.call(v); } catch {}
-            return "[unprintable]";
-          } catch (e) {
-            try { return `[inspect error] ${e && e.message ? e.message : String(e)}`; } catch {}
-            return "[inspect error]";
-          }
-        }
-    "#;
-
-    let func = ctx.eval::<JSFunc>(Source::from_bytes(src))?;
-    global.set("__rong_repl_inspect", func.clone())?;
-    Ok(func)
-}
-
 fn render_error(ctx: &JSContext, err: RongJSError) -> String {
     let fallback = err.to_string();
-    let Ok(inspect) = ensure_inspect_fn(ctx) else {
-        return fallback;
-    };
     let js_value = err.into_catch_value::<JSEngineValue>(ctx);
-    inspect
-        .call::<_, String>(None, (js_value,))
-        .unwrap_or(fallback)
+    let rendered = rong_console::inspect_value(js_value);
+    if rendered.is_empty() {
+        fallback
+    } else {
+        rendered
+    }
 }
 
 /// Check if code contains top-level await
 fn has_top_level_await(code: &str) -> bool {
-    code.contains("await ") && !code.contains("async function") && !code.contains("async (")
+    code.contains("await ") || code.contains("for await")
 }
 
 /// Extract simple variable names from let/const/var declarations
@@ -139,6 +101,18 @@ fn extract_declarations(code: &str) -> Vec<String> {
         let trimmed = line.trim();
         if trimmed.starts_with("//") || trimmed.starts_with("/*") {
             continue;
+        }
+        for keyword in &["async function ", "function ", "class "] {
+            if let Some(rest) = trimmed.strip_prefix(keyword) {
+                let ident: String = rest
+                    .trim_start()
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
+                    .collect();
+                if !ident.is_empty() {
+                    vars.push(ident);
+                }
+            }
         }
         for keyword in &["let ", "const ", "var "] {
             if let Some(rest) = trimmed.strip_prefix(keyword) {
@@ -159,28 +133,29 @@ fn extract_declarations(code: &str) -> Vec<String> {
     vars
 }
 
+fn wrap_top_level_await(code: &str) -> String {
+    if !has_top_level_await(code) {
+        return code.to_string();
+    }
+
+    let vars = extract_declarations(code);
+    if vars.is_empty() {
+        return format!("(async () => {{ {} }})();", code);
+    }
+
+    let mut expose = String::new();
+    for v in &vars {
+        expose.push_str("globalThis.");
+        expose.push_str(v);
+        expose.push_str(" = ");
+        expose.push_str(v);
+        expose.push_str("; ");
+    }
+    format!("(async () => {{ {} {} }})();", code, expose)
+}
+
 async fn eval_and_print(ctx: &JSContext, code: &str) -> JSResult<()> {
-    // Wrap top-level await in async IIFE for REPL convenience
-    // Also expose declared variables to global scope
-    let wrapped_code = if has_top_level_await(code) {
-        let vars = extract_declarations(code);
-        if vars.is_empty() {
-            format!("(async () => {{ {} }})();", code)
-        } else {
-            // Expose declared variables to globalThis after execution
-            let mut expose = String::new();
-            for v in &vars {
-                expose.push_str("globalThis.");
-                expose.push_str(v);
-                expose.push_str(" = ");
-                expose.push_str(v);
-                expose.push_str("; ");
-            }
-            format!("(async () => {{ {} {}  }})();", code, expose)
-        }
-    } else {
-        code.to_string()
-    };
+    let wrapped_code = wrap_top_level_await(code);
 
     let value = ctx
         .eval_async::<JSValue>(Source::from_bytes(wrapped_code.as_bytes()))
@@ -192,20 +167,25 @@ async fn eval_and_print(ctx: &JSContext, code: &str) -> JSResult<()> {
         return Ok(());
     }
 
-    let inspect = ensure_inspect_fn(ctx)?;
-    let rendered: String = inspect.call::<_, String>(None, (value,))?;
+    let rendered = rong_console::inspect_value(value);
     println!("{}", rendered);
     Ok(())
 }
 
 async fn load_file(ctx: &JSContext, path: &PathBuf) -> JSResult<()> {
     let source = Source::from_path(ctx, path).await?;
-    let value = ctx.eval_async::<JSValue>(source).await?;
+    let value = match source.kind() {
+        rong::SourceKind::JavaScript(code) => {
+            let code_str = String::from_utf8_lossy(code);
+            let wrapped = wrap_top_level_await(&code_str);
+            ctx.eval_async::<JSValue>(Source::from_bytes(wrapped))
+                .await?
+        }
+        _ => ctx.eval_async::<JSValue>(source).await?,
+    };
     ctx.global().set("_", value.clone())?;
     if !value.is_undefined() {
-        let inspect = ensure_inspect_fn(ctx)?;
-        let rendered: String = inspect.call::<_, String>(None, (value,))?;
-        println!("{}", rendered);
+        println!("{}", rong_console::inspect_value(value));
     }
     Ok(())
 }
@@ -243,7 +223,7 @@ pub async fn run(ctx: &JSContext) -> JSResult<()> {
     let completion_state = completer::new_completion_state();
     completer::update_completions(ctx, &completion_state);
 
-    let helper = ReplHelper::new(completion_state.clone());
+    let helper = ReplHelper::new(ctx.clone(), completion_state.clone());
     let mut rl = Editor::new().map_err(|e| {
         HostError::new(
             rong::error::E_IO,
@@ -364,4 +344,19 @@ pub async fn run(ctx: &JSContext) -> JSResult<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_top_level_await_exposes_simple_declarations() {
+        let wrapped = wrap_top_level_await(
+            "const client = 1;\nasync function boot() {}\nclass Demo {}\nawait Promise.resolve();",
+        );
+        assert!(wrapped.contains("globalThis.client"));
+        assert!(wrapped.contains("globalThis.boot"));
+        assert!(wrapped.contains("globalThis.Demo"));
+    }
 }
