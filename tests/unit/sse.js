@@ -1,7 +1,13 @@
 describe("SSE", () => {
+  it("does not expose SSE on globalThis", () => {
+    assert.equal(typeof SSE, "undefined");
+    assert.equal(globalThis.SSE, undefined);
+    assert.equal(typeof Rong.SSE, "function");
+  });
+
   it("should receive events via for-await-of", async () => {
     const url = TEST_SERVER_URL + "/sse/basic";
-    const sse = new SSE(url);
+    const sse = new Rong.SSE(url);
 
     const events = [];
     for await (const event of sse) {
@@ -19,7 +25,7 @@ describe("SSE", () => {
 
   it("should reconnect transparently across iterations", async () => {
     const url = TEST_SERVER_URL + "/sse/reconnect";
-    const sse = new SSE(url, {
+    const sse = new Rong.SSE(url, {
       reconnect: {
         enabled: true,
         baseDelayMs: 10,
@@ -44,14 +50,14 @@ describe("SSE", () => {
 
   it("should expose url property", () => {
     const url = TEST_SERVER_URL + "/sse/basic";
-    const sse = new SSE(url);
+    const sse = new Rong.SSE(url);
     assert.equal(sse.url, url);
     sse.close();
   });
 
   it("should provide origin in event objects", async () => {
     const url = TEST_SERVER_URL + "/sse/basic";
-    const sse = new SSE(url);
+    const sse = new Rong.SSE(url);
 
     for await (const event of sse) {
       assert.equal(typeof event.origin, "string");
@@ -63,7 +69,7 @@ describe("SSE", () => {
 
   it("should throw on connection error", async () => {
     const url = TEST_SERVER_URL + "/sse/not-event-stream";
-    const sse = new SSE(url, { reconnect: { enabled: false } });
+    const sse = new Rong.SSE(url, { reconnect: { enabled: false } });
 
     let threw = false;
     try {
@@ -80,7 +86,7 @@ describe("SSE", () => {
 
   it("should stop receiving after break", async () => {
     const url = TEST_SERVER_URL + "/sse/many";
-    const sse = new SSE(url, { reconnect: { enabled: false } });
+    const sse = new Rong.SSE(url, { reconnect: { enabled: false } });
 
     const events = [];
     for await (const event of sse) {
@@ -93,7 +99,7 @@ describe("SSE", () => {
 
   it("should stop receiving after close()", async () => {
     const url = TEST_SERVER_URL + "/sse/many";
-    const sse = new SSE(url, { reconnect: { enabled: false } });
+    const sse = new Rong.SSE(url, { reconnect: { enabled: false } });
 
     const events = [];
     for await (const event of sse) {
@@ -111,7 +117,7 @@ describe("SSE", () => {
 
   it("should deliver custom event types", async () => {
     const url = TEST_SERVER_URL + "/sse/custom";
-    const sse = new SSE(url, { reconnect: { enabled: false } });
+    const sse = new Rong.SSE(url, { reconnect: { enabled: false } });
 
     const statusEvents = [];
     const progressEvents = [];
@@ -141,7 +147,7 @@ describe("SSE", () => {
 
   it("should deliver small events before stream end", async () => {
     const url = TEST_SERVER_URL + "/sse/live-small";
-    const sse = new SSE(url, { reconnect: { enabled: false } });
+    const sse = new Rong.SSE(url, { reconnect: { enabled: false } });
     const startedAt = Date.now();
 
     for await (const event of sse) {

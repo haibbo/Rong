@@ -12,8 +12,8 @@ HTTP client providing the standard Fetch API and Server-Sent Events.
   - `get()`, `set()`, `append()`, `delete()`, `has()`, `forEach()`, `entries()`, `keys()`, `values()`, `getSetCookie()`
 - `Request` — HTTP request class
   - `method`, `headers`, `url`, `signal`, `redirect`, `clone()`, plus body mixin methods
-- `SSE` — Server-Sent Events async iterator client
-  - `new SSE(url, options?)` — connect to an SSE endpoint, returns an `AsyncIterable<SSEEvent>`
+- `Rong.SSE` — Server-Sent Events async iterator client
+  - `new Rong.SSE(url, options?)` — connect to an SSE endpoint, returns an `AsyncIterable<SSEEvent>`
   - `for await (const event of sse)` — iterate events (`{ type, data, id, origin }`)
   - `close()` — close the connection
   - `url` — the connection URL

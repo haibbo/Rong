@@ -34,7 +34,7 @@ hr();
 const startedAt = Date.now();
 let messageCount = 0;
 
-const sse = new SSE(url);
+const sse = new Rong.SSE(url);
 
 // Auto-close after duration
 const timer = setTimeout(() => sse.close(), durationMs);

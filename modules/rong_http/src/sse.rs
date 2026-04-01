@@ -1,9 +1,6 @@
-use futures::Stream;
 use rong::function::*;
 use rong::*;
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::security::grant_network_access;
@@ -25,6 +22,7 @@ pub struct SSE {
     _rt_close_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
     rx: Arc<Mutex<Option<EventReceiver>>>,
     opened_rx: Arc<Mutex<Option<OpenedReceiver>>>,
+    state: Arc<Mutex<SseStreamState>>,
 }
 
 #[js_class]
@@ -146,6 +144,7 @@ impl SSE {
             _rt_close_tx: Arc::new(Mutex::new(rt_close_tx)),
             opened_rx: Arc::new(Mutex::new(Some(opened_rx))),
             rx: Arc::new(Mutex::new(Some(rx))),
+            state: Arc::new(Mutex::new(SseStreamState::Opening)),
         })
     }
 
@@ -159,6 +158,15 @@ impl SSE {
         if let Ok(mut guard) = self._rt_close_tx.lock() {
             guard.take();
         }
+        if let Ok(mut guard) = self.rx.lock() {
+            guard.take();
+        }
+        if let Ok(mut guard) = self.opened_rx.lock() {
+            guard.take();
+        }
+        if let Ok(mut guard) = self.state.lock() {
+            *guard = SseStreamState::Done;
+        }
     }
 
     #[js_method(getter)]
@@ -166,21 +174,99 @@ impl SSE {
         self.url.clone()
     }
 
-    /// Internal method called by JS wrapper to install the async iterator.
-    #[js_method(rename = "_iter")]
-    fn iter(&self, this: This<JSObject>, ctx: JSContext) {
-        let opened_rx = self.opened_rx.lock().ok().and_then(|mut g| g.take());
-        let rx = self.rx.lock().ok().and_then(|mut g| g.take());
+    #[js_method]
+    async fn next(&self, ctx: JSContext) -> JSResult<JSObject> {
+        loop {
+            let opening = {
+                let guard = self.state.lock().map_err(|_| {
+                    HostError::new(rong::error::E_INTERNAL, "SSE state is poisoned")
+                })?;
+                matches!(&*guard, SseStreamState::Opening)
+            };
 
-        let stream = SseEventStream {
-            ctx: ctx.clone(),
-            origin: String::new(),
-            state: SseStreamState::Opening,
-            opened_rx,
-            rx,
-        };
+            if opening {
+                let opened_rx = self.opened_rx.lock().ok().and_then(|mut g| g.take());
+                let Some(opened_rx) = opened_rx else {
+                    if let Ok(mut guard) = self.state.lock() {
+                        *guard = SseStreamState::Done;
+                    }
+                    return Self::done_result(&ctx);
+                };
 
-        let _ = stream.install_js_async_iter(&ctx, &this.0);
+                match opened_rx.await {
+                    Ok(Ok(origin)) => {
+                        if let Ok(mut guard) = self.state.lock() {
+                            *guard = SseStreamState::Streaming { origin };
+                        }
+                        continue;
+                    }
+                    Ok(Err(message)) => {
+                        if let Ok(mut guard) = self.state.lock() {
+                            *guard = SseStreamState::Done;
+                        }
+                        return Err(HostError::new(rong::error::E_IO, message).into());
+                    }
+                    Err(_) => {
+                        if let Ok(mut guard) = self.state.lock() {
+                            *guard = SseStreamState::Done;
+                        }
+                        return Err(
+                            HostError::new(rong::error::E_IO, "SSE connection failed").into()
+                        );
+                    }
+                }
+            }
+
+            let origin = {
+                let guard = self.state.lock().map_err(|_| {
+                    HostError::new(rong::error::E_INTERNAL, "SSE state is poisoned")
+                })?;
+                match &*guard {
+                    SseStreamState::Streaming { origin } => origin.clone(),
+                    SseStreamState::Done => return Self::done_result(&ctx),
+                    SseStreamState::Opening => continue,
+                }
+            };
+
+            let mut rx = {
+                let mut guard = self.rx.lock().map_err(|_| {
+                    HostError::new(rong::error::E_INTERNAL, "SSE stream is poisoned")
+                })?;
+                guard.take()
+            };
+
+            let Some(mut rx) = rx.take() else {
+                if let Ok(mut guard) = self.state.lock() {
+                    *guard = SseStreamState::Done;
+                }
+                return Self::done_result(&ctx);
+            };
+
+            match rx.recv().await {
+                Some(Ok(evt)) => {
+                    if let Ok(mut guard) = self.rx.lock()
+                        && guard.is_none()
+                    {
+                        *guard = Some(rx);
+                    }
+                    return Self::value_result(&ctx, &origin, evt);
+                }
+                Some(Err(message)) => {
+                    self.close();
+                    return Err(HostError::new(rong::error::E_IO, message).into());
+                }
+                None => {
+                    self.close();
+                    return Self::done_result(&ctx);
+                }
+            }
+        }
+    }
+
+    #[js_method(rename = "return")]
+    async fn r#return(&self, ctx: JSContext) -> JSResult<JSObject> {
+        self.close();
+        Self::done_result(&ctx)
     }
 
     #[js_method(gc_mark)]
@@ -193,86 +279,32 @@ impl SSE {
 
 enum SseStreamState {
     Opening,
-    Streaming,
+    Streaming { origin: String },
     Done,
 }
 
-struct SseEventStream {
-    ctx: JSContext,
-    origin: String,
-    state: SseStreamState,
-    opened_rx: Option<OpenedReceiver>,
-    rx: Option<EventReceiver>,
-}
+impl SSE {
+    fn done_result(ctx: &JSContext) -> JSResult<JSObject> {
+        let obj = JSObject::new(ctx);
+        obj.set("done", true)?;
+        obj.set("value", JSValue::undefined(ctx))?;
+        Ok(obj)
+    }
 
-impl Stream for SseEventStream {
-    type Item = JSResult<JSObject>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-
-        loop {
-            match this.state {
-                SseStreamState::Opening => {
-                    if let Some(ref mut opened_rx) = this.opened_rx {
-                        match Pin::new(opened_rx).poll(cx) {
-                            Poll::Ready(Ok(Ok(origin))) => {
-                                this.origin = origin;
-                                this.opened_rx = None;
-                                this.state = SseStreamState::Streaming;
-                                continue;
-                            }
-                            Poll::Ready(Ok(Err(message))) => {
-                                this.state = SseStreamState::Done;
-                                let err: RongJSError =
-                                    HostError::new(rong::error::E_IO, message).into();
-                                return Poll::Ready(Some(Err(err)));
-                            }
-                            Poll::Ready(Err(_)) => {
-                                this.state = SseStreamState::Done;
-                                let err: RongJSError =
-                                    HostError::new(rong::error::E_IO, "SSE connection failed")
-                                        .into();
-                                return Poll::Ready(Some(Err(err)));
-                            }
-                            Poll::Pending => return Poll::Pending,
-                        }
-                    } else {
-                        this.state = SseStreamState::Done;
-                        return Poll::Ready(None);
-                    }
-                }
-                SseStreamState::Streaming => {
-                    if let Some(ref mut rx) = this.rx {
-                        match rx.poll_recv(cx) {
-                            Poll::Ready(Some(Ok(evt))) => {
-                                let obj = JSObject::new(&this.ctx);
-                                let _ = obj.set("type", evt.event.as_str());
-                                let _ = obj.set("data", evt.data.as_str());
-                                let _ = obj.set("id", evt.id.as_deref().unwrap_or(""));
-                                let _ = obj.set("origin", this.origin.as_str());
-                                return Poll::Ready(Some(Ok(obj)));
-                            }
-                            Poll::Ready(Some(Err(message))) => {
-                                this.state = SseStreamState::Done;
-                                let err: RongJSError =
-                                    HostError::new(rong::error::E_IO, message).into();
-                                return Poll::Ready(Some(Err(err)));
-                            }
-                            Poll::Ready(None) => {
-                                this.state = SseStreamState::Done;
-                                return Poll::Ready(None);
-                            }
-                            Poll::Pending => return Poll::Pending,
-                        }
-                    } else {
-                        this.state = SseStreamState::Done;
-                        return Poll::Ready(None);
-                    }
-                }
-                SseStreamState::Done => return Poll::Ready(None),
-            }
-        }
+    fn value_result(
+        ctx: &JSContext,
+        origin: &str,
+        evt: rong_rt::sse::SseEvent,
+    ) -> JSResult<JSObject> {
+        let obj = JSObject::new(ctx);
+        obj.set("done", false)?;
+        let value = JSObject::new(ctx);
+        value.set("type", evt.event.as_str())?;
+        value.set("data", evt.data.as_str())?;
+        value.set("id", evt.id.as_deref().unwrap_or(""))?;
+        value.set("origin", origin)?;
+        obj.set("value", value)?;
+        Ok(obj)
     }
 }
 
@@ -297,22 +329,10 @@ fn url_to_destination(parsed: &url::Url) -> JSResult<rong_rt::sse::SseDestinatio
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
-    ctx.register_class::<SSE>()?;
-
-    // Wrap the constructor so that _iter() is called automatically after construction.
-    // _iter() requires `this` (the JSObject), which is not available inside the Rust constructor.
-    ctx.eval::<()>(Source::from_bytes(
-        r#"(function() {
-            const _SSE = SSE;
-            const _proto = _SSE.prototype;
-            globalThis.SSE = function SSE(url, opts) {
-                const sse = opts !== undefined ? new _SSE(url, opts) : new _SSE(url);
-                sse._iter();
-                return sse;
-            };
-            globalThis.SSE.prototype = _proto;
-        })();"#,
-    ))?;
-
+    ctx.register_hidden_class::<SSE>()?;
+    let ctor = Class::lookup::<SSE>(ctx)?.clone();
+    let proto = Class::prototype::<SSE>(ctx)?;
+    rong::install_async_iterator_symbol(ctx, &proto)?;
+    ctx.host_namespace().set("SSE", ctor)?;
     Ok(())
 }

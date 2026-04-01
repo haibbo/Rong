@@ -729,7 +729,7 @@ mod tests {
             };
             let base_url = format!("http://{}", addr);
             ctx.global().set("TEST_SERVER_URL", base_url)?;
-            let has_sse: bool = ctx.eval(Source::from_bytes("typeof SSE === 'function'"))?;
+            let has_sse: bool = ctx.eval(Source::from_bytes("typeof Rong.SSE === 'function'"))?;
             assert!(has_sse, "SSE should be initialized");
 
             let passed = UnitJSRunner::load_script(&ctx, "sse.js")
