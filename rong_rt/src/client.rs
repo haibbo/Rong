@@ -157,9 +157,11 @@ pub fn reset_request_timeout() {
 
 fn build_client(proxy: Option<ProxyConfig>) -> HttpClient {
     #[cfg(feature = "tls-aws-lc")]
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    let provider = rustls::crypto::aws_lc_rs::default_provider();
     #[cfg(feature = "tls-ring")]
-    let _ = rustls::crypto::ring::default_provider().install_default();
+    let provider = rustls::crypto::ring::default_provider();
+
+    let _ = provider.clone().install_default();
 
     let mut connector = HttpConnector::new();
     // Required when using wrap_connector and https URIs.
@@ -174,7 +176,8 @@ fn build_client(proxy: Option<ProxyConfig>) -> HttpClient {
     }
 
     let https = HttpsConnectorBuilder::new()
-        .with_webpki_roots()
+        .with_provider_and_webpki_roots(provider)
+        .expect("failed to configure TLS root store")
         .https_or_http()
         .enable_http1()
         .wrap_connector(proxy_connector);
