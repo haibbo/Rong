@@ -130,8 +130,9 @@ pub trait JSContextImpl {
     /// # Returns
     /// * `Ok(Vec<u8>)` - The compiled bytecode as bytes if compilation succeeds
     /// * `Err(RongJSError)` - If compilation fails with one of these errors:
-    ///   - `RongJSError::CompileToByteErr()`: General compilation error
-    ///   - `RongJSError::NotSupportByteCode()`: Bytecode compilation not supported by runtime
+    ///   - `HostError::new(E_COMPILE, ...)`: General compilation error
+    ///   - `HostError::new(E_NOT_SUPPORTED, ...).with_data(err_data!({ feature: "bytecode" }))`:
+    ///     Bytecode compilation not supported by runtime
     fn compile_to_bytecode(&self, source: Source) -> Result<Vec<u8>, RongJSError>;
 
     /// Executes previously compiled bytecode

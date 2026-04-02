@@ -1,4 +1,5 @@
 use rong_test::*;
+use std::collections::{BTreeMap, HashMap};
 
 #[test]
 fn test_throw_error() {
@@ -71,14 +72,24 @@ fn test_error_constructor() {
         ctx.global().set(
             "reference_error",
             JSFunc::new(ctx, || -> JSResult<()> {
-                Err(RongJSError::PropertyNotFound("dummy".to_string()))
+                Err(HostError::new(
+                    rong::error::E_MISSING_PROPERTY,
+                    "Property 'dummy' Not Found",
+                )
+                .with_name("ReferenceError")
+                .into())
             })?,
         )?;
 
         ctx.global().set(
             "range_error",
             JSFunc::new(ctx, || -> JSResult<()> {
-                Err(RongJSError::TypedArrayRangeError())
+                Err(HostError::new(
+                    rong::error::E_OUT_OF_RANGE,
+                    "Invalid TypedArray range: offset or length exceeds buffer size",
+                )
+                .with_name("RangeError")
+                .into())
             })?,
         )?;
 
@@ -223,6 +234,90 @@ fn test_error_conversion() {
             let message = thrown_error_message(ctx, &err)?;
             assert_eq!(message, expected_msg);
         }
+        Ok(())
+    });
+}
+
+#[test]
+fn test_error_data_common_conversions() {
+    let mut tree = BTreeMap::new();
+    tree.insert("path".to_string(), "/tmp/demo");
+    tree.insert("kind".to_string(), "io");
+
+    let mut hash = HashMap::new();
+    hash.insert("code".to_string(), 5u32);
+    hash.insert("retry".to_string(), 1u32);
+
+    assert_eq!(
+        rong::error::ErrorData::from(None::<i32>),
+        rong::error::ErrorData::Null
+    );
+    assert_eq!(
+        rong::error::ErrorData::from(Some(7i32)),
+        rong::error::ErrorData::from(7i32)
+    );
+    assert_eq!(
+        rong::error::ErrorData::from(vec![1u32, 2u32, 3u32]),
+        rong::error::ErrorData::Array(vec![
+            rong::error::ErrorData::from(1u32),
+            rong::error::ErrorData::from(2u32),
+            rong::error::ErrorData::from(3u32),
+        ])
+    );
+    assert_eq!(
+        rong::error::ErrorData::from(["a", "b"]),
+        rong::error::ErrorData::Array(vec![
+            rong::error::ErrorData::from("a"),
+            rong::error::ErrorData::from("b"),
+        ])
+    );
+    assert!(matches!(
+        rong::error::ErrorData::from(tree),
+        rong::error::ErrorData::Object(map)
+            if map.get("path") == Some(&rong::error::ErrorData::from("/tmp/demo"))
+                && map.get("kind") == Some(&rong::error::ErrorData::from("io"))
+    ));
+    assert!(matches!(
+        rong::error::ErrorData::from(hash),
+        rong::error::ErrorData::Object(map)
+            if map.get("code") == Some(&rong::error::ErrorData::from(5u32))
+                && map.get("retry") == Some(&rong::error::ErrorData::from(1u32))
+    ));
+}
+
+#[test]
+fn test_error_helpers_use_host_error_builders() {
+    run(|ctx| {
+        ctx.global().set(
+            "error_with_aliases",
+            JSFunc::new(ctx, || -> JSResult<()> {
+                let data =
+                    HostError::new(rong::error::E_IO, "alias test").with_data(rong::err_data!({
+                        os_error: (Some(5i32)),
+                        tags: (vec!["fs", "read"]),
+                    }));
+                let err: RongJSError = data.into();
+                let host = err.as_host_error().expect("expected host error");
+                assert!(matches!(
+                    host.data.as_ref(),
+                    Some(rong::error::ErrorData::Object(map))
+                        if map.get("os_error") == Some(&rong::error::ErrorData::from(5i32))
+                            && map.get("tags")
+                                == Some(&rong::error::ErrorData::from(vec!["fs", "read"]))
+                ));
+                Err(HostError::new(
+                    rong::error::E_MISSING_PROPERTY,
+                    "Property 'missing' Not Found",
+                )
+                .with_name("ReferenceError")
+                .into())
+            })?,
+        )?;
+
+        let result = ctx.eval::<String>(Source::from_bytes(
+            br#"try { error_with_aliases(); } catch (e) { `${e.name}:${e.message}` }"#,
+        ))?;
+        assert_eq!(result, "ReferenceError:Property 'missing' Not Found");
         Ok(())
     });
 }

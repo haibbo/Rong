@@ -1,5 +1,5 @@
 use crate::{
-    IntoJSValue, JSClass, JSObjectOps, JSResult, JSValueImpl, Promise, PromiseResolver, RongJSError,
+    HostError, IntoJSValue, JSClass, JSObjectOps, JSResult, JSValueImpl, Promise, PromiseResolver,
 };
 use std::cell::RefCell;
 use std::future::Future;
@@ -104,15 +104,12 @@ impl<V: JSValueImpl> RustFunc<V> {
         // Validate the number of arguments
         let num_args = accessor.args_len() as u32;
         if num_args < self.required_params {
-            return Err(RongJSError::InvalidParameter(
-                self.required_params,
-                num_args,
-            ));
+            return Err(HostError::invalid_arg_count(self.required_params, num_args).into());
         }
 
         match &self.func {
             JSCallable::FnMut(f) => f.borrow_mut()(accessor),
-            JSCallable::FnOnce(f) => f.take().ok_or_else(RongJSError::OnceFnCalled)?(accessor),
+            JSCallable::FnOnce(f) => f.take().ok_or_else(HostError::once_fn_called)?(accessor),
         }
     }
 

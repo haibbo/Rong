@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue,
-    JSValueImpl, JSValueMapper, RongJSError,
+    FromJSValue, HostError, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf,
+    JSValue, JSValueImpl, JSValueMapper,
 };
 use std::fmt;
 use std::marker::PhantomData;
@@ -38,7 +38,7 @@ where
         if value.is_array() {
             JSObject::from_js_value(ctx, value).map(Self)
         } else {
-            Err(RongJSError::NotJSArray())
+            Err(HostError::not_array().into())
         }
     }
 }
@@ -377,7 +377,7 @@ where
             let array = JSArray::from_js_value(ctx, value)?;
             array.iter::<T>()?.collect::<JSResult<Vec<_>>>()
         } else {
-            Err(RongJSError::NotJSArray())
+            Err(HostError::not_array().into())
         }
     }
 }

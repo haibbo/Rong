@@ -1,6 +1,6 @@
 use crate::{QJSRuntime, QJSValue, qjs};
 use rong_core::{
-    JSClass, JSContextImpl, JSErrorFactory, JSExceptionThrower, JSRuntimeImpl, JSTypeOf,
+    HostError, JSClass, JSContextImpl, JSErrorFactory, JSExceptionThrower, JSRuntimeImpl, JSTypeOf,
     JSValueImpl, RongJSError, Source,
 };
 use smallvec::SmallVec;
@@ -9,6 +9,14 @@ use std::mem::MaybeUninit;
 use std::rc::Rc;
 
 use crate::runtime::{QJSRuntimeInner, runtime_guard_from_ctx};
+
+fn compile_to_bytecode_failed() -> RongJSError {
+    HostError::new(
+        rong_core::error::E_COMPILE,
+        "Failed to compile JS code to bytecode",
+    )
+    .into()
+}
 
 pub struct QJSContext {
     pub(crate) ctx: *mut qjs::JSContext,
@@ -67,7 +75,7 @@ impl JSContextImpl for QJSContext {
         };
         let obj = self.eval_raw(&source, options.to_flags());
         if obj.is_exception() {
-            return Err(RongJSError::CompileToByteErr());
+            return Err(compile_to_bytecode_failed());
         }
 
         let mut out_size: usize = 0;
@@ -81,7 +89,7 @@ impl JSContextImpl for QJSContext {
         };
 
         if buf.is_null() {
-            return Err(RongJSError::CompileToByteErr());
+            return Err(compile_to_bytecode_failed());
         }
 
         let bytecode = unsafe { std::slice::from_raw_parts(buf, out_size) }.to_vec();

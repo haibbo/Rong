@@ -1,7 +1,7 @@
 use super::{JSError, JSErrorFactory};
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult, JSTypeOf,
-    JSValue, JSValueImpl, RongJSError,
+    FromJSValue, HostError, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
+    JSTypeOf, JSValue, JSValueImpl,
 };
 use std::fmt;
 use std::ops::Deref;
@@ -46,7 +46,7 @@ where
         if value.is_exception() {
             Ok(Self(JSObject::from_js_value(ctx, value)?))
         } else {
-            Err(RongJSError::NotObject())
+            Err(HostError::not_exception().into())
         }
     }
 }

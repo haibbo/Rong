@@ -158,7 +158,9 @@ pub trait JSClassExt<V: JSValueImpl>: JSClass<V> {
 
         let mut func = match obj.borrow_mut::<RustFunc<V>>() {
             Ok(f) => f,
-            Err(_) => return RongJSError::NotJSFunc().throw_js_exception(ctx),
+            Err(_) => {
+                return RongJSError::from(HostError::not_function()).throw_js_exception(ctx);
+            }
         };
 
         // ignore checking whether v is exception or error, sicne no one use it again here
@@ -287,12 +289,20 @@ where
 
         let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
-            Err(RongJSError::Borrow(std::any::type_name::<T>()))
+            Err(HostError::new(
+                crate::error::E_INTERNAL,
+                format!("Failed to borrow for type {}", std::any::type_name::<T>()),
+            )
+            .into())
         } else {
             // SAFETY: ptr was created by Box::into_raw in instance()
-            unsafe { &*ptr }
-                .try_borrow()
-                .map_err(|_| RongJSError::Borrow(std::any::type_name::<T>()))
+            unsafe { &*ptr }.try_borrow().map_err(|_| {
+                HostError::new(
+                    crate::error::E_INTERNAL,
+                    format!("Failed to borrow for type {}", std::any::type_name::<T>()),
+                )
+                .into()
+            })
         }
     }
 
@@ -312,12 +322,20 @@ where
 
         let ptr = self.as_value().get_opaque() as *mut RefCell<T>;
         if ptr.is_null() {
-            Err(RongJSError::Borrow(std::any::type_name::<T>()))
+            Err(HostError::new(
+                crate::error::E_INTERNAL,
+                format!("Failed to borrow for type {}", std::any::type_name::<T>()),
+            )
+            .into())
         } else {
             // SAFETY: ptr was created by Box::into_raw in instance()
-            unsafe { &*ptr }
-                .try_borrow_mut()
-                .map_err(|_| RongJSError::Borrow(std::any::type_name::<T>()))
+            unsafe { &*ptr }.try_borrow_mut().map_err(|_| {
+                HostError::new(
+                    crate::error::E_INTERNAL,
+                    format!("Failed to borrow for type {}", std::any::type_name::<T>()),
+                )
+                .into()
+            })
         }
     }
 

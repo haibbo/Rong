@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, JSContext, JSFunc, JSResult, JSTypeOf, JSValue, JSValueConversion, JSValueImpl,
-    JsonToJSValue, RongJSError,
+    FromJSValue, HostError, JSContext, JSFunc, JSResult, JSTypeOf, JSValue, JSValueConversion,
+    JSValueImpl, JsonToJSValue, RongJSError,
 };
 use std::fmt;
 use std::ops::Deref;
@@ -36,7 +36,7 @@ where
         if value.is_object() {
             Ok(value.into())
         } else {
-            Err(RongJSError::NotObject())
+            Err(HostError::not_object().into())
         }
     }
 }
@@ -252,7 +252,7 @@ where
                     .has_property(kv)
                     .map_err(|thrown| Self::thrown_error(ctx, thrown))?
                 {
-                    return Err(RongJSError::PropertyNotFound(key.to_string()));
+                    return Err(HostError::property_not_found(key).into());
                 }
                 value
             }
@@ -262,7 +262,7 @@ where
                     .has_property(kv)
                     .map_err(|thrown| Self::thrown_error(ctx, thrown))?
                 {
-                    return Err(RongJSError::PropertyNotFound(key.to_string()));
+                    return Err(HostError::property_not_found(key).into());
                 }
                 JSValue::undefined(ctx)
             }

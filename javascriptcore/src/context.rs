@@ -225,7 +225,12 @@ impl JSContextImpl for JSCContext {
     }
 
     fn compile_to_bytecode(&self, _source: rong_core::Source) -> Result<Vec<u8>, RongJSError> {
-        Err(RongJSError::NotSupportByteCode())
+        Err(rong_core::HostError::new(
+            rong_core::error::E_NOT_SUPPORTED,
+            "Bytecode is not supported on JavaScriptCore",
+        )
+        .with_data(rong_core::err_data!({ feature: "bytecode" }))
+        .into())
     }
 
     fn run_bytecode(&self, _bytes: &[u8]) -> Self::Value {

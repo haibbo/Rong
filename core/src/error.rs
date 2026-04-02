@@ -39,16 +39,14 @@ use crate::{
     FromJSValue, IntoJSValue, JSArray, JSArrayOps, JSContext, JSContextImpl, JSErrorFactory,
     JSExceptionThrower, JSObject, JSObjectOps, JSValue, JSValueImpl,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use thiserror::Error;
 use tokio::sync::oneshot;
 
 pub type JSResult<T> = Result<T, RongJSError>;
 
 pub fn illegal_constructor<T>(message: impl Into<String>) -> JSResult<T> {
-    Err(HostError::new(E_ILLEGAL_CONSTRUCTOR, message)
-        .with_name("TypeError")
-        .into())
+    Err(HostError::type_error(E_ILLEGAL_CONSTRUCTOR, message).into())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -173,6 +171,54 @@ impl From<usize> for ErrorData {
     }
 }
 
+impl<T> From<Option<T>> for ErrorData
+where
+    T: Into<ErrorData>,
+{
+    fn from(v: Option<T>) -> Self {
+        match v {
+            Some(value) => value.into(),
+            None => Self::Null,
+        }
+    }
+}
+
+impl<T> From<Vec<T>> for ErrorData
+where
+    T: Into<ErrorData>,
+{
+    fn from(v: Vec<T>) -> Self {
+        Self::Array(v.into_iter().map(Into::into).collect())
+    }
+}
+
+impl<T, const N: usize> From<[T; N]> for ErrorData
+where
+    T: Into<ErrorData>,
+{
+    fn from(v: [T; N]) -> Self {
+        Self::Array(v.into_iter().map(Into::into).collect())
+    }
+}
+
+impl<T> From<BTreeMap<String, T>> for ErrorData
+where
+    T: Into<ErrorData>,
+{
+    fn from(v: BTreeMap<String, T>) -> Self {
+        Self::Object(v.into_iter().map(|(k, value)| (k, value.into())).collect())
+    }
+}
+
+impl<T> From<HashMap<String, T>> for ErrorData
+where
+    T: Into<ErrorData>,
+{
+    fn from(v: HashMap<String, T>) -> Self {
+        Self::Object(v.into_iter().map(|(k, value)| (k, value.into())).collect())
+    }
+}
+
 #[macro_export]
 macro_rules! err_data {
     (null) => {
@@ -254,13 +300,84 @@ impl HostError {
         }
     }
 
+    pub(crate) fn type_error(code: &'static str, message: impl Into<String>) -> Self {
+        Self::new(code, message).with_name("TypeError")
+    }
+
+    pub(crate) fn range_error(code: &'static str, message: impl Into<String>) -> Self {
+        Self::new(code, message).with_name("RangeError")
+    }
+
     pub fn invalid_arg_count(expected: u32, got: u32) -> Self {
-        Self::new(
+        Self::type_error(
             E_INVALID_ARG,
             format!("{expected} arguments required, but {got} found"),
         )
-        .with_name("TypeError")
         .with_data(crate::err_data!({ expected: expected, got: got }))
+    }
+
+    pub(crate) fn not_array() -> Self {
+        Self::type_error(E_NOT_ARRAY, "Not JS Array")
+    }
+
+    pub(crate) fn not_array_buffer() -> Self {
+        Self::type_error(E_NOT_ARRAY_BUFFER, "Not JS ArrayBuffer")
+    }
+
+    pub(crate) fn not_exception() -> Self {
+        Self::type_error(E_NOT_EXCEPTION, "Not JS Exception")
+    }
+
+    pub(crate) fn not_function() -> Self {
+        Self::type_error(E_NOT_FUNCTION, "Not JS Function")
+    }
+
+    pub(crate) fn not_object() -> Self {
+        Self::type_error(E_TYPE, "Not JS Object")
+    }
+
+    pub(crate) fn not_symbol() -> Self {
+        Self::type_error(E_TYPE, "Not JS Symbol")
+    }
+
+    pub(crate) fn not_typed_array() -> Self {
+        Self::type_error(E_NOT_TYPED_ARRAY, "Not JS TypedArray")
+    }
+
+    pub(crate) fn property_not_found(name: impl std::fmt::Display) -> Self {
+        Self::new(E_MISSING_PROPERTY, format!("Property '{name}' Not Found"))
+            .with_name("ReferenceError")
+    }
+
+    pub(crate) fn once_fn_called() -> Self {
+        Self::new(E_INVALID_STATE, "OnceFn had been called")
+    }
+
+    pub(crate) fn typed_array_kind_mismatch(
+        expected: impl std::fmt::Debug,
+        actual: impl std::fmt::Debug,
+    ) -> Self {
+        Self::type_error(
+            E_TYPE,
+            format!(
+                "TypedArray kind mismatch: expected {:?}, got {:?}",
+                expected, actual
+            ),
+        )
+    }
+
+    pub(crate) fn typed_array_alignment_error() -> Self {
+        Self::range_error(
+            E_OUT_OF_RANGE,
+            "Invalid TypedArray alignment: byte_offset must be a multiple of element size",
+        )
+    }
+
+    pub(crate) fn typed_array_range_error() -> Self {
+        Self::range_error(
+            E_OUT_OF_RANGE,
+            "Invalid TypedArray range: offset or length exceeds buffer size",
+        )
     }
 
     pub fn with_name(mut self, name: &'static str) -> Self {
@@ -268,8 +385,11 @@ impl HostError {
         self
     }
 
-    pub fn with_data(mut self, data: ErrorData) -> Self {
-        self.data = Some(data);
+    pub fn with_data<D>(mut self, data: D) -> Self
+    where
+        D: Into<ErrorData>,
+    {
+        self.data = Some(data.into());
         self
     }
 
@@ -306,111 +426,7 @@ pub(crate) enum RongJSErrorKind {
     Thrown(ThrownValue),
 }
 
-#[allow(non_snake_case, non_upper_case_globals)]
 impl RongJSError {
-    pub fn Borrow(ty: &'static str) -> Self {
-        HostError::new(E_INTERNAL, format!("Failed to borrow for type {ty}")).into()
-    }
-
-    pub fn InvalidParameter(expected: u32, got: u32) -> Self {
-        HostError::invalid_arg_count(expected, got).into()
-    }
-
-    pub fn PropertyNotFound(name: String) -> Self {
-        HostError::new(E_MISSING_PROPERTY, format!("Property '{name}' Not Found"))
-            .with_name("ReferenceError")
-            .into()
-    }
-
-    pub fn NotObject() -> Self {
-        HostError::new(E_TYPE, "Not JS Object")
-            .with_name("TypeError")
-            .into()
-    }
-
-    pub fn NotSymbol() -> Self {
-        HostError::new(E_TYPE, "Not JS Symbol")
-            .with_name("TypeError")
-            .into()
-    }
-
-    pub fn NotJSFunc() -> Self {
-        HostError::new(E_NOT_FUNCTION, "Not JS Function")
-            .with_name("TypeError")
-            .into()
-    }
-
-    pub fn NotJSArray() -> Self {
-        HostError::new(E_NOT_ARRAY, "Not JS Array")
-            .with_name("TypeError")
-            .into()
-    }
-
-    pub fn NotJSArrayBuffer() -> Self {
-        HostError::new(E_NOT_ARRAY_BUFFER, "Not JS ArrayBuffer")
-            .with_name("TypeError")
-            .into()
-    }
-
-    pub fn NotJSTypedArray() -> Self {
-        HostError::new(E_NOT_TYPED_ARRAY, "Not JS TypedArray")
-            .with_name("TypeError")
-            .into()
-    }
-
-    pub fn TypedArrayAlignmentError() -> Self {
-        HostError::new(
-            E_OUT_OF_RANGE,
-            "Invalid TypedArray alignment: byte_offset must be a multiple of element size",
-        )
-        .with_name("RangeError")
-        .into()
-    }
-
-    pub fn TypedArrayRangeError() -> Self {
-        HostError::new(
-            E_OUT_OF_RANGE,
-            "Invalid TypedArray range: offset or length exceeds buffer size",
-        )
-        .with_name("RangeError")
-        .into()
-    }
-
-    pub fn TypedArrayKindMismatch(
-        expected: crate::JSTypedArrayKind,
-        actual: crate::JSTypedArrayKind,
-    ) -> Self {
-        HostError::new(
-            E_TYPE,
-            format!(
-                "TypedArray kind mismatch: expected {:?}, got {:?}",
-                expected, actual
-            ),
-        )
-        .with_name("TypeError")
-        .into()
-    }
-
-    pub fn NotJSExcep() -> Self {
-        HostError::new(E_NOT_EXCEPTION, "Not JS Exception Object")
-            .with_name("TypeError")
-            .into()
-    }
-
-    pub fn CompileToByteErr() -> Self {
-        HostError::new(E_COMPILE, "Failed to compile JS code to bytecode").into()
-    }
-
-    pub fn NotSupportByteCode() -> Self {
-        HostError::new(E_NOT_SUPPORTED, "Does not support bytecode")
-            .with_data(crate::err_data!({ feature: "bytecode" }))
-            .into()
-    }
-
-    pub fn OnceFnCalled() -> Self {
-        HostError::new(E_INVALID_STATE, "OnceFn had been called").into()
-    }
-
     fn error_data_to_js_value<V>(ctx: &JSContext<V::Context>, data: &ErrorData) -> JSValue<V>
     where
         V: JSValueImpl + JSObjectOps + JSArrayOps,

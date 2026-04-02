@@ -1,10 +1,18 @@
 use crate::{ArkJSRuntime, ArkJSValue, arkjs};
 use rong_core::{
-    JSClass, JSContextImpl, JSErrorFactory, JSExceptionThrower, JSRuntimeImpl, JSValueImpl,
-    PromiseHandlerRegistration, RongJSError,
+    HostError, JSClass, JSContextImpl, JSErrorFactory, JSExceptionThrower, JSRuntimeImpl,
+    JSValueImpl, PromiseHandlerRegistration, RongJSError,
 };
 use std::ffi::CString;
 use std::ptr;
+
+fn compile_to_bytecode_failed() -> RongJSError {
+    HostError::new(
+        rong_core::error::E_COMPILE,
+        "Failed to compile JS code to bytecode",
+    )
+    .into()
+}
 
 pub struct ArkJSContext {
     raw: arkjs::JSVM_Env,
@@ -315,7 +323,7 @@ impl JSContextImpl for ArkJSContext {
                 &mut script_value,
             );
             if status != arkjs::JSVM_Status_JSVM_OK {
-                return Err(RongJSError::CompileToByteErr());
+                return Err(compile_to_bytecode_failed());
             }
 
             let mut script: arkjs::JSVM_Script = ptr::null_mut();
@@ -330,7 +338,7 @@ impl JSContextImpl for ArkJSContext {
                 &mut script,
             );
             if status != arkjs::JSVM_Status_JSVM_OK {
-                return Err(RongJSError::CompileToByteErr());
+                return Err(compile_to_bytecode_failed());
             }
 
             // Generate code cache from compiled script
@@ -339,7 +347,7 @@ impl JSContextImpl for ArkJSContext {
             let status =
                 arkjs::OH_JSVM_CreateCodeCache(self.raw, script, &mut cache_data, &mut cache_len);
             if status != arkjs::JSVM_Status_JSVM_OK || cache_data.is_null() {
-                return Err(RongJSError::CompileToByteErr());
+                return Err(compile_to_bytecode_failed());
             }
 
             // Pack: [source_len: 4 bytes LE][source bytes][cache bytes]

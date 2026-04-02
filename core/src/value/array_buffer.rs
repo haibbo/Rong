@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf, JSValue,
-    JSValueImpl, JSValueMapper, RongJSError, TypedArrayElement,
+    FromJSValue, HostError, IntoJSValue, JSContext, JSObject, JSObjectOps, JSResult, JSTypeOf,
+    JSValue, JSValueImpl, JSValueMapper, TypedArrayElement,
 };
 
 use std::ops::{Deref, DerefMut};
@@ -49,7 +49,7 @@ where
                 inner: JSObject::from_js_value(ctx, value)?,
             })
         } else {
-            Err(RongJSError::NotJSArrayBuffer())
+            Err(HostError::not_array_buffer().into())
         }
     }
 }
@@ -132,7 +132,7 @@ where
         T: TypedArrayElement,
     {
         if !self.len().is_multiple_of(T::BYTES_PER_ELEMENT) {
-            return Err(RongJSError::TypedArrayAlignmentError());
+            return Err(HostError::typed_array_alignment_error().into());
         }
 
         Ok(self.len() / T::BYTES_PER_ELEMENT)

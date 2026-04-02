@@ -1,7 +1,7 @@
 use crate::function::{FromParams, IntoJSCallable, IntoOnceJSCallable, JSParameterType, RustFunc};
 use crate::{
-    Class, FromJSValue, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps, JSResult,
-    JSTypeOf, JSValue, JSValueImpl, JSValueMapper, Promise, PropertyDescriptor, RongJSError,
+    Class, FromJSValue, HostError, IntoJSValue, JSContext, JSContextImpl, JSObject, JSObjectOps,
+    JSResult, JSTypeOf, JSValue, JSValueImpl, JSValueMapper, Promise, PropertyDescriptor,
 };
 use std::ops::Deref;
 
@@ -41,7 +41,7 @@ where
         if value.is_function() {
             JSObject::from_js_value(ctx, value).map(Self)
         } else {
-            Err(RongJSError::NotJSFunc())
+            Err(HostError::not_function().into())
         }
     }
 }

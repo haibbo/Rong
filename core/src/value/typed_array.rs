@@ -1,6 +1,6 @@
 use crate::{
-    FromJSValue, IntoJSValue, JSArrayBuffer, JSArrayBufferOps, JSContext, JSObject, JSObjectOps,
-    JSResult, JSTypeOf, JSValue, JSValueImpl, JSValueMapper, RongJSError,
+    FromJSValue, HostError, IntoJSValue, JSArrayBuffer, JSArrayBufferOps, JSContext, JSObject,
+    JSObjectOps, JSResult, JSTypeOf, JSValue, JSValueImpl, JSValueMapper,
 };
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -124,7 +124,7 @@ where
         if value.is_object() && value.as_value().get_kind().is_some() {
             JSObject::from_js_value(ctx, value).map(Self)
         } else {
-            Err(RongJSError::NotJSTypedArray())
+            Err(HostError::not_typed_array().into())
         }
     }
 }
@@ -188,7 +188,7 @@ where
     pub fn from_any(inner: AnyJSTypedArray<V>) -> JSResult<Self> {
         let actual = inner.kind();
         if actual != T::TYPE {
-            return Err(RongJSError::TypedArrayKindMismatch(T::TYPE, actual));
+            return Err(HostError::typed_array_kind_mismatch(T::TYPE, actual).into());
         }
 
         Ok(Self {
@@ -295,7 +295,7 @@ where
         let buffer = self
             .as_value()
             .get_array_buffer()
-            .ok_or_else(RongJSError::NotJSArrayBuffer)?;
+            .ok_or_else(|| -> crate::RongJSError { HostError::not_array_buffer().into() })?;
         let ctx = self.context();
         JSArrayBuffer::from_js_value(&ctx, JSValue::from_raw(&ctx, buffer))
     }
@@ -375,25 +375,25 @@ where
 {
     let bytes_per_element = kind.bytes_per_element();
     if !byte_offset.is_multiple_of(bytes_per_element) {
-        return Err(RongJSError::TypedArrayAlignmentError());
+        return Err(HostError::typed_array_alignment_error().into());
     }
 
     let buffer_size = buffer.len();
     if byte_offset > buffer_size {
-        return Err(RongJSError::TypedArrayRangeError());
+        return Err(HostError::typed_array_range_error().into());
     }
 
     let available_bytes = buffer_size - byte_offset;
     match length {
         Some(length) => {
             if length > available_bytes / bytes_per_element {
-                return Err(RongJSError::TypedArrayRangeError());
+                return Err(HostError::typed_array_range_error().into());
             }
             Ok(length)
         }
         None => {
             if !available_bytes.is_multiple_of(bytes_per_element) {
-                return Err(RongJSError::TypedArrayAlignmentError());
+                return Err(HostError::typed_array_alignment_error().into());
             }
             Ok(available_bytes / bytes_per_element)
         }
