@@ -6,3 +6,53 @@ This crate provides the executor-facing runtime support used by Rong, including
 HTTP client plumbing, async service integration, and transport-related helpers.
 
 Most applications should depend on `rong` instead of using `rong_rt` directly.
+
+## Timeouts
+
+`rong_rt` separates two different timeout scopes:
+
+- `request_timeout`: caps the whole request/response operation
+- `connect_timeout`: caps only the socket connect phase
+
+This matters for long-lived or high-latency flows. For example, an SSE stream or
+large upload may legitimately run for minutes after the connection is
+established, while you still want the initial dial to fail fast if DNS, TCP, or
+TLS setup gets stuck.
+
+Typical use cases:
+
+- fail fast when connecting through a flaky proxy or dead IP
+- keep SSE handshakes short without limiting the stream lifetime
+- allow large uploads/downloads to run for a long time after connection
+
+### Per-request overrides
+
+```rust
+use std::time::Duration;
+
+use rong_rt::http::RequestOptions;
+
+let options = RequestOptions::new()
+    .with_request_timeout(Duration::from_secs(30))
+    .with_connect_timeout(Duration::from_secs(2));
+```
+
+If no override is provided, `rong_rt` uses its built-in defaults: a `60s`
+request timeout and no extra connect timeout cap.
+
+There is no process-wide mutable timeout configuration. If one call site needs a
+different policy, pass it explicitly through that operation's options.
+
+The same split exists on the operation-specific builders:
+
+- `download::DownloadOptions::with_request_timeout`
+- `download::DownloadOptions::with_connect_timeout`
+- `upload::UploadOptions::with_request_timeout`
+- `upload::UploadOptions::with_connect_timeout`
+- `sse::SseConnectOptions::with_request_timeout`
+- `sse::SseConnectOptions::with_connect_timeout`
+
+Rule of thumb:
+
+- shorten `connect_timeout` when you want to fail fast before the connection is established
+- shorten `request_timeout` when the whole request/response lifecycle should be bounded

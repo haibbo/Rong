@@ -8,7 +8,6 @@ use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use std::io::Error;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock, RwLock};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
@@ -33,6 +32,12 @@ struct CachedClient {
     client: HttpClient,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct RequestTimeouts {
+    pub request_timeout: Option<Duration>,
+    pub connect_timeout: Option<Duration>,
+}
+
 #[cfg(all(feature = "tls-aws-lc", feature = "tls-ring"))]
 compile_error!("Enable only one TLS backend feature: `tls-aws-lc` or `tls-ring`.");
 
@@ -41,7 +46,8 @@ compile_error!("One TLS backend feature is required: enable `tls-aws-lc` or `tls
 
 static CLIENT: OnceLock<Mutex<Option<CachedClient>>> = OnceLock::new();
 static PROXY_CONFIG: OnceLock<RwLock<Option<ProxyConfig>>> = OnceLock::new();
-static REQUEST_TIMEOUT_MS: AtomicU64 = AtomicU64::new(DEFAULT_REQUEST_TIMEOUT.as_millis() as u64);
+#[cfg(test)]
+static TEST_GUARD: OnceLock<Mutex<()>> = OnceLock::new();
 
 async fn forward_or_buffer_chunk(
     tx: &mpsc::Sender<Result<Bytes, String>>,
@@ -74,6 +80,14 @@ fn invalidate_client_cache() {
     if let Ok(mut slot) = client_cache().lock() {
         *slot = None;
     }
+}
+
+#[cfg(test)]
+pub(crate) fn test_guard() -> std::sync::MutexGuard<'static, ()> {
+    TEST_GUARD
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("test guard lock")
 }
 
 fn current_proxy() -> Option<ProxyConfig> {
@@ -131,31 +145,7 @@ pub fn get_proxy() -> Option<String> {
     current_proxy().map(|p| p.uri.to_string())
 }
 
-pub fn set_request_timeout(timeout: Duration) {
-    // Keep timeout > 0; use default if caller passes zero.
-    let millis = timeout.as_millis() as u64;
-    REQUEST_TIMEOUT_MS.store(
-        if millis == 0 {
-            DEFAULT_REQUEST_TIMEOUT.as_millis() as u64
-        } else {
-            millis
-        },
-        Ordering::Relaxed,
-    );
-}
-
-pub fn get_request_timeout() -> Duration {
-    Duration::from_millis(REQUEST_TIMEOUT_MS.load(Ordering::Relaxed))
-}
-
-pub fn reset_request_timeout() {
-    REQUEST_TIMEOUT_MS.store(
-        DEFAULT_REQUEST_TIMEOUT.as_millis() as u64,
-        Ordering::Relaxed,
-    );
-}
-
-fn build_client(proxy: Option<ProxyConfig>) -> HttpClient {
+fn build_client(proxy: Option<ProxyConfig>, connect_timeout: Option<Duration>) -> HttpClient {
     #[cfg(feature = "tls-aws-lc")]
     let provider = rustls::crypto::aws_lc_rs::default_provider();
     #[cfg(feature = "tls-ring")]
@@ -166,6 +156,7 @@ fn build_client(proxy: Option<ProxyConfig>) -> HttpClient {
     let mut connector = HttpConnector::new();
     // Required when using wrap_connector and https URIs.
     connector.enforce_http(false);
+    connector.set_connect_timeout(connect_timeout);
 
     let mut proxy_connector = ProxyConnector::unsecured(connector);
     if let Some(proxy_config) = proxy {
@@ -189,17 +180,23 @@ fn build_proxy(proxy_config: ProxyConfig) -> Proxy {
     Proxy::new(Intercept::All, proxy_config.uri)
 }
 
-fn client() -> Result<HttpClient, String> {
+fn client(timeouts: RequestTimeouts) -> Result<HttpClient, String> {
     let proxy = current_proxy();
+    let connect_timeout = timeouts.connect_timeout;
 
     if let Ok(slot) = client_cache().lock()
         && let Some(cached) = slot.as_ref()
         && cached.proxy == proxy
+        && connect_timeout.is_none()
     {
         return Ok(cached.client.clone());
     }
 
-    let built = build_client(proxy.clone());
+    let built = build_client(proxy.clone(), connect_timeout);
+    if connect_timeout.is_some() {
+        return Ok(built);
+    }
+
     let mut slot = client_cache()
         .lock()
         .map_err(|_| "client cache lock poisoned".to_string())?;
@@ -226,14 +223,14 @@ pub async fn send_request_with_timeout(
     request: HttpRequest<BoxBody<Bytes, Error>>,
     small_threshold: usize,
     abort_rx: Option<oneshot::Receiver<()>>,
-    timeout_override: Option<Duration>,
+    timeouts: RequestTimeouts,
 ) -> Result<HttpResponse, String> {
     send_request_with_coalesce(
         request,
         small_threshold,
         abort_rx,
         DEFAULT_STREAM_COALESCE_TARGET,
-        timeout_override,
+        timeouts,
     )
     .await
 }
@@ -243,9 +240,10 @@ pub async fn send_request_with_coalesce(
     small_threshold: usize,
     abort_rx: Option<oneshot::Receiver<()>>,
     stream_coalesce_target: usize,
-    timeout_override: Option<Duration>,
+    timeouts: RequestTimeouts,
 ) -> Result<HttpResponse, String> {
-    let client = client()?;
+    let request_timeout = timeouts.request_timeout.unwrap_or(DEFAULT_REQUEST_TIMEOUT);
+    let client = client(timeouts)?;
     let join = crate::RongExecutor::global().spawn(async move {
         process_request(
             client,
@@ -253,7 +251,7 @@ pub async fn send_request_with_coalesce(
             small_threshold,
             stream_coalesce_target,
             abort_rx,
-            timeout_override,
+            request_timeout,
         )
         .await
     });
@@ -268,10 +266,9 @@ async fn process_request(
     small: usize,
     stream_coalesce_target: usize,
     mut abort_rx: Option<oneshot::Receiver<()>>,
-    timeout_override: Option<Duration>,
+    request_timeout: Duration,
 ) -> Result<HttpResponse, String> {
     const READ_FRAME_TIMEOUT: Duration = Duration::from_secs(120);
-    let request_timeout = timeout_override.unwrap_or_else(get_request_timeout);
 
     let resp = if let Some(rx) = abort_rx.as_mut() {
         tokio::select! {
@@ -429,7 +426,54 @@ mod tests {
     use super::*;
 
     #[test]
+    fn custom_connect_timeout_does_not_populate_shared_cache() {
+        let _guard = test_guard();
+        invalidate_client_cache();
+        clear_proxy();
+
+        let _ = client(RequestTimeouts {
+            connect_timeout: Some(Duration::from_secs(1)),
+            ..Default::default()
+        })
+        .expect("custom-timeout client");
+        assert!(client_cache().lock().expect("cache lock").is_none());
+
+        let _ = client(RequestTimeouts::default()).expect("default client");
+        assert!(client_cache().lock().expect("cache lock").is_some());
+    }
+
+    #[test]
+    fn custom_connect_timeout_keeps_shared_cache_intact() {
+        let _guard = test_guard();
+        invalidate_client_cache();
+        clear_proxy();
+
+        let _ = client(RequestTimeouts::default()).expect("default client");
+        let had_cached_client_before = client_cache()
+            .lock()
+            .expect("cache lock")
+            .as_ref()
+            .is_some();
+
+        let _ = client(RequestTimeouts {
+            connect_timeout: Some(Duration::from_secs(1)),
+            ..Default::default()
+        })
+        .expect("custom-timeout client");
+
+        let had_cached_client_after = client_cache()
+            .lock()
+            .expect("cache lock")
+            .as_ref()
+            .is_some();
+
+        assert!(had_cached_client_before);
+        assert!(had_cached_client_after);
+    }
+
+    #[test]
     fn proxy_url_supports_basic_auth() {
+        let _guard = test_guard();
         let uri = parse_proxy_uri("http://bob:secret@127.0.0.1:8080").expect("valid proxy uri");
         let proxy = build_proxy(ProxyConfig { uri });
         let auth = proxy
@@ -449,6 +493,7 @@ mod tests {
 
     #[test]
     fn proxy_url_without_auth_has_no_auth_headers() {
+        let _guard = test_guard();
         let uri = parse_proxy_uri("http://127.0.0.1:8080").expect("valid proxy uri");
         let proxy = build_proxy(ProxyConfig { uri });
         assert!(proxy.headers().get("authorization").is_none());
@@ -457,6 +502,7 @@ mod tests {
 
     #[test]
     fn proxy_only_supports_http_scheme() {
+        let _guard = test_guard();
         let err = parse_proxy_uri("https://127.0.0.1:8080").expect_err("must reject https");
         assert!(err.contains("only http:// is supported"));
     }

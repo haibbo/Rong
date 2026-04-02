@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::client::{self, HttpBody};
+use crate::client::{self, HttpBody, RequestTimeouts};
 
 // SSE is latency-sensitive; forward frames immediately instead of waiting for body coalescing.
 const SSE_STREAM_COALESCE_TARGET: usize = 0;
@@ -96,11 +96,12 @@ impl Default for SseReconnectOptions {
 /// Connection options for a new SSE session.
 #[derive(Clone, Debug)]
 pub struct SseConnectOptions {
-    pub destination: SseDestination,
-    pub headers: Vec<(String, String)>,
-    pub last_event_id: Option<String>,
-    pub reconnect: SseReconnectOptions,
-    pub request_timeout: Option<Duration>,
+    destination: SseDestination,
+    headers: Vec<(String, String)>,
+    last_event_id: Option<String>,
+    reconnect: SseReconnectOptions,
+    request_timeout: Option<Duration>,
+    connect_timeout: Option<Duration>,
 }
 
 impl SseConnectOptions {
@@ -113,6 +114,7 @@ impl SseConnectOptions {
             last_event_id: None,
             reconnect: SseReconnectOptions::default(),
             request_timeout: None,
+            connect_timeout: None,
         })
     }
 
@@ -138,6 +140,19 @@ impl SseConnectOptions {
     pub fn with_request_timeout(mut self, timeout: Duration) -> Self {
         self.request_timeout = Some(timeout);
         self
+    }
+
+    /// Override the socket-connect timeout used for the SSE handshake.
+    pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = Some(timeout);
+        self
+    }
+
+    fn timeouts(&self) -> RequestTimeouts {
+        RequestTimeouts {
+            request_timeout: self.request_timeout,
+            connect_timeout: self.connect_timeout,
+        }
     }
 }
 
@@ -323,7 +338,7 @@ async fn run_sse_worker(
             0,
             Some(attempt_abort_rx),
             SSE_STREAM_COALESCE_TARGET,
-            options.request_timeout,
+            options.timeouts(),
         );
         tokio::pin!(send_fut);
 
@@ -756,6 +771,7 @@ mod tests {
 
     #[test]
     fn connect_convenience_opens_and_receives_small_event() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_sse_server().await;
@@ -784,6 +800,7 @@ mod tests {
 
     #[test]
     fn connect_options_builder_sends_headers_and_last_event_id() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_sse_server().await;
@@ -793,6 +810,7 @@ mod tests {
                 .with_header("x-test", "builder")
                 .with_last_event_id("41")
                 .with_request_timeout(Duration::from_secs(1))
+                .with_connect_timeout(Duration::from_secs(1))
                 .with_reconnect(SseReconnectOptions {
                     enabled: false,
                     ..Default::default()

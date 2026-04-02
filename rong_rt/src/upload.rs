@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, oneshot, watch};
 use tokio_stream::StreamExt as _;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::client::{HttpBody, send_request_with_timeout};
+use crate::client::{HttpBody, RequestTimeouts, send_request_with_timeout};
 
 const UPLOAD_CHUNK_SIZE: usize = 64 * 1024;
 const UPLOAD_BODY_CHAN_CAP: usize = 16;
@@ -22,12 +22,13 @@ const UPLOAD_EVENT_CHAN_CAP: usize = 128;
 
 #[derive(Clone, Debug)]
 pub struct UploadOptions {
-    pub url: String,
-    pub file_path: PathBuf,
-    pub method: Method,
-    pub headers: Vec<(String, String)>,
-    pub content_type: Option<String>,
-    pub request_timeout: Option<Duration>,
+    url: String,
+    file_path: PathBuf,
+    method: Method,
+    headers: Vec<(String, String)>,
+    content_type: Option<String>,
+    request_timeout: Option<Duration>,
+    connect_timeout: Option<Duration>,
 }
 
 impl UploadOptions {
@@ -40,6 +41,7 @@ impl UploadOptions {
             headers: Vec::new(),
             content_type: None,
             request_timeout: None,
+            connect_timeout: None,
         }
     }
 
@@ -65,6 +67,19 @@ impl UploadOptions {
     pub fn with_request_timeout(mut self, timeout: Duration) -> Self {
         self.request_timeout = Some(timeout);
         self
+    }
+
+    /// Override the socket-connect timeout for this upload.
+    pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = Some(timeout);
+        self
+    }
+
+    fn timeouts(&self) -> RequestTimeouts {
+        RequestTimeouts {
+            request_timeout: self.request_timeout,
+            connect_timeout: self.connect_timeout,
+        }
     }
 }
 
@@ -291,9 +306,7 @@ async fn run_upload_worker(
     });
 
     let response =
-        match send_request_with_timeout(request, 0, Some(net_abort_rx), options.request_timeout)
-            .await
-        {
+        match send_request_with_timeout(request, 0, Some(net_abort_rx), options.timeouts()).await {
             Ok(resp) => resp,
             Err(e) => {
                 let _ = events_tx
@@ -434,6 +447,7 @@ mod tests {
 
     #[test]
     fn spawn_upload_reports_progress_and_success() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_upload_server().await;
@@ -449,7 +463,8 @@ mod tests {
 
             let options = UploadOptions::new(format!("http://{}/upload", addr), &path)
                 .with_content_type("application/octet-stream")
-                .with_header("x-upload-tag", "spawn");
+                .with_header("x-upload-tag", "spawn")
+                .with_connect_timeout(Duration::from_secs(1));
             let task = spawn_upload(options, None).expect("upload task should start");
             let mut stream = task.into_stream();
 
@@ -481,6 +496,7 @@ mod tests {
 
     #[test]
     fn upload_convenience_returns_response() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_upload_server().await;
@@ -498,7 +514,9 @@ mod tests {
                 UploadOptions::new(format!("http://{}/upload", addr), &path)
                     .with_method(Method::POST)
                     .with_header("x-upload-tag", "direct")
-                    .with_content_type("application/octet-stream"),
+                    .with_content_type("application/octet-stream")
+                    .with_request_timeout(Duration::from_secs(5))
+                    .with_connect_timeout(Duration::from_secs(1)),
                 None,
             )
             .await

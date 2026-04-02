@@ -6,16 +6,17 @@ use std::io::Error;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::oneshot;
 
-use crate::client::{HttpBody, send_request_with_timeout};
+use crate::client::{HttpBody, RequestTimeouts, send_request_with_timeout};
 use tokio::time::Duration;
 
 const DEFAULT_DOWNLOAD_SMALL_THRESHOLD: usize = 64 * 1024;
 
 pub struct DownloadOptions {
-    pub url: String,
-    pub dest: std::path::PathBuf,
-    pub sink: Option<Box<dyn BodySink>>,
-    pub request_timeout: Option<Duration>,
+    url: String,
+    dest: std::path::PathBuf,
+    sink: Option<Box<dyn BodySink>>,
+    request_timeout: Option<Duration>,
+    connect_timeout: Option<Duration>,
 }
 
 impl DownloadOptions {
@@ -26,6 +27,7 @@ impl DownloadOptions {
             dest: dest.into(),
             sink: None,
             request_timeout: None,
+            connect_timeout: None,
         }
     }
 
@@ -40,6 +42,19 @@ impl DownloadOptions {
         self.request_timeout = Some(timeout);
         self
     }
+
+    /// Override the socket-connect timeout for this download.
+    pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = Some(timeout);
+        self
+    }
+
+    fn timeouts(&self) -> RequestTimeouts {
+        RequestTimeouts {
+            request_timeout: self.request_timeout,
+            connect_timeout: self.connect_timeout,
+        }
+    }
 }
 
 pub trait BodySink: Send {
@@ -52,12 +67,13 @@ pub async fn download(
     options: DownloadOptions,
     abort_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<(), String> {
+    let timeouts = options.timeouts();
     download_resource(
         &options.url,
         &options.dest,
         abort_rx,
         options.sink,
-        options.request_timeout,
+        timeouts,
     )
     .await
 }
@@ -67,13 +83,8 @@ pub fn spawn_download(
     options: DownloadOptions,
     abort_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
-    request_download_inner(
-        options.url,
-        options.dest,
-        abort_rx,
-        options.sink,
-        options.request_timeout,
-    )
+    let timeouts = options.timeouts();
+    request_download_inner(options.url, options.dest, abort_rx, options.sink, timeouts)
 }
 
 pub fn request_download(
@@ -82,17 +93,7 @@ pub fn request_download(
     abort_rx: Option<oneshot::Receiver<()>>,
     sink: Option<Box<dyn BodySink>>,
 ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
-    request_download_inner(url, dest, abort_rx, sink, None)
-}
-
-pub fn request_download_with_timeout(
-    url: impl Into<String>,
-    dest: impl Into<std::path::PathBuf>,
-    abort_rx: Option<oneshot::Receiver<()>>,
-    sink: Option<Box<dyn BodySink>>,
-    request_timeout: Duration,
-) -> Result<oneshot::Receiver<Result<(), String>>, String> {
-    request_download_inner(url, dest, abort_rx, sink, Some(request_timeout))
+    request_download_inner(url, dest, abort_rx, sink, RequestTimeouts::default())
 }
 
 fn request_download_inner(
@@ -100,14 +101,14 @@ fn request_download_inner(
     dest: impl Into<std::path::PathBuf>,
     abort_rx: Option<oneshot::Receiver<()>>,
     sink: Option<Box<dyn BodySink>>,
-    timeout_override: Option<Duration>,
+    timeouts: RequestTimeouts,
 ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
     let (completion_tx, completion_rx) = oneshot::channel();
 
     let url = url.into();
     let dest = dest.into();
     crate::RongExecutor::global().spawn(async move {
-        let res = download_resource(&url, &dest, abort_rx, sink, timeout_override).await;
+        let res = download_resource(&url, &dest, abort_rx, sink, timeouts).await;
         let _ = completion_tx.send(res);
     });
 
@@ -119,7 +120,7 @@ async fn download_resource(
     dest: &std::path::PathBuf,
     abort_rx: Option<oneshot::Receiver<()>>,
     sink: Option<Box<dyn BodySink>>,
-    timeout_override: Option<Duration>,
+    timeouts: RequestTimeouts,
 ) -> Result<(), String> {
     let mut sink_opt = sink;
 
@@ -162,17 +163,13 @@ async fn download_resource(
 
     let small_threshold = DEFAULT_DOWNLOAD_SMALL_THRESHOLD;
     let mut abort_rx_opt = abort_rx;
-    let resp = match send_request_with_timeout(
-        request,
-        small_threshold,
-        abort_rx_opt.take(),
-        timeout_override,
-    )
-    .await
-    {
-        Ok(r) => r,
-        Err(e) => return finalize_sink(sink_opt, Err(e)),
-    };
+    let resp =
+        match send_request_with_timeout(request, small_threshold, abort_rx_opt.take(), timeouts)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => return finalize_sink(sink_opt, Err(e)),
+        };
     if !resp.status.is_success() {
         return finalize_sink(sink_opt, Err(format!("http status: {}", resp.status)));
     }
@@ -276,6 +273,7 @@ mod tests {
 
     #[test]
     fn spawn_download_with_options_succeeds() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let content = b"hello download";
@@ -291,7 +289,9 @@ mod tests {
             ));
 
             let rx = spawn_download(
-                DownloadOptions::new(&url, &dest).with_request_timeout(Duration::from_secs(5)),
+                DownloadOptions::new(&url, &dest)
+                    .with_request_timeout(Duration::from_secs(5))
+                    .with_connect_timeout(Duration::from_secs(1)),
                 None,
             )
             .expect("should queue download");
@@ -307,6 +307,7 @@ mod tests {
 
     #[test]
     fn download_convenience_succeeds() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let content = b"hello direct download";
@@ -332,15 +333,20 @@ mod tests {
 
     #[test]
     fn download_with_timeout_expires() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_slow_server(300).await;
             let url = format!("http://{}/slow", addr);
             let dest = std::env::temp_dir().join("rong_dl_timeout_test.bin");
 
-            let rx =
-                request_download_with_timeout(&url, &dest, None, None, Duration::from_millis(10))
-                    .expect("should queue download");
+            let rx = spawn_download(
+                DownloadOptions::new(&url, &dest)
+                    .with_request_timeout(Duration::from_millis(10))
+                    .with_connect_timeout(Duration::from_secs(1)),
+                None,
+            )
+            .expect("should queue download");
             let err = rx
                 .await
                 .expect("channel dropped")

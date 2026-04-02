@@ -11,7 +11,7 @@ use std::io::Error;
 use std::time::Duration;
 use tokio::sync::oneshot;
 
-use crate::client;
+use crate::client::{self, RequestTimeouts};
 
 pub use crate::client::{HttpBody, HttpResponse};
 
@@ -66,7 +66,8 @@ impl std::error::Error for HttpError {}
 /// Per-request behavior overrides for the high-level HTTP helpers.
 #[derive(Debug, Default)]
 pub struct RequestOptions {
-    timeout: Option<Duration>,
+    request_timeout: Option<Duration>,
+    connect_timeout: Option<Duration>,
     abort_rx: Option<oneshot::Receiver<()>>,
 }
 
@@ -75,8 +76,14 @@ impl RequestOptions {
         Self::default()
     }
 
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = Some(timeout);
+    pub fn with_request_timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = Some(timeout);
+        self
+    }
+
+    /// Override only the socket-connect phase timeout for this request.
+    pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
+        self.connect_timeout = Some(timeout);
         self
     }
 
@@ -91,12 +98,14 @@ impl RequestOptions {
         self
     }
 
-    pub fn timeout(&self) -> Option<Duration> {
-        self.timeout
-    }
-
-    fn into_parts(self) -> (Option<Duration>, Option<oneshot::Receiver<()>>) {
-        (self.timeout, self.abort_rx)
+    fn into_parts(self) -> (RequestTimeouts, Option<oneshot::Receiver<()>>) {
+        (
+            RequestTimeouts {
+                request_timeout: self.request_timeout,
+                connect_timeout: self.connect_timeout,
+            },
+            self.abort_rx,
+        )
     }
 }
 
@@ -114,21 +123,6 @@ pub struct JsonResponse<T> {
     pub status: StatusCode,
     pub headers: HeaderMap,
     pub body: T,
-}
-
-/// Set the default request timeout used by `send*` helpers when no override is provided.
-pub fn set_default_timeout(timeout: Duration) {
-    client::set_request_timeout(timeout);
-}
-
-/// Read the current default request timeout.
-pub fn default_timeout() -> Duration {
-    client::get_request_timeout()
-}
-
-/// Reset the default request timeout back to the crate default.
-pub fn reset_default_timeout() {
-    client::reset_request_timeout();
 }
 
 /// Configure a process-wide HTTP proxy for subsequent requests.
@@ -151,12 +145,12 @@ pub async fn send(
     request: HttpRequest<BoxBody<Bytes, Error>>,
     options: RequestOptions,
 ) -> Result<HttpResponse, HttpError> {
-    let (timeout, abort_rx) = options.into_parts();
+    let (timeouts, abort_rx) = options.into_parts();
     client::send_request_with_timeout(
         request,
         client::DEFAULT_BLOCKING_BODY_LIMIT,
         abort_rx,
-        timeout,
+        timeouts,
     )
     .await
     .map_err(Into::into)
@@ -168,8 +162,8 @@ pub async fn send_with_small_body_limit(
     small_body_limit: usize,
     options: RequestOptions,
 ) -> Result<HttpResponse, HttpError> {
-    let (timeout, abort_rx) = options.into_parts();
-    client::send_request_with_timeout(request, small_body_limit, abort_rx, timeout)
+    let (timeouts, abort_rx) = options.into_parts();
+    client::send_request_with_timeout(request, small_body_limit, abort_rx, timeouts)
         .await
         .map_err(Into::into)
 }
@@ -179,8 +173,8 @@ pub async fn send_stream(
     request: HttpRequest<BoxBody<Bytes, Error>>,
     options: RequestOptions,
 ) -> Result<HttpResponse, HttpError> {
-    let (timeout, abort_rx) = options.into_parts();
-    client::send_request_with_coalesce(request, 0, abort_rx, 0, timeout)
+    let (timeouts, abort_rx) = options.into_parts();
+    client::send_request_with_coalesce(request, 0, abort_rx, 0, timeouts)
         .await
         .map_err(Into::into)
 }
@@ -443,6 +437,7 @@ mod tests {
 
     #[test]
     fn send_bytes_collects_body() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_server().await;
@@ -457,6 +452,7 @@ mod tests {
 
     #[test]
     fn send_json_parses_body() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_server().await;
@@ -472,6 +468,7 @@ mod tests {
 
     #[test]
     fn send_stream_collects_streaming_body() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_server().await;
@@ -487,6 +484,7 @@ mod tests {
 
     #[test]
     fn post_json_bytes_sends_json_headers_and_body() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_server().await;
@@ -511,6 +509,7 @@ mod tests {
 
     #[test]
     fn post_json_serializes_request_and_decodes_response() {
+        let _guard = crate::client::test_guard();
         let handle = crate::RongExecutor::global().handle();
         handle.block_on(async {
             let addr = spawn_server().await;

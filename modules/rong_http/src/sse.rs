@@ -36,8 +36,6 @@ impl SSE {
             .ok_or_else(|| type_error("url must contain a valid host"))?;
         grant_network_access(host)?;
 
-        let destination = url_to_destination(&parsed)?;
-
         let mut headers = Vec::new();
         let mut reconnect_opts = rong_rt::sse::SseReconnectOptions::default();
         let mut request_timeout = None;
@@ -107,13 +105,15 @@ impl SSE {
             }
         }
 
-        let rt_options = rong_rt::sse::SseConnectOptions {
-            destination,
-            headers,
-            last_event_id: None,
-            reconnect: reconnect_opts,
-            request_timeout,
-        };
+        let mut rt_options = rong_rt::sse::SseConnectOptions::new(&url)
+            .map_err(|e| type_error(format!("invalid url: {}", e)))?
+            .with_reconnect(reconnect_opts);
+        if let Some(request_timeout) = request_timeout {
+            rt_options = rt_options.with_request_timeout(request_timeout);
+        }
+        for (name, value) in headers {
+            rt_options = rt_options.with_header(name, value);
+        }
 
         let (close_tx, close_rx) = oneshot::channel::<()>();
 
@@ -306,26 +306,6 @@ impl SSE {
         obj.set("value", value)?;
         Ok(obj)
     }
-}
-
-fn url_to_destination(parsed: &url::Url) -> JSResult<rong_rt::sse::SseDestination> {
-    let scheme = match parsed.scheme() {
-        "http" => rong_rt::sse::SseScheme::Http,
-        "https" => rong_rt::sse::SseScheme::Https,
-        _ => return Err(type_error("url scheme must be http or https")),
-    };
-
-    let target = match parsed.port() {
-        Some(port) => format!("{}:{}", parsed.host_str().unwrap(), port),
-        None => parsed.host_str().unwrap().to_string(),
-    };
-
-    Ok(rong_rt::sse::SseDestination {
-        scheme,
-        target,
-        path: parsed.path().to_string(),
-        query: parsed.query().map(|q| q.to_string()),
-    })
 }
 
 pub(crate) fn init(ctx: &JSContext) -> JSResult<()> {
