@@ -2,6 +2,11 @@
 
 This document is for Rong module developers, covering error handling patterns at the Rust ↔ JS boundary.
 
+Two concepts matter throughout this guide:
+
+- `RongError`: a host-generated Error-like object with `name/message/code/data`
+- thrown payload: any preserved JavaScript value (`throw 1`, Promise rejection reason, abort reason, ...)
+
 ---
 
 ## Quick Reference
@@ -15,7 +20,7 @@ This document is for Rong module developers, covering error handling patterns at
 | Out of range             | `HostError::new(E_OUT_OF_RANGE, "index out of bounds").with_name("RangeError")`    |
 | IO failure               | `HostError::new(E_IO, err.to_string())`                                            |
 | Permission denied        | `HostError::new(E_PERMISSION_DENIED, "access denied")`                             |
-| Operation aborted        | `HostError::aborted(reason)`                                                       |
+| Operation aborted        | `HostError::aborted(None)` or `RongJSError::from_thrown_value(reason)`            |
 | Invalid state            | `HostError::new(E_INVALID_STATE, "stream already closed")`                         |
 | Preserve JS thrown value | `RongJSError::from_thrown_value(js_value)`                                         |
 
@@ -39,7 +44,8 @@ fn read_file(path: &str) -> JSResult<Vec<u8>> {
         HostError::new(E_IO, e.to_string())
             .with_data(rong::err_data!({
                 path: path,
-                os_error: (e.raw_os_error())  // Option<i32> -> number | null
+                os_error: (e.raw_os_error()),  // Option<i32> -> number | null
+                tags: (vec!["fs", "read"]),    // Vec<&str> -> string[]
             }))
             .into()
     })
@@ -61,10 +67,12 @@ fn call_js_callback(func: JSFunc, args: impl IntoArgs) -> JSResult<JSValue> {
 try {
     await readFile("/etc/shadow");
 } catch (e) {
-    e.name;    // "Error"
-    e.message; // "permission denied"
-    e.code;    // "E_PERMISSION_DENIED" (stable, for programmatic handling)
-    e.data;    // { path: "/etc/shadow" } (optional structured details)
+    if (e instanceof Error) {
+        e.name;    // "Error"
+        e.message; // "permission denied"
+        e.code;    // "E_PERMISSION_DENIED" (stable, for programmatic handling)
+        e.data;    // { path: "/etc/shadow" } (optional structured details)
+    }
 }
 ```
 
@@ -82,6 +90,8 @@ JSResult<T> = Err(e) →  JS throw / Promise.reject(payload)
 ```
 
 If you want certain failures to **not enter catch**, you must use `Ok(...)` to return an explicit result object (see "API Design" section).
+
+`JSResult<T>` is also the bridge type used by function registration and Promise integration, so this rule applies uniformly to sync and async host functions.
 
 ### 2. Use `is_exception()` to detect exceptions
 
@@ -126,7 +136,7 @@ Location: [`rong::error::E_*`](../core/src/error.rs)
 | `E_COMPILE`               | Compilation error         | `SyntaxError`                 |
 | `E_INTERNAL`              | Internal error            | `Error`                       |
 | `E_ILLEGAL_CONSTRUCTOR`   | Illegal constructor       | `TypeError`                   |
-| `E_JS_THROWN`             | Wrapped JS thrown value   | (preserves original name)     |
+| `E_JS_THROWN`             | Wrapped JS thrown value   | `Error` + original payload in `cause` / `data.thrown` |
 
 **Module-specific codes**: Modules can define their own codes with prefixes like `FS_*`, `NET_*`, `HTTP_*`.
 
@@ -213,10 +223,14 @@ HostError::new(code, message)
 
 // Attach structured data
 .with_data(rong::err_data!({ key: "value" }))
+.with_data(rong::err_data!({ maybe_code: (Some(5)) }))
 
 // Convenience constructors
 HostError::invalid_arg_count(expected, got)  // Wrong argument count
-HostError::aborted(reason)                    // Operation aborted
+HostError::aborted(None)                      // Default AbortError
+
+// Preserve original JS abort reason as-is
+RongJSError::from_thrown_value(reason)
 
 // Convert to RongJSError
 host_error.into()  // converts HostError into RongJSError

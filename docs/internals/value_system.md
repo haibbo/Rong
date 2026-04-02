@@ -691,7 +691,11 @@ where
             let array = JSArray::from_js_value(ctx, value)?;
             array.iter::<T>().collect::<JSResult<Vec<_>>>()
         } else {
-            Err(RongJSError::NotJSArray())
+            Err(
+                HostError::new(rong::error::E_NOT_ARRAY, "Not JS Array")
+                    .with_name("TypeError")
+                    .into(),
+            )
         }
     }
 }
@@ -718,7 +722,11 @@ impl<V: JSTypeOf> FromJSValue<V> for JSObject<V> {
         if value.is_object() {
             Ok(value.into())
         } else {
-            Err(RongJSError::NotObject())
+            Err(
+                HostError::new(rong::error::E_TYPE, "Not JS Object")
+                    .with_name("TypeError")
+                    .into(),
+            )
         }
     }
 }
@@ -729,7 +737,11 @@ impl<V: JSTypeOf> FromJSValue<V> for JSArray<V> {
         if value.is_array() {
             JSObject::from_js_value(ctx, value).map(Self)
         } else {
-            Err(RongJSError::NotJSArray())
+            Err(
+                HostError::new(rong::error::E_NOT_ARRAY, "Not JS Array")
+                    .with_name("TypeError")
+                    .into(),
+            )
         }
     }
 }
