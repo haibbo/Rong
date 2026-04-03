@@ -72,6 +72,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 This is the lowest-level embedding path: create a runtime, create a context,
 and evaluate JavaScript directly.
 
+When embedding `rong` as a library, select the engine and TLS backend
+explicitly in your dependency features. Example for desktop QuickJS:
+
+```toml
+rong = { version = "0.2.0", features = ["quickjs", "tls-aws-lc"] }
+```
+
 ## Common Usage: Worker Pools
 
 Most applications move one step up from raw `RongJS::runtime()` and use a worker
@@ -122,7 +129,7 @@ Reach for `RongExecutor::builder()` only when you need to:
 
 ### Engine Selection
 
-QuickJS is the default engine:
+`rong_cli` uses QuickJS + `tls-aws-lc` by default on desktop:
 
 ```bash
 cargo run -p rong_cli
@@ -137,11 +144,12 @@ cargo run -p rong_cli --no-default-features --features jscore,tls-aws-lc
 Build for ArkJS explicitly on HarmonyOS/OpenHarmony targets:
 
 ```bash
-cargo build --no-default-features --features arkjs --target aarch64-unknown-linux-ohos
+cargo build --no-default-features --features arkjs,tls-ring --target aarch64-unknown-linux-ohos
 ```
 
 `quickjs`, `jscore`, and `arkjs` are mutually exclusive. If multiple engines are enabled, build fails fast.
-For TLS backend selection, use `tls-aws-lc` (default) or `tls-ring`.
+`rong` the library has no default engine or TLS backend; downstream crates should choose them explicitly.
+For TLS backend selection, use `tls-aws-lc` on desktop hosts and `tls-ring` on HarmonyOS/OpenHarmony targets.
 
 ## 📦 Built-in Modules
 
