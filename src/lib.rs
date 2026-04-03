@@ -5,11 +5,11 @@ pub use rong_core::{
     JSArrayBuffer as CoreJSArrayBuffer, JSAsyncIterator, JSBytes as CoreJSBytes, JSClass,
     JSContext as CoreJSContext, JSContextService, JSDate as CoreJSDate, JSEngine,
     JSException as CoreJSException, JSFunc as CoreJSFunc, JSIterator, JSObject as CoreJSObject,
-    JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService, JSSymbol as CoreJSSymbol,
-    JSTypedArray as CoreJSTypedArray, JSTypedArrayKind, JSValue as CoreJSValue, JSValueType,
-    JsonToJSValue, Promise as CorePromise, PropertyDescriptor as CorePropertyDescriptor,
-    RongJSError, Source, SourceKind, Uint8Clamped, error, illegal_constructor,
-    install_async_iterator_symbol, install_iterator_symbol,
+    JSProxy as CoreJSProxy, JSResult, JSRuntime as CoreJSRuntime, JSRuntimeService,
+    JSSymbol as CoreJSSymbol, JSTypedArray as CoreJSTypedArray, JSTypedArrayKind,
+    JSValue as CoreJSValue, JSValueType, JsonToJSValue, Promise as CorePromise,
+    PropertyDescriptor as CorePropertyDescriptor, RongJSError, Source, SourceKind, Uint8Clamped,
+    error, illegal_constructor, install_async_iterator_symbol, install_iterator_symbol,
 };
 // Re-export selected runtime API from rong_core::rong so downstream crates use `rong::...`
 pub use rong_core::rong::{
@@ -95,6 +95,8 @@ pub type JSRuntime = CoreJSRuntime<<RongJS as JSEngine>::Runtime>;
 pub type JSValue = CoreJSValue<JSEngineValue>;
 #[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSObject = CoreJSObject<JSEngineValue>;
+#[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
+pub type JSProxy = CoreJSProxy<JSEngineValue>;
 #[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]
 pub type JSSymbol = CoreJSSymbol<JSEngineValue>;
 #[cfg(any(feature = "quickjs", feature = "jscore", feature = "arkjs"))]

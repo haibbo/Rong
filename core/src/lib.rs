@@ -18,8 +18,8 @@ pub mod engine {
     pub use crate::context::{JSContextImpl, JSRawContext, PromiseHandlerRegistration};
     pub use crate::runtime::{JSEngine, JSRuntimeImpl};
     pub use crate::value::{
-        JSArrayBufferOps, JSArrayOps, JSErrorFactory, JSExceptionThrower, JSObjectOps, JSTypeOf,
-        JSTypedArrayKind, JSTypedArrayOps, JSValueConversion, JSValueImpl, JSValueMapper,
+        JSArrayBufferOps, JSArrayOps, JSErrorFactory, JSExceptionThrower, JSObjectOps, JSProxyOps,
+        JSTypeOf, JSTypedArrayKind, JSTypedArrayOps, JSValueConversion, JSValueImpl, JSValueMapper,
         JSValueType,
     };
 }
@@ -45,9 +45,9 @@ pub use runtime::{JSEngine, JSRuntime};
 pub use source::{Source, SourceKind};
 pub use value::{
     AnyJSTypedArray, FromJSValue, IntoJSValue, JSArray, JSArrayBuffer, JSBytes, JSDate,
-    JSException, JSFunc, JSObject, JSSymbol, JSTypedArray, JSTypedArrayKind, JSValue, JSValueType,
-    JsonToJSValue, PropertyAttributes, PropertyDescriptor, PropertyKey, TypedArrayElement,
-    Uint8Clamped,
+    JSException, JSFunc, JSObject, JSProxy, JSSymbol, JSTypedArray, JSTypedArrayKind, JSValue,
+    JSValueType, JsonToJSValue, PropertyAttributes, PropertyDescriptor, PropertyKey,
+    TypedArrayElement, Uint8Clamped,
 };
 
 #[doc(hidden)]
@@ -55,8 +55,8 @@ pub use advanced::{JSContextService, JSRuntimeService};
 #[doc(hidden)]
 pub use engine::{
     JSArrayBufferOps, JSArrayOps, JSClassExt, JSContextImpl, JSErrorFactory, JSExceptionThrower,
-    JSObjectOps, JSRawContext, JSRuntimeImpl, JSTypeOf, JSTypedArrayOps, JSValueConversion,
-    JSValueImpl, JSValueMapper,
+    JSObjectOps, JSProxyOps, JSRawContext, JSRuntimeImpl, JSTypeOf, JSTypedArrayOps,
+    JSValueConversion, JSValueImpl, JSValueMapper,
 };
 
 pub mod prelude {
@@ -64,10 +64,10 @@ pub mod prelude {
         Class, ClassSetup, FromJSValue, HostError, IntoJSAsyncIteratorExt, IntoJSIteratorExt,
         IntoJSValue, JSArray, JSArrayBuffer, JSArrayBufferOps, JSArrayOps, JSAsyncIterator,
         JSBytes, JSClass, JSContext, JSContextImpl, JSDate, JSEngine, JSErrorFactory, JSException,
-        JSExceptionThrower, JSFunc, JSIterator, JSObject, JSObjectOps, JSRawContext, JSResult,
-        JSRuntime, JSRuntimeImpl, JSSymbol, JSTypeOf, JSTypedArray, JSTypedArrayOps, JSValue,
-        JSValueConversion, JSValueImpl, JSValueMapper, JsInvokePriority, Promise, RongJSError,
-        Source, SourceKind, enqueue_js_invoke, install_async_iterator_symbol,
+        JSExceptionThrower, JSFunc, JSIterator, JSObject, JSObjectOps, JSProxy, JSProxyOps,
+        JSRawContext, JSResult, JSRuntime, JSRuntimeImpl, JSSymbol, JSTypeOf, JSTypedArray,
+        JSTypedArrayOps, JSValue, JSValueConversion, JSValueImpl, JSValueMapper, JsInvokePriority,
+        Promise, RongJSError, Source, SourceKind, enqueue_js_invoke, install_async_iterator_symbol,
         install_iterator_symbol,
     };
 }

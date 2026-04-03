@@ -39,6 +39,9 @@ pub use symbol::*;
 mod date;
 pub use date::*;
 
+mod proxy;
+pub use proxy::*;
+
 pub trait JSValueImpl: Clone + PartialEq + Hash {
     /// the JS engine specific type of JavaScript Value
     type RawValue: Copy;

@@ -340,6 +340,10 @@ impl HostError {
         Self::type_error(E_TYPE, "Not JS Symbol")
     }
 
+    pub(crate) fn not_proxy() -> Self {
+        Self::type_error(E_TYPE, "Not JS Proxy")
+    }
+
     pub(crate) fn not_typed_array() -> Self {
         Self::type_error(E_NOT_TYPED_ARRAY, "Not JS TypedArray")
     }

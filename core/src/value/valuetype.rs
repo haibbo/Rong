@@ -64,6 +64,7 @@ pub trait JSTypeOf: JSValueImpl {
     fn is_object(&self) -> bool;
     fn is_constructor(&self) -> bool;
     fn is_date(&self) -> bool;
+    fn is_proxy(&self) -> bool;
 
     fn type_of(&self) -> JSValueType {
         if self.is_exception() {
@@ -153,5 +154,6 @@ generate_is_type!(
     take_is_bigint => is_bigint,
     take_is_string => is_string,
     take_is_symbol => is_symbol,
-    take_is_date => is_date
+    take_is_date => is_date,
+    take_is_proxy => is_proxy
 );
