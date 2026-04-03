@@ -12,6 +12,7 @@ This guide explains how to expose Rust functions and classes to JavaScript in th
   - [Optional Parameters](#optional-parameters)
 - [Part 2: JavaScript Classes](#part-2-javascript-classes)
   - [Class Definition](#class-definition)
+  - [Class Registration](#class-registration)
   - [Constructor](#constructor)
   - [Instance Methods](#instance-methods)
   - [Getters and Setters](#getters-and-setters)
@@ -192,6 +193,47 @@ const p = new Point2D(10, 20);
 - `#[js_export]` makes the struct available to the macro system
 - `rename = "Point2D"` sets the JavaScript class name (optional, defaults to struct name)
 - `#[derive(Debug)]` is optional but helpful for debugging
+
+### Class Registration
+
+There are two registration modes:
+
+- `ctx.register_class::<T>()` registers the class and exposes its constructor on
+  the global object.
+- `ctx.register_hidden_class::<T>()` registers the class in the context
+  registry, but does **not** expose its constructor on the global object.
+
+Use the normal form when JavaScript should be able to write:
+
+```javascript
+const value = new Point2D(1, 2);
+```
+
+Use the hidden form for Rust-owned interop types that need prototype/class
+metadata but should not be directly constructed by JavaScript.
+
+```rust
+ctx.register_class::<Point>()?;
+```
+
+This exposes `globalThis.Point2D` (or `Point` if no rename is used).
+
+```rust
+ctx.register_hidden_class::<Point>()?;
+```
+
+After hidden registration, `Class::lookup::<Point>(&ctx)?` and
+`Class::prototype::<Point>(&ctx)?` still work, but JavaScript does not get a
+global constructor.
+
+To create instances from Rust without exposing a JS constructor:
+
+```rust
+ctx.register_hidden_class::<Point>()?;
+
+let class = Class::lookup::<Point>(ctx)?;
+let instance = class.instance(Point { x: 1, y: 2 });
+```
 
 ### Constructor
 
