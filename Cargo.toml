@@ -50,7 +50,7 @@ rong_test = { path = "testing/rong_test", default-features = false }
 rong_test_harness = { path = "testing/rong_test_harness" }
 rong_test_device = { path = "testing/rong_test_device" }
 rong_modules = { path = "rong_modules"   , version = "0.2.0" }
-rong_rt = { path = "rong_rt"   , version = "0.2.0" }
+rong_rt = { path = "rong_rt"   , version = "0.2.0", default-features = false }
 
 # Module dependencies
 rong_timer = { path = "modules/rong_timer"   , version = "0.2.0", default-features = false }
