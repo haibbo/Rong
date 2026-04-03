@@ -302,6 +302,7 @@ unsafe fn bigint_to_u64(ctx: *const jsc::OpaqueJSContext, value: jsc::JSValueRef
 mod array;
 mod array_buffer;
 mod object;
+pub(crate) mod proxy;
 mod typed_array;
 mod valuetype;
 

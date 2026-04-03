@@ -141,4 +141,8 @@ impl JSTypeOf for JSCValue {
     fn is_date(&self) -> bool {
         unsafe { jsc::JSValueIsDate(self.ctx, self.as_value()) }
     }
+
+    fn is_proxy(&self) -> bool {
+        crate::value::proxy::is_proxy(self)
+    }
 }

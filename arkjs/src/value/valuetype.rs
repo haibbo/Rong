@@ -168,4 +168,13 @@ impl JSTypeOf for ArkJSValue {
             status == arkjs::JSVM_Status_JSVM_OK && result
         }
     }
+
+    fn is_proxy(&self) -> bool {
+        let value = self.resolve_handle();
+        unsafe {
+            let mut result = false;
+            let status = arkjs::OH_JSVM_IsProxy(self.env, value, &mut result);
+            status == arkjs::JSVM_Status_JSVM_OK && result
+        }
+    }
 }

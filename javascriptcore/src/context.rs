@@ -17,9 +17,11 @@ impl JSContextImpl for JSCContext {
     type Value = JSCValue;
 
     fn new(runtime: &Self::Runtime) -> Self {
-        Self {
+        let ctx = Self {
             raw: unsafe { jsc::JSGlobalContextCreateInGroup(runtime.to_raw(), ptr::null_mut()) },
-        }
+        };
+        let _ = crate::value::proxy::prime_proxy_helper(&ctx);
+        ctx
     }
 
     fn as_raw(&self) -> &Self::RawContext {

@@ -70,4 +70,8 @@ impl JSTypeOf for QJSValue {
     fn is_date(&self) -> bool {
         unsafe { qjs::JS_IsDate(self.value) }
     }
+
+    fn is_proxy(&self) -> bool {
+        unsafe { qjs::JS_IsProxy(self.value) }
+    }
 }

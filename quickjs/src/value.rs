@@ -11,6 +11,7 @@ use std::slice;
 mod array;
 mod array_buffer;
 mod object;
+mod proxy;
 mod typed_array;
 mod valuetype;
 
