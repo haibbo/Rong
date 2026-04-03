@@ -19,6 +19,8 @@ $ErrorActionPreference = "Stop"
 
 Set-Location $PSScriptRoot
 
+$HostTlsBackend = if ($env:HOST_TLS_BACKEND) { $env:HOST_TLS_BACKEND } else { "tls-aws-lc" }
+
 function Log-Info([string]$Message) {
     Write-Host "[INFO] $Message" -ForegroundColor Cyan
 }
@@ -156,7 +158,8 @@ function Run-CoreTest([string]$TestName, [string]$EngineName) {
     Log-Info "Running core test: $TestName (engine: $EngineName)"
     $script:TotalTests++
 
-    & cargo test "--test=$TestName" "--no-default-features" "--features=$EngineName" "--quiet"
+    $featureSet = "$EngineName,$HostTlsBackend"
+    & cargo test "--test=$TestName" "--no-default-features" "--features=$featureSet" "--quiet"
     if ($LASTEXITCODE -eq 0) {
         Log-Pass "Core test $TestName passed on $EngineName"
         $script:PassedTests++
@@ -172,10 +175,7 @@ function Run-ModuleTest([string]$ModuleName, [string]$EngineName) {
     Log-Info "Running module test: $ModuleName (engine: $EngineName)"
     $script:TotalTests++
 
-    $featureSet = $EngineName
-    if ($ModuleName -eq "rong_http") {
-        $featureSet = "$featureSet,tls-aws-lc"
-    }
+    $featureSet = "$EngineName,$HostTlsBackend"
 
     & cargo test "-p" $ModuleName "--no-default-features" "--features=$featureSet" "--quiet"
     if ($LASTEXITCODE -eq 0) {

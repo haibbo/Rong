@@ -31,6 +31,7 @@ log_warning() {
 
 # Available engines
 ENGINES=("quickjs" "jscore")
+HOST_TLS_BACKEND="${HOST_TLS_BACKEND:-tls-aws-lc}"
 SUPPORTED_ENGINES=("quickjs" "jscore" "arkjs")
 
 # Cleanup function to kill child processes
@@ -124,11 +125,12 @@ print_arkjs_instructions() {
 run_core_test() {
     local test_name=$1
     local engine=$2
+    local feature_set="$engine,$HOST_TLS_BACKEND"
 
     log_info "Running core test: $test_name (engine: $engine)"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo test --release --test="$test_name" --no-default-features --features="$engine" --quiet; then
+    if cargo test --release --test="$test_name" --no-default-features --features="$feature_set" --quiet; then
         log_success "Core test $test_name passed on $engine"
         PASSED_TESTS=$((PASSED_TESTS + 1))
         return 0
@@ -152,11 +154,7 @@ run_module_test() {
     log_info "Running module test: $module_name (engine: $engine)"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    local feature_set="$engine"
-    # rong_http requires an explicit TLS backend when default features are disabled.
-    if [[ "$module_name" == "rong_http" ]]; then
-        feature_set="$feature_set,tls-aws-lc"
-    fi
+    local feature_set="$engine,$HOST_TLS_BACKEND"
 
     if cargo test -p "$module_name" --no-default-features --features="$feature_set" --quiet; then
         log_success "Module test $module_name passed on $engine"
