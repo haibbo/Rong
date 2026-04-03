@@ -4,6 +4,7 @@ use http::Uri;
 use http::header;
 use http_body_util::{BodyExt, combinators::BoxBody};
 use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
+#[cfg(any(feature = "tls-aws-lc", feature = "tls-ring"))]
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
@@ -39,10 +40,12 @@ pub(crate) struct RequestTimeouts {
 }
 
 #[cfg(all(feature = "tls-aws-lc", feature = "tls-ring"))]
-compile_error!("Enable only one TLS backend feature: `tls-aws-lc` or `tls-ring`.");
+compile_error!("Enable only one TLS backend feature for rong_rt: `tls-aws-lc` or `tls-ring`.");
 
 #[cfg(not(any(feature = "tls-aws-lc", feature = "tls-ring")))]
-compile_error!("One TLS backend feature is required: enable `tls-aws-lc` or `tls-ring`.");
+compile_error!(
+    "rong_rt requires an explicit TLS backend. Enable exactly one of `tls-aws-lc` or `tls-ring` from your top-level crate."
+);
 
 static CLIENT: OnceLock<Mutex<Option<CachedClient>>> = OnceLock::new();
 static PROXY_CONFIG: OnceLock<RwLock<Option<ProxyConfig>>> = OnceLock::new();
@@ -145,11 +148,19 @@ pub fn get_proxy() -> Option<String> {
     current_proxy().map(|p| p.uri.to_string())
 }
 
+#[cfg(feature = "tls-aws-lc")]
+fn tls_provider() -> rustls::crypto::CryptoProvider {
+    rustls::crypto::aws_lc_rs::default_provider()
+}
+
+#[cfg(feature = "tls-ring")]
+fn tls_provider() -> rustls::crypto::CryptoProvider {
+    rustls::crypto::ring::default_provider()
+}
+
+#[cfg(any(feature = "tls-aws-lc", feature = "tls-ring"))]
 fn build_client(proxy: Option<ProxyConfig>, connect_timeout: Option<Duration>) -> HttpClient {
-    #[cfg(feature = "tls-aws-lc")]
-    let provider = rustls::crypto::aws_lc_rs::default_provider();
-    #[cfg(feature = "tls-ring")]
-    let provider = rustls::crypto::ring::default_provider();
+    let provider = tls_provider();
 
     let _ = provider.clone().install_default();
 
@@ -174,6 +185,11 @@ fn build_client(proxy: Option<ProxyConfig>, connect_timeout: Option<Duration>) -
         .wrap_connector(proxy_connector);
 
     Client::builder(hyper_util::rt::TokioExecutor::new()).build(https)
+}
+
+#[cfg(not(any(feature = "tls-aws-lc", feature = "tls-ring")))]
+fn build_client(_proxy: Option<ProxyConfig>, _connect_timeout: Option<Duration>) -> HttpClient {
+    unreachable!("compile_error should require an explicit TLS backend before build_client()")
 }
 
 fn build_proxy(proxy_config: ProxyConfig) -> Proxy {

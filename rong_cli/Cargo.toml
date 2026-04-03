@@ -24,11 +24,11 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [features]
-# Out-of-the-box CLI uses QuickJS + aws-lc TLS.
-# Switching engine requires `--no-default-features`.
+# CLI owns the runtime/TLS choice for the full dependency graph.
+# Switching engine/backend requires `--no-default-features`.
 default = ["quickjs", "tls-aws-lc"]
 quickjs = ["rong/quickjs", "rong_console/quickjs", "rong_modules/quickjs", "rong_modules/all"]
 jscore = ["rong/jscore", "rong_console/jscore", "rong_modules/jscore", "rong_modules/all"]
 arkjs = ["rong/arkjs", "rong_modules/arkjs", "rong_modules/all"]
-tls-aws-lc = ["rong_modules/tls-aws-lc"]
-tls-ring = ["rong_modules/tls-ring"]
+tls-aws-lc = ["rong/tls-aws-lc", "rong_modules/tls-aws-lc"]
+tls-ring = ["rong/tls-ring", "rong_modules/tls-ring"]

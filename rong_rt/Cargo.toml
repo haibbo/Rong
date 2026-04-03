@@ -36,6 +36,6 @@ tokio = { workspace = true, features = ["net"] }
 tempfile = "3"
 
 [features]
-default = ["tls-aws-lc"]
+default = []
 tls-aws-lc = ["hyper-rustls/aws-lc-rs", "rustls/aws_lc_rs"]
 tls-ring = ["hyper-rustls/ring", "rustls/ring"]

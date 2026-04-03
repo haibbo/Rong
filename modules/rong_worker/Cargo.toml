@@ -23,6 +23,8 @@ tracing = { workspace = true }
 quickjs = ["rong/quickjs"]
 jscore = ["rong/jscore"]
 arkjs = ["rong/arkjs"]
+tls-aws-lc = ["rong/tls-aws-lc"]
+tls-ring = ["rong/tls-ring"]
 
 [dev-dependencies]
 rong_test = { workspace = true }

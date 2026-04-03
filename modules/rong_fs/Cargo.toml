@@ -29,6 +29,8 @@ default = []
 quickjs = ["rong/quickjs", "rong_abort/quickjs", "rong_exception/quickjs", "rong_stream/quickjs"]
 jscore = ["rong/jscore", "rong_abort/jscore", "rong_exception/jscore", "rong_stream/jscore"]
 arkjs = ["rong/arkjs", "rong_abort/arkjs", "rong_exception/arkjs", "rong_stream/arkjs"]
+tls-aws-lc = ["rong/tls-aws-lc"]
+tls-ring = ["rong/tls-ring"]
 
 [dev-dependencies]
 rong_test = { workspace = true }

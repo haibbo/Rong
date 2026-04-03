@@ -14,7 +14,7 @@ documentation = "https://docs.rs/rong_http"
 readme = "README.md"
 [dependencies]
 rong = { workspace = true }
-rong_rt = { workspace = true }
+rong_rt = { workspace = true, default-features = false }
 futures = { workspace = true }
 tokio = { workspace = true }
 bytes = { workspace = true }
@@ -34,8 +34,8 @@ tokio-stream = { workspace = true }
 serde_json = { workspace = true }
 
 [features]
-# Forward JS engine features to the main rong crate
-default = ["tls-aws-lc"]
+# TLS backend is intentionally selected by the top-level product crate.
+default = []
 quickjs = [
     "rong/quickjs",
     "rong_abort/quickjs",

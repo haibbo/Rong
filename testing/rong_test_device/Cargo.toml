@@ -7,6 +7,11 @@ repository.workspace = true
 publish = false
 description = "On-device test suite generated from tests/*.rs via build.rs source transformation"
 
+[features]
+default = []
+tls-aws-lc = ["rong/tls-aws-lc"]
+tls-ring = ["rong/tls-ring"]
+
 [dependencies]
 rong_test_harness = { workspace = true }
 

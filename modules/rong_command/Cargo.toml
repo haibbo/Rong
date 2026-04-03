@@ -48,6 +48,8 @@ arkjs = [
     "rong_event/arkjs",
     "rong_stream/arkjs",
 ]
+tls-aws-lc = ["rong/tls-aws-lc"]
+tls-ring = ["rong/tls-ring"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

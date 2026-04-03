@@ -93,8 +93,9 @@ arkjs = [
     "rong_worker?/arkjs",
 ]
 
-tls-aws-lc = ["rong_http?/tls-aws-lc"]
-tls-ring = ["rong_http?/tls-ring"]
+# TLS backend selection is forwarded from the top-level product crate.
+tls-aws-lc = ["rong/tls-aws-lc", "rong_http?/tls-aws-lc"]
+tls-ring = ["rong/tls-ring", "rong_http?/tls-ring"]
 
 all = [
     "timer",

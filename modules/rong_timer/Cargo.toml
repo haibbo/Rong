@@ -19,11 +19,13 @@ tokio = { workspace = true }
 futures = { workspace = true }
 
 [features]
-# Forward JS engine features to the main rong crate
+# TLS backend is intentionally selected by the top-level product crate.
 default = []
 quickjs = ["rong/quickjs"]
 jscore = ["rong/jscore"]
 arkjs = ["rong/arkjs"]
+tls-aws-lc = ["rong/tls-aws-lc"]
+tls-ring = ["rong/tls-ring"]
 
 [dev-dependencies]
 rong_test = { workspace = true }

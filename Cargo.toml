@@ -134,12 +134,14 @@ tokio = { workspace = true }
 futures = { workspace = true }
 
 [features]
-# Default engine for out-of-the-box DX.
-# Use `--no-default-features --features jscore` to switch engine.
-default = ["quickjs"]
+# Library consumers must select an engine/TLS backend explicitly.
+# The CLI/examples keep desktop-friendly defaults for out-of-the-box runs.
+default = []
 quickjs = ["dep:rong_quickjs", "rong_test/quickjs"]
 jscore = ["dep:rong_jscore", "rong_test/jscore"]
 arkjs = ["dep:rong_arkjs", "rong_test/arkjs"]
+tls-aws-lc = ["rong_rt/tls-aws-lc"]
+tls-ring = ["rong_rt/tls-ring"]
 
 [dev-dependencies]
 rong_test = { workspace = true }

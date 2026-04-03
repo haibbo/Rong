@@ -13,6 +13,11 @@ description = "Thin NAPI glue: exposes an HTTP control plane for HarmonyOS ArkJS
 name = "rong_harmony_smoke"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = []
+tls-aws-lc = ["rong_test_device/tls-aws-lc"]
+tls-ring = ["rong_test_device/tls-ring"]
+
 [dependencies]
 rong_test_device = { path = "../../rong_test_device" }
 rong_test_harness = { path = "../../rong_test_harness" }
