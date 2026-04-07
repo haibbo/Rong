@@ -1,7 +1,7 @@
 # Publishing Scripts (Maintainer)
 
 Recommended path: maintain the version and `CHANGELOG.md` manually, then use the
-GitHub Actions `Release: Publish` workflow to execute the release.
+GitHub Actions `Release: Publish Crates` workflow to execute the release.
 
 Release flow summary: see [`docs/releasing.md`](../docs/releasing.md).
 
@@ -54,14 +54,14 @@ git config --local core.hooksPath .githooks
 
 1. Update the release version and `CHANGELOG.md`.
 2. Land the release change on `master`.
-3. GitHub → Actions → run workflow `Release: Publish` from `master`.
+3. GitHub → Actions → run workflow `Release: Publish Crates` from `master`.
 
 Notes:
 
-- `Release: Publish` reads the version from `Cargo.toml`.
-- `Release: Publish` requires a matching `CHANGELOG.md` entry for that version.
-- `Release: Publish` creates the repository tag `vX.Y.Z` and the GitHub Release.
-- `Release: Publish` requires `CARGO_REGISTRY_TOKEN` secret to publish to crates.io.
+- `Release: Publish Crates` reads the version from `Cargo.toml`.
+- `Release: Publish Crates` requires a matching `CHANGELOG.md` entry for that version.
+- `Release: Publish Crates` publishes crates.io first, then creates the repository tag `vX.Y.Z` and the GitHub Release.
+- `Release: Publish Crates` requires `CARGO_REGISTRY_TOKEN` secret to publish to crates.io.
 
 ## Local fallback flow
 

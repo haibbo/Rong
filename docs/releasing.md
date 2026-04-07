@@ -26,7 +26,7 @@ Use this for ordinary releases.
 
 3. Merge the release PR into `master`.
 
-4. In GitHub Actions, run `Release: Publish` from `master`.
+4. In GitHub Actions, run `Release: Publish Crates` from `master`.
 
 The publish workflow:
 
@@ -38,7 +38,7 @@ The publish workflow:
 
 Requirements:
 
-- `Release: Publish` must run from `master`
+- `Release: Publish Crates` must run from `master`
 - `CARGO_REGISTRY_TOKEN` must be configured in GitHub Actions
 
 ## Local Fallback
@@ -103,5 +103,5 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
 
 ## Short Version
 
-- Normal release: open a normal PR with version + changelog changes, merge it, then run `Release: Publish`
+- Normal release: open a normal PR with version + changelog changes, merge it, then run `Release: Publish Crates`
 - Fallback release: bump version, update changelog, run `publish.sh`, then create `vX.Y.Z` tag and GitHub Release manually

@@ -214,13 +214,13 @@ if [ "$DO_COMMIT" = true ]; then
   echo -e "  1. Review: ${BLUE}git show${NC}"
   echo -e "  2. Update: ${BLUE}edit CHANGELOG.md for ${NEW_VERSION}${NC}"
   echo -e "  3. Push: ${BLUE}git push${NC}"
-  echo -e "  4. Release: ${BLUE}run the Release: Publish workflow from master${NC}"
+  echo -e "  4. Release: ${BLUE}run the Release: Publish Crates workflow from master${NC}"
 else
   echo -e "${YELLOW}Next steps:${NC}"
   echo -e "  1. Review: ${BLUE}git diff Cargo.toml${NC}"
   echo -e "  2. Update: ${BLUE}edit CHANGELOG.md for ${NEW_VERSION}${NC}"
   echo -e "  3. Commit: ${BLUE}git add Cargo.toml && git commit -m 'chore: bump version to ${NEW_VERSION}'${NC}"
   echo -e "  4. Push: ${BLUE}git push${NC}"
-  echo -e "  5. Release: ${BLUE}run the Release: Publish workflow from master${NC}"
+  echo -e "  5. Release: ${BLUE}run the Release: Publish Crates workflow from master${NC}"
   echo ""
 fi

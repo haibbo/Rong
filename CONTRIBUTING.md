@@ -111,7 +111,7 @@ Preferred flow:
 
 1. Prepare a normal PR with the version bump and matching `CHANGELOG.md` update.
 2. Merge that PR into `master`.
-3. Run `Release: Publish` in GitHub Actions from `master`.
+3. Run `Release: Publish Crates` in GitHub Actions from `master`.
 
 For local release details, see [`scripts/README.md`](scripts/README.md).
 For the full maintainer checklist, see [`docs/releasing.md`](docs/releasing.md).

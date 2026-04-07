@@ -1,4 +1,4 @@
-name: "Release: Publish"
+name: "Release: Publish Crates"
 
 on:
   workflow_dispatch:
