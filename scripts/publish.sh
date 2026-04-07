@@ -270,7 +270,8 @@ for crate in "${CRATES[@]}"; do
   echo -e "${YELLOW}Running: ${cmd[*]}${NC}"
 
   # Execute publish command
-  if "${cmd[@]}"; then
+  if publish_output="$("${cmd[@]}" 2>&1)"; then
+    printf '%s\n' "$publish_output"
     PUBLISHED=$((PUBLISHED + 1))
     echo -e "${GREEN}✓ Successfully published ${crate}${NC}"
 
@@ -279,6 +280,13 @@ for crate in "${CRATES[@]}"; do
       wait_for_crate "$crate" "$EXPECTED_VERSION" "$WAIT_TIMEOUT" "$POLL_INTERVAL"
     fi
   else
+    printf '%s\n' "$publish_output"
+    if grep -Eq 'already exists on crates\.io index|already uploaded' <<<"$publish_output"; then
+      SKIPPED=$((SKIPPED + 1))
+      echo -e "${YELLOW}⊘ Skipping ${crate} ${EXPECTED_VERSION} (already published; detected during cargo publish)${NC}"
+      continue
+    fi
+
     FAILED=$((FAILED + 1))
     echo -e "${RED}✗ Failed to publish ${crate}${NC}"
     echo -e "${RED}Stopping publish process due to error.${NC}"
