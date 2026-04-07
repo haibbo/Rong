@@ -40,11 +40,11 @@ CRATES=(
   # Layer 5 - Basic modules
   "rong_console"
   "rong_assert"
-  "rong_buffer"
   "rong_encoding"
   "rong_url"
-  "rong_event"
   "rong_timer"
+  "rong_event"
+  "rong_buffer"
 
   # Layer 6 - Intermediate modules
   "rong_exception"
@@ -55,6 +55,8 @@ CRATES=(
   "rong_fs"
   "rong_storage"
   "rong_http"
+  "rong_compression"
+  "rong_command"
   "rong_redis"
   "rong_sqlite"
   "rong_worker"
