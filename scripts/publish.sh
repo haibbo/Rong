@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 NO_VERIFY=false
 ALLOW_DIRTY=false
 AUTO_CONFIRM=false
-WAIT_TIMEOUT=60  # Maximum wait time for crates.io sync
+WAIT_TIMEOUT=180  # Maximum wait time for crates.io sync
 POLL_INTERVAL=5  # Check every 5 seconds
 
 WORKSPACE_TOML="Cargo.toml"
@@ -76,7 +76,7 @@ OPTIONS:
   -n, --no-verify       Skip build verification with --no-verify (default: false)
   -a, --allow-dirty     Allow publishing with uncommitted changes (default: false)
   -y, --yes             Skip confirmation prompt (default: false)
-  -t, --timeout SECONDS Maximum wait time for crates.io sync (default: 60)
+  -t, --timeout SECONDS Maximum wait time for crates.io sync (default: 180)
   -p, --poll SECONDS    Poll interval for checking crates.io (default: 5)
   -h, --help            Show this help message
 
@@ -277,7 +277,9 @@ for crate in "${CRATES[@]}"; do
 
     # Wait for crates.io to sync (except for last crate)
     if [ $((PUBLISHED + SKIPPED)) -lt ${#CRATES[@]} ]; then
-      wait_for_crate "$crate" "$EXPECTED_VERSION" "$WAIT_TIMEOUT" "$POLL_INTERVAL"
+      if ! wait_for_crate "$crate" "$EXPECTED_VERSION" "$WAIT_TIMEOUT" "$POLL_INTERVAL"; then
+        echo -e "${YELLOW}⚠ Proceeding despite crates.io index lag for ${crate}.${NC}"
+      fi
     fi
   else
     printf '%s\n' "$publish_output"
