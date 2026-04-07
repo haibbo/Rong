@@ -21,6 +21,7 @@ WORKSPACE_TOML="Cargo.toml"
 CRATES=(
   # Layer 1 - Foundation (no workspace deps)
   "rong_macro"
+  "rong_rt"
   "rong_core"
 
   # Layer 2 - System bindings
@@ -33,7 +34,7 @@ CRATES=(
   "rong_jscore"
   "rong_arkjs"
 
-  # Layer 4 - Main runtime
+  # Layer 4 - Main runtime facade
   "rong"
 
   # Layer 5 - Basic modules
