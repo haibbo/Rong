@@ -212,7 +212,7 @@ describe("S3 operations", () => {
   const TEST_JSON_KEY = `rong-test-${Date.now()}.json`;
   const TEST_BIN_KEY = `rong-test-${Date.now()}.bin`;
   const TEST_CONTENT = "Hello from RongJS S3 test!";
-  const TEST_JSON = { name: "rong", version: "0.2.0", timestamp: Date.now() };
+  const TEST_JSON = { name: "rong", version: "0.3.0", timestamp: Date.now() };
 
   // ─── write + read ──────────────────────────────────────────────
 
@@ -234,7 +234,7 @@ describe("S3 operations", () => {
     const file = client.file(TEST_JSON_KEY);
     const data = await file.json();
     assert.equal(data.name, "rong");
-    assert.equal(data.version, "0.2.0");
+    assert.equal(data.version, "0.3.0");
   });
 
   it("write() ArrayBuffer + bytes() roundtrip", async () => {
