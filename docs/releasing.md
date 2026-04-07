@@ -4,7 +4,7 @@ This repository uses a maintainer-driven release flow:
 
 - maintainers choose the version
 - maintainers write `CHANGELOG.md`
-- automation publishes crates, creates the repository tag, and creates the GitHub Release
+- automation publishes crates and the npm package, creates the repository tag, and creates the GitHub Release
 
 There is no generated release PR and no automatic version inference.
 
@@ -26,20 +26,22 @@ Use this for ordinary releases.
 
 3. Merge the release PR into `master`.
 
-4. In GitHub Actions, run `Release: Publish Crates` from `master`.
+4. In GitHub Actions, run `Release: Publish Packages` from `master`.
 
 The publish workflow:
 
 - reads the release version from `Cargo.toml`
 - requires a matching `CHANGELOG.md` section
 - publishes crates through `scripts/publish.sh`
+- publishes `@lingxia/rong` through `scripts/publish_npm.sh`
 - creates the repository tag as `vX.Y.Z`
 - creates the GitHub Release from the changelog entry
 
 Requirements:
 
-- `Release: Publish Crates` must run from `master`
+- `Release: Publish Packages` must run from `master`
 - `CARGO_REGISTRY_TOKEN` must be configured in GitHub Actions
+- `NPM_TOKEN` must be configured in GitHub Actions
 
 ## Local Fallback
 
@@ -68,10 +70,11 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
 
 4. Review, commit, and push the full release change if needed.
 
-5. Export the crates.io token:
+5. Export the publish tokens:
 
    ```bash
    export CARGO_REGISTRY_TOKEN=...
+   export NPM_TOKEN=...
    ```
 
 6. Publish crates:
@@ -86,7 +89,13 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
    ./scripts/publish.sh --yes
    ```
 
-7. Create the repository tag and GitHub Release manually:
+7. Publish the npm package:
+
+   ```bash
+   ./scripts/publish_npm.sh
+   ```
+
+8. Create the repository tag and GitHub Release manually:
 
    ```bash
    git tag -a v<version> -m "Rong v<version>"
@@ -99,9 +108,10 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
 - `bump_version.sh` updates the workspace version, the root package version, and internal workspace dependency versions.
 - `publish.sh` does not change versions or changelog content.
 - `publish.sh` publishes crates in dependency order and waits for crates.io index propagation between packages.
+- `publish_npm.sh` publishes the `@lingxia/rong` npm package and skips versions that already exist.
 - When adding or removing published crates, update `scripts/publish.sh`.
 
 ## Short Version
 
-- Normal release: open a normal PR with version + changelog changes, merge it, then run `Release: Publish Crates`
-- Fallback release: bump version, update changelog, run `publish.sh`, then create `vX.Y.Z` tag and GitHub Release manually
+- Normal release: open a normal PR with version + changelog changes, merge it, then run `Release: Publish Packages`
+- Fallback release: bump version, update changelog, run `publish.sh` and `publish_npm.sh`, then create `vX.Y.Z` tag and GitHub Release manually

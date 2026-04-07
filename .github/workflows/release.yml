@@ -1,4 +1,4 @@
-name: "Release: Publish Crates"
+name: "Release: Publish Packages"
 
 on:
   workflow_dispatch:
@@ -14,6 +14,7 @@ jobs:
       contents: write
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -23,6 +24,12 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -70,6 +77,9 @@ jobs:
 
       - name: Publish crates
         run: ./scripts/publish.sh --yes
+
+      - name: Publish npm package
+        run: ./scripts/publish_npm.sh
 
       - name: Create release tag
         run: |

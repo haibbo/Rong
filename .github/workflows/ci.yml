@@ -20,9 +20,9 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
 
-  host-verify:
+  host-check:
     needs: fmt
-    name: host-${{ matrix.engine }}-${{ matrix.os }}
+    name: host-check-${{ matrix.engine }}-${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -59,7 +59,95 @@ jobs:
           brew install llvm
           echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
 
-      - name: Verify
+      - name: Check
         env:
           ENGINE: ${{ matrix.engine }}
-        run: cargo make ci-verify
+        run: cargo make check-engine
+
+  host-clippy:
+    needs: fmt
+    name: host-clippy-${{ matrix.engine }}-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - engine: quickjs
+            os: windows-latest
+          - engine: quickjs
+            os: macos-latest
+          - engine: jscore
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-make
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+
+      - name: Clippy
+        env:
+          ENGINE: ${{ matrix.engine }}
+        run: cargo make clippy-engine
+
+  host-test:
+    needs: fmt
+    name: host-test-${{ matrix.engine }}-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - engine: quickjs
+            os: windows-latest
+          - engine: quickjs
+            os: macos-latest
+          - engine: jscore
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-make
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+
+      - name: Test
+        env:
+          ENGINE: ${{ matrix.engine }}
+        run: cargo make test-engine

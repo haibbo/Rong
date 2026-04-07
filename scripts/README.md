@@ -1,7 +1,7 @@
 # Publishing Scripts (Maintainer)
 
 Recommended path: maintain the version and `CHANGELOG.md` manually, then use the
-GitHub Actions `Release: Publish Crates` workflow to execute the release.
+GitHub Actions `Release: Publish Packages` workflow to execute the release.
 
 Release flow summary: see [`docs/releasing.md`](../docs/releasing.md).
 
@@ -50,18 +50,28 @@ git config --local core.hooksPath .githooks
 - Smart waiting: polls crates.io until each package is indexed
 - `--yes` skips the confirmation prompt (useful for CI)
 
+## publish_npm.sh
+
+```
+./scripts/publish_npm.sh
+```
+
+- Publishes the `@lingxia/rong` npm package from `rong_types`
+- Requires `NPM_TOKEN` or `NODE_AUTH_TOKEN`
+- Skips the publish if the same npm version already exists
+
 ## GitHub publish flow (recommended)
 
 1. Update the release version and `CHANGELOG.md`.
 2. Land the release change on `master`.
-3. GitHub → Actions → run workflow `Release: Publish Crates` from `master`.
+3. GitHub → Actions → run workflow `Release: Publish Packages` from `master`.
 
 Notes:
 
-- `Release: Publish Crates` reads the version from `Cargo.toml`.
-- `Release: Publish Crates` requires a matching `CHANGELOG.md` entry for that version.
-- `Release: Publish Crates` publishes crates.io first, then creates the repository tag `vX.Y.Z` and the GitHub Release.
-- `Release: Publish Crates` requires `CARGO_REGISTRY_TOKEN` secret to publish to crates.io.
+- `Release: Publish Packages` reads the version from `Cargo.toml`.
+- `Release: Publish Packages` requires a matching `CHANGELOG.md` entry for that version.
+- `Release: Publish Packages` publishes crates.io packages and `@lingxia/rong`, then creates the repository tag `vX.Y.Z` and the GitHub Release.
+- `Release: Publish Packages` requires `CARGO_REGISTRY_TOKEN` and `NPM_TOKEN`.
 
 ## Local fallback flow
 
@@ -71,7 +81,8 @@ Use this when GitHub Actions is unavailable or when you need to recover manually
 2. Update `CHANGELOG.md` for the same version.
 3. Review, commit, and push the release changes.
 4. Run `./scripts/publish.sh` to publish crates.
-5. Create tag `v<version>` and the GitHub Release manually.
+5. Run `./scripts/publish_npm.sh` to publish `@lingxia/rong`.
+6. Create tag `v<version>` and the GitHub Release manually.
 
 ## Troubleshooting
 
