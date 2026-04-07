@@ -3,8 +3,14 @@
 ## `ci.yml` (tests)
 
 - **Trigger:** push + pull_request
-- **Runs:** macOS matrix for `quickjs` and `jscore`
-- **Steps:** `cargo fmt --check` → `cargo make check-engine` → `cargo make clippy-engine` → `cargo make test-engine`
+- **Runs:** `cargo fmt` once, then host verification on Windows `quickjs`, macOS `quickjs`, and macOS `jscore`
+- **Steps:** `cargo fmt --check` → `cargo make ci-verify`
+
+## `harmony-self-hosted.yml` (Harmony self-hosted)
+
+- **Trigger:** manual (`workflow_dispatch`)
+- **Runs:** ArkJS/OHOS `check`, `clippy`, and the Rust-side Harmony smoke-library build on a self-hosted runner with `OHOS_NDK_HOME`
+- **Requirements:** runner labels `self-hosted` and `harmony`; intended for future local-runner coverage, not GitHub-hosted CI
 
 ## `release.yml` (manual publish)
 

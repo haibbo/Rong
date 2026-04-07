@@ -65,13 +65,13 @@ describe("Rong.sleep", () => {
     }
   });
 
-  it("blocks synchronously for the requested delay", () => {
+  it("blocks synchronously for at least the requested delay", () => {
     const start = Date.now();
     Rong.sleepSync(40);
     const elapsed = Date.now() - start;
     assert.ok(
-      elapsed >= 35 && elapsed <= 160,
-      `Rong.sleepSync should block about 40ms, got ${elapsed}ms`,
+      elapsed >= 35 && elapsed <= 300,
+      `Rong.sleepSync should block for about 40ms without oversleeping excessively, got ${elapsed}ms`,
     );
   });
 

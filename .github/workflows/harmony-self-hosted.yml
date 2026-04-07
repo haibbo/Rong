@@ -1,0 +1,42 @@
+name: Harmony CI (Self-Hosted)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  harmony-rust:
+    runs-on: [self-hosted, harmony]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-make
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Check runner prerequisites
+        shell: bash
+        run: |
+          if [ -z "${OHOS_NDK_HOME:-}" ]; then
+            echo "OHOS_NDK_HOME must be configured on the self-hosted Harmony runner."
+            exit 1
+          fi
+
+      - name: ArkJS OHOS check
+        run: cargo make check-arkjs-ohos
+
+      - name: ArkJS OHOS clippy
+        run: cargo make clippy-arkjs-ohos
+
+      - name: Harmony Rust build
+        shell: bash
+        run: ./testing/harmony/dev.sh --rust-only
