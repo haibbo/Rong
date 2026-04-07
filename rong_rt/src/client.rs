@@ -42,11 +42,6 @@ pub(crate) struct RequestTimeouts {
 #[cfg(all(feature = "tls-aws-lc", feature = "tls-ring"))]
 compile_error!("Enable only one TLS backend feature for rong_rt: `tls-aws-lc` or `tls-ring`.");
 
-#[cfg(not(any(feature = "tls-aws-lc", feature = "tls-ring")))]
-compile_error!(
-    "rong_rt requires an explicit TLS backend. Enable exactly one of `tls-aws-lc` or `tls-ring` from your top-level crate."
-);
-
 static CLIENT: OnceLock<Mutex<Option<CachedClient>>> = OnceLock::new();
 static PROXY_CONFIG: OnceLock<RwLock<Option<ProxyConfig>>> = OnceLock::new();
 #[cfg(test)]
@@ -196,6 +191,7 @@ fn build_proxy(proxy_config: ProxyConfig) -> Proxy {
     Proxy::new(Intercept::All, proxy_config.uri)
 }
 
+#[cfg(any(feature = "tls-aws-lc", feature = "tls-ring"))]
 fn client(timeouts: RequestTimeouts) -> Result<HttpClient, String> {
     let proxy = current_proxy();
     let connect_timeout = timeouts.connect_timeout;
@@ -221,6 +217,14 @@ fn client(timeouts: RequestTimeouts) -> Result<HttpClient, String> {
         client: built.clone(),
     });
     Ok(built)
+}
+
+#[cfg(not(any(feature = "tls-aws-lc", feature = "tls-ring")))]
+fn client(_timeouts: RequestTimeouts) -> Result<HttpClient, String> {
+    Err(
+        "rong_rt requires an explicit TLS backend. Enable exactly one of `tls-aws-lc` or `tls-ring` from your top-level crate."
+            .to_string(),
+    )
 }
 
 pub struct HttpResponse {
