@@ -6,11 +6,29 @@ on:
   pull_request:
 
 jobs:
-  verify:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+  host-verify:
+    needs: fmt
+    name: host-${{ matrix.engine }}-${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          - engine: quickjs
+            os: windows-latest
           - engine: quickjs
             os: macos-latest
           - engine: jscore
@@ -41,20 +59,7 @@ jobs:
           brew install llvm
           echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
 
-      - name: Format
-        run: cargo fmt --all -- --check
-
-      - name: Check
+      - name: Verify
         env:
           ENGINE: ${{ matrix.engine }}
-        run: cargo make check-engine
-
-      - name: Clippy
-        env:
-          ENGINE: ${{ matrix.engine }}
-        run: cargo make clippy-engine
-
-      - name: Tests
-        env:
-          ENGINE: ${{ matrix.engine }}
-        run: cargo make test-engine
+        run: cargo make ci-verify
