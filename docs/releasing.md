@@ -1,45 +1,49 @@
-# Release Checklist
+# Releasing
 
-This repository uses one release model:
+This repository uses a maintainer-driven release flow:
 
-- Maintainers decide the version and write `CHANGELOG.md`
-- Automation publishes crates, creates the repo tag, and creates the GitHub Release
+- maintainers choose the version
+- maintainers write `CHANGELOG.md`
+- automation publishes crates, creates the repository tag, and creates the GitHub Release
 
-The preferred execution path is the GitHub Actions publish workflow. Local publishing
-is the fallback when GitHub Actions is unavailable or when recovering from a partial
-release.
+There is no generated release PR and no automatic version inference.
 
-## Preferred Flow: GitHub Actions publish
+## Normal Flow
 
-Checklist:
+Use this for ordinary releases.
 
-1. Land the intended changes on `master`.
-2. Update the release metadata in the same change set:
+1. Prepare a normal release PR.
+   The PR should include:
+   - the version bump in `Cargo.toml`
+   - any other versioned package metadata updates
+   - the matching `CHANGELOG.md` entry
 
-   - bump the workspace version
-   - add the matching `CHANGELOG.md` entry
-
-3. Run local verification if needed:
+2. Run verification as needed:
 
    ```bash
    cargo make ci-verify-all
    ```
 
-4. Merge the release commit or PR into `master`.
-5. In GitHub Actions, run `Release: Publish` from `master`.
+3. Merge the release PR into `master`.
 
-Notes:
+4. In GitHub Actions, run `Release: Publish` from `master`.
 
-- `Release: Publish` reads the release version from `Cargo.toml`.
-- `Release: Publish` extracts the GitHub Release body from the matching `CHANGELOG.md` section.
-- `Release: Publish` creates the repository tag as `vX.Y.Z`.
-- `Release: Publish` requires the `CARGO_REGISTRY_TOKEN` GitHub secret.
+The publish workflow:
 
-## Local Fallback Flow
+- reads the release version from `Cargo.toml`
+- requires a matching `CHANGELOG.md` section
+- publishes crates through `scripts/publish.sh`
+- creates the repository tag as `vX.Y.Z`
+- creates the GitHub Release from the changelog entry
 
-Use this when GitHub Actions is unavailable or when you need to recover manually.
+Requirements:
 
-Checklist:
+- `Release: Publish` must run from `master`
+- `CARGO_REGISTRY_TOKEN` must be configured in GitHub Actions
+
+## Local Fallback
+
+Use this only when GitHub Actions is unavailable or when you are recovering from a partial release.
 
 1. Run verification:
 
@@ -48,7 +52,7 @@ Checklist:
    cargo make ci-verify-all
    ```
 
-2. Bump versions:
+2. Update release metadata:
 
    ```bash
    ./scripts/bump_version.sh <version>
@@ -60,16 +64,17 @@ Checklist:
    ./scripts/bump_version.sh <version> --commit
    ```
 
-3. Update `CHANGELOG.md` with the matching release entry.
-4. Review the combined release changes.
-5. Commit and push the release changes if needed.
-6. Export the crates.io token:
+3. Update `CHANGELOG.md` for the same version.
+
+4. Review, commit, and push the full release change if needed.
+
+5. Export the crates.io token:
 
    ```bash
    export CARGO_REGISTRY_TOKEN=...
    ```
 
-7. Publish:
+6. Publish crates:
 
    ```bash
    ./scripts/publish.sh
@@ -81,7 +86,7 @@ Checklist:
    ./scripts/publish.sh --yes
    ```
 
-8. Create the repository tag and GitHub Release manually:
+7. Create the repository tag and GitHub Release manually:
 
    ```bash
    git tag -a v<version> -m "Rong v<version>"
@@ -89,16 +94,14 @@ Checklist:
    gh release create v<version> --title "v<version>" --notes-file <(bash ./scripts/extract_changelog_entry.sh <version>)
    ```
 
-Notes:
+## Maintainer Notes
 
-- `bump_version.sh` updates:
-  - `[workspace.package]` version
-  - the root `[package]` version
-  - internal crate versions in `[workspace.dependencies]`
-- `publish.sh` does not bump versions for you. Always bump first, then publish.
+- `bump_version.sh` updates the workspace version, the root package version, and internal workspace dependency versions.
+- `publish.sh` does not change versions or changelog content.
 - `publish.sh` publishes crates in dependency order and waits for crates.io index propagation between packages.
+- When adding or removing published crates, update `scripts/publish.sh`.
 
-## Quick Rule
+## Short Version
 
-- Normal release: merge version + changelog update -> run `Release: Publish`
-- Fallback release: `bump_version.sh` -> update `CHANGELOG.md` -> `publish.sh` -> create `vX.Y.Z` tag + GitHub Release
+- Normal release: open a normal PR with version + changelog changes, merge it, then run `Release: Publish`
+- Fallback release: bump version, update changelog, run `publish.sh`, then create `vX.Y.Z` tag and GitHub Release manually

@@ -56,10 +56,10 @@ What these tasks do:
 - `ci-verify-all`: runs `ci-verify` sequentially for `quickjs` and `jscore`
 
 The shared tasks exclude `rong_arkjs`, `rong_arkjs_sys`, and the device-only
-`rong_test_device` crate from the default host CI gate. On this macOS-focused
-host flow, ArkJS is validated through the on-device `rong_test_device` path
-instead. The tasks also check `lib/bin/test` targets instead of `--all-targets`
-to avoid example-only regressions from blocking normal work.
+`rong_test_device` crate from the default host CI gate. ArkJS/OHOS is validated
+through separate Harmony-focused checks instead of the default host matrix. The
+tasks also check `lib/bin/test` targets instead of `--all-targets` to avoid
+example-only regressions from blocking normal work.
 
 ## Git Hooks
 
@@ -84,9 +84,9 @@ Run them manually:
 
 ## Test Matrix
 
-- `quickjs`: default local and CI engine
-- `jscore`: secondary CI engine
-- `arkjs`: tested on-device via `rong_test_device`; not part of the default host verification gate
+- `quickjs`: default local engine; CI runs it on Windows and macOS
+- `jscore`: secondary CI engine; CI runs it on macOS only
+- `arkjs`: verified separately through Harmony/OHOS checks; not part of the default host verification gate
 
 For ad hoc engine tests, the lower-level runner remains available:
 
@@ -101,17 +101,20 @@ For HarmonyOS device-side verification, use:
 ./testing/harmony/dev.sh test
 ```
 
+For future self-hosted Harmony CI coverage, provision a local runner with
+`OHOS_NDK_HOME` and the `harmony` runner label, then use the
+`Harmony CI (Self-Hosted)` workflow.
+
 ## Release Flow
 
 Preferred flow:
 
-1. Land changes on `master`.
-2. Run `Release: Prepare PR` in GitHub Actions.
-3. Review and merge the generated release PR.
-4. Run `Release: Publish` in GitHub Actions.
+1. Prepare a normal PR with the version bump and matching `CHANGELOG.md` update.
+2. Merge that PR into `master`.
+3. Run `Release: Publish` in GitHub Actions from `master`.
 
 For local release details, see [`scripts/README.md`](scripts/README.md).
-For the release checklist and the difference between `release-plz` and manual publishing, see [`docs/releasing.md`](docs/releasing.md).
+For the full maintainer checklist, see [`docs/releasing.md`](docs/releasing.md).
 
 ## Notes For Contributors
 
