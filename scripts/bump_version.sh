@@ -16,9 +16,9 @@ Usage: $0 <new-version> [OPTIONS]
 
 Bump workspace version by updating the root Cargo.toml.
 
-NOTE: This script is for manual maintenance only. The recommended release flow
-uses release-plz (Release PR -> merge -> CI publishes). This script does NOT
-create tags because release-plz uses per-package tags (see release-plz.toml).
+NOTE: Maintainers decide versions and changelog entries manually. This script
+only updates Cargo.toml metadata. It does NOT create repository tags, publish
+crates, or create GitHub releases.
 
 ARGUMENTS:
   <new-version>         New version number (e.g., 0.1.2, 0.2.0, 1.0.0)
@@ -38,7 +38,7 @@ WORKFLOW:
   1. Updates [workspace.package] version
   2. Updates the root [package] version
   3. Syncs all [workspace.dependencies] versions
-  4. Creates git commit (if --commit or --commit-and-tag)
+  4. Creates git commit (if --commit)
 
 DEFAULT BEHAVIOR:
   By default, this script only updates Cargo.toml without git operations.
@@ -212,13 +212,15 @@ echo ""
 if [ "$DO_COMMIT" = true ]; then
   echo -e "${YELLOW}Next steps:${NC}"
   echo -e "  1. Review: ${BLUE}git show${NC}"
-  echo -e "  2. Push: ${BLUE}git push${NC}"
-  echo -e "  3. Release: ${BLUE}merge the Release PR created by release-plz${NC}"
+  echo -e "  2. Update: ${BLUE}edit CHANGELOG.md for ${NEW_VERSION}${NC}"
+  echo -e "  3. Push: ${BLUE}git push${NC}"
+  echo -e "  4. Release: ${BLUE}run the Release: Publish workflow from master${NC}"
 else
   echo -e "${YELLOW}Next steps:${NC}"
   echo -e "  1. Review: ${BLUE}git diff Cargo.toml${NC}"
-  echo -e "  2. Commit: ${BLUE}git add Cargo.toml && git commit -m 'chore: bump version to ${NEW_VERSION}'${NC}"
-  echo -e "  3. Push: ${BLUE}git push${NC}"
-  echo -e "  4. Release: ${BLUE}merge the Release PR created by release-plz${NC}"
+  echo -e "  2. Update: ${BLUE}edit CHANGELOG.md for ${NEW_VERSION}${NC}"
+  echo -e "  3. Commit: ${BLUE}git add Cargo.toml && git commit -m 'chore: bump version to ${NEW_VERSION}'${NC}"
+  echo -e "  4. Push: ${BLUE}git push${NC}"
+  echo -e "  5. Release: ${BLUE}run the Release: Publish workflow from master${NC}"
   echo ""
 fi

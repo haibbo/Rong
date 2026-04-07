@@ -12,7 +12,6 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write
-      pull-requests: read
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
@@ -35,9 +34,51 @@ jobs:
           brew install llvm
           echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
 
-      - name: Release
-        uses: release-plz/action@v0.5
-        with:
-          command: release
+      - name: Resolve release metadata
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "master" ]; then
+            echo "Run this workflow from master."
+            exit 1
+          fi
+
+          VERSION="$(grep -A 2 '^\[workspace.package\]' Cargo.toml | grep '^version' | sed 's/version = "\(.*\)"/\1/')"
+          if [ -z "$VERSION" ]; then
+            echo "Unable to resolve workspace version from Cargo.toml."
+            exit 1
+          fi
+
+          TAG="v${VERSION}"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists in the checked-out repository."
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin."
+            exit 1
+          fi
+
+          bash ./scripts/extract_changelog_entry.sh "$VERSION" > /tmp/rong-release-notes.md
+          if [ ! -s /tmp/rong-release-notes.md ]; then
+            echo "CHANGELOG.md entry for $VERSION is empty."
+            exit 1
+          fi
+
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+
+      - name: Publish crates
+        run: ./scripts/publish.sh --yes
+
+      - name: Create release tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Rong $TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$TAG" --title "$TAG" --notes-file /tmp/rong-release-notes.md

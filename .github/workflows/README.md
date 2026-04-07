@@ -6,22 +6,16 @@
 - **Runs:** macOS matrix for `quickjs` and `jscore`
 - **Steps:** `cargo fmt --check` → `cargo make check-engine` → `cargo make clippy-engine` → `cargo make test-engine`
 
-## `release-pr.yml` (release-plz)
+## `release.yml` (manual publish)
 
 - **Trigger:** manual (`workflow_dispatch`)
-- **Runs:** release-plz to open/update a Release PR based on Conventional Commits
-- **Labels:** applies `release` label to Release PRs (see `release-plz.toml`)
-  - **Action:** `release-plz/action@v0.5`
-
-## `release.yml` (release-plz)
-
-- **Trigger:** manual (`workflow_dispatch`)
-- **Runs:** publish workflow after Release PR merge (creates tag, publishes crates, creates GitHub Release)
-  - **Action:** `release-plz/action@v0.5`
+- **Runs:** validates the current workspace version and matching `CHANGELOG.md` entry, publishes crates, creates repo tag `vX.Y.Z`, and creates the GitHub Release from the changelog text
+- **Requirements:** run from `master`; `CHANGELOG.md` must already contain the release entry
 
 ## Secrets
 
 - `CARGO_REGISTRY_TOKEN` (required for publish)
+- `GITHUB_TOKEN` (default Actions token; used to push the release tag and create the GitHub Release)
 
 ## Local testing
 

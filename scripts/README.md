@@ -1,6 +1,7 @@
 # Publishing Scripts (Maintainer)
 
-Recommended path: use the **GitHub Actions** release-plz workflows. Local scripts are here for manual use / emergencies.
+Recommended path: maintain the version and `CHANGELOG.md` manually, then use the
+GitHub Actions `Release: Publish` workflow to execute the release.
 
 Release flow summary: see [`docs/releasing.md`](../docs/releasing.md).
 
@@ -36,7 +37,7 @@ git config --local core.hooksPath .githooks
 
 - Updates `[workspace.package]` and syncs `[workspace.dependencies]`
 - Default is file update only (no git ops)
-- Does not create tags (release-plz uses per-package tags)
+- Does not create tags or GitHub releases
 
 ## publish.sh
 
@@ -49,25 +50,28 @@ git config --local core.hooksPath .githooks
 - Smart waiting: polls crates.io until each package is indexed
 - `--yes` skips the confirmation prompt (useful for CI)
 
-## GitHub release flow (recommended, manual)
+## GitHub publish flow (recommended)
 
-1. Land changes on `master` (prefer Conventional Commits: `fix: ...`, `feat: ...`, `feat!: ...`).
-2. GitHub → Actions → run workflow `Release: Prepare PR` (select branch `master`).
-3. Review and merge the generated “Release PR” (this PR contains the version bumps + changelog updates).
-4. GitHub → Actions → run workflow `Release: Publish` (select branch `master`).
+1. Update the release version and `CHANGELOG.md`.
+2. Land the release change on `master`.
+3. GitHub → Actions → run workflow `Release: Publish` from `master`.
 
 Notes:
-- The “version bump” is done by release-plz inside the Release PR; you generally do **not** run `bump_version.sh` for the GitHub-based flow.
+
+- `Release: Publish` reads the version from `Cargo.toml`.
+- `Release: Publish` requires a matching `CHANGELOG.md` entry for that version.
+- `Release: Publish` creates the repository tag `vX.Y.Z` and the GitHub Release.
 - `Release: Publish` requires `CARGO_REGISTRY_TOKEN` secret to publish to crates.io.
-  - The GitHub workflows use `release-plz/action@v0.5` (latest v0.5.x).
 
-## Local manual flow (not recommended)
+## Local fallback flow
 
-Use this only if you intentionally want to bypass release-plz automation:
+Use this when GitHub Actions is unavailable or when you need to recover manually:
 
-1. Run `./scripts/bump_version.sh <version>` and commit the changes.
-2. Run `./scripts/publish.sh` to publish crates.
-3. Create Git tags / GitHub Releases manually as needed.
+1. Run `./scripts/bump_version.sh <version>`.
+2. Update `CHANGELOG.md` for the same version.
+3. Review, commit, and push the release changes.
+4. Run `./scripts/publish.sh` to publish crates.
+5. Create tag `v<version>` and the GitHub Release manually.
 
 ## Troubleshooting
 
