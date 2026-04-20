@@ -307,7 +307,7 @@ impl JSObjectOps for ArkJSValue {
                 arkjs::OH_JSVM_GetProperty(self.env, obj, key.raw_value_for_api(), &mut result);
 
             if status == arkjs::JSVM_Status_JSVM_OK && !result.is_null() {
-                Ok(Some(ArkJSValue::from_owned_raw(self.env, result)))
+                Ok(Some(ArkJSValue::from_owned_raw(self.env, result).protect()))
             } else if status == arkjs::JSVM_Status_JSVM_OK {
                 Ok(None)
             } else {

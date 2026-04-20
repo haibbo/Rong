@@ -15,6 +15,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
+arkjs = []
 tls-aws-lc = ["rong_test_device/tls-aws-lc"]
 tls-ring = ["rong_test_device/tls-ring"]
 

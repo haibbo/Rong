@@ -1,6 +1,12 @@
+use rong_macro::FromJSObj;
 use rong_test::function::JSParameterType;
 use rong_test::*;
 use tokio::time::{Duration, sleep};
+
+#[derive(FromJSObj)]
+struct NestedQueryOptions {
+    query: Option<JSObject>,
+}
 
 #[test]
 fn function_with_optional() {
@@ -224,6 +230,37 @@ fn test_async_rust_fn_reject() {
         let err = result.unwrap_err();
         let message = thrown_error_message(&ctx, &err)?;
         assert!(message.contains("Failed to perform add!"));
+        Ok(())
+    });
+}
+
+#[test]
+fn test_async_rust_fn_preserves_nested_jsobject_after_await() {
+    async_run!(|ctx: JSContext| async move {
+        let stringify_query = JSFunc::new(&ctx, |options: NestedQueryOptions| async move {
+            let query = options.query.ok_or_else(|| {
+                HostError::new(rong::error::E_INVALID_ARG, "missing query").with_name("TypeError")
+            })?;
+
+            sleep(Duration::from_millis(50)).await;
+            query.to_json_string()
+        })?;
+        ctx.global()
+            .set("stringifyQueryAfterAwait", stringify_query)?;
+
+        let result: String = ctx
+            .eval::<Promise>(Source::from_bytes(
+                br#"
+                stringifyQueryAfterAwait({
+                    page: "file",
+                    query: { section: "openFile" }
+                })
+                "#,
+            ))?
+            .into_future()
+            .await?;
+
+        assert_eq!(result, r#"{"section":"openFile"}"#);
         Ok(())
     });
 }
