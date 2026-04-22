@@ -16,6 +16,7 @@ readme = "README.md"
 [dependencies]
 rong = { workspace = true }
 rong_timer = { workspace = true, optional = true }
+rong_cron = { workspace = true, optional = true }
 rong_http = { workspace = true, optional = true, default-features = false }
 rong_encoding = { workspace = true, optional = true }
 rong_event = { workspace = true, optional = true }
@@ -41,6 +42,7 @@ default = []
 quickjs = [
     "rong/quickjs",
     "rong_timer?/quickjs",
+    "rong_cron?/quickjs",
     "rong_http?/quickjs",
     "rong_encoding?/quickjs",
     "rong_event?/quickjs",
@@ -59,6 +61,7 @@ quickjs = [
 jscore = [
     "rong/jscore",
     "rong_timer?/jscore",
+    "rong_cron?/jscore",
     "rong_http?/jscore",
     "rong_encoding?/jscore",
     "rong_event?/jscore",
@@ -77,6 +80,7 @@ jscore = [
 arkjs = [
     "rong/arkjs",
     "rong_timer?/arkjs",
+    "rong_cron?/arkjs",
     "rong_http?/arkjs",
     "rong_encoding?/arkjs",
     "rong_event?/arkjs",
@@ -99,6 +103,7 @@ tls-ring = ["rong/tls-ring", "rong_http?/tls-ring"]
 
 all = [
     "timer",
+    "cron",
     "http",
     "encoding",
     "event",
@@ -120,6 +125,7 @@ all = [
 ]
 
 timer = ["rong_timer"]
+cron = ["rong_cron"]
 http = ["rong_http"]
 encoding = ["rong_encoding"]
 event = ["rong_event"]

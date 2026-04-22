@@ -8,6 +8,9 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
     #[cfg(feature = "timer")]
     rong_timer::init(ctx)?;
 
+    #[cfg(feature = "cron")]
+    rong_cron::init(ctx)?;
+
     #[cfg(feature = "stream")]
     rong_stream::init(ctx)?;
 

@@ -11,6 +11,7 @@ members = [
     "examples",
     "rong_rt",
     "modules/rong_timer",
+    "modules/rong_cron",
     "modules/rong_http", "modules/rong_encoding", "modules/rong_event",
     "modules/rong_assert", "modules/rong_exception", "modules/rong_storage",
     "modules/rong_abort", "modules/rong_console", "modules/rong_url", "modules/rong_buffer",
@@ -54,6 +55,7 @@ rong_rt = { path = "rong_rt"   , version = "0.3.0", default-features = false }
 
 # Module dependencies
 rong_timer = { path = "modules/rong_timer"   , version = "0.3.0", default-features = false }
+rong_cron = { path = "modules/rong_cron"   , version = "0.3.0", default-features = false }
 rong_console = { path = "modules/rong_console"   , version = "0.3.0", default-features = false }
 rong_assert = { path = "modules/rong_assert"   , version = "0.3.0", default-features = false }
 rong_fs = { path = "modules/rong_fs"   , version = "0.3.0", default-features = false }
@@ -75,11 +77,13 @@ rong_s3 = { path = "modules/rong_s3"   , version = "0.3.0", default-features = f
 
 # External dependencies
 tokio = { version = "1.49", features = ["rt", "rt-multi-thread", "time", "macros", "sync", "fs", "io-util", "process", "io-std"] }
+tokio-cron-scheduler = "0.15.1"
 futures = "0.3.31"
 thiserror = "2.0.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+croner = "3.0.1"
 
 # Additional common dependencies
 http = { package = "http", version = "1.4" }

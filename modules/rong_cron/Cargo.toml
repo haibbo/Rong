@@ -1,0 +1,35 @@
+[package]
+name = "rong_cron"
+version.workspace = true
+edition.workspace = true
+
+description = "Cron module for RongJS"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+categories.workspace = true
+documentation = "https://docs.rs/rong_cron"
+readme = "README.md"
+
+[dependencies]
+rong = { workspace = true }
+rong_rt = { workspace = true }
+tokio = { workspace = true }
+tokio-cron-scheduler = { workspace = true }
+chrono = { workspace = true }
+croner = { workspace = true }
+
+[features]
+default = []
+quickjs = ["rong/quickjs"]
+jscore = ["rong/jscore"]
+arkjs = ["rong/arkjs"]
+tls-aws-lc = ["rong/tls-aws-lc"]
+tls-ring = ["rong/tls-ring"]
+
+[dev-dependencies]
+rong_test = { workspace = true }
+rong_console = { workspace = true }
+rong_assert = { workspace = true }

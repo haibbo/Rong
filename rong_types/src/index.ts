@@ -60,6 +60,7 @@ export * from './exception';
 
 // Utility modules
 export * from './timer';
+export * from './cron';
 export * from './assert';
 export * from './console';
 export * from './sqlite';

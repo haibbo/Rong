@@ -23,6 +23,7 @@ import type {
   RongSyncSubprocess,
 } from './command';
 import type { RongSleepValue } from './timer';
+import type { RongCronFunction } from './cron';
 import type {
   DirEntry,
   MkdirOptions,
@@ -84,6 +85,14 @@ declare global {
     spawnSync(options: RongSpawnOptionsWithCmd): RongSyncSubprocess;
     sleep(delay?: RongSleepValue): Promise<void>;
     sleepSync(delay?: number): void;
+    /**
+     * Rong in-process cron API.
+     *
+     * `Rong.cron(schedule, handler)` synchronously returns a CronJob handle.
+     * `Rong.cron.parse(expression, relativeDate?)` returns the next matching
+     * UTC Date or null.
+     */
+    cron: RongCronFunction;
     zstdCompress(
       data: RongCompressionInput,
       options?: RongZstdCompressOptions
@@ -129,6 +138,11 @@ declare global {
    * Assert function - Test assertions (Node.js compatible)
    */
   const assert: AssertFunction;
+
+  const Bun: {
+    /** Alias of `Rong.cron`. */
+    cron: RongCronFunction;
+  };
 
 }
 
