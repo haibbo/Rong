@@ -8,8 +8,8 @@ use chrono::{TimeZone, Utc};
 use croner::parser::{CronParser, Seconds, Year};
 use rong::function::{Optional, This};
 use rong::{
-    HostError, JSContext, JSDate, JSFunc, JSObject, JSResult, JSRuntimeService, JSValue,
-    RongExecutor, spawn_local,
+    HostError, JSContext, JSContextService, JSDate, JSFunc, JSObject, JSResult, JSRuntimeService,
+    JSValue, RongExecutor, spawn_local,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -187,36 +187,80 @@ struct CronInvocation {
     done: oneshot::Sender<()>,
 }
 
-struct CronCallbackQueue {
-    tx: mpsc::UnboundedSender<CronInvocation>,
-    rx: RefCell<Option<mpsc::UnboundedReceiver<CronInvocation>>>,
+#[derive(Clone, Default)]
+struct CronSchedulerState {
+    scheduler: Arc<Mutex<Option<JobScheduler>>>,
 }
 
-impl Default for CronCallbackQueue {
-    fn default() -> Self {
-        let (tx, rx) = mpsc::unbounded_channel();
-        Self {
-            tx,
-            rx: RefCell::new(Some(rx)),
+impl JSRuntimeService for CronSchedulerState {
+    fn on_shutdown(&self) {
+        if let Some(mut scheduler) = self.take() {
+            RongExecutor::global().spawn(async move {
+                let _ = scheduler.shutdown().await;
+            });
         }
     }
 }
 
-impl JSRuntimeService for CronCallbackQueue {
-    fn on_shutdown(&self) {
-        let _ = self.rx.borrow_mut().take();
-    }
+struct CronEntry {
+    scheduler_ids: Vec<JobId>,
+    callback: JSFunc,
+    handle: JSObject,
+    active: Arc<AtomicBool>,
+    refed: AtomicBool,
 }
 
-impl CronCallbackQueue {
-    fn tx(&self) -> mpsc::UnboundedSender<CronInvocation> {
-        self.tx.clone()
+#[derive(Clone)]
+struct CronContextRegistry {
+    inner: Rc<CronContextRegistryInner>,
+}
+
+struct CronContextRegistryInner {
+    next_id: AtomicU32,
+    entries: RefCell<HashMap<u32, CronEntry>>,
+    tx: mpsc::UnboundedSender<CronInvocation>,
+    rx: RefCell<Option<mpsc::UnboundedReceiver<CronInvocation>>>,
+    scheduler: CronSchedulerState,
+}
+
+impl CronContextRegistry {
+    fn ensure(ctx: &JSContext) -> Self {
+        if let Some(registry) = ctx.get_service::<Self>() {
+            return registry.clone();
+        }
+
+        let scheduler = ctx
+            .runtime()
+            .get_or_init_service::<CronSchedulerState>()
+            .clone();
+        let (tx, rx) = mpsc::unbounded_channel();
+        let registry = Self {
+            inner: Rc::new(CronContextRegistryInner {
+                next_id: AtomicU32::new(1),
+                entries: RefCell::new(HashMap::new()),
+                tx,
+                rx: RefCell::new(Some(rx)),
+                scheduler,
+            }),
+        };
+        ctx.set_service(registry.clone());
+        registry.start();
+        registry
     }
 
-    fn start(&self, registry: CronRegistry) {
-        let Some(mut rx) = self.rx.borrow_mut().take() else {
+    fn next_id(&self) -> u32 {
+        self.inner.next_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn tx(&self) -> mpsc::UnboundedSender<CronInvocation> {
+        self.inner.tx.clone()
+    }
+
+    fn start(&self) {
+        let Some(mut rx) = self.inner.rx.borrow_mut().take() else {
             return;
         };
+        let registry = self.clone();
 
         spawn_local(async move {
             while let Some(invocation) = rx.recv().await {
@@ -228,57 +272,9 @@ impl CronCallbackQueue {
             }
         });
     }
-}
-
-#[derive(Clone)]
-struct CronRegistry {
-    inner: Rc<CronRegistryInner>,
-}
-
-#[derive(Clone, Default)]
-struct CronSchedulerState {
-    scheduler: Arc<Mutex<Option<JobScheduler>>>,
-}
-
-struct CronEntry {
-    scheduler_ids: Vec<JobId>,
-    callback: JSFunc,
-    handle: JSObject,
-    active: Arc<AtomicBool>,
-    refed: AtomicBool,
-}
-
-struct CronRegistryInner {
-    next_id: AtomicU32,
-    entries: Mutex<HashMap<u32, CronEntry>>,
-    scheduler: CronSchedulerState,
-}
-
-impl Default for CronRegistry {
-    fn default() -> Self {
-        Self {
-            inner: Rc::new(CronRegistryInner {
-                next_id: AtomicU32::new(1),
-                entries: Mutex::new(HashMap::new()),
-                scheduler: CronSchedulerState::default(),
-            }),
-        }
-    }
-}
-
-impl JSRuntimeService for CronRegistry {
-    fn on_shutdown(&self) {
-        self.shutdown();
-    }
-}
-
-impl CronRegistry {
-    fn next_id(&self) -> u32 {
-        self.inner.next_id.fetch_add(1, Ordering::Relaxed)
-    }
 
     fn callback(&self, id: u32) -> Option<(JSFunc, JSObject)> {
-        let entries = lock_poison(&self.inner.entries);
+        let entries = self.inner.entries.borrow();
         let entry = entries.get(&id)?;
         if !entry.active.load(Ordering::SeqCst) {
             return None;
@@ -287,11 +283,11 @@ impl CronRegistry {
     }
 
     fn insert(&self, id: u32, entry: CronEntry) {
-        lock_poison(&self.inner.entries).insert(id, entry);
+        self.inner.entries.borrow_mut().insert(id, entry);
     }
 
     fn stop_job(&self, id: u32) {
-        let removed = lock_poison(&self.inner.entries).remove(&id);
+        let removed = self.inner.entries.borrow_mut().remove(&id);
         if let Some(entry) = removed {
             entry.active.store(false, Ordering::SeqCst);
             if let Some(scheduler) = self.inner.scheduler.current() {
@@ -305,7 +301,7 @@ impl CronRegistry {
     }
 
     fn set_refed(&self, id: u32, refed: bool) {
-        if let Some(entry) = lock_poison(&self.inner.entries).get(&id) {
+        if let Some(entry) = self.inner.entries.borrow().get(&id) {
             entry.refed.store(refed, Ordering::SeqCst);
         }
     }
@@ -316,7 +312,7 @@ impl CronRegistry {
 
     fn shutdown(&self) {
         let entries = {
-            let mut entries = lock_poison(&self.inner.entries);
+            let mut entries = self.inner.entries.borrow_mut();
             entries
                 .drain()
                 .flat_map(|(_, entry)| {
@@ -326,14 +322,21 @@ impl CronRegistry {
                 .collect::<Vec<_>>()
         };
 
-        if let Some(mut scheduler) = self.inner.scheduler.take() {
+        if let Some(scheduler) = self.inner.scheduler.current() {
             RongExecutor::global().spawn(async move {
                 for id in entries {
                     let _ = scheduler.remove(&id).await;
                 }
-                let _ = scheduler.shutdown().await;
             });
         }
+
+        let _ = self.inner.rx.borrow_mut().take();
+    }
+}
+
+impl JSContextService for CronContextRegistry {
+    fn on_shutdown(&self) {
+        self.shutdown();
     }
 }
 
@@ -368,7 +371,12 @@ impl CronSchedulerState {
     }
 }
 
-fn make_handle(ctx: &JSContext, registry: CronRegistry, id: u32, cron: &str) -> JSResult<JSObject> {
+fn make_handle(
+    ctx: &JSContext,
+    registry: CronContextRegistry,
+    id: u32,
+    cron: &str,
+) -> JSResult<JSObject> {
     let handle = JSObject::new(ctx);
     #[cfg(test)]
     handle.define_property(
@@ -421,8 +429,7 @@ fn make_handle(ctx: &JSContext, registry: CronRegistry, id: u32, cron: &str) -> 
 
 fn create_cron_job(
     ctx: JSContext,
-    registry: CronRegistry,
-    callback_tx: mpsc::UnboundedSender<CronInvocation>,
+    registry: CronContextRegistry,
     schedule: String,
     handler: JSFunc,
 ) -> JSResult<JSObject> {
@@ -445,6 +452,7 @@ fn create_cron_job(
     let handle = make_handle(&ctx, registry.clone(), id, &normalized)?;
     let active = Arc::new(AtomicBool::new(true));
     let running = Arc::new(AtomicBool::new(false));
+    let callback_tx = registry.tx();
 
     let mut jobs = Vec::with_capacity(schedules_for_scheduler.len());
     let mut scheduler_ids = Vec::with_capacity(schedules_for_scheduler.len());
@@ -528,19 +536,15 @@ fn cron_call(
         .to_rust::<JSFunc>()
         .map_err(|_| cron_error("Rong.cron expects a handler function"))?;
 
-    let registry = ctx.runtime().get_or_init_service::<CronRegistry>().clone();
-    let callback_queue = ctx.runtime().get_or_init_service::<CronCallbackQueue>();
-    callback_queue.start(registry.clone());
-    let callback_tx = callback_queue.tx();
+    let registry = CronContextRegistry::ensure(&ctx);
 
-    create_cron_job(ctx, registry, callback_tx, schedule, handler)
+    create_cron_job(ctx, registry, schedule, handler)
 }
 
 /// Initialize the Cron module.
 pub fn init(ctx: &JSContext) -> JSResult<()> {
-    let registry = ctx.runtime().get_or_init_service::<CronRegistry>().clone();
-    let callback_queue = ctx.runtime().get_or_init_service::<CronCallbackQueue>();
-    callback_queue.start(registry);
+    let _ = ctx.runtime().get_or_init_service::<CronSchedulerState>();
+    let _ = CronContextRegistry::ensure(ctx);
 
     let cron = JSFunc::new(ctx, cron_call)?.name("cron")?;
     cron.set("parse", JSFunc::new(ctx, cron_parse)?.name("parse")?)?;
@@ -569,12 +573,10 @@ mod tests {
 
     async fn trigger_cron_job_for_test(ctx: JSContext, job: JSObject) -> JSResult<()> {
         let id: u32 = job.get(CRON_TEST_ID_PROPERTY)?;
-        let registry = ctx.runtime().get_or_init_service::<CronRegistry>().clone();
-        let callback_queue = ctx.runtime().get_or_init_service::<CronCallbackQueue>();
-        callback_queue.start(registry);
+        let registry = CronContextRegistry::ensure(&ctx);
 
         let (done_tx, done_rx) = oneshot::channel();
-        callback_queue
+        registry
             .tx()
             .send(CronInvocation { id, done: done_tx })
             .map_err(|_| HostError::new(rong::error::E_INTERNAL, "Cron test trigger failed"))?;
