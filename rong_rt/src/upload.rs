@@ -196,9 +196,14 @@ pub fn request_upload(
     let (events_tx, events_rx) =
         mpsc::channel::<Result<UploadEvent, String>>(UPLOAD_EVENT_CHAN_CAP);
     let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
+    let network_access_guard = crate::http::current_network_access_guard();
 
     crate::RongExecutor::global().spawn(async move {
-        run_upload_worker(options, abort_rx, cancel_rx, events_tx).await;
+        crate::http::scope_network_access_guard_opt(
+            network_access_guard,
+            run_upload_worker(options, abort_rx, cancel_rx, events_tx),
+        )
+        .await;
     });
 
     Ok(UploadTask {
@@ -248,6 +253,22 @@ async fn run_upload_worker(
     };
 
     let (body_tx, body_rx) = mpsc::channel::<Result<Bytes, Error>>(UPLOAD_BODY_CHAN_CAP);
+    let body_stream = ReceiverStream::new(body_rx).map(|item| item.map(Frame::data));
+    let request_body: BoxBody<Bytes, Error> = StreamBody::new(body_stream).boxed();
+    let request = match build_request(&options, total_bytes, request_body) {
+        Ok(req) => req,
+        Err(e) => {
+            let _ = events_tx.send(Err(e)).await;
+            return;
+        }
+    };
+    if let Err(err) = crate::http::check_current_network_access(&request) {
+        let _ = events_tx
+            .send(Err(format!("upload request failed: {}", err)))
+            .await;
+        return;
+    }
+
     let progress_tx = events_tx.clone();
     let stop_rx_reader = stop_rx.clone();
     let reader_handle = tokio::task::spawn(async move {
@@ -280,16 +301,6 @@ async fn run_upload_worker(
         }
         Ok::<(), String>(())
     });
-
-    let body_stream = ReceiverStream::new(body_rx).map(|item| item.map(Frame::data));
-    let request_body: BoxBody<Bytes, Error> = StreamBody::new(body_stream).boxed();
-    let request = match build_request(&options, total_bytes, request_body) {
-        Ok(req) => req,
-        Err(e) => {
-            let _ = events_tx.send(Err(e)).await;
-            return;
-        }
-    };
 
     let (net_abort_tx, net_abort_rx) = oneshot::channel::<()>();
     let mut stop_rx_net = stop_rx.clone();
@@ -411,9 +422,23 @@ async fn collect_response_body(body: HttpBody) -> Result<Bytes, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use tokio_stream::StreamExt;
 
     // Pool starts lazily on first spawn/handle; nothing to do here.
+
+    struct DenyExampleGuard;
+
+    impl crate::http::NetworkAccessGuard for DenyExampleGuard {
+        fn check_access(&self, uri: &crate::http::Uri) -> Result<(), crate::http::HttpError> {
+            if uri.host() == Some("denied.example.com") {
+                return Err(crate::http::HttpError::access_denied(
+                    "network access denied",
+                ));
+            }
+            Ok(())
+        }
+    }
 
     async fn spawn_upload_server() -> std::net::SocketAddr {
         use axum::Router;
@@ -527,6 +552,34 @@ mod tests {
                 response.body,
                 Bytes::from(format!("method=POST,uploaded={},tag=direct", payload.len()))
             );
+            let _ = tokio::fs::remove_file(&path).await;
+        });
+    }
+
+    #[test]
+    fn scoped_network_access_guard_blocks_spawn_upload() {
+        let handle = crate::RongExecutor::global().handle();
+        handle.block_on(async {
+            let path = std::env::temp_dir().join(format!(
+                "rong_upload_denied_test_{}.bin",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .subsec_nanos()
+            ));
+            tokio::fs::write(&path, b"denied").await.unwrap();
+
+            let err = crate::http::scope_network_access_guard(Arc::new(DenyExampleGuard), async {
+                upload(
+                    UploadOptions::new("http://denied.example.com/upload", &path),
+                    None,
+                )
+                .await
+                .expect_err("upload should be denied")
+            })
+            .await;
+
+            assert_eq!(err, "upload request failed: network access denied");
             let _ = tokio::fs::remove_file(&path).await;
         });
     }

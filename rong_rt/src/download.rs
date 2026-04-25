@@ -110,8 +110,13 @@ fn request_download_inner(
 
     let url = url.into();
     let dest = dest.into();
+    let network_access_guard = crate::http::current_network_access_guard();
     crate::RongExecutor::global().spawn(async move {
-        let res = download_resource(&url, &dest, abort_rx, sink, timeouts).await;
+        let res = crate::http::scope_network_access_guard_opt(
+            network_access_guard,
+            download_resource(&url, &dest, abort_rx, sink, timeouts),
+        )
+        .await;
         let _ = completion_tx.send(res);
     });
 
@@ -151,6 +156,9 @@ async fn download_resource(
             Ok(request) => request,
             Err(e) => return finalize_sink(sink_opt, Err(e)),
         };
+        if let Err(err) = crate::http::check_current_network_access(&request) {
+            return finalize_sink(sink_opt, Err(err.to_string()));
+        }
         let remaining_timeouts = match remaining_request_timeouts(timeouts, request_deadline) {
             Ok(timeouts) => timeouts,
             Err(e) => return finalize_sink(sink_opt, Err(e)),
@@ -314,6 +322,20 @@ fn redirect_target(current_url: &str, headers: &http::HeaderMap) -> Result<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+
+    struct DenyExampleGuard;
+
+    impl crate::http::NetworkAccessGuard for DenyExampleGuard {
+        fn check_access(&self, uri: &crate::http::Uri) -> Result<(), crate::http::HttpError> {
+            if uri.host() == Some("denied.example.com") {
+                return Err(crate::http::HttpError::access_denied(
+                    "network access denied",
+                ));
+            }
+            Ok(())
+        }
+    }
 
     // Pool starts lazily on first spawn/handle; nothing to do here.
 
@@ -406,6 +428,36 @@ mod tests {
             let written = tokio::fs::read(&dest).await.expect("file should exist");
             assert_eq!(written, content);
             let _ = tokio::fs::remove_file(&dest).await;
+        });
+    }
+
+    #[test]
+    fn scoped_network_access_guard_blocks_spawn_download() {
+        let handle = crate::RongExecutor::global().handle();
+        handle.block_on(async {
+            let dest = std::env::temp_dir().join(format!(
+                "rong_dl_denied_test_{}.bin",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .subsec_nanos()
+            ));
+
+            let err = crate::http::scope_network_access_guard(Arc::new(DenyExampleGuard), async {
+                let rx = spawn_download(
+                    DownloadOptions::new("http://denied.example.com/file", &dest),
+                    None,
+                )
+                .expect("should queue download");
+                rx.await
+                    .expect("channel dropped")
+                    .expect_err("download should be denied")
+            })
+            .await;
+
+            assert_eq!(err, "network access denied");
+            let _ = tokio::fs::remove_file(&dest).await;
+            let _ = tokio::fs::remove_file(dest.with_extension("part")).await;
         });
     }
 

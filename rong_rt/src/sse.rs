@@ -271,9 +271,14 @@ pub fn connect_sse(
     let (events_tx, events_rx) = mpsc::channel::<Result<SseEvent, String>>(SSE_EVENT_CHAN_CAP);
     let (close_tx, close_rx) = oneshot::channel::<()>();
     let (opened_tx, opened_rx) = oneshot::channel::<Result<String, String>>();
+    let network_access_guard = crate::http::current_network_access_guard();
 
     crate::RongExecutor::global().spawn(async move {
-        run_sse_worker(options, abort_rx, close_rx, events_tx, Some(opened_tx)).await;
+        crate::http::scope_network_access_guard_opt(
+            network_access_guard,
+            run_sse_worker(options, abort_rx, close_rx, events_tx, Some(opened_tx)),
+        )
+        .await;
     });
 
     Ok(SseConnection {
@@ -331,6 +336,12 @@ async fn run_sse_worker(
                 break;
             }
         };
+        if let Err(err) = crate::http::check_current_network_access(&req) {
+            let message = format!("sse request failed: {}", err);
+            complete_initial_open(&mut opened_tx, Err(message.clone()));
+            let _ = events_tx.send(Err(message)).await;
+            break;
+        }
 
         let (attempt_abort_tx, attempt_abort_rx) = oneshot::channel::<()>();
         let send_fut = client::send_request_with_coalesce(
@@ -714,10 +725,24 @@ mod tests {
     use axum::routing::get;
     use axum::{Router, response::Response as AxumResponse};
     use std::convert::Infallible;
+    use std::sync::Arc;
     use tokio::sync::mpsc;
     use tokio_stream::{self as stream, wrappers::ReceiverStream};
 
     // Pool starts lazily on first spawn/handle; nothing to do here.
+
+    struct DenyExampleGuard;
+
+    impl crate::http::NetworkAccessGuard for DenyExampleGuard {
+        fn check_access(&self, uri: &crate::http::Uri) -> Result<(), crate::http::HttpError> {
+            if uri.host() == Some("denied.example.com") {
+                return Err(crate::http::HttpError::access_denied(
+                    "network access denied",
+                ));
+            }
+            Ok(())
+        }
+    }
 
     async fn spawn_sse_server() -> std::net::SocketAddr {
         async fn live_small() -> impl IntoResponse {
@@ -825,6 +850,21 @@ mod tests {
                 .expect("event should be ok");
             assert_eq!(event.data, "builder|41");
             connection.close();
+        });
+    }
+
+    #[test]
+    fn scoped_network_access_guard_blocks_connect_sse() {
+        let handle = crate::RongExecutor::global().handle();
+        handle.block_on(async {
+            let err = crate::http::scope_network_access_guard(Arc::new(DenyExampleGuard), async {
+                let mut connection = connect("http://denied.example.com/events", None)
+                    .expect("sse connection should start");
+                connection.opened().await.expect_err("sse should be denied")
+            })
+            .await;
+
+            assert_eq!(err, "sse request failed: network access denied");
         });
     }
 }

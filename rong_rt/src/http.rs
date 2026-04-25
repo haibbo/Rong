@@ -7,19 +7,27 @@ use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::fmt;
+use std::future::Future;
 use std::io::Error;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::oneshot;
 
 use crate::client::{self, RequestTimeouts};
 
 pub use crate::client::{HttpBody, HttpResponse};
+pub use http::Uri;
+
+tokio::task_local! {
+    static NETWORK_ACCESS_GUARD: Arc<dyn NetworkAccessGuard>;
+}
 
 /// Transport and response-decoding failures surfaced by the high-level HTTP API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HttpErrorKind {
     Transport,
     Json,
+    AccessDenied,
 }
 
 /// Error returned by the public HTTP helpers.
@@ -44,6 +52,13 @@ impl HttpError {
             message: err.to_string(),
         }
     }
+
+    pub fn access_denied(message: impl Into<String>) -> Self {
+        Self {
+            kind: HttpErrorKind::AccessDenied,
+            message: message.into(),
+        }
+    }
 }
 
 impl From<String> for HttpError {
@@ -63,12 +78,60 @@ impl fmt::Display for HttpError {
 
 impl std::error::Error for HttpError {}
 
+/// Per-request network access policy.
+///
+/// The runtime owns only the hook point. Embedders define the actual policy,
+/// such as an app-specific domain allowlist.
+pub trait NetworkAccessGuard: Send + Sync {
+    fn check_access(&self, uri: &Uri) -> Result<(), HttpError>;
+}
+
+pub async fn scope_network_access_guard<F, T>(guard: Arc<dyn NetworkAccessGuard>, future: F) -> T
+where
+    F: Future<Output = T>,
+{
+    NETWORK_ACCESS_GUARD.scope(guard, future).await
+}
+
+pub(crate) fn current_network_access_guard() -> Option<Arc<dyn NetworkAccessGuard>> {
+    NETWORK_ACCESS_GUARD.try_with(Clone::clone).ok()
+}
+
+pub(crate) async fn scope_network_access_guard_opt<F, T>(
+    guard: Option<Arc<dyn NetworkAccessGuard>>,
+    future: F,
+) -> T
+where
+    F: Future<Output = T>,
+{
+    if let Some(guard) = guard {
+        scope_network_access_guard(guard, future).await
+    } else {
+        future.await
+    }
+}
+
 /// Per-request behavior overrides for the high-level HTTP helpers.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct RequestOptions {
     request_timeout: Option<Duration>,
     connect_timeout: Option<Duration>,
     abort_rx: Option<oneshot::Receiver<()>>,
+    network_access_guard: Option<Arc<dyn NetworkAccessGuard>>,
+}
+
+impl fmt::Debug for RequestOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RequestOptions")
+            .field("request_timeout", &self.request_timeout)
+            .field("connect_timeout", &self.connect_timeout)
+            .field("has_abort", &self.abort_rx.is_some())
+            .field(
+                "has_network_access_guard",
+                &self.network_access_guard.is_some(),
+            )
+            .finish()
+    }
 }
 
 impl RequestOptions {
@@ -92,21 +155,50 @@ impl RequestOptions {
         self
     }
 
+    pub fn with_network_access_guard(mut self, guard: Arc<dyn NetworkAccessGuard>) -> Self {
+        self.network_access_guard = Some(guard);
+        self
+    }
+
     #[doc(hidden)]
     pub fn with_abort_opt(mut self, abort_rx: Option<oneshot::Receiver<()>>) -> Self {
         self.abort_rx = abort_rx;
         self
     }
 
-    fn into_parts(self) -> (RequestTimeouts, Option<oneshot::Receiver<()>>) {
+    fn into_parts(
+        self,
+    ) -> (
+        RequestTimeouts,
+        Option<oneshot::Receiver<()>>,
+        Option<Arc<dyn NetworkAccessGuard>>,
+    ) {
         (
             RequestTimeouts {
                 request_timeout: self.request_timeout,
                 connect_timeout: self.connect_timeout,
             },
             self.abort_rx,
+            self.network_access_guard,
         )
     }
+}
+
+fn check_network_access(
+    request: &HttpRequest<BoxBody<Bytes, Error>>,
+    guard: Option<&dyn NetworkAccessGuard>,
+) -> Result<(), HttpError> {
+    if let Some(guard) = guard {
+        guard.check_access(request.uri())?;
+    }
+    Ok(())
+}
+
+pub(crate) fn check_current_network_access(
+    request: &HttpRequest<BoxBody<Bytes, Error>>,
+) -> Result<(), HttpError> {
+    let guard = current_network_access_guard();
+    check_network_access(request, guard.as_deref())
 }
 
 /// Fully collected HTTP response body.
@@ -145,7 +237,9 @@ pub async fn send(
     request: HttpRequest<BoxBody<Bytes, Error>>,
     options: RequestOptions,
 ) -> Result<HttpResponse, HttpError> {
-    let (timeouts, abort_rx) = options.into_parts();
+    let (timeouts, abort_rx, guard) = options.into_parts();
+    let guard = guard.or_else(current_network_access_guard);
+    check_network_access(&request, guard.as_deref())?;
     client::send_request_with_timeout(
         request,
         client::DEFAULT_BLOCKING_BODY_LIMIT,
@@ -162,7 +256,9 @@ pub async fn send_with_small_body_limit(
     small_body_limit: usize,
     options: RequestOptions,
 ) -> Result<HttpResponse, HttpError> {
-    let (timeouts, abort_rx) = options.into_parts();
+    let (timeouts, abort_rx, guard) = options.into_parts();
+    let guard = guard.or_else(current_network_access_guard);
+    check_network_access(&request, guard.as_deref())?;
     client::send_request_with_timeout(request, small_body_limit, abort_rx, timeouts)
         .await
         .map_err(Into::into)
@@ -173,7 +269,9 @@ pub async fn send_stream(
     request: HttpRequest<BoxBody<Bytes, Error>>,
     options: RequestOptions,
 ) -> Result<HttpResponse, HttpError> {
-    let (timeouts, abort_rx) = options.into_parts();
+    let (timeouts, abort_rx, guard) = options.into_parts();
+    let guard = guard.or_else(current_network_access_guard);
+    check_network_access(&request, guard.as_deref())?;
     client::send_request_with_coalesce(request, 0, abort_rx, 0, timeouts)
         .await
         .map_err(Into::into)
@@ -528,6 +626,51 @@ mod tests {
             assert_eq!(response.body.content_type, "application/json");
             assert_eq!(response.body.accept, "application/json");
             assert_eq!(response.body.body["hello"], "typed");
+        });
+    }
+
+    #[derive(Debug)]
+    struct DenyExampleGuard;
+
+    impl NetworkAccessGuard for DenyExampleGuard {
+        fn check_access(&self, uri: &Uri) -> Result<(), HttpError> {
+            if uri.host() == Some("denied.example.com") {
+                return Err(HttpError::access_denied("network access denied"));
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn network_access_guard_blocks_request_before_transport() {
+        let handle = crate::RongExecutor::global().handle();
+        handle.block_on(async {
+            let request = empty_request("http://denied.example.com/");
+            let err = send_bytes(
+                request,
+                RequestOptions::new().with_network_access_guard(Arc::new(DenyExampleGuard)),
+            )
+            .await
+            .unwrap_err();
+
+            assert_eq!(err.kind(), HttpErrorKind::AccessDenied);
+            assert_eq!(err.message(), "network access denied");
+        });
+    }
+
+    #[test]
+    fn network_access_guard_scope_applies_to_default_request_options() {
+        let handle = crate::RongExecutor::global().handle();
+        handle.block_on(async {
+            let request = empty_request("http://denied.example.com/");
+            let err = scope_network_access_guard(Arc::new(DenyExampleGuard), async move {
+                send_bytes(request, RequestOptions::new())
+                    .await
+                    .unwrap_err()
+            })
+            .await;
+
+            assert_eq!(err.kind(), HttpErrorKind::AccessDenied);
         });
     }
 }

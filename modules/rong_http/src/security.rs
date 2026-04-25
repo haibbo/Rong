@@ -20,7 +20,10 @@ impl NetworkAccessGuard for DefaultNetworkAccessGuard {
     }
 }
 
-/// Set a custom network access guard for the current thread
+/// Set a custom network access guard for the current thread.
+///
+/// The fetch module forwards this policy into `rong_rt::http::RequestOptions`,
+/// so the same guard is enforced by the underlying runtime request path.
 /// This allows applications to implement custom network access control policies
 ///
 /// # Example
