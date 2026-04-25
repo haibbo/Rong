@@ -1,4 +1,6 @@
 use bytes::Bytes;
+use futures::FutureExt;
+use futures::future::{BoxFuture, Shared};
 use http::Request as HttpRequest;
 use http::Uri;
 use http::header;
@@ -9,9 +11,8 @@ use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use std::io::Error;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, RwLock};
-use tokio::sync::{Notify, mpsc, oneshot};
+use std::sync::{Mutex, OnceLock, RwLock};
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
 
 pub const DEFAULT_BLOCKING_BODY_LIMIT: usize = 512 * 1024;
@@ -42,29 +43,18 @@ pub(crate) struct RequestTimeouts {
 
 #[derive(Clone, Debug)]
 pub(crate) struct AbortSignal {
-    aborted: Arc<AtomicBool>,
-    notify: Arc<Notify>,
+    future: Shared<BoxFuture<'static, ()>>,
 }
 
 impl AbortSignal {
-    fn new() -> Self {
+    fn new(abort_rx: oneshot::Receiver<()>) -> Self {
         Self {
-            aborted: Arc::new(AtomicBool::new(false)),
-            notify: Arc::new(Notify::new()),
-        }
-    }
-
-    fn abort(&self) {
-        if !self.aborted.swap(true, Ordering::SeqCst) {
-            self.notify.notify_waiters();
+            future: abort_rx.map(|_| ()).boxed().shared(),
         }
     }
 
     async fn cancelled(&self) {
-        if self.aborted.load(Ordering::SeqCst) {
-            return;
-        }
-        self.notify.notified().await;
+        self.future.clone().await;
     }
 }
 
@@ -269,15 +259,7 @@ pub enum HttpBody {
 }
 
 pub(crate) fn shared_abort_signal(abort_rx: Option<oneshot::Receiver<()>>) -> Option<AbortSignal> {
-    abort_rx.map(|rx| {
-        let signal = AbortSignal::new();
-        let waiter = signal.clone();
-        crate::RongExecutor::global().spawn(async move {
-            let _ = rx.await;
-            waiter.abort();
-        });
-        signal
-    })
+    abort_rx.map(AbortSignal::new)
 }
 
 pub async fn send_request_with_timeout(
