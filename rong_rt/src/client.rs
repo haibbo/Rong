@@ -9,8 +9,9 @@ use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use std::io::Error;
-use std::sync::{Mutex, OnceLock, RwLock};
-use tokio::sync::{mpsc, oneshot};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use tokio::sync::{Notify, mpsc, oneshot};
 use tokio::time::{Duration, timeout};
 
 pub const DEFAULT_BLOCKING_BODY_LIMIT: usize = 512 * 1024;
@@ -37,6 +38,34 @@ struct CachedClient {
 pub(crate) struct RequestTimeouts {
     pub request_timeout: Option<Duration>,
     pub connect_timeout: Option<Duration>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct AbortSignal {
+    aborted: Arc<AtomicBool>,
+    notify: Arc<Notify>,
+}
+
+impl AbortSignal {
+    fn new() -> Self {
+        Self {
+            aborted: Arc::new(AtomicBool::new(false)),
+            notify: Arc::new(Notify::new()),
+        }
+    }
+
+    fn abort(&self) {
+        if !self.aborted.swap(true, Ordering::SeqCst) {
+            self.notify.notify_waiters();
+        }
+    }
+
+    async fn cancelled(&self) {
+        if self.aborted.load(Ordering::SeqCst) {
+            return;
+        }
+        self.notify.notified().await;
+    }
 }
 
 #[cfg(all(feature = "tls-aws-lc", feature = "tls-ring"))]
@@ -239,16 +268,28 @@ pub enum HttpBody {
     Stream(mpsc::Receiver<Result<Bytes, String>>),
 }
 
+pub(crate) fn shared_abort_signal(abort_rx: Option<oneshot::Receiver<()>>) -> Option<AbortSignal> {
+    abort_rx.map(|rx| {
+        let signal = AbortSignal::new();
+        let waiter = signal.clone();
+        crate::RongExecutor::global().spawn(async move {
+            let _ = rx.await;
+            waiter.abort();
+        });
+        signal
+    })
+}
+
 pub async fn send_request_with_timeout(
     request: HttpRequest<BoxBody<Bytes, Error>>,
     small_threshold: usize,
     abort_rx: Option<oneshot::Receiver<()>>,
     timeouts: RequestTimeouts,
 ) -> Result<HttpResponse, String> {
-    send_request_with_coalesce(
+    send_request_with_shared_abort(
         request,
         small_threshold,
-        abort_rx,
+        shared_abort_signal(abort_rx),
         DEFAULT_STREAM_COALESCE_TARGET,
         timeouts,
     )
@@ -262,6 +303,23 @@ pub async fn send_request_with_coalesce(
     stream_coalesce_target: usize,
     timeouts: RequestTimeouts,
 ) -> Result<HttpResponse, String> {
+    send_request_with_shared_abort(
+        request,
+        small_threshold,
+        shared_abort_signal(abort_rx),
+        stream_coalesce_target,
+        timeouts,
+    )
+    .await
+}
+
+pub(crate) async fn send_request_with_shared_abort(
+    request: HttpRequest<BoxBody<Bytes, Error>>,
+    small_threshold: usize,
+    abort_signal: Option<AbortSignal>,
+    stream_coalesce_target: usize,
+    timeouts: RequestTimeouts,
+) -> Result<HttpResponse, String> {
     let request_timeout = timeouts.request_timeout.unwrap_or(DEFAULT_REQUEST_TIMEOUT);
     let client = client(timeouts)?;
     let join = crate::RongExecutor::global().spawn(async move {
@@ -270,7 +328,7 @@ pub async fn send_request_with_coalesce(
             request,
             small_threshold,
             stream_coalesce_target,
-            abort_rx,
+            abort_signal,
             request_timeout,
         )
         .await
@@ -285,19 +343,19 @@ async fn process_request(
     req: HttpRequest<BoxBody<Bytes, Error>>,
     small: usize,
     stream_coalesce_target: usize,
-    mut abort_rx: Option<oneshot::Receiver<()>>,
+    abort_signal: Option<AbortSignal>,
     request_timeout: Duration,
 ) -> Result<HttpResponse, String> {
     const READ_FRAME_TIMEOUT: Duration = Duration::from_secs(120);
 
-    let resp = if let Some(rx) = abort_rx.as_mut() {
+    let resp = if let Some(signal) = abort_signal.as_ref() {
         tokio::select! {
             res = timeout(request_timeout, client.request(req)) => match res {
                 Ok(Ok(r)) => r,
                 Ok(Err(e)) => return Err(format!("request failed: {}", e)),
                 Err(_) => return Err("request timeout".to_string()),
             },
-            _ = rx => return Err("aborted".to_string()),
+            _ = signal.cancelled() => return Err("aborted".to_string()),
         }
     } else {
         match timeout(request_timeout, client.request(req)).await {
@@ -317,9 +375,8 @@ async fn process_request(
 
     if cl > 0 && cl <= small {
         let mut buf = Vec::with_capacity(cl);
-        let has_abort = abort_rx.is_some();
         loop {
-            if has_abort {
+            if let Some(signal) = abort_signal.as_ref() {
                 tokio::select! {
                     maybe = timeout(READ_FRAME_TIMEOUT, body.frame()) => {
                         match maybe {
@@ -332,7 +389,7 @@ async fn process_request(
                             Err(_) => return Err("read timeout".to_string()),
                         }
                     }
-                    _ = async { if let Some(rx) = abort_rx.as_mut() { let _ = rx.await; } } => return Err("aborted".to_string()),
+                    _ = signal.cancelled() => return Err("aborted".to_string()),
                 }
             } else {
                 match timeout(READ_FRAME_TIMEOUT, body.frame()).await {
@@ -358,7 +415,7 @@ async fn process_request(
     }
 
     let (tx, rx) = mpsc::channel::<Result<Bytes, String>>(STREAM_CHAN_CAP);
-    let mut abort = abort_rx.take();
+    let abort_signal = abort_signal.clone();
     // `0` disables response-body coalescing and forwards frames as they arrive.
     let coalesce_target = if stream_coalesce_target == 0 {
         0
@@ -373,10 +430,9 @@ async fn process_request(
         } else {
             bytes::BytesMut::with_capacity(coalesce_target)
         };
-        let has_abort = abort.is_some();
         let mut aborted = false;
         loop {
-            if has_abort {
+            if let Some(signal) = abort_signal.as_ref() {
                 tokio::select! {
                     maybe = timeout(READ_FRAME_TIMEOUT, body.frame()) => {
                         match maybe {
@@ -392,7 +448,7 @@ async fn process_request(
                             Err(_) => { let _ = tx.send(Err("read timeout".to_string())).await; break; }
                         }
                     }
-                    _ = async { if let Some(rx) = &mut abort { let _ = rx.await; } } => { let _ = tx.send(Err("aborted".to_string())).await; aborted = true; break; }
+                    _ = signal.cancelled() => { let _ = tx.send(Err("aborted".to_string())).await; aborted = true; break; }
                 }
             } else {
                 match timeout(READ_FRAME_TIMEOUT, body.frame()).await {
