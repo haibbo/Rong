@@ -5,13 +5,17 @@ use http::Request as HttpRequest;
 use http::Uri;
 use http::header;
 use http_body_util::{BodyExt, combinators::BoxBody};
-use hyper_http_proxy::{Intercept, Proxy, ProxyConnector};
+#[cfg(any(feature = "tls-aws-lc", feature = "tls-ring", test))]
+use hyper_http_proxy::{Intercept, Proxy};
+use hyper_http_proxy::ProxyConnector;
 #[cfg(any(feature = "tls-aws-lc", feature = "tls-ring"))]
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use std::io::Error;
-use std::sync::{Mutex, OnceLock, RwLock};
+use std::sync::{OnceLock, RwLock};
+#[cfg(any(feature = "tls-aws-lc", feature = "tls-ring", test))]
+use std::sync::Mutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
 
@@ -30,6 +34,7 @@ struct ProxyConfig {
 }
 
 #[derive(Clone)]
+#[cfg(any(feature = "tls-aws-lc", feature = "tls-ring", test))]
 struct CachedClient {
     proxy: Option<ProxyConfig>,
     client: HttpClient,
@@ -61,6 +66,7 @@ impl AbortSignal {
 #[cfg(all(feature = "tls-aws-lc", feature = "tls-ring"))]
 compile_error!("Enable only one TLS backend feature for rong_rt: `tls-aws-lc` or `tls-ring`.");
 
+#[cfg(any(feature = "tls-aws-lc", feature = "tls-ring", test))]
 static CLIENT: OnceLock<Mutex<Option<CachedClient>>> = OnceLock::new();
 static PROXY_CONFIG: OnceLock<RwLock<Option<ProxyConfig>>> = OnceLock::new();
 #[cfg(test)]
@@ -85,6 +91,7 @@ async fn forward_or_buffer_chunk(
     true
 }
 
+#[cfg(any(feature = "tls-aws-lc", feature = "tls-ring", test))]
 fn client_cache() -> &'static Mutex<Option<CachedClient>> {
     CLIENT.get_or_init(|| Mutex::new(None))
 }
@@ -93,11 +100,15 @@ fn proxy_config_store() -> &'static RwLock<Option<ProxyConfig>> {
     PROXY_CONFIG.get_or_init(|| RwLock::new(None))
 }
 
+#[cfg(any(feature = "tls-aws-lc", feature = "tls-ring", test))]
 fn invalidate_client_cache() {
     if let Ok(mut slot) = client_cache().lock() {
         *slot = None;
     }
 }
+
+#[cfg(not(any(feature = "tls-aws-lc", feature = "tls-ring", test)))]
+fn invalidate_client_cache() {}
 
 #[cfg(test)]
 pub(crate) fn test_guard() -> std::sync::MutexGuard<'static, ()> {
@@ -201,11 +212,7 @@ fn build_client(proxy: Option<ProxyConfig>, connect_timeout: Option<Duration>) -
     Client::builder(hyper_util::rt::TokioExecutor::new()).build(https)
 }
 
-#[cfg(not(any(feature = "tls-aws-lc", feature = "tls-ring")))]
-fn build_client(_proxy: Option<ProxyConfig>, _connect_timeout: Option<Duration>) -> HttpClient {
-    unreachable!("compile_error should require an explicit TLS backend before build_client()")
-}
-
+#[cfg(any(feature = "tls-aws-lc", feature = "tls-ring", test))]
 fn build_proxy(proxy_config: ProxyConfig) -> Proxy {
     Proxy::new(Intercept::All, proxy_config.uri)
 }
