@@ -27,7 +27,7 @@ zstd = "0.13.2"
 rong_assert = { workspace = true }
 rong_console = { workspace = true }
 rong_encoding = { workspace = true }
-rong_test = { workspace = true }
+rong_test = { path = "../../testing/rong_test" }
 
 [features]
 default = []

@@ -16,6 +16,7 @@ WAIT_TIMEOUT=180  # Maximum wait time for crates.io sync
 POLL_INTERVAL=5  # Check every 5 seconds
 START_FROM=""
 SKIP_PUBLISHED_CHECK=false
+VERIFY_FEATURES="quickjs"
 
 WORKSPACE_TOML="Cargo.toml"
 
@@ -83,6 +84,8 @@ OPTIONS:
   -s, --start-from NAME Start publishing from the given crate (inclusive)
       --skip-published-check
                         Skip `cargo search` pre-check for already-published crates
+      --verify-features FEATURES
+                        Cargo features used for publish verification (default: quickjs)
   -y, --yes             Skip confirmation prompt (default: false)
   -t, --timeout SECONDS Maximum wait time for crates.io sync (default: 180)
   -p, --poll SECONDS    Poll interval for checking crates.io (default: 5)
@@ -103,6 +106,9 @@ EXAMPLES:
 
   # Skip pre-check and let cargo publish decide
   $0 --start-from rong --skip-published-check
+
+  # Verify with jscore instead of quickjs
+  $0 --start-from rong --verify-features jscore
 
   # Non-interactive publish
   $0 --yes
@@ -135,6 +141,14 @@ while [[ $# -gt 0 ]]; do
     --skip-published-check)
       SKIP_PUBLISHED_CHECK=true
       shift
+      ;;
+    --verify-features)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --verify-features requires a feature list"
+        exit 1
+      fi
+      VERIFY_FEATURES="$2"
+      shift 2
       ;;
     -y|--yes)
       AUTO_CONFIRM=true
@@ -199,6 +213,7 @@ if [ -n "$START_FROM" ]; then
   echo -e "Start from: ${YELLOW}${START_FROM}${NC}"
 fi
 echo -e "Skip published pre-check: ${YELLOW}${SKIP_PUBLISHED_CHECK}${NC}"
+echo -e "Verify features: ${YELLOW}${VERIFY_FEATURES}${NC}"
 echo -e "No verify: ${YELLOW}${NO_VERIFY}${NC}"
 echo -e "Allow dirty: ${YELLOW}${ALLOW_DIRTY}${NC}"
 echo -e "Auto confirm: ${YELLOW}${AUTO_CONFIRM}${NC}"
@@ -244,6 +259,20 @@ is_crate_published() {
     fi
   fi
   return 1
+}
+
+# Crates that expose JS engine feature forwarding and should be verified with
+# an explicit engine feature to avoid no-engine compilation failures.
+needs_engine_verify_features() {
+  local crate=$1
+  case "$crate" in
+    rong|rong_console|rong_assert|rong_encoding|rong_url|rong_timer|rong_cron|rong_event|rong_buffer|rong_exception|rong_abort|rong_stream|rong_fs|rong_storage|rong_http|rong_compression|rong_command|rong_redis|rong_sqlite|rong_worker|rong_s3|rong_modules|rong_cli)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 # Function to wait for crate to appear in crates.io index
@@ -311,6 +340,8 @@ for crate in "${PUBLISH_CRATES[@]}"; do
 
   if [ "$NO_VERIFY" = true ]; then
     cmd+=(--no-verify)
+  elif [ -n "$VERIFY_FEATURES" ] && needs_engine_verify_features "$crate"; then
+    cmd+=(--features "$VERIFY_FEATURES")
   fi
 
   if [ "$ALLOW_DIRTY" = true ]; then

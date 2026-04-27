@@ -148,7 +148,7 @@ tls-aws-lc = ["rong_rt/tls-aws-lc"]
 tls-ring = ["rong_rt/tls-ring"]
 
 [dev-dependencies]
-rong_test = { workspace = true }
+rong_test = { path = "testing/rong_test" }
 bytes = { workspace = true }
 
 [profile.test]

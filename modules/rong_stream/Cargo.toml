@@ -26,7 +26,7 @@ tokio-stream = { workspace = true }
 flate2 = { workspace = true }
 
 [dev-dependencies]
-rong_test = { workspace = true }
+rong_test = { path = "../../testing/rong_test" }
 rong_console = { workspace = true }
 rong_assert = { workspace = true }
 rong_encoding = { workspace = true }

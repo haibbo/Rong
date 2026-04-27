@@ -64,7 +64,7 @@ tls-aws-lc = ["rong_rt/tls-aws-lc"]
 tls-ring = ["rong_rt/tls-ring"]
 
 [dev-dependencies]
-rong_test = { workspace = true, features = ["http"] }
+rong_test = { path = "../../testing/rong_test", features = ["http"] }
 rong_encoding = { workspace = true }
 rong_console = { workspace = true }
 rong_assert = { workspace = true }

@@ -25,4 +25,4 @@ tls-aws-lc = ["rong/tls-aws-lc"]
 tls-ring = ["rong/tls-ring"]
 
 [dev-dependencies]
-rong_test = { workspace = true }
+rong_test = { path = "../../testing/rong_test" }
