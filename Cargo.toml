@@ -141,9 +141,9 @@ futures = { workspace = true }
 # Library consumers must select an engine/TLS backend explicitly.
 # The CLI/examples keep desktop-friendly defaults for out-of-the-box runs.
 default = []
-quickjs = ["dep:rong_quickjs", "rong_test/quickjs"]
-jscore = ["dep:rong_jscore", "rong_test/jscore"]
-arkjs = ["dep:rong_arkjs", "rong_test/arkjs"]
+quickjs = ["dep:rong_quickjs"]
+jscore = ["dep:rong_jscore"]
+arkjs = ["dep:rong_arkjs"]
 tls-aws-lc = ["rong_rt/tls-aws-lc"]
 tls-ring = ["rong_rt/tls-ring"]
 

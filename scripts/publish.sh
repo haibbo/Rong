@@ -14,6 +14,8 @@ ALLOW_DIRTY=false
 AUTO_CONFIRM=false
 WAIT_TIMEOUT=180  # Maximum wait time for crates.io sync
 POLL_INTERVAL=5  # Check every 5 seconds
+START_FROM=""
+SKIP_PUBLISHED_CHECK=false
 
 WORKSPACE_TOML="Cargo.toml"
 
@@ -78,6 +80,9 @@ Publish all workspace crates to crates.io in dependency order.
 OPTIONS:
   -n, --no-verify       Skip build verification with --no-verify (default: false)
   -a, --allow-dirty     Allow publishing with uncommitted changes (default: false)
+  -s, --start-from NAME Start publishing from the given crate (inclusive)
+      --skip-published-check
+                        Skip `cargo search` pre-check for already-published crates
   -y, --yes             Skip confirmation prompt (default: false)
   -t, --timeout SECONDS Maximum wait time for crates.io sync (default: 180)
   -p, --poll SECONDS    Poll interval for checking crates.io (default: 5)
@@ -92,6 +97,12 @@ EXAMPLES:
 
   # Publish with uncommitted changes
   $0 --allow-dirty
+
+  # Resume publish from a specific crate
+  $0 --start-from rong
+
+  # Skip pre-check and let cargo publish decide
+  $0 --start-from rong --skip-published-check
 
   # Non-interactive publish
   $0 --yes
@@ -111,6 +122,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     -a|--allow-dirty)
       ALLOW_DIRTY=true
+      shift
+      ;;
+    -s|--start-from)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --start-from requires a crate name"
+        exit 1
+      fi
+      START_FROM="$2"
+      shift 2
+      ;;
+    --skip-published-check)
+      SKIP_PUBLISHED_CHECK=true
       shift
       ;;
     -y|--yes)
@@ -140,6 +163,26 @@ if [ "${CI:-}" = "true" ]; then
   AUTO_CONFIRM=true
 fi
 
+# Select publishing slice
+PUBLISH_CRATES=("${CRATES[@]}")
+if [ -n "$START_FROM" ]; then
+  FOUND_START=false
+  for i in "${!CRATES[@]}"; do
+    if [ "${CRATES[$i]}" = "$START_FROM" ]; then
+      PUBLISH_CRATES=("${CRATES[@]:$i}")
+      FOUND_START=true
+      break
+    fi
+  done
+  if [ "$FOUND_START" = false ]; then
+    echo -e "${RED}ERROR: start crate not found in publish list: ${START_FROM}${NC}"
+    echo "Available crates:"
+    printf '  - %s\n' "${CRATES[@]}"
+    exit 1
+  fi
+fi
+TOTAL_CRATES=${#PUBLISH_CRATES[@]}
+
 # Extract the expected version so we can wait for crates.io index to reflect the
 # publish we just did (not merely the crate's existence).
 EXPECTED_VERSION="$(grep -A 2 '^\[workspace.package\]' "$WORKSPACE_TOML" 2>/dev/null | grep '^version' | sed 's/version = "\(.*\)"/\1/' || true)"
@@ -151,7 +194,11 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  RongJS Workspace Publishing Script${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
-echo -e "Total crates to publish: ${GREEN}${#CRATES[@]}${NC}"
+echo -e "Total crates to publish: ${GREEN}${TOTAL_CRATES}${NC}"
+if [ -n "$START_FROM" ]; then
+  echo -e "Start from: ${YELLOW}${START_FROM}${NC}"
+fi
+echo -e "Skip published pre-check: ${YELLOW}${SKIP_PUBLISHED_CHECK}${NC}"
 echo -e "No verify: ${YELLOW}${NO_VERIFY}${NC}"
 echo -e "Allow dirty: ${YELLOW}${ALLOW_DIRTY}${NC}"
 echo -e "Auto confirm: ${YELLOW}${AUTO_CONFIRM}${NC}"
@@ -171,7 +218,7 @@ fi
 if [ "$AUTO_CONFIRM" = true ]; then
   echo -e "${YELLOW}⚠️  Auto-confirm enabled; proceeding with publish.${NC}"
 else
-  echo -e "${YELLOW}⚠️  This will publish ${#CRATES[@]} crates to crates.io!${NC}"
+  echo -e "${YELLOW}⚠️  This will publish ${TOTAL_CRATES} crates to crates.io!${NC}"
   read -p "Are you sure you want to continue? (yes/no): " -r
   echo
   if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
@@ -246,14 +293,14 @@ PUBLISHED=0
 SKIPPED=0
 FAILED=0
 
-for crate in "${CRATES[@]}"; do
+for crate in "${PUBLISH_CRATES[@]}"; do
   echo ""
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${BLUE}Publishing [$((PUBLISHED + SKIPPED + 1))/${#CRATES[@]}]: ${GREEN}${crate}${NC}"
+  echo -e "${BLUE}Publishing [$((PUBLISHED + SKIPPED + 1))/${TOTAL_CRATES}]: ${GREEN}${crate}${NC}"
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
   # Check if crate is already published and skip it
-  if is_crate_published "$crate" "$EXPECTED_VERSION"; then
+  if [ "$SKIP_PUBLISHED_CHECK" = false ] && is_crate_published "$crate" "$EXPECTED_VERSION"; then
     echo -e "${YELLOW}⊘ Skipping ${crate} ${EXPECTED_VERSION} (already published)${NC}"
     SKIPPED=$((SKIPPED + 1))
     continue
@@ -279,7 +326,7 @@ for crate in "${CRATES[@]}"; do
     echo -e "${GREEN}✓ Successfully published ${crate}${NC}"
 
     # Wait for crates.io to sync (except for last crate)
-    if [ $((PUBLISHED + SKIPPED)) -lt ${#CRATES[@]} ]; then
+    if [ $((PUBLISHED + SKIPPED)) -lt ${TOTAL_CRATES} ]; then
       if ! wait_for_crate "$crate" "$EXPECTED_VERSION" "$WAIT_TIMEOUT" "$POLL_INTERVAL"; then
         echo -e "${YELLOW}⚠ Proceeding despite crates.io index lag for ${crate}.${NC}"
       fi
