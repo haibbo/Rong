@@ -43,6 +43,7 @@ CRATES=(
   "rong_encoding"
   "rong_url"
   "rong_timer"
+  "rong_cron"
   "rong_event"
   "rong_buffer"
 
