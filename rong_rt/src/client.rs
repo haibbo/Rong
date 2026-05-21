@@ -5,17 +5,17 @@ use http::Request as HttpRequest;
 use http::Uri;
 use http::header;
 use http_body_util::{BodyExt, combinators::BoxBody};
+use hyper_http_proxy::ProxyConnector;
 #[cfg(any(feature = "tls-aws-lc", feature = "tls-ring", test))]
 use hyper_http_proxy::{Intercept, Proxy};
-use hyper_http_proxy::ProxyConnector;
 #[cfg(any(feature = "tls-aws-lc", feature = "tls-ring"))]
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use std::io::Error;
-use std::sync::{OnceLock, RwLock};
 #[cfg(any(feature = "tls-aws-lc", feature = "tls-ring", test))]
 use std::sync::Mutex;
+use std::sync::{OnceLock, RwLock};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, timeout};
 

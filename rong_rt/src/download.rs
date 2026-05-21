@@ -20,6 +20,7 @@ pub struct DownloadOptions {
     sink: Option<Box<dyn BodySink>>,
     request_timeout: Option<Duration>,
     connect_timeout: Option<Duration>,
+    resume: bool,
 }
 
 impl DownloadOptions {
@@ -31,6 +32,7 @@ impl DownloadOptions {
             sink: None,
             request_timeout: None,
             connect_timeout: None,
+            resume: false,
         }
     }
 
@@ -49,6 +51,19 @@ impl DownloadOptions {
     /// Override the socket-connect timeout for this download.
     pub fn with_connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = Some(timeout);
+        self
+    }
+
+    /// Resume a previously-interrupted download by appending to the existing
+    /// `.part` file if one is present and sending `Range: bytes=N-`.
+    ///
+    /// If the remote server returns 200 OK (does not honor the range), the
+    /// existing `.part` is truncated and the full body is rewritten.
+    /// If it returns 416 (range not satisfiable), a `.part` file that already
+    /// matches the server's complete length is finalized; otherwise the
+    /// `.part` is discarded and the call fails.
+    pub fn with_resume(mut self) -> Self {
+        self.resume = true;
         self
     }
 
@@ -77,6 +92,7 @@ pub async fn download(
         abort_rx,
         options.sink,
         timeouts,
+        options.resume,
     )
     .await
 }
@@ -87,7 +103,14 @@ pub fn spawn_download(
     abort_rx: Option<oneshot::Receiver<()>>,
 ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
     let timeouts = options.timeouts();
-    request_download_inner(options.url, options.dest, abort_rx, options.sink, timeouts)
+    request_download_inner(
+        options.url,
+        options.dest,
+        abort_rx,
+        options.sink,
+        timeouts,
+        options.resume,
+    )
 }
 
 pub fn request_download(
@@ -96,7 +119,7 @@ pub fn request_download(
     abort_rx: Option<oneshot::Receiver<()>>,
     sink: Option<Box<dyn BodySink>>,
 ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
-    request_download_inner(url, dest, abort_rx, sink, RequestTimeouts::default())
+    request_download_inner(url, dest, abort_rx, sink, RequestTimeouts::default(), false)
 }
 
 fn request_download_inner(
@@ -105,6 +128,7 @@ fn request_download_inner(
     abort_rx: Option<oneshot::Receiver<()>>,
     sink: Option<Box<dyn BodySink>>,
     timeouts: RequestTimeouts,
+    resume: bool,
 ) -> Result<oneshot::Receiver<Result<(), String>>, String> {
     let (completion_tx, completion_rx) = oneshot::channel();
 
@@ -114,7 +138,7 @@ fn request_download_inner(
     crate::RongExecutor::global().spawn(async move {
         let res = crate::http::scope_network_access_guard_opt(
             network_access_guard,
-            download_resource(&url, &dest, abort_rx, sink, timeouts),
+            download_resource(&url, &dest, abort_rx, sink, timeouts, resume),
         )
         .await;
         let _ = completion_tx.send(res);
@@ -129,6 +153,7 @@ async fn download_resource(
     abort_rx: Option<oneshot::Receiver<()>>,
     sink: Option<Box<dyn BodySink>>,
     timeouts: RequestTimeouts,
+    resume: bool,
 ) -> Result<(), String> {
     let mut sink_opt = sink;
 
@@ -139,9 +164,34 @@ async fn download_resource(
     }
 
     let temp_path = dest.with_extension("part");
-    let mut file = match tokio::fs::File::create(&temp_path).await {
-        Ok(f) => f,
-        Err(e) => return finalize_sink(sink_opt, Err(format!("open: {}", e))),
+
+    // Determine resume offset from an existing `.part` file.
+    let resume_offset: u64 = if resume {
+        match tokio::fs::metadata(&temp_path).await {
+            Ok(meta) if meta.is_file() => meta.len(),
+            _ => 0,
+        }
+    } else {
+        0
+    };
+
+    // When resuming we open in append mode to preserve existing bytes;
+    // otherwise truncate as before.
+    let mut file = if resume_offset > 0 {
+        match tokio::fs::OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(&temp_path)
+            .await
+        {
+            Ok(f) => f,
+            Err(e) => return finalize_sink(sink_opt, Err(format!("open: {}", e))),
+        }
+    } else {
+        match tokio::fs::File::create(&temp_path).await {
+            Ok(f) => f,
+            Err(e) => return finalize_sink(sink_opt, Err(format!("open: {}", e))),
+        }
     };
 
     let small_threshold = DEFAULT_DOWNLOAD_SMALL_THRESHOLD;
@@ -152,7 +202,7 @@ async fn download_resource(
         .request_timeout
         .map(|timeout| Instant::now() + timeout);
     let resp = loop {
-        let request = match build_download_request(&current_url) {
+        let request = match build_download_request(&current_url, resume_offset) {
             Ok(request) => request,
             Err(e) => return finalize_sink(sink_opt, Err(e)),
         };
@@ -188,6 +238,63 @@ async fn download_resource(
         };
         redirect_count += 1;
     };
+
+    if resume_offset > 0 {
+        if resp.status == http::StatusCode::OK {
+            drop(file);
+            file = match tokio::fs::File::create(&temp_path).await {
+                Ok(f) => f,
+                Err(e) => return finalize_sink(sink_opt, Err(format!("reopen: {}", e))),
+            };
+        } else if resp.status == http::StatusCode::PARTIAL_CONTENT {
+            match content_range(&resp.headers) {
+                Ok(ContentRange::Bytes { start, .. }) if start == resume_offset => {}
+                Ok(ContentRange::Bytes { start, .. }) => {
+                    return finalize_sink(
+                        sink_opt,
+                        Err(format!(
+                            "resume content range starts at {}, expected {}",
+                            start, resume_offset
+                        )),
+                    );
+                }
+                Ok(ContentRange::Unsatisfied { .. }) => {
+                    return finalize_sink(
+                        sink_opt,
+                        Err("invalid content range for partial response".to_string()),
+                    );
+                }
+                Err(e) => return finalize_sink(sink_opt, Err(e)),
+            }
+        } else if resp.status == http::StatusCode::RANGE_NOT_SATISFIABLE {
+            let already_complete = matches!(
+                content_range(&resp.headers),
+                Ok(ContentRange::Unsatisfied {
+                    complete_length: Some(length),
+                }) if length == resume_offset
+            );
+            drop(file);
+            if already_complete {
+                if let Err(e) = tokio::fs::rename(&temp_path, dest).await {
+                    return finalize_sink(sink_opt, Err(format!("rename: {}", e)));
+                }
+                return finalize_sink(sink_opt, Ok(()));
+            }
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            return finalize_sink(
+                sink_opt,
+                Err("range not satisfiable; stale `.part` discarded".to_string()),
+            );
+        } else if resp.status.is_success() {
+            return finalize_sink(
+                sink_opt,
+                Err(format!(
+                    "unexpected resume response status: {}",
+                    resp.status
+                )),
+            );
+        }
+    }
     if !resp.status.is_success() {
         return finalize_sink(sink_opt, Err(format!("http status: {}", resp.status)));
     }
@@ -274,6 +381,7 @@ fn finalize_sink(
 
 fn build_download_request(
     url: &str,
+    resume_offset: u64,
 ) -> Result<HttpRequest<http_body_util::combinators::BoxBody<Bytes, Error>>, String> {
     let mut builder = HttpRequest::builder()
         .method("GET")
@@ -284,6 +392,12 @@ fn build_download_request(
         let value = header::HeaderValue::from_str(&ua)
             .map_err(|e| format!("invalid user agent header: {}", e))?;
         headers.insert(header::USER_AGENT, value);
+        if resume_offset > 0 {
+            let range = format!("bytes={}-", resume_offset);
+            let value = header::HeaderValue::from_str(&range)
+                .map_err(|e| format!("invalid range header: {}", e))?;
+            headers.insert(header::RANGE, value);
+        }
     }
     let empty = Full::new(Bytes::new())
         .map_err(|_| Error::other("body error"))
@@ -291,6 +405,63 @@ fn build_download_request(
     builder
         .body(empty)
         .map_err(|e| format!("build request: {}", e))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ContentRange {
+    Bytes {
+        start: u64,
+        end: u64,
+        complete_length: Option<u64>,
+    },
+    Unsatisfied {
+        complete_length: Option<u64>,
+    },
+}
+
+fn content_range(headers: &http::HeaderMap) -> Result<ContentRange, String> {
+    let value = headers
+        .get(header::CONTENT_RANGE)
+        .ok_or_else(|| "missing Content-Range header".to_string())?
+        .to_str()
+        .map_err(|e| format!("invalid Content-Range header: {}", e))?;
+    parse_content_range(value)
+        .ok_or_else(|| format!("invalid Content-Range header value: {}", value))
+}
+
+fn parse_content_range(value: &str) -> Option<ContentRange> {
+    let rest = value.trim().strip_prefix("bytes ")?;
+    if let Some(length) = rest.strip_prefix("*/") {
+        return Some(ContentRange::Unsatisfied {
+            complete_length: parse_complete_length(length.trim())?,
+        });
+    }
+
+    let (range, complete_length) = rest.split_once('/')?;
+    let (start, end) = range.split_once('-')?;
+    let start = start.trim().parse::<u64>().ok()?;
+    let end = end.trim().parse::<u64>().ok()?;
+    if end < start {
+        return None;
+    }
+    let complete_length = parse_complete_length(complete_length.trim())?;
+    if let Some(length) = complete_length
+        && end >= length
+    {
+        return None;
+    }
+    Some(ContentRange::Bytes {
+        start,
+        end,
+        complete_length,
+    })
+}
+
+fn parse_complete_length(value: &str) -> Option<Option<u64>> {
+    if value == "*" {
+        return Some(None);
+    }
+    value.parse::<u64>().ok().map(Some)
 }
 
 fn is_download_redirect(status: http::StatusCode) -> bool {
@@ -458,6 +629,210 @@ mod tests {
             assert_eq!(err, "network access denied");
             let _ = tokio::fs::remove_file(&dest).await;
             let _ = tokio::fs::remove_file(dest.with_extension("part")).await;
+        });
+    }
+
+    /// Spawn a server that honors `Range: bytes=N-` with a 206 response
+    /// containing the suffix of `content` starting at offset N.
+    async fn spawn_range_aware_server(content: &'static [u8]) -> std::net::SocketAddr {
+        use axum::Router;
+        use axum::body::Body;
+        use axum::http::{HeaderMap, StatusCode};
+        use axum::response::Response;
+        use axum::routing::get;
+
+        let app = Router::new().route(
+            "/file",
+            get(move |headers: HeaderMap| async move {
+                let mut start: usize = 0;
+                if let Some(range) = headers.get(http::header::RANGE)
+                    && let Ok(value) = range.to_str()
+                    && let Some(spec) = value.strip_prefix("bytes=")
+                    && let Some((begin, _end)) = spec.split_once('-')
+                    && let Ok(n) = begin.parse::<usize>()
+                {
+                    start = n;
+                }
+                if start >= content.len() {
+                    return Response::builder()
+                        .status(StatusCode::RANGE_NOT_SATISFIABLE)
+                        .header(
+                            http::header::CONTENT_RANGE,
+                            format!("bytes */{}", content.len()),
+                        )
+                        .body(Body::empty())
+                        .unwrap();
+                }
+                let suffix = &content[start..];
+                let mut builder = Response::builder();
+                if start > 0 {
+                    builder = builder.status(StatusCode::PARTIAL_CONTENT).header(
+                        http::header::CONTENT_RANGE,
+                        format!("bytes {}-{}/{}", start, content.len() - 1, content.len()),
+                    );
+                } else {
+                    builder = builder.status(StatusCode::OK);
+                }
+                builder.body(Body::from(suffix.to_vec())).unwrap()
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        addr
+    }
+
+    async fn spawn_bad_206_server(content: &'static [u8]) -> std::net::SocketAddr {
+        use axum::Router;
+        use axum::body::Body;
+        use axum::http::StatusCode;
+        use axum::response::Response;
+        use axum::routing::get;
+
+        let app = Router::new().route(
+            "/file",
+            get(move || async move {
+                Response::builder()
+                    .status(StatusCode::PARTIAL_CONTENT)
+                    .header(
+                        http::header::CONTENT_RANGE,
+                        format!("bytes 0-{}/{}", content.len() - 1, content.len()),
+                    )
+                    .body(Body::from(content.to_vec()))
+                    .unwrap()
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        addr
+    }
+
+    #[test]
+    fn download_resume_appends_remaining_bytes() {
+        let _guard = crate::client::test_guard();
+        let handle = crate::RongExecutor::global().handle();
+        handle.block_on(async {
+            let content: &'static [u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+            let addr = spawn_range_aware_server(content).await;
+            let url = format!("http://{}/file", addr);
+            let dest = std::env::temp_dir().join(format!(
+                "rong_dl_resume_test_{}.bin",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .subsec_nanos()
+            ));
+            let part = dest.with_extension("part");
+
+            // Pre-seed a partial download — first 10 bytes already on disk.
+            tokio::fs::write(&part, &content[..10]).await.unwrap();
+
+            download(DownloadOptions::new(&url, &dest).with_resume(), None)
+                .await
+                .expect("resume download should succeed");
+
+            let written = tokio::fs::read(&dest).await.expect("file should exist");
+            assert_eq!(written, content);
+            let _ = tokio::fs::remove_file(&dest).await;
+        });
+    }
+
+    #[test]
+    fn download_resume_restarts_on_416() {
+        let _guard = crate::client::test_guard();
+        let handle = crate::RongExecutor::global().handle();
+        handle.block_on(async {
+            let content: &'static [u8] = b"shortbody";
+            let addr = spawn_range_aware_server(content).await;
+            let url = format!("http://{}/file", addr);
+            let dest = std::env::temp_dir().join(format!(
+                "rong_dl_resume_416_test_{}.bin",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .subsec_nanos()
+            ));
+            let part = dest.with_extension("part");
+            // Seed a `.part` that is larger than the server's body so the
+            // resume request gets back 416 Range Not Satisfiable.
+            tokio::fs::write(&part, vec![0u8; content.len() * 2])
+                .await
+                .unwrap();
+
+            let err = download(DownloadOptions::new(&url, &dest).with_resume(), None)
+                .await
+                .expect_err("resume should fail with 416");
+            assert!(err.contains("range not satisfiable"), "got: {err}");
+            // The stale `.part` should have been discarded so the next
+            // attempt starts fresh.
+            assert!(!part.exists(), "expected stale .part to be removed");
+        });
+    }
+
+    #[test]
+    fn download_resume_finalizes_complete_part_on_416() {
+        let _guard = crate::client::test_guard();
+        let handle = crate::RongExecutor::global().handle();
+        handle.block_on(async {
+            let content: &'static [u8] = b"already complete";
+            let addr = spawn_range_aware_server(content).await;
+            let url = format!("http://{}/file", addr);
+            let dest = std::env::temp_dir().join(format!(
+                "rong_dl_resume_complete_416_test_{}.bin",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .subsec_nanos()
+            ));
+            let part = dest.with_extension("part");
+            tokio::fs::write(&part, content).await.unwrap();
+
+            download(DownloadOptions::new(&url, &dest).with_resume(), None)
+                .await
+                .expect("complete .part should be finalized");
+
+            let written = tokio::fs::read(&dest).await.expect("file should exist");
+            assert_eq!(written, content);
+            assert!(!part.exists(), "expected .part to be renamed");
+            let _ = tokio::fs::remove_file(&dest).await;
+        });
+    }
+
+    #[test]
+    fn download_resume_rejects_mismatched_206_content_range() {
+        let _guard = crate::client::test_guard();
+        let handle = crate::RongExecutor::global().handle();
+        handle.block_on(async {
+            let content: &'static [u8] = b"full remote body";
+            let addr = spawn_bad_206_server(content).await;
+            let url = format!("http://{}/file", addr);
+            let dest = std::env::temp_dir().join(format!(
+                "rong_dl_resume_bad_206_test_{}.bin",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .subsec_nanos()
+            ));
+            let part = dest.with_extension("part");
+            tokio::fs::write(&part, b"partial").await.unwrap();
+
+            let err = download(DownloadOptions::new(&url, &dest).with_resume(), None)
+                .await
+                .expect_err("mismatched 206 should fail");
+
+            assert!(
+                err.contains("resume content range starts"),
+                "expected content range error, got: {err}"
+            );
+            let written = tokio::fs::read(&part).await.expect(".part should remain");
+            assert_eq!(written, b"partial");
+            assert!(!dest.exists(), "destination should not be finalized");
+            let _ = tokio::fs::remove_file(&part).await;
         });
     }
 
