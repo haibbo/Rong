@@ -89,4 +89,43 @@ mod tests {
             Ok(())
         });
     }
+
+    // Regression: AbortSignal.timeout used to set `inner.aborted = true`
+    // directly and emit only the JS `abort` event, leaving Rust subscribers
+    // on the internal watch channel permanently pending. Verify Rust-side
+    // `subscribe()` receivers wake when the timeout fires.
+    #[test]
+    fn test_timeout_notifies_rust_subscribers() {
+        async_run!(|ctx: JSContext| async move {
+            init(&ctx)?;
+            rong_exception::init(&ctx)?;
+
+            let (tx, mut rx) = mpsc::channel(1);
+
+            let callback = JSFunc::new(&ctx, move |obj: JSObject| {
+                let abort = obj.borrow::<AbortSignal>().unwrap();
+                let mut recv = abort.subscribe();
+                let tx = tx.clone();
+                spawn_local(async move {
+                    let _ = recv.recv().await;
+                    tx.send(()).await.unwrap();
+                });
+            });
+
+            ctx.global().set("rust", callback)?;
+            ctx.eval::<()>(Source::from_bytes(
+                r#"
+                    const signal = AbortSignal.timeout(50);
+                    rust(signal);
+                "#,
+            ))?;
+
+            tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+                .await
+                .expect("rust subscriber should receive timeout abort within 2s")
+                .expect("forwarder should not drop sender before notifying");
+
+            Ok(())
+        });
+    }
 }
