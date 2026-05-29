@@ -127,11 +127,7 @@ fn build_quickjs(out_dir: &Path) {
 
     // Platform-specific setup
     match target_os.as_str() {
-        "linux" => {
-            if env::var("CARGO_CFG_TARGET_ENV").unwrap() == "ohos" {
-                harmony_setup(&mut build);
-            }
-        }
+        "linux" if target_env == "ohos" => harmony_setup(&mut build),
         "android" => android_setup(&mut build),
         "ios" => ios_setup(&mut build),
         _ => {} // macOS, Windows, etc. — cc crate auto-detects

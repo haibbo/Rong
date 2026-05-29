@@ -58,36 +58,24 @@ fn equal(ctx: JSContext, left: JSValue, right: JSValue, message: Optional<JSValu
 /// Asserts that a value is truthy.
 fn ok(ctx: JSContext, value: JSValue, message: Optional<JSValue>) -> JSValue {
     let undefined = JSValue::undefined(&ctx);
-    match value.type_of() {
-        JSValueType::Boolean => {
-            if value.to_rust::<bool>().unwrap_or(false) {
-                return undefined;
-            }
-        }
-        JSValueType::Number => {
-            if value.to_rust::<i32>().map(|b| b != 0).unwrap_or(false) {
-                return undefined;
-            }
-        }
-        JSValueType::String => {
-            if value
-                .to_rust::<String>()
-                .map(|s| !s.is_empty())
-                .unwrap_or(false)
-            {
-                return undefined;
-            }
-        }
+    let is_truthy = match value.type_of() {
+        JSValueType::Boolean => value.to_rust::<bool>().unwrap_or(false),
+        JSValueType::Number => value.to_rust::<i32>().map(|b| b != 0).unwrap_or(false),
+        JSValueType::String => value
+            .to_rust::<String>()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false),
         JSValueType::Array
         | JSValueType::BigInt
         | JSValueType::Constructor
         | JSValueType::Exception
         | JSValueType::Function
         | JSValueType::Symbol
-        | JSValueType::Object => {
-            return undefined;
-        }
-        _ => {}
+        | JSValueType::Object => true,
+        _ => false,
+    };
+    if is_truthy {
+        return undefined;
     }
 
     handle_assertion_error(

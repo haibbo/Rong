@@ -650,11 +650,7 @@ async fn parse_available_events(
         match field {
             "event" => pending.event = Some(value.to_string()),
             "data" => pending.data_lines.push(value.to_string()),
-            "id" => {
-                if !value.contains('\0') {
-                    pending.id = Some(value.to_string());
-                }
-            }
+            "id" if !value.contains('\0') => pending.id = Some(value.to_string()),
             "retry" => {
                 if let Ok(v) = value.parse::<u64>() {
                     pending.retry_ms = Some(v);

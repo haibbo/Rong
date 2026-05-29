@@ -154,11 +154,7 @@ impl JSTypedArrayOps for QJSValue {
             );
             qjs::JS_FreeValue(self.ctx, buffer);
 
-            if pbytes_per_element == 0 {
-                0
-            } else {
-                pbyte_length / pbytes_per_element
-            }
+            pbyte_length.checked_div(pbytes_per_element).unwrap_or(0)
         }
     }
 
