@@ -21,6 +21,21 @@ Set-Location $PSScriptRoot
 
 $HostTlsBackend = if ($env:HOST_TLS_BACKEND) { $env:HOST_TLS_BACKEND } else { "tls-aws-lc" }
 
+function Get-JscoreFeatures {
+    $featureSet = "jscore,$HostTlsBackend"
+    if ($env:RONG_JSC_SOURCE) {
+        $featureSet = "$featureSet,rong/jscore-source"
+    }
+    return $featureSet
+}
+
+function Test-JscoreSourceConfigured {
+    return [bool](
+        $env:RONG_JSC_SOURCE -or
+        $env:RONG_JSC_ROOT
+    )
+}
+
 function Log-Info([string]$Message) {
     Write-Host "[INFO] $Message" -ForegroundColor Cyan
 }
@@ -159,6 +174,9 @@ function Run-CoreTest([string]$TestName, [string]$EngineName) {
     $script:TotalTests++
 
     $featureSet = "$EngineName,$HostTlsBackend"
+    if ($EngineName -eq "jscore") {
+        $featureSet = Get-JscoreFeatures
+    }
     & cargo test "--test=$TestName" "--no-default-features" "--features=$featureSet" "--quiet"
     if ($LASTEXITCODE -eq 0) {
         Log-Pass "Core test $TestName passed on $EngineName"
@@ -176,6 +194,9 @@ function Run-ModuleTest([string]$ModuleName, [string]$EngineName) {
     $script:TotalTests++
 
     $featureSet = "$EngineName,$HostTlsBackend"
+    if ($EngineName -eq "jscore") {
+        $featureSet = Get-JscoreFeatures
+    }
 
     & cargo test "-p" $ModuleName "--no-default-features" "--features=$featureSet" "--quiet"
     if ($LASTEXITCODE -eq 0) {
@@ -226,14 +247,14 @@ if ($Help) {
     exit 0
 }
 
-# test.sh supports quickjs+jscore+all; on Windows, jscore is unavailable.
 $engines = @("quickjs")
 if ($Engine -eq "jscore") {
-    Log-Fail "JavaScriptCore is not supported on Windows."
-    exit 1
+    $engines = @("jscore")
 }
 if ($Engine -eq "all") {
-    Log-Warn "Windows runner maps -e all to quickjs because jscore is not supported."
+    if (Test-JscoreSourceConfigured) {
+        $engines = @("quickjs", "jscore")
+    }
 }
 if ($Engine -eq "quickjs") {
     $engines = @("quickjs")

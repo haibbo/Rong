@@ -37,6 +37,11 @@ done <<EOF
 $(rustc -vV)
 EOF
 
+engine_features="${ENGINE},${HOST_TLS_BACKEND}"
+if [ "${ENGINE}" = "jscore" ] && [ -n "${RONG_JSC_SOURCE:-}" ]; then
+  engine_features="${engine_features},rong/jscore-source"
+fi
+
 if [ "${ENGINE}" = "quickjs" ]; then
   workspace_args="${workspace_args} --exclude rong_jscore --exclude rong_jscore_sys"
 elif [ "${ENGINE}" = "jscore" ]; then
@@ -45,8 +50,7 @@ elif [ "${ENGINE}" = "jscore" ]; then
       workspace_args="${workspace_args} --exclude rong_quickjs --exclude rong_quickjs_sys"
       ;;
     *)
-      echo "ENGINE=jscore is only supported on Apple hosts" >&2
-      exit 1
+      workspace_args="${workspace_args} --exclude rong_quickjs --exclude rong_quickjs_sys"
       ;;
   esac
 elif [ "${ENGINE}" = "arkjs" ]; then
@@ -54,7 +58,7 @@ elif [ "${ENGINE}" = "arkjs" ]; then
   exit 1
 fi
 
-cargo check ${workspace_args} --lib --bins --tests --no-default-features --features "${ENGINE},${HOST_TLS_BACKEND}"
+cargo check ${workspace_args} --lib --bins --tests --no-default-features --features "${engine_features}"
 '''
 
 [tasks.check-engine-windows]
@@ -83,7 +87,12 @@ if ($env:ENGINE -eq "quickjs") {
     $workspaceArgs += @("--exclude", "rong_jscore", "--exclude", "rong_jscore_sys")
     & cargo check @workspaceArgs --lib --bins --tests "--no-default-features" "--features=quickjs,$env:HOST_TLS_BACKEND"
 } elseif ($env:ENGINE -eq "jscore") {
-    throw "ENGINE=jscore is only supported on Apple hosts"
+    $workspaceArgs += @("--exclude", "rong_quickjs", "--exclude", "rong_quickjs_sys")
+    $engineFeatures = "jscore,$env:HOST_TLS_BACKEND"
+    if ($env:RONG_JSC_SOURCE) {
+        $engineFeatures = "$engineFeatures,rong/jscore-source"
+    }
+    & cargo check @workspaceArgs --lib --bins --tests "--no-default-features" "--features=$engineFeatures"
 } elseif ($env:ENGINE -eq "arkjs") {
     throw "Use 'cargo make check-arkjs-ohos' for ArkJS"
 } else {
@@ -116,6 +125,11 @@ done <<EOF
 $(rustc -vV)
 EOF
 
+engine_features="${ENGINE},${HOST_TLS_BACKEND}"
+if [ "${ENGINE}" = "jscore" ] && [ -n "${RONG_JSC_SOURCE:-}" ]; then
+  engine_features="${engine_features},rong/jscore-source"
+fi
+
 if [ "${ENGINE}" = "quickjs" ]; then
   workspace_args="${workspace_args} --exclude rong_jscore --exclude rong_jscore_sys"
 elif [ "${ENGINE}" = "jscore" ]; then
@@ -124,8 +138,7 @@ elif [ "${ENGINE}" = "jscore" ]; then
       workspace_args="${workspace_args} --exclude rong_quickjs --exclude rong_quickjs_sys"
       ;;
     *)
-      echo "ENGINE=jscore is only supported on Apple hosts" >&2
-      exit 1
+      workspace_args="${workspace_args} --exclude rong_quickjs --exclude rong_quickjs_sys"
       ;;
   esac
 elif [ "${ENGINE}" = "arkjs" ]; then
@@ -133,7 +146,7 @@ elif [ "${ENGINE}" = "arkjs" ]; then
   exit 1
 fi
 
-cargo clippy ${workspace_args} --lib --bins --tests --no-default-features --features "${ENGINE},${HOST_TLS_BACKEND}" -- -D warnings
+cargo clippy ${workspace_args} --lib --bins --tests --no-default-features --features "${engine_features}" -- -D warnings
 '''
 
 [tasks.clippy-engine-windows]
@@ -162,7 +175,12 @@ if ($env:ENGINE -eq "quickjs") {
     $workspaceArgs += @("--exclude", "rong_jscore", "--exclude", "rong_jscore_sys")
     & cargo clippy @workspaceArgs --lib --bins --tests "--no-default-features" "--features=quickjs,$env:HOST_TLS_BACKEND" -- -D warnings
 } elseif ($env:ENGINE -eq "jscore") {
-    throw "ENGINE=jscore is only supported on Apple hosts"
+    $workspaceArgs += @("--exclude", "rong_quickjs", "--exclude", "rong_quickjs_sys")
+    $engineFeatures = "jscore,$env:HOST_TLS_BACKEND"
+    if ($env:RONG_JSC_SOURCE) {
+        $engineFeatures = "$engineFeatures,rong/jscore-source"
+    }
+    & cargo clippy @workspaceArgs --lib --bins --tests "--no-default-features" "--features=$engineFeatures" -- -D warnings
 } elseif ($env:ENGINE -eq "arkjs") {
     throw "Use 'cargo make clippy-arkjs-ohos' for ArkJS"
 } else {
@@ -316,6 +334,11 @@ case "${host_target}" in
   *apple*)
     engines="${engines} jscore"
     ;;
+  *)
+    if [ -n "${RONG_JSC_SOURCE:-}" ] || [ -n "${RONG_JSC_ROOT:-}" ]; then
+      engines="${engines} jscore"
+    fi
+    ;;
 esac
 
 for engine in ${engines}; do
@@ -334,6 +357,9 @@ args = [
     '''
 $ErrorActionPreference = "Stop"
 $engines = @("quickjs")
+if ($env:RONG_JSC_SOURCE -or $env:RONG_JSC_ROOT) {
+    $engines = @("quickjs", "jscore")
+}
 
 foreach ($engine in $engines) {
     Write-Host "==> ci-verify ($engine)"
@@ -382,10 +408,10 @@ case "${host_target}" in
     echo "Current host: Apple -> quickjs and jscore are supported."
     ;;
   *windows*)
-    echo "Current host: Windows -> quickjs is supported."
+    echo "Current host: Windows -> quickjs by default; jscore requires a source artifact."
     ;;
   *)
-    echo "Current host: non-Apple Unix -> quickjs is supported."
+    echo "Current host: non-Apple Unix -> quickjs by default; jscore requires a source artifact."
     ;;
 esac
 echo ""
@@ -418,7 +444,7 @@ Write-Host "  cargo make clippy-engine"
 Write-Host "  cargo make test-engine"
 Write-Host "  cargo make ci-verify"
 Write-Host ""
-Write-Host "Current host: Windows -> quickjs is supported."
+Write-Host "Current host: Windows -> quickjs by default; jscore requires a source artifact."
 Write-Host ""
 Write-Host "ArkJS tasks:"
 Write-Host "  cargo make check-arkjs-ohos"

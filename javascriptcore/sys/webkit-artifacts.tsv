@@ -1,0 +1,26 @@
+# Pinned prebuilt JSCOnly artifacts for the source backend.
+#
+# build.rs (rong_jscore_sys) reads this file. When the source backend has no
+# artifact resolved (no RONG_JSC_* env, nothing in the cache), it downloads the
+# row matching the current target triple, verifies its sha256, and extracts it
+# into the per-target cache (<cache>/<target>/{include,lib}). Download is a quick
+# curl + tar; disable it with RONG_JSC_DOWNLOAD=0.
+#
+# Once rows are populated, this is what makes the source backend "just work" on
+# Linux and Windows with no local WebKit build. Rows should point at vanilla
+# JSCOnly artifacts: static archives off-Apple, a JavaScriptCore.framework on
+# Apple.
+#
+# Format (whitespace-separated), one row per target:
+#   <target-triple>            <release-tag>        <filename>                                   <sha256-hex>
+# Download URL = ${RONG_JSC_ARTIFACT_BASE_URL:-https://github.com/LingXia-Dev/Rong/releases/download}/<tag>/<filename>
+#
+# To produce rows: run the "Build JSC artifacts" workflow
+# (.github/workflows/build-jsc-artifacts.yml), or locally run
+# `scripts/build_jsc_artifact.sh --package <file>.tar.gz`. Both print the row
+# (target, release-tag, filename, sha256) to paste below.
+#
+# No rows yet → source builds require a manually-provided artifact. Example of a
+# populated row (commented out):
+#
+#   x86_64-unknown-linux-gnu   webkit-2025.05.01    rong-webkit-x86_64-unknown-linux-gnu.tar.gz  0000000000000000000000000000000000000000000000000000000000000000

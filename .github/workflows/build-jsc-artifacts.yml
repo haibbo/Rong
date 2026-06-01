@@ -1,0 +1,139 @@
+name: "Build JSC artifacts"
+
+# Builds JSCOnly prebuilt artifacts from UPSTREAM WebKit and uploads them to a
+# GitHub release, then emits the `webkit-artifacts.tsv` rows to paste in. Once
+# those rows land, the source backend "just works" with no env var on the listed
+# targets (rong_jscore_sys/build.rs downloads + verifies them on demand).
+#
+# Manual trigger only — building WebKit is slow and expensive. The TSV update is
+# intentionally a human-reviewed paste step (you want to eyeball the tag + sha
+# before the whole world auto-downloads it).
+
+on:
+  workflow_dispatch:
+    inputs:
+      webkit_ref:
+        description: "WebKit tag/branch/sha to build (PIN a tag for reproducible artifacts)"
+        required: true
+        default: "main"
+      release_tag:
+        description: "GitHub release tag to upload artifacts to (created if missing)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build-${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS defaults to the system JavaScriptCore.framework, but the
+          # `jscore-source` feature is a supported opt-in (build.rs then downloads
+          # a source artifact). Publishing Apple artifacts lets that opt-in work
+          # without a local WebKit build.
+          - target: x86_64-apple-darwin
+            os: macos-13
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm   # native arm64 runner (no cross-compile)
+          # TODO: x86_64-pc-windows-msvc (MSVC build-jsc), iOS, and Android NDK
+          # targets once validated.
+    runs-on: ${{ matrix.os }}
+    env:
+      PKG: rong-webkit-${{ matrix.target }}.tar.gz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust (for host triple detection)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install build deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          # Best-effort JSCOnly/CMake build deps; expand if build-jsc complains.
+          # build-essential: gcc/g++/make for the static-ICU source build.
+          # No libicu-dev: a static ICU is built from source and linked via ICU_ROOT,
+          # so the system shared ICU must not shadow it.
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build ruby perl python3 gperf bison flex \
+            clang build-essential libssl-dev pkg-config
+
+      - name: Select full Xcode (macOS)
+        if: runner.os == 'macOS'
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Build artifact
+        run: |
+          bash scripts/build_jsc_artifact.sh \
+            --webkit-ref "${{ inputs.webkit_ref }}" \
+            --target "${{ matrix.target }}" \
+            --out "${{ runner.temp }}/artifact" \
+            --package "${{ runner.temp }}/$PKG"
+
+      - name: Compute checksum and TSV row
+        run: |
+          sha="$(shasum -a 256 "${{ runner.temp }}/$PKG" | awk '{print $1}')"
+          row="${{ matrix.target }}	${{ inputs.release_tag }}	$PKG	$sha"
+          echo "$row" > "${{ runner.temp }}/row-${{ matrix.target }}.tsv"
+          {
+            echo "### ${{ matrix.target }}"
+            echo '```'
+            echo "$row"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Idempotent and safe under the parallel matrix: `create` no-ops if the
+          # release already exists (another leg won the race); `upload --clobber`
+          # overwrites an earlier copy.
+          gh release create "${{ inputs.release_tag }}" \
+            --title "${{ inputs.release_tag }}" \
+            --notes "Prebuilt JSCOnly artifacts for the rong source backend." \
+            2>/dev/null || true
+          gh release upload "${{ inputs.release_tag }}" "${{ runner.temp }}/$PKG" --clobber
+
+      - name: Upload TSV row (workflow artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsv-row-${{ matrix.target }}
+          path: ${{ runner.temp }}/row-${{ matrix.target }}.tsv
+
+  collect-rows:
+    name: collect-tsv-rows
+    needs: build
+    # Run even if some targets failed, so the summary still has the rows that
+    # did build (each target also uploads its artifact + release asset on its own).
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all rows
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tsv-row-*
+          path: rows
+          merge-multiple: true
+
+      - name: Assemble webkit-artifacts.tsv additions
+        run: |
+          cat rows/*.tsv 2>/dev/null | sort > webkit-artifacts.additions.tsv
+          echo "## Paste these rows into javascriptcore/sys/webkit-artifacts.tsv" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat webkit-artifacts.additions.tsv >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload combined additions
+        uses: actions/upload-artifact@v4
+        with:
+          name: webkit-artifacts-additions
+          path: webkit-artifacts.additions.tsv

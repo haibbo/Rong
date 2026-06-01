@@ -16,6 +16,18 @@ cargo test
 cargo test --no-default-features --features jscore
 ```
 
+On Apple, `jscore` uses the system `JavaScriptCore.framework`. To exercise the
+source-built (JSCOnly) backend instead, use the `jscore-source` feature:
+
+```bash
+cargo test --no-default-features --features jscore-source
+```
+
+`./test.sh -e jscore` lets `build.rs` download a pinned source artifact or use
+one configured through `RONG_JSC_ROOT`. Set `RONG_JSC_SOURCE=1` to force the
+source backend in `test.sh` on Apple too. See
+[`javascriptcore/sys/README.md`](../../javascriptcore/sys/README.md) for artifact setup.
+
 ### Testing a specific module
 
 To test a single module, use the `-p` (package) flag:

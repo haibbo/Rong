@@ -29,10 +29,30 @@ log_warning() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
-# Available engines
-ENGINES=("quickjs" "jscore")
 HOST_TLS_BACKEND="${HOST_TLS_BACKEND:-tls-aws-lc}"
 SUPPORTED_ENGINES=("quickjs" "jscore" "arkjs")
+
+jscore_features() {
+    local feature_set="jscore,$HOST_TLS_BACKEND"
+    if [[ -n "${RONG_JSC_SOURCE:-}" ]]; then
+        feature_set="$feature_set,rong/jscore-source"
+    fi
+    echo "$feature_set"
+}
+
+host_is_apple() {
+    rustc -vV | grep -q '^host: .*apple'
+}
+
+jscore_source_configured() {
+    [[ -n "${RONG_JSC_SOURCE:-}" ]] ||
+        [[ -n "${RONG_JSC_ROOT:-}" ]]
+}
+
+ENGINES=("quickjs")
+if host_is_apple || jscore_source_configured; then
+    ENGINES+=("jscore")
+fi
 
 # Cleanup function to kill child processes
 cleanup() {
@@ -126,6 +146,9 @@ run_core_test() {
     local test_name=$1
     local engine=$2
     local feature_set="$engine,$HOST_TLS_BACKEND"
+    if [[ "$engine" == "jscore" ]]; then
+        feature_set="$(jscore_features)"
+    fi
 
     log_info "Running core test: $test_name (engine: $engine)"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
@@ -155,6 +178,9 @@ run_module_test() {
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
     local feature_set="$engine,$HOST_TLS_BACKEND"
+    if [[ "$engine" == "jscore" ]]; then
+        feature_set="$(jscore_features)"
+    fi
 
     if cargo test -p "$module_name" --no-default-features --features="$feature_set" --quiet; then
         log_success "Module test $module_name passed on $engine"
