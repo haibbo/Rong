@@ -16,6 +16,19 @@ impl JSArrayOps for QJSValue {
         }
     }
 
+    fn array_len(&self) -> Self {
+        let ctx = self.ctx;
+        unsafe {
+            let v = qjs::JS_GetPropertyStr(ctx, self.value, c"length".as_ptr());
+
+            if qjs::QJS_IsException(ctx, v) {
+                QJSValue::from_owned_raw(ctx, v).with_exception()
+            } else {
+                QJSValue::from_owned_raw(ctx, v)
+            }
+        }
+    }
+
     fn get_index(&self, index: u32) -> Self {
         let ctx = self.ctx;
         unsafe {

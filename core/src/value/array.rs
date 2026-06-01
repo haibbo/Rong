@@ -48,6 +48,9 @@ pub trait JSArrayOps: JSValueImpl {
     /// Create a new empty array.
     fn new_array(ctx: &Self::Context) -> Self;
 
+    /// Get the array length.
+    fn array_len(&self) -> Self;
+
     /// Get element at index.
     ///
     /// Returns the element value or an exception.
@@ -71,7 +74,7 @@ where
 
     /// Get the JavaScript `length` property.
     pub fn len(&self) -> JSResult<u32> {
-        self.0.get::<_, u32>("length")
+        self.as_value().array_len().try_convert()
     }
 
     /// Check whether the array is empty.
