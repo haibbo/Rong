@@ -1,0 +1,17 @@
+fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+    // Declared so rustc's unexpected_cfgs lint stays quiet.
+    println!("cargo:rustc-check-cfg=cfg(jsc_source)");
+
+    // `rong_jscore_sys` (links = "jscore") publishes the backend it actually
+    // linked via `cargo::metadata=backend=...`, surfaced to this build script as
+    // `DEP_JSCORE_BACKEND`. Mirror it into a cfg so the source-only code in this
+    // crate (JSC global init, the bytecode bridge, engine identity) tracks the
+    // backend the sys crate built — instead of an independently-set cargo
+    // feature that silently disagrees on non-Apple targets (where the sys crate
+    // picks the source backend by default, with no `source` feature involved).
+    println!("cargo:rerun-if-env-changed=DEP_JSCORE_BACKEND");
+    if std::env::var("DEP_JSCORE_BACKEND").as_deref() == Ok("source") {
+        println!("cargo:rustc-cfg=jsc_source");
+    }
+}

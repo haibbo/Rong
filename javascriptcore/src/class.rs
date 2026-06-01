@@ -1,5 +1,5 @@
 use crate::{JSCContext, JSCValue, jsc};
-use rong_core::{JSClass, JSClassExt, JSContext, JSContextImpl, JSTypeOf, JSValueImpl, Source};
+use rong_core::{JSClass, JSClassExt, JSContext, JSContextImpl, JSTypeOf, JSValueImpl};
 use std::collections::HashMap;
 use std::ffi::{CString, c_char};
 use std::ptr;
@@ -27,7 +27,6 @@ const PUBLIC_CONSTRUCTOR_FACTORY: &[u8] = br#"
         return callWithoutNew(...args);
     }
 
-    HostClass.prototype = nativeCtor.prototype;
     return HostClass;
 })
 "#;
@@ -219,9 +218,7 @@ unsafe fn set_prototype_constructor(
     constructor: jsc::JSObjectRef,
 ) {
     unsafe {
-        let prototype_key = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
-        let prototype = jsc::JSObjectGetProperty(ctx, function, prototype_key, ptr::null_mut());
-        let prototype = jsc::JSValueToObject(ctx, prototype, ptr::null_mut());
+        let prototype = ensure_constructor_prototype(ctx, function);
         let constructor_key = jsc::JSStringCreateWithUTF8CString(c"constructor".as_ptr());
         jsc::JSObjectSetProperty(
             ctx,
@@ -232,7 +229,39 @@ unsafe fn set_prototype_constructor(
             ptr::null_mut(),
         );
         jsc::JSStringRelease(constructor_key);
+    }
+}
+
+unsafe fn ensure_constructor_prototype(
+    ctx: *mut jsc::OpaqueJSContext,
+    function: jsc::JSObjectRef,
+) -> jsc::JSObjectRef {
+    unsafe {
+        let prototype_key = jsc::JSStringCreateWithUTF8CString(c"prototype".as_ptr());
+        let mut exception: jsc::JSValueRef = ptr::null_mut();
+        let mut prototype = jsc::JSObjectGetProperty(ctx, function, prototype_key, &mut exception);
+
+        if !exception.is_null()
+            || jsc::JSValueIsUndefined(ctx, prototype)
+            || jsc::JSValueIsNull(ctx, prototype)
+            || !jsc::JSValueIsObject(ctx, prototype)
+        {
+            exception = ptr::null_mut();
+            let prototype_obj = jsc::JSObjectMake(ctx, ptr::null_mut(), ptr::null_mut());
+            prototype = prototype_obj;
+            jsc::JSObjectSetProperty(
+                ctx,
+                function,
+                prototype_key,
+                prototype,
+                jsc::kJSPropertyAttributeDontEnum,
+                &mut exception,
+            );
+        }
+
+        let prototype_obj = jsc::JSValueToObject(ctx, prototype, ptr::null_mut());
         jsc::JSStringRelease(prototype_key);
+        prototype_obj
     }
 }
 
@@ -256,14 +285,26 @@ where
         return JSCValue::from_owned_obj(ctx.to_raw(), native_ctor);
     }
 
-    let public_ctor = ctx.call(
-        &factory,
-        JSCValue::create_undefined(ctx),
-        &[
-            JSCValue::from_borrowed_obj(ctx.to_raw(), native_ctor),
-            JSCValue::from_owned_obj(ctx.to_raw(), call_without_new),
-        ],
-    );
+    let public_ctor = unsafe {
+        let args = [
+            native_ctor as jsc::JSValueRef,
+            call_without_new as jsc::JSValueRef,
+        ];
+        let mut exception: jsc::JSValueRef = ptr::null_mut();
+        let result = jsc::JSObjectCallAsFunction(
+            ctx.to_raw(),
+            factory.as_obj(),
+            ptr::null_mut(),
+            args.len(),
+            args.as_ptr(),
+            &mut exception,
+        );
+        if exception.is_null() {
+            JSCValue::from_owned_raw(ctx.to_raw(), result)
+        } else {
+            JSCValue::from_owned_raw(ctx.to_raw(), exception).with_exception()
+        }
+    };
     if public_ctor.is_exception() || !public_ctor.is_object() {
         return JSCValue::from_owned_obj(ctx.to_raw(), native_ctor);
     }
@@ -271,6 +312,8 @@ where
     let public_ctor_obj = public_ctor.as_obj();
     unsafe {
         set_function_name(ctx.to_raw(), public_ctor_obj, class_name_cstr);
+        // `set_prototype_constructor` calls `ensure_constructor_prototype` itself,
+        // so there is no need to ensure the prototype separately here.
         set_prototype_constructor(ctx.to_raw(), public_ctor_obj, public_ctor_obj);
     }
     JSCValue::from_owned_obj(ctx.to_raw(), public_ctor_obj)
@@ -282,7 +325,7 @@ fn get_public_constructor_factory(ctx: &JSCContext) -> JSCValue {
         return factory.0.clone();
     }
 
-    let factory = ctx.eval(Source::from_bytes(PUBLIC_CONSTRUCTOR_FACTORY));
+    let factory = ctx.eval_direct(PUBLIC_CONSTRUCTOR_FACTORY);
     if !factory.is_exception() {
         host_ctx.set_state(PublicConstructorFactory(factory.clone()));
     }

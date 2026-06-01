@@ -1,7 +1,7 @@
 use crate::{JSCContext, JSCValue};
 use rong_core::{
     FromJSValue, JSContext, JSContextImpl, JSFunc, JSObject, JSProxyOps, JSTypeOf, JSValue,
-    JSValueImpl, RongJSError, Source,
+    JSValueImpl, RongJSError,
 };
 
 #[derive(Clone)]
@@ -66,7 +66,7 @@ const PROXY_HELPER_SOURCE: &[u8] = br#"
 "#;
 
 pub(crate) fn prime_proxy_helper(ctx: &JSCContext) -> JSCValue {
-    ctx.eval(Source::from_bytes(PROXY_HELPER_SOURCE))
+    ctx.eval_direct(PROXY_HELPER_SOURCE)
 }
 
 pub(crate) fn install_proxy_helper(ctx: &JSCContext) -> JSCValue {

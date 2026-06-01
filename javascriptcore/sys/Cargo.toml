@@ -12,5 +12,14 @@ keywords.workspace = true
 categories.workspace = true
 documentation = "https://docs.rs/rong_jscore_sys"
 readme = "README.md"
+# Lets dependents read the chosen backend via DEP_JSCORE_BACKEND in their build script.
+links = "jscore"
+
+[features]
+# Force the source/JSCOnly backend even on Apple for local dev/testing of the
+# source path. Off: macOS/iOS use the system framework; other targets use source.
+source = []
+
 [build-dependencies]
 bindgen = "0.72"
+cc = "1.2"

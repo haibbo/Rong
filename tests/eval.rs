@@ -3,6 +3,19 @@ use rong_test::*;
 use std::string::String;
 use tokio::time::Duration;
 
+fn compile_to_bytecode_or_skip(ctx: &JSContext, code: &str) -> JSResult<Option<Source>> {
+    match ctx.compile_to_bytecode(code) {
+        Ok(source) => Ok(Some(source)),
+        Err(e)
+            if e.is_not_support_bytecode()
+                && std::env::var("RONG_JSC_REQUIRE_BYTECODE").as_deref() != Ok("1") =>
+        {
+            Ok(None)
+        }
+        Err(e) => panic!("Unexpected bytecode compile error: {:?}", e),
+    }
+}
+
 #[test]
 fn test_eval() {
     run(|ctx| {
@@ -22,14 +35,36 @@ fn test_eval() {
 fn test_bytecode() {
     run(|ctx| {
         let code = "(4 + 8) * 3";
-        let source = match ctx.compile_to_bytecode(code) {
-            Ok(source) => source,
-            Err(e) if e.is_not_support_bytecode() => return Ok(()),
-            Err(e) => panic!("Unexpected error: {:?}", e),
+        let Some(source) = compile_to_bytecode_or_skip(ctx, code)? else {
+            return Ok(());
         };
 
         let result: i32 = ctx.eval(source)?;
         assert_eq!(result, 36);
+        Ok(())
+    });
+}
+
+#[test]
+fn test_compile_to_bytecode_does_not_execute() {
+    run(|ctx| {
+        let code = "globalThis.__rong_compile_side_effect = (globalThis.__rong_compile_side_effect || 0) + 1; 7";
+        let Some(source) = compile_to_bytecode_or_skip(ctx, code)? else {
+            return Ok(());
+        };
+
+        let side_effect_after_compile: i32 = ctx.eval(Source::from_bytes(
+            "globalThis.__rong_compile_side_effect || 0",
+        ))?;
+        assert_eq!(side_effect_after_compile, 0);
+
+        let result: i32 = ctx.eval(source)?;
+        assert_eq!(result, 7);
+
+        let side_effect_after_run: i32 = ctx.eval(Source::from_bytes(
+            "globalThis.__rong_compile_side_effect || 0",
+        ))?;
+        assert_eq!(side_effect_after_run, 1);
         Ok(())
     });
 }
@@ -68,10 +103,8 @@ fn test_eval_async() {
             })
         "#;
 
-        let source = match ctx.compile_to_bytecode(js_code) {
-            Ok(source) => source,
-            Err(e) if e.is_not_support_bytecode() => return Ok(()),
-            Err(e) => panic!("Unexpected error: {:?}", e),
+        let Some(source) = compile_to_bytecode_or_skip(&ctx, js_code)? else {
+            return Ok(());
         };
         // println!("source length is {}", source.len());
 

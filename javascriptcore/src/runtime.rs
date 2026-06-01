@@ -10,6 +10,13 @@ impl JSRuntimeImpl for JSCRuntime {
     type Context = JSCContext;
 
     fn new() -> Self {
+        // On the source/JSCOnly backend, force JSC's one-time global init before
+        // the first JSC API call. `JSContextGroupCreate` is the earliest VM touch
+        // (earlier than `JSCContext::new`), so the guard belongs here. Idempotent
+        // and thread-safe; a no-op on the system framework, which runs this from
+        // the dylib's static initializers.
+        #[cfg(jsc_source)]
+        jsc::ensure_initialized();
         Self {
             raw: unsafe { jsc::JSContextGroupCreate() },
         }
@@ -39,10 +46,26 @@ impl JSEngine for JavaScriptCore {
     type Runtime = JSCRuntime;
 
     fn name() -> &'static str {
-        "JavaScriptCore"
+        // Distinguish the source-built JSCOnly backend from the system
+        // JavaScriptCore.framework so the active engine is identifiable at runtime.
+        #[cfg(jsc_source)]
+        {
+            "JavaScriptCore (source)"
+        }
+        #[cfg(not(jsc_source))]
+        {
+            "JavaScriptCore"
+        }
     }
 
     fn version() -> String {
-        String::from("Unknown")
+        #[cfg(jsc_source)]
+        {
+            String::from("JSCOnly (source build)")
+        }
+        #[cfg(not(jsc_source))]
+        {
+            String::from("system framework")
+        }
     }
 }

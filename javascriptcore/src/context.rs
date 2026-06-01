@@ -7,6 +7,10 @@ use smallvec::SmallVec;
 use std::ffi::CString;
 use std::ptr;
 
+/// Bytecode is unavailable through JavaScriptCore's public C API, so every
+/// bytecode entry point reports the same not-supported message.
+const BYTECODE_UNSUPPORTED_MSG: &str = "Bytecode is not supported on JavaScriptCore";
+
 pub struct JSCContext {
     raw: *mut jsc::OpaqueJSContext,
 }
@@ -17,6 +21,14 @@ impl JSContextImpl for JSCContext {
     type Value = JSCValue;
 
     fn new(runtime: &Self::Runtime) -> Self {
+        // Each JSCRuntime owns an independent context group (one JSC VM), so the
+        // "one thread, one independent runtime" model holds: a VM is only ever
+        // touched by its owning thread, and N runtimes run on N threads
+        // concurrently. The source backend additionally needs JSC's one-time
+        // global init forced before the first VM is created (the system
+        // framework gets this from the dylib's static initializers).
+        #[cfg(jsc_source)]
+        jsc::ensure_initialized();
         let ctx = Self {
             raw: unsafe { jsc::JSGlobalContextCreateInGroup(runtime.to_raw(), ptr::null_mut()) },
         };
@@ -38,11 +50,10 @@ impl JSContextImpl for JSCContext {
 
     fn eval(&self, source: rong_core::Source) -> Self::Value {
         let filename = source.name().unwrap_or("eval");
-        // Keep engine behavior consistent with QuickJS backend, which evaluates in strict mode
-        // (it sets JS_EVAL_FLAG_STRICT by default).
-        //
-        // JavaScriptCore's JSEvaluateScript does not provide a strict-mode flag, so we enforce it
-        // by prepending a directive prologue.
+        // Keep behavior consistent with the QuickJS backend, which evaluates in
+        // strict mode (it sets JS_EVAL_FLAG_STRICT by default). JavaScriptCore's
+        // JSEvaluateScript has no strict-mode flag, so we enforce it by
+        // prepending a "use strict" directive prologue.
         let mut code_bytes = b"\"use strict\";\n".to_vec();
         code_bytes.extend_from_slice(source.code());
         let code = CString::new(code_bytes).unwrap();
@@ -56,7 +67,7 @@ impl JSContextImpl for JSCContext {
             let result = jsc::JSEvaluateScript(
                 self.raw,
                 js_str,
-                std::ptr::null_mut(), // thisObject (null means use global object)
+                jsc::JSContextGetGlobalObject(self.raw),
                 js_filename,
                 1,
                 &mut exception,
@@ -65,15 +76,9 @@ impl JSContextImpl for JSCContext {
             jsc::JSStringRelease(js_str);
             jsc::JSStringRelease(js_filename);
 
-            // Check if an exception occurred
             if !exception.is_null() {
-                // println!("got exception");
                 return JSCValue::from_owned_raw(self.raw, exception).with_exception();
             }
-            // println!(
-            //     "Result isObject: {}",
-            //     jsc::JSValueIsObject(self.raw, result)
-            // );
             JSCValue::from_owned_raw(self.raw, result)
         }
     }
@@ -226,21 +231,177 @@ impl JSContextImpl for JSCContext {
         }
     }
 
-    fn compile_to_bytecode(&self, _source: rong_core::Source) -> Result<Vec<u8>, RongJSError> {
-        Err(rong_core::HostError::new(
-            rong_core::error::E_NOT_SUPPORTED,
-            "Bytecode is not supported on JavaScriptCore",
-        )
-        .with_data(rong_core::err_data!({ feature: "bytecode" }))
-        .into())
+    #[cfg(jsc_source)]
+    fn compile_to_bytecode(&self, source: rong_core::Source) -> Result<Vec<u8>, RongJSError> {
+        use rong_core::HostError;
+        use std::ffi::CString;
+
+        // Build-time validation requires source artifacts to provide the real
+        // bytecode bridge. Keep this guard as a defensive fallback for manually
+        // linked binaries.
+        if unsafe { jsc::bytecode_bridge::rong_jsc_bytecode_supported() } == 0 {
+            return Err(HostError::new(
+                rong_core::error::E_NOT_SUPPORTED,
+                BYTECODE_UNSUPPORTED_MSG,
+            )
+            .with_data(rong_core::err_data!({ feature: "bytecode" }))
+            .into());
+        }
+
+        let code = source.code();
+        let filename = source.name().unwrap_or("eval");
+
+        // Match the `eval` method: prepend a "use strict" directive prologue
+        // so the compiled bytecode matches what a normal eval would produce.
+        let mut code_with_strict = b"\"use strict\";\n".to_vec();
+        code_with_strict.extend_from_slice(code);
+
+        let filename_cstr = CString::new(filename).map_err(|_| {
+            HostError::new(
+                rong_core::error::E_INVALID_ARG,
+                "Filename contains null byte",
+            )
+        })?;
+
+        unsafe {
+            let result = jsc::bytecode_bridge::rong_jsc_compile_to_bytecode(
+                self.raw,
+                code_with_strict.as_ptr().cast(),
+                code_with_strict.len(),
+                filename_cstr.as_ptr(),
+            );
+
+            // Handle explicit error message from the bridge.
+            if !result.error.is_null() {
+                let msg = std::ffi::CStr::from_ptr(result.error)
+                    .to_string_lossy()
+                    .into_owned();
+                if !result.data.is_null() {
+                    jsc::bytecode_bridge::rong_jsc_free_bytecode(result.data);
+                }
+                jsc::bytecode_bridge::rong_jsc_free_error(result.error);
+                return Err(HostError::new(rong_core::error::E_COMPILE, msg).into());
+            }
+
+            // The bridge should never return NULL data without an error message,
+            // but guard against it anyway.
+            if result.data.is_null() || result.size == 0 {
+                return Err(HostError::new(
+                    rong_core::error::E_COMPILE,
+                    "Bytecode compilation produced no output",
+                )
+                .into());
+            }
+
+            let bytecode = std::slice::from_raw_parts(result.data, result.size).to_vec();
+            jsc::bytecode_bridge::rong_jsc_free_bytecode(result.data);
+            Ok(bytecode)
+        }
     }
 
+    #[cfg(jsc_source)]
+    fn run_bytecode(&self, bytes: &[u8]) -> Self::Value {
+        // Defensive fallback for manually linked binaries without the bridge.
+        if unsafe { jsc::bytecode_bridge::rong_jsc_bytecode_supported() } == 0 {
+            return self
+                .new_error(
+                    "Error",
+                    BYTECODE_UNSUPPORTED_MSG,
+                    Some(rong_core::error::E_NOT_SUPPORTED),
+                )
+                .with_exception();
+        }
+        unsafe {
+            let result =
+                jsc::bytecode_bridge::rong_jsc_run_bytecode(self.raw, bytes.as_ptr(), bytes.len());
+
+            if !result.error.is_null() {
+                let msg = std::ffi::CStr::from_ptr(result.error)
+                    .to_string_lossy()
+                    .into_owned();
+                jsc::bytecode_bridge::rong_jsc_free_error(result.error);
+                return self
+                    .new_error("Error", msg, Some(rong_core::error::E_COMPILE))
+                    .with_exception();
+            }
+
+            if result.value.is_null() {
+                return self
+                    .new_error(
+                        "Error",
+                        "Bytecode execution failed (null result)",
+                        Some(rong_core::error::E_COMPILE),
+                    )
+                    .with_exception();
+            }
+
+            let value = JSCValue::from_owned_raw(self.raw, result.value);
+            if result.is_exception != 0 {
+                value.with_exception()
+            } else {
+                value
+            }
+        }
+    }
+
+    #[cfg(not(jsc_source))]
+    fn compile_to_bytecode(&self, _source: rong_core::Source) -> Result<Vec<u8>, RongJSError> {
+        Err(
+            rong_core::HostError::new(rong_core::error::E_NOT_SUPPORTED, BYTECODE_UNSUPPORTED_MSG)
+                .with_data(rong_core::err_data!({ feature: "bytecode" }))
+                .into(),
+        )
+    }
+
+    #[cfg(not(jsc_source))]
     fn run_bytecode(&self, _bytes: &[u8]) -> Self::Value {
-        todo!()
+        // JavaScriptCore's public C API exposes no bytecode (de)serialization, so
+        // bytecode is unsupported on this backend — mirror `compile_to_bytecode`
+        // by returning a thrown not-supported error instead of panicking.
+        self.new_error(
+            "Error",
+            BYTECODE_UNSUPPORTED_MSG,
+            Some(rong_core::error::E_NOT_SUPPORTED),
+        )
+        .with_exception()
     }
 }
 
 impl JSCContext {
+    pub(crate) fn eval_direct(&self, source: &[u8]) -> JSCValue {
+        let code = match CString::new(source) {
+            Ok(code) => code,
+            Err(_) => {
+                return self
+                    .new_error(
+                        "SyntaxError",
+                        "Source contains an interior null byte",
+                        Some(rong_core::error::E_COMPILE),
+                    )
+                    .with_exception();
+            }
+        };
+        unsafe {
+            let js_str = jsc::JSStringCreateWithUTF8CString(code.as_ptr());
+            let mut exception: jsc::JSValueRef = ptr::null_mut();
+            let result = jsc::JSEvaluateScript(
+                self.raw,
+                js_str,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                1,
+                &mut exception,
+            );
+            jsc::JSStringRelease(js_str);
+
+            if !exception.is_null() {
+                JSCValue::from_owned_raw(self.raw, exception).with_exception()
+            } else {
+                JSCValue::from_owned_raw(self.raw, result)
+            }
+        }
+    }
+
     fn _from_borrowed_raw(ctx: *mut jsc::OpaqueJSContext) -> Self {
         let raw = unsafe { jsc::JSGlobalContextRetain(ctx) };
         Self { raw }

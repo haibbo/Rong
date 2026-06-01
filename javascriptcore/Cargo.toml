@@ -12,6 +12,9 @@ keywords.workspace = true
 categories.workspace = true
 documentation = "https://docs.rs/rong_jscore"
 readme = "README.md"
+[features]
+source = ["rong_jscore_sys/source"]
+
 [dependencies]
 rong_jscore_sys = { workspace = true }
 rong_core = { workspace = true }
