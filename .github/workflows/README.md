@@ -19,6 +19,9 @@
   `skill/bin/pack.mjs`.
 - **Source backend behavior:** `jscore-source-*` is the production-style prebuilt consumer path. It downloads and caches the pinned artifact through `rong_jscore_sys/build.rs`; if no row exists for a supported target, CI fails instead of silently skipping.
 - **Steps:** `cargo fmt --check` plus `cargo make check-engine`, `cargo make clippy-engine`, and `cargo make test-engine`
+- **No standalone Windows JSC workflow:** Windows source support is covered by
+  `build-jsc-artifacts.yml` for producing artifacts and `CI`'s
+  `jscore-source-x86_64-pc-windows-msvc` job for consuming them.
 
 ## `build-jsc-artifacts.yml` (JSC source prebuilds)
 
