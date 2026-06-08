@@ -17,7 +17,7 @@ impl JSArrayOps for JSCValue {
                 array,
                 key,
                 jsc::JSValueMakeNumber(ctx.to_raw(), 0.0),
-                jsc::kJSPropertyAttributeDontEnum,
+                jsc::attr(jsc::kJSPropertyAttributeDontEnum),
                 &mut exception,
             );
             jsc::JSStringRelease(key);
@@ -124,7 +124,7 @@ impl JSArrayOps for JSCValue {
                             self.as_obj(),
                             key,
                             jsc::JSValueMakeNumber(self.ctx, next_len),
-                            jsc::kJSPropertyAttributeDontEnum,
+                            jsc::attr(jsc::kJSPropertyAttributeDontEnum),
                             &mut exception,
                         );
                         jsc::JSStringRelease(key);

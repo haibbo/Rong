@@ -2,9 +2,22 @@
 
 ## `ci.yml` (tests)
 
-- **Trigger:** push + pull_request
-- **Runs:** `cargo fmt` once, then separate host `check`, `clippy`, and `test` jobs on Windows `quickjs`, macOS `quickjs`, and macOS `jscore`
+- **Trigger:** push to `master`, pull_request, and manual `workflow_dispatch`
+- **Concurrency:** PR and branch runs cancel older in-progress runs for the same PR/ref, so the Actions page shows the latest relevant CI instead of stale queued attempts.
+- **Runs:** `cargo fmt` once, then separate host `check`, `clippy`, and `test` jobs:
+  - `quickjs` on Windows, Linux, and macOS
+  - `jscore` on macOS using the system `JavaScriptCore.framework`
+  - `jscore-source-*` on macOS, Linux, and Windows, gated by pinned prebuilt artifact rows in `javascriptcore/sys/webkit-artifacts.tsv`
+- **Source backend behavior:** `jscore-source-*` is the production-style prebuilt consumer path. It downloads and caches the pinned artifact through `rong_jscore_sys/build.rs`; if no row exists for a supported target, CI fails instead of silently skipping.
 - **Steps:** `cargo fmt --check` plus `cargo make check-engine`, `cargo make clippy-engine`, and `cargo make test-engine`
+
+## `build-jsc-artifacts.yml` (JSC source prebuilds)
+
+- **Trigger:** manual (`workflow_dispatch`)
+- **Runs:** builds WebKit/JSCOnly artifacts for supported macOS, Linux, and Windows targets and uploads tarballs to one GitHub Release.
+- **Outputs:** per-target release assets plus TSV rows for `javascriptcore/sys/webkit-artifacts.tsv`.
+- **Purpose:** produce the prebuilt source artifacts consumed by normal `jscore-source` builds. This keeps regular CI and local builds from compiling WebKit and keeps disk usage bounded to the downloaded artifact cache.
+- **Update flow:** run the workflow with one release tag and either a WebKit tag/SHA or a branch that the workflow resolves to a fixed commit, review the emitted TSV rows, paste them into `javascriptcore/sys/webkit-artifacts.tsv`, then run `CI` to verify prebuilt consumption.
 
 ## `harmony-self-hosted.yml` (Harmony self-hosted)
 
@@ -29,6 +42,7 @@
 ```bash
 cargo make ci-verify
 ENGINE=jscore cargo make ci-verify
+RONG_JSC_SOURCE=1 ENGINE=jscore cargo make ci-verify
 cargo make ci-verify-all
 ```
 

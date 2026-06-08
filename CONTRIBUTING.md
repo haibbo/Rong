@@ -86,8 +86,8 @@ Run them manually:
 
 - `quickjs`: default local engine; CI runs it on Windows and macOS
 - `jscore`: secondary CI engine; CI runs it on macOS (system framework). It also
-  builds and tests on other hosts via the source backend when a WebKit/JSCOnly
-  artifact is available (see [`javascriptcore/sys/README.md`](javascriptcore/sys/README.md));
+  builds and tests on supported source-backend hosts when a
+  WebKit/JSCOnly artifact is available (see [`javascriptcore/sys/README.md`](javascriptcore/sys/README.md));
   `test.sh` skips `jscore` on non-Apple hosts that have no artifact configured.
 - `arkjs`: verified separately through Harmony/OHOS checks; not part of the default host verification gate
 

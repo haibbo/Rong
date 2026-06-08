@@ -100,7 +100,7 @@ impl JSObjectOps for JSCValue {
                     self.as_obj(),
                     key,
                     value.as_value(),
-                    jsc::kJSPropertyAttributeNone,
+                    jsc::attr(jsc::kJSPropertyAttributeNone),
                     &mut exception,
                 );
                 jsc::JSStringRelease(key);
@@ -116,7 +116,7 @@ impl JSObjectOps for JSCValue {
                 self.as_obj(),
                 key.as_value(),
                 value.as_value(),
-                jsc::kJSPropertyAttributeNone,
+                jsc::attr(jsc::kJSPropertyAttributeNone),
                 &mut exception,
             );
 
@@ -161,7 +161,7 @@ impl JSObjectOps for JSCValue {
                     descriptor,
                     value_str,
                     value.as_value(),
-                    jsc::kJSPropertyAttributeNone,
+                    jsc::attr(jsc::kJSPropertyAttributeNone),
                     &mut exception,
                 );
                 jsc::JSStringRelease(value_str);
@@ -177,7 +177,7 @@ impl JSObjectOps for JSCValue {
                     descriptor,
                     get_str,
                     getter.as_value(),
-                    jsc::kJSPropertyAttributeNone,
+                    jsc::attr(jsc::kJSPropertyAttributeNone),
                     &mut exception,
                 );
                 jsc::JSStringRelease(get_str);
@@ -193,7 +193,7 @@ impl JSObjectOps for JSCValue {
                     descriptor,
                     set_str,
                     setter.as_value(),
-                    jsc::kJSPropertyAttributeNone,
+                    jsc::attr(jsc::kJSPropertyAttributeNone),
                     &mut exception,
                 );
                 jsc::JSStringRelease(set_str);
@@ -212,9 +212,9 @@ impl JSObjectOps for JSCValue {
                     enumerable_str,
                     jsc::JSValueMakeBoolean(
                         self.ctx,
-                        (flags & jsc::kJSPropertyAttributeDontEnum) == 0,
+                        (flags & jsc::attr(jsc::kJSPropertyAttributeDontEnum)) == 0,
                     ),
-                    jsc::kJSPropertyAttributeNone,
+                    jsc::attr(jsc::kJSPropertyAttributeNone),
                     &mut exception,
                 );
                 jsc::JSStringRelease(enumerable_str);
@@ -231,9 +231,9 @@ impl JSObjectOps for JSCValue {
                     configurable_str,
                     jsc::JSValueMakeBoolean(
                         self.ctx,
-                        (flags & jsc::kJSPropertyAttributeDontDelete) == 0,
+                        (flags & jsc::attr(jsc::kJSPropertyAttributeDontDelete)) == 0,
                     ),
-                    jsc::kJSPropertyAttributeNone,
+                    jsc::attr(jsc::kJSPropertyAttributeNone),
                     &mut exception,
                 );
                 jsc::JSStringRelease(configurable_str);
@@ -250,9 +250,9 @@ impl JSObjectOps for JSCValue {
                     writable_str,
                     jsc::JSValueMakeBoolean(
                         self.ctx,
-                        (flags & jsc::kJSPropertyAttributeReadOnly) == 0,
+                        (flags & jsc::attr(jsc::kJSPropertyAttributeReadOnly)) == 0,
                     ),
-                    jsc::kJSPropertyAttributeNone,
+                    jsc::attr(jsc::kJSPropertyAttributeNone),
                     &mut exception,
                 );
                 jsc::JSStringRelease(writable_str);
@@ -403,16 +403,16 @@ impl JSObjectOps for JSCValue {
 }
 
 fn to_jsc_attributes(attr: PropertyAttributes) -> u32 {
-    let mut flags = jsc::kJSPropertyAttributeNone;
+    let mut flags = jsc::attr(jsc::kJSPropertyAttributeNone);
 
     if !attr.is_writable() {
-        flags |= jsc::kJSPropertyAttributeReadOnly;
+        flags |= jsc::attr(jsc::kJSPropertyAttributeReadOnly);
     }
     if !attr.is_enumerable() {
-        flags |= jsc::kJSPropertyAttributeDontEnum
+        flags |= jsc::attr(jsc::kJSPropertyAttributeDontEnum)
     }
     if !attr.is_configurable() {
-        flags |= jsc::kJSPropertyAttributeDontDelete
+        flags |= jsc::attr(jsc::kJSPropertyAttributeDontDelete)
     }
 
     flags

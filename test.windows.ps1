@@ -30,10 +30,7 @@ function Get-JscoreFeatures {
 }
 
 function Test-JscoreSourceConfigured {
-    return [bool](
-        $env:RONG_JSC_SOURCE -or
-        $env:RONG_JSC_ROOT
-    )
+    return [bool]($env:RONG_JSC_SOURCE -or $env:RONG_JSC_ROOT)
 }
 
 function Log-Info([string]$Message) {
@@ -249,6 +246,10 @@ if ($Help) {
 
 $engines = @("quickjs")
 if ($Engine -eq "jscore") {
+    if (-not (Test-JscoreSourceConfigured)) {
+        Log-Fail "jscore tests on Windows require RONG_JSC_SOURCE=1 or RONG_JSC_ROOT"
+        exit 1
+    }
     $engines = @("jscore")
 }
 if ($Engine -eq "all") {

@@ -493,7 +493,7 @@ impl JSCContext {
                             obj,
                             name_key,
                             name_value,
-                            jsc::kJSPropertyAttributeDontEnum,
+                            jsc::attr(jsc::kJSPropertyAttributeDontEnum),
                             ptr::null_mut(),
                         );
                         jsc::JSStringRelease(name_key);
@@ -515,7 +515,7 @@ impl JSCContext {
                     obj,
                     name_key,
                     name_value,
-                    jsc::kJSPropertyAttributeDontEnum,
+                    jsc::attr(jsc::kJSPropertyAttributeDontEnum),
                     ptr::null_mut(),
                 );
                 jsc::JSStringRelease(name_key);
@@ -533,7 +533,7 @@ impl JSCContext {
                     error,
                     code_key,
                     code_value,
-                    jsc::kJSPropertyAttributeDontEnum,
+                    jsc::attr(jsc::kJSPropertyAttributeDontEnum),
                     ptr::null_mut(),
                 );
                 jsc::JSStringRelease(code_key);

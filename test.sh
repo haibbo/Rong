@@ -40,6 +40,14 @@ jscore_features() {
     echo "$feature_set"
 }
 
+run_cargo_test() {
+    if [[ -n "${RONG_TEST_TIMEOUT_SECONDS:-}" ]] && command -v perl >/dev/null 2>&1; then
+        perl -e 'alarm shift; exec @ARGV' "$RONG_TEST_TIMEOUT_SECONDS" cargo test "$@"
+    else
+        cargo test "$@"
+    fi
+}
+
 host_is_apple() {
     rustc -vV | grep -q '^host: .*apple'
 }
@@ -47,6 +55,55 @@ host_is_apple() {
 jscore_source_configured() {
     [[ -n "${RONG_JSC_SOURCE:-}" ]] ||
         [[ -n "${RONG_JSC_ROOT:-}" ]]
+}
+
+jscore_source_lib_dir() {
+    local target
+    target="$(rustc -vV | awk '/^host: / { print $2; exit }')"
+
+    if [[ -n "${RONG_JSC_ROOT:-}" ]]; then
+        local dirs=(
+            "$RONG_JSC_ROOT/lib"
+            "$RONG_JSC_ROOT/usr/lib"
+            "$RONG_JSC_ROOT/WebKitBuild/JSCOnly/Release/lib"
+            "$RONG_JSC_ROOT/WebKitBuild/Release/lib"
+        )
+        local dir
+        for dir in "${dirs[@]}"; do
+            if [[ -d "$dir/JavaScriptCore.framework" ]]; then
+                echo "$dir"
+                return 0
+            fi
+        done
+        echo "$RONG_JSC_ROOT/lib"
+        return 0
+    fi
+
+    local cache_base
+    if [[ -n "${RONG_JSC_CACHE_DIR:-}" ]]; then
+        cache_base="$RONG_JSC_CACHE_DIR"
+    else
+        cache_base="${XDG_CACHE_HOME:-$HOME/.cache}/rong/webkit"
+    fi
+    echo "$cache_base/$target/lib"
+}
+
+configure_jscore_source_apple_runtime() {
+    local engine=$1
+    if [[ "$engine" != "jscore" ]] || ! host_is_apple || ! jscore_source_configured; then
+        return 0
+    fi
+
+    local lib_dir
+    lib_dir="$(jscore_source_lib_dir)"
+    [[ -n "$lib_dir" ]] || return 0
+
+    case " ${RUSTFLAGS:-} " in
+        *"-Wl,-rpath,$lib_dir"*) ;;
+        *) export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-Wl,-rpath,$lib_dir" ;;
+    esac
+    export DYLD_FRAMEWORK_PATH="$lib_dir${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}"
+    log_info "Using JSC source framework path: $lib_dir"
 }
 
 ENGINES=("quickjs")
@@ -153,7 +210,7 @@ run_core_test() {
     log_info "Running core test: $test_name (engine: $engine)"
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
-    if cargo test --release --test="$test_name" --no-default-features --features="$feature_set" --quiet; then
+    if run_cargo_test --release --test="$test_name" --no-default-features --features="$feature_set" --quiet; then
         log_success "Core test $test_name passed on $engine"
         PASSED_TESTS=$((PASSED_TESTS + 1))
         return 0
@@ -182,7 +239,7 @@ run_module_test() {
         feature_set="$(jscore_features)"
     fi
 
-    if cargo test -p "$module_name" --no-default-features --features="$feature_set" --quiet; then
+    if run_cargo_test -p "$module_name" --no-default-features --features="$feature_set" --quiet; then
         log_success "Module test $module_name passed on $engine"
         PASSED_TESTS=$((PASSED_TESTS + 1))
         return 0
@@ -320,6 +377,7 @@ print_header
 # Main execution
 for engine in "${ENGINES[@]}"; do
     echo -e "\n${YELLOW}Testing with engine: $engine${NC}"
+    configure_jscore_source_apple_runtime "$engine"
 
     if [[ -n "$TEST_FILTER" ]]; then
         # Run specific test

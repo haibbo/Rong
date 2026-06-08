@@ -4,6 +4,11 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   fmt:
@@ -30,6 +35,8 @@ jobs:
           - engine: quickjs
             os: windows-latest
           - engine: quickjs
+            os: ubuntu-latest
+          - engine: quickjs
             os: macos-latest
           - engine: jscore
             os: macos-latest
@@ -57,7 +64,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
           brew install llvm
-          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
 
       - name: Check
         env:
@@ -74,6 +81,8 @@ jobs:
           - engine: quickjs
             os: windows-latest
           - engine: quickjs
+            os: ubuntu-latest
+          - engine: quickjs
             os: macos-latest
           - engine: jscore
             os: macos-latest
@@ -101,7 +110,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
           brew install llvm
-          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
 
       - name: Clippy
         env:
@@ -118,6 +127,8 @@ jobs:
           - engine: quickjs
             os: windows-latest
           - engine: quickjs
+            os: ubuntu-latest
+          - engine: quickjs
             os: macos-latest
           - engine: jscore
             os: macos-latest
@@ -145,9 +156,237 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
           brew install llvm
-          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
 
-      - name: Test
+      - name: Test (Unix)
+        if: runner.os != 'Windows'
         env:
           ENGINE: ${{ matrix.engine }}
-        run: cargo make test-engine
+          CARGO_TERM_COLOR: never
+          RONG_TEST_TIMEOUT_SECONDS: "600"
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/host-test-${{ matrix.engine }}.log"
+          if ! cargo make test-engine 2>&1 | tee "$log"; then
+            tail_text="$(tail -n 160 "$log")"
+            tail_text="${tail_text//'%'/'%25'}"
+            tail_text="${tail_text//$'\r'/'%0D'}"
+            tail_text="${tail_text//$'\n'/'%0A'}"
+            echo "::error title=Host test failed::$tail_text"
+            exit 1
+          fi
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          ENGINE: ${{ matrix.engine }}
+          CARGO_TERM_COLOR: never
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "host-test-$env:ENGINE.log"
+          & cargo make test-engine 2>&1 | Tee-Object -FilePath $log
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) {
+            $tailText = (Get-Content -Path $log -Tail 160) -join "`n"
+            $tailText = $tailText.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+            Write-Output "::error title=Host test failed::$tailText"
+            exit $exitCode
+          }
+
+  jscore-source-test:
+    needs: fmt
+    name: jscore-source-${{ matrix.target }} (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    env:
+      RONG_JSC_CACHE_DIR: ${{ github.workspace }}/.jsc-cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Check pinned JSC source artifact
+        id: source-artifact
+        shell: bash
+        run: |
+          if grep -Eq "^${{ matrix.target }}[[:space:]]" javascriptcore/sys/webkit-artifacts.tsv; then
+            echo "run_source=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error title=Missing pinned JSC source artifact::No javascriptcore/sys/webkit-artifacts.tsv row for ${{ matrix.target }}."
+            echo "Run build-jsc-artifacts.yml with a pinned WebKit ref, add its row, and rerun CI."
+            exit 1
+          fi
+
+      - name: Install Rust
+        if: steps.source-artifact.outputs.run_source == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache JSC source artifact
+        if: steps.source-artifact.outputs.run_source == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.RONG_JSC_CACHE_DIR }}/${{ matrix.target }}
+          key: jsc-source-${{ matrix.target }}-${{ hashFiles('javascriptcore/sys/webkit-artifacts.tsv') }}
+
+      - name: Cache cargo
+        if: steps.source-artifact.outputs.run_source == 'true'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-make
+        if: steps.source-artifact.outputs.run_source == 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-make
+
+      - name: Install libclang (Linux)
+        if: steps.source-artifact.outputs.run_source == 'true' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang libicu-dev
+
+      - name: Install libclang (macOS)
+        if: steps.source-artifact.outputs.run_source == 'true' && runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
+
+      - name: Install libclang (Windows)
+        if: steps.source-artifact.outputs.run_source == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Check JSC source backend (Unix)
+        if: steps.source-artifact.outputs.run_source == 'true' && runner.os != 'Windows'
+        env:
+          ENGINE: jscore
+          RONG_JSC_SOURCE: "1"
+          RONG_JSC_DOWNLOAD: "1"
+          RONG_JSC_REQUIRE_BYTECODE: "1"
+          CARGO_TERM_COLOR: never
+          RONG_TEST_TIMEOUT_SECONDS: "600"
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/jscore-source-check.log"
+          if ! cargo make check-engine 2>&1 | tee "$log"; then
+            tail_text="$(tail -n 120 "$log")"
+            tail_text="${tail_text//'%'/'%25'}"
+            tail_text="${tail_text//$'\r'/'%0D'}"
+            tail_text="${tail_text//$'\n'/'%0A'}"
+            echo "::error title=JSC source check failed::$tail_text"
+            exit 1
+          fi
+
+      - name: Check JSC source backend (Windows)
+        if: steps.source-artifact.outputs.run_source == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        env:
+          ENGINE: jscore
+          RONG_JSC_SOURCE: "1"
+          RONG_JSC_DOWNLOAD: "1"
+          RONG_JSC_REQUIRE_BYTECODE: "1"
+          CARGO_TERM_COLOR: never
+          RONG_TEST_TIMEOUT_SECONDS: "600"
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "jscore-source-check.log"
+          & cargo make check-engine 2>&1 | Tee-Object -FilePath $log
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) {
+            $tailText = (Get-Content -Path $log -Tail 120) -join "`n"
+            $tailText = $tailText.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+            Write-Output "::error title=JSC source check failed::$tailText"
+            exit $exitCode
+          }
+
+      - name: Clippy JSC source backend (Unix)
+        if: steps.source-artifact.outputs.run_source == 'true' && runner.os != 'Windows'
+        env:
+          ENGINE: jscore
+          RONG_JSC_SOURCE: "1"
+          RONG_JSC_DOWNLOAD: "1"
+          RONG_JSC_REQUIRE_BYTECODE: "1"
+          CARGO_TERM_COLOR: never
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/jscore-source-clippy.log"
+          if ! cargo make clippy-engine 2>&1 | tee "$log"; then
+            tail_text="$(tail -n 120 "$log")"
+            tail_text="${tail_text//'%'/'%25'}"
+            tail_text="${tail_text//$'\r'/'%0D'}"
+            tail_text="${tail_text//$'\n'/'%0A'}"
+            echo "::error title=JSC source clippy failed::$tail_text"
+            exit 1
+          fi
+
+      - name: Clippy JSC source backend (Windows)
+        if: steps.source-artifact.outputs.run_source == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        env:
+          ENGINE: jscore
+          RONG_JSC_SOURCE: "1"
+          RONG_JSC_DOWNLOAD: "1"
+          RONG_JSC_REQUIRE_BYTECODE: "1"
+          CARGO_TERM_COLOR: never
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "jscore-source-clippy.log"
+          & cargo make clippy-engine 2>&1 | Tee-Object -FilePath $log
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) {
+            $tailText = (Get-Content -Path $log -Tail 120) -join "`n"
+            $tailText = $tailText.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+            Write-Output "::error title=JSC source clippy failed::$tailText"
+            exit $exitCode
+          }
+
+      - name: Test JSC source backend (Unix)
+        if: steps.source-artifact.outputs.run_source == 'true' && runner.os != 'Windows'
+        env:
+          ENGINE: jscore
+          RONG_JSC_SOURCE: "1"
+          RONG_JSC_DOWNLOAD: "1"
+          RONG_JSC_REQUIRE_BYTECODE: "1"
+          CARGO_TERM_COLOR: never
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/jscore-source-test.log"
+          if ! cargo make test-engine 2>&1 | tee "$log"; then
+            tail_text="$(tail -n 120 "$log")"
+            tail_text="${tail_text//'%'/'%25'}"
+            tail_text="${tail_text//$'\r'/'%0D'}"
+            tail_text="${tail_text//$'\n'/'%0A'}"
+            echo "::error title=JSC source test failed::$tail_text"
+            exit 1
+          fi
+
+      - name: Test JSC source backend (Windows)
+        if: steps.source-artifact.outputs.run_source == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        env:
+          ENGINE: jscore
+          RONG_JSC_SOURCE: "1"
+          RONG_JSC_DOWNLOAD: "1"
+          RONG_JSC_REQUIRE_BYTECODE: "1"
+          CARGO_TERM_COLOR: never
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "jscore-source-test.log"
+          & cargo make test-engine 2>&1 | Tee-Object -FilePath $log
+          $exitCode = $LASTEXITCODE
+          if ($exitCode -ne 0) {
+            $tailText = (Get-Content -Path $log -Tail 120) -join "`n"
+            $tailText = $tailText.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+            Write-Output "::error title=JSC source test failed::$tailText"
+            exit $exitCode
+          }

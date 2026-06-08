@@ -70,10 +70,15 @@ By default it installs into `~/.cache/rong/webkit/<target>/{include,lib}`, so a
 later `RONG_JSC_SOURCE=1 cargo build` (or `./test.sh -e jscore`) needs no env
 var. Useful flags:
 
+- `--check` - validate the host tools/environment before cloning WebKit.
+
 - `--out <dir>` — install elsewhere; then set `RONG_JSC_ROOT=<dir>`.
 - `--package <file.tar.gz>` — also emit a distributable tarball (this is what CI
   uploads to GitHub releases and pins in `webkit-artifacts.tsv`).
 - `--webkit-ref <tag|branch|sha>` — pin the WebKit revision (default: a known-good tag).
+
+Windows/MSVC source artifacts use clang-cl, vcpkg static ICU, and the same
+released-artifact smoke path as the other prebuilt targets.
 
 To build by hand instead, use WebKit's own tooling and point `RONG_JSC_ROOT` at
 the build tree:
@@ -87,6 +92,61 @@ RONG_JSC_ROOT="$PWD/WebKitBuild/JSCOnly/Release" cargo build ...
 The helper validates the installed artifact and runs a bytecode smoke test for
 native builds. The build fails if required headers, libraries, or bytecode
 private headers are missing.
+
+## Updating prebuilt artifacts
+
+Normal source builds should use prebuilt source artifacts. They should not
+compile WebKit in regular CI or on developer machines unless someone is
+intentionally producing a new artifact. The update flow is:
+
+1. Pick and pin a WebKit revision.
+   Use a tag or exact commit SHA, not `main`, for artifacts that will be
+   published and consumed by others.
+
+2. Run the manual GitHub workflow:
+
+   ```text
+   .github/workflows/build-jsc-artifacts.yml
+   ```
+
+   Inputs:
+
+   - `webkit_ref`: the pinned WebKit tag/branch/SHA to build.
+   - `release_tag`: the GitHub Release tag that will hold the tarballs.
+
+   The workflow builds the supported macOS, Linux, and Windows targets, uploads
+   `rong-webkit-<target>.tar.gz` assets to the release, and emits TSV rows in
+   its summary and `webkit-artifacts-additions` artifact.
+
+3. Review the emitted rows and paste them into
+   `javascriptcore/sys/webkit-artifacts.tsv`.
+
+   Each row is:
+
+   ```text
+   <target-triple> <release-tag> <filename> <sha256>
+   ```
+
+   The checksum is what `build.rs` verifies before extracting the artifact into
+   the per-target cache.
+
+4. Run the normal `CI` workflow.
+
+   Once rows exist, the corresponding `jscore-source-test` jobs stop skipping.
+   They exercise the production path: `build.rs` downloads the pinned prebuilt
+   artifact, verifies the SHA-256, extracts it into `RONG_JSC_CACHE_DIR`, and
+   runs `ENGINE=jscore RONG_JSC_SOURCE=1 RONG_JSC_REQUIRE_BYTECODE=1 cargo make
+   ci-verify`.
+
+5. Merge only after both sides pass:
+
+   - `build-jsc-artifacts.yml` produced valid release assets and TSV rows.
+   - `ci.yml` consumed those rows and passed `jscore-source-test` for every
+     pinned target.
+
+If an artifact must be disabled temporarily, remove or comment out its row in
+`webkit-artifacts.tsv`. The corresponding CI job will explicitly skip and tell
+maintainers to rebuild/pin an artifact.
 
 ## Bytecode
 

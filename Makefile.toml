@@ -22,7 +22,7 @@ windows_alias = "check-engine-windows"
 [tasks.check-engine-unix]
 script_runner = "@shell"
 script = '''
-set -euo pipefail
+set -eu
 
 workspace_args="${WORKSPACE_ARGS}"
 host_target=""
@@ -83,15 +83,16 @@ if ($workspaceArgs.Count -eq 0) {
     )
 }
 
+$engineFeatures = "$env:ENGINE,$env:HOST_TLS_BACKEND"
+if ($env:ENGINE -eq "jscore" -and $env:RONG_JSC_SOURCE) {
+    $engineFeatures = "$engineFeatures,rong/jscore-source"
+}
+
 if ($env:ENGINE -eq "quickjs") {
     $workspaceArgs += @("--exclude", "rong_jscore", "--exclude", "rong_jscore_sys")
-    & cargo check @workspaceArgs --lib --bins --tests "--no-default-features" "--features=quickjs,$env:HOST_TLS_BACKEND"
+    & cargo check @workspaceArgs --lib --bins --tests "--no-default-features" "--features=$engineFeatures"
 } elseif ($env:ENGINE -eq "jscore") {
     $workspaceArgs += @("--exclude", "rong_quickjs", "--exclude", "rong_quickjs_sys")
-    $engineFeatures = "jscore,$env:HOST_TLS_BACKEND"
-    if ($env:RONG_JSC_SOURCE) {
-        $engineFeatures = "$engineFeatures,rong/jscore-source"
-    }
     & cargo check @workspaceArgs --lib --bins --tests "--no-default-features" "--features=$engineFeatures"
 } elseif ($env:ENGINE -eq "arkjs") {
     throw "Use 'cargo make check-arkjs-ohos' for ArkJS"
@@ -110,7 +111,7 @@ windows_alias = "clippy-engine-windows"
 [tasks.clippy-engine-unix]
 script_runner = "@shell"
 script = '''
-set -euo pipefail
+set -eu
 
 workspace_args="${WORKSPACE_ARGS}"
 host_target=""
@@ -171,15 +172,16 @@ if ($workspaceArgs.Count -eq 0) {
     )
 }
 
+$engineFeatures = "$env:ENGINE,$env:HOST_TLS_BACKEND"
+if ($env:ENGINE -eq "jscore" -and $env:RONG_JSC_SOURCE) {
+    $engineFeatures = "$engineFeatures,rong/jscore-source"
+}
+
 if ($env:ENGINE -eq "quickjs") {
     $workspaceArgs += @("--exclude", "rong_jscore", "--exclude", "rong_jscore_sys")
-    & cargo clippy @workspaceArgs --lib --bins --tests "--no-default-features" "--features=quickjs,$env:HOST_TLS_BACKEND" -- -D warnings
+    & cargo clippy @workspaceArgs --lib --bins --tests "--no-default-features" "--features=$engineFeatures" -- -D warnings
 } elseif ($env:ENGINE -eq "jscore") {
     $workspaceArgs += @("--exclude", "rong_quickjs", "--exclude", "rong_quickjs_sys")
-    $engineFeatures = "jscore,$env:HOST_TLS_BACKEND"
-    if ($env:RONG_JSC_SOURCE) {
-        $engineFeatures = "$engineFeatures,rong/jscore-source"
-    }
     & cargo clippy @workspaceArgs --lib --bins --tests "--no-default-features" "--features=$engineFeatures" -- -D warnings
 } elseif ($env:ENGINE -eq "arkjs") {
     throw "Use 'cargo make clippy-arkjs-ohos' for ArkJS"
@@ -198,7 +200,7 @@ windows_alias = "check-arkjs-ohos-windows"
 [tasks.check-arkjs-ohos-unix]
 script_runner = "@shell"
 script = '''
-set -euo pipefail
+set -eu
 
 if [ -z "${OHOS_NDK_HOME:-}" ]; then
   echo "OHOS_NDK_HOME is not set" >&2
@@ -245,7 +247,7 @@ windows_alias = "clippy-arkjs-ohos-windows"
 [tasks.clippy-arkjs-ohos-unix]
 script_runner = "@shell"
 script = '''
-set -euo pipefail
+set -eu
 
 if [ -z "${OHOS_NDK_HOME:-}" ]; then
   echo "OHOS_NDK_HOME is not set" >&2
@@ -315,7 +317,7 @@ windows_alias = "ci-verify-all-windows"
 [tasks.ci-verify-all-unix]
 script_runner = "@shell"
 script = '''
-set -euo pipefail
+set -eu
 
 host_target=""
 while IFS= read -r line; do
@@ -358,7 +360,7 @@ args = [
 $ErrorActionPreference = "Stop"
 $engines = @("quickjs")
 if ($env:RONG_JSC_SOURCE -or $env:RONG_JSC_ROOT) {
-    $engines = @("quickjs", "jscore")
+    $engines += "jscore"
 }
 
 foreach ($engine in $engines) {
@@ -380,7 +382,7 @@ windows_alias = "help-windows"
 [tasks.help-unix]
 script_runner = "@shell"
 script = '''
-set -euo pipefail
+set -eu
 
 host_target=""
 while IFS= read -r line; do

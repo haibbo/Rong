@@ -56,12 +56,12 @@ fn generate_bindings(header_file: &Path, clang_args: &[String]) {
 /// `rong_jsc_*` symbols are always defined and gating the Rust side on
 /// `jsc_source` alone never produces an undefined-symbol link error. When the
 /// artifact ships JSC's private/internal headers under
-/// `<cache>/include/JavaScriptCore/private/` plus the transitive WTF/bmalloc
-/// headers, the real implementation is built
+/// `<cache>/include/JavaScriptCore/private/JavaScriptCore/` plus the transitive
+/// WTF/bmalloc headers, the real implementation is built
 /// (`-DRONG_JSC_HAVE_PRIVATE_HEADERS`). Release artifacts must include those
 /// headers; set `RONG_JSC_REQUIRE_BYTECODE=1` to make missing bytecode support a
 /// build error.
-fn compile_bytecode_bridge(include_dir: &Path, target_os: &str) {
+fn compile_bytecode_bridge(include_dir: &Path, target_os: &str, target: &str) {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let bridge_src = manifest_dir.join("src").join("bytecode_bridge.cpp");
 
@@ -71,11 +71,16 @@ fn compile_bytecode_bridge(include_dir: &Path, target_os: &str) {
     println!("cargo:rerun-if-changed={}", bridge_src.display());
 
     let private_jsc = include_dir.join("JavaScriptCore").join("private");
+    let nested_private_jsc = private_jsc.join("JavaScriptCore");
     let wtf_dir = include_dir.join("WTF");
     let bmalloc_dir = include_dir.join("bmalloc");
-    let have_private_headers = private_jsc.is_dir()
+    let have_nested_private_headers = nested_private_jsc.is_dir()
+        && nested_private_jsc.join("Completion.h").exists()
+        && nested_private_jsc.join("BytecodeCacheError.h").exists();
+    let have_flat_private_headers = private_jsc.is_dir()
         && private_jsc.join("Completion.h").exists()
-        && private_jsc.join("BytecodeCacheError.h").exists()
+        && private_jsc.join("BytecodeCacheError.h").exists();
+    let have_private_headers = (have_nested_private_headers || have_flat_private_headers)
         && wtf_dir.is_dir()
         && bmalloc_dir.is_dir();
 
@@ -87,25 +92,74 @@ fn compile_bytecode_bridge(include_dir: &Path, target_os: &str) {
         .include(include_dir)
         // public (alternate):  #include "JSContextRef.h"
         .include(include_dir.join("JavaScriptCore"))
-        .flag("-std=c++20")
-        .flag("-fno-exceptions")
-        .flag("-fno-rtti")
         .warnings(false);
+
+    // Current WebKit private headers use C++23 library features such as
+    // `std::unexpected` and `std::to_underlying`. cc-rs does not currently map
+    // `c++23` to an MSVC `/std:` spelling, so pass that one explicitly.
+    if target.ends_with("-pc-windows-msvc") {
+        add_windows_llvm_to_path();
+        build.prefer_clang_cl_over_msvc(true);
+        build.flag("/std:c++latest");
+        // WebKit's Windows port is normally built with clang-cl, whose
+        // preprocessor defines these GCC-compatible target macros. Plain cl.exe
+        // does not, but installed headers such as PlatformCPU.h still test them.
+        if target.starts_with("x86_64-") || target.starts_with("aarch64-") {
+            build.define("__SIZEOF_POINTER__", Some("8"));
+        } else if target.starts_with("i686-") || target.starts_with("i586-") {
+            build.define("__SIZEOF_POINTER__", Some("4"));
+        }
+        build
+            .define("__ORDER_LITTLE_ENDIAN__", Some("1234"))
+            .define("__ORDER_BIG_ENDIAN__", Some("4321"))
+            .define("__ORDER_PDP_ENDIAN__", Some("3412"))
+            .define("__BYTE_ORDER__", Some("__ORDER_LITTLE_ENDIAN__"))
+            .define("STATICALLY_LINKED_WITH_JavaScriptCore", None)
+            .define("STATICALLY_LINKED_WITH_WTF", None)
+            .define("NOMINMAX", None)
+            .define("WIN32_LEAN_AND_MEAN", None);
+    } else {
+        build.std("c++23");
+    }
+    // Prebuilt/source artifacts are Release WebKit builds. Keep the bridge's
+    // view of WebKit private headers in release mode even when Rust is building
+    // debug tests; otherwise private inline helpers reference debug-only JSC
+    // symbols that are not shipped in the release static archives.
+    build.define("NDEBUG", None);
+    if env::var("PROFILE").as_deref() != Ok("release") {
+        build.define("RELEASE_WITHOUT_OPTIMIZATIONS", None);
+    }
+
+    // Match how WebKit compiles JSC (exceptions + RTTI off). `flag_if_supported`
+    // probes each flag and drops it where the compiler rejects it, so the same
+    // call set covers gcc/clang (`-fno-*`), clang-cl (accepts both), and a bare
+    // MSVC `cl.exe` fallback (`/GR-`, `/EHs-c-`). WebKit's private headers
+    // realistically require clang/clang-cl regardless.
+    for flag in ["-fno-exceptions", "-fno-rtti", "/GR-", "/EHs-c-"] {
+        build.flag_if_supported(flag);
+    }
 
     if have_private_headers {
         build
             // Selects the real implementation in bytecode_bridge.cpp.
             .define("RONG_JSC_HAVE_PRIVATE_HEADERS", None)
-            // private:  #include "VM.h", "BytecodeCache.h", etc.
+            // private:  #include <JavaScriptCore/VM.h>, etc. New source
+            // artifacts store these under private/JavaScriptCore; flat-only
+            // local artifacts still work through bytecode_bridge.cpp fallback.
             .include(&private_jsc);
         // WTF/bmalloc headers are pulled transitively by JSC private headers.
         build.include(&wtf_dir);
         build.include(&bmalloc_dir);
+        let icu_dir = include_dir.join("icu");
+        if icu_dir.is_dir() {
+            build.include(icu_dir);
+        }
     } else if env::var("RONG_JSC_REQUIRE_BYTECODE").as_deref() == Ok("1") {
         panic!(
             "source JavaScriptCore artifact is incomplete: expected private headers at {} \
-             plus WTF and bmalloc headers under {}. Build or download a full JSCOnly artifact \
-             with bytecode support.",
+             (or legacy flat headers at {}) plus WTF and bmalloc headers under {}. Build or \
+             download a full JSCOnly artifact with bytecode support.",
+            nested_private_jsc.display(),
             private_jsc.display(),
             include_dir.display()
         );
@@ -114,7 +168,7 @@ fn compile_bytecode_bridge(include_dir: &Path, target_os: &str) {
             "cargo:warning=rong_jscore_sys: JSC private headers not found at {}; \
              building the bytecode bridge stub (bytecode will be unsupported). \
              Set RONG_JSC_REQUIRE_BYTECODE=1 to reject this artifact.",
-            private_jsc.display()
+            nested_private_jsc.display()
         );
     }
 
@@ -134,6 +188,27 @@ fn compile_bytecode_bridge(include_dir: &Path, target_os: &str) {
     }
 
     build.compile("jsc_bytecode_bridge");
+}
+
+fn add_windows_llvm_to_path() {
+    let llvm_bin = Path::new(r"C:\Program Files\LLVM\bin");
+    if !llvm_bin.join("clang-cl.exe").exists() {
+        return;
+    }
+
+    let old_path = env::var_os("PATH").unwrap_or_default();
+    let already_present = env::split_paths(&old_path).any(|path| path == llvm_bin);
+    if already_present {
+        return;
+    }
+
+    let mut paths = vec![llvm_bin.to_path_buf()];
+    paths.extend(env::split_paths(&old_path));
+    if let Ok(new_path) = env::join_paths(paths) {
+        unsafe {
+            env::set_var("PATH", new_path);
+        }
+    }
 }
 
 /// Resolve the Apple SDK path via `xcrun` for the given target OS.
@@ -208,15 +283,20 @@ fn build_source(target_os: &str) {
 
     // Compile the C++ bytecode bridge (source backend only — the system
     // framework doesn't provide the private headers needed).
-    compile_bytecode_bridge(&source.include, target_os);
+    compile_bytecode_bridge(&source.include, target_os, &target);
 
     // A vanilla JSCOnly build on Apple produces a `JavaScriptCore.framework`
     // (dynamic) rather than the static `.a` set; link it as a framework. The
-    // artifact is expected to carry an absolute install name, so no rpath is
-    // needed in dependent binaries.
-    if source.lib.join("JavaScriptCore.framework").is_dir() {
+    // artifact is relocatable, so stamp the local extracted framework with its
+    // current absolute install name before consumers link against it.
+    let framework_dir = source.lib.join("JavaScriptCore.framework");
+    if framework_dir.is_dir() {
+        stamp_apple_framework_install_name(&framework_dir);
         println!("cargo:rustc-link-search=framework={}", source.lib.display());
         println!("cargo:rustc-link-lib=framework=JavaScriptCore");
+        if matches!(target_os, "macos" | "ios" | "tvos" | "watchos") {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", source.lib.display());
+        }
     } else {
         println!("cargo:rustc-link-search=native={}", source.lib.display());
         for lib in link_libs(target_os) {
@@ -228,6 +308,45 @@ fn build_source(target_os: &str) {
     emit_metadata("backend", "source");
     emit_metadata("include", &source.include.display().to_string());
     emit_metadata("lib", &source.lib.display().to_string());
+}
+
+fn stamp_apple_framework_install_name(framework_dir: &Path) {
+    let binary = framework_dir
+        .join("Versions")
+        .read_dir()
+        .ok()
+        .and_then(|entries| {
+            entries.filter_map(Result::ok).find_map(|entry| {
+                let candidate = entry.path().join("JavaScriptCore");
+                candidate.is_file().then_some(candidate)
+            })
+        })
+        .or_else(|| {
+            let candidate = framework_dir.join("JavaScriptCore");
+            candidate.is_file().then_some(candidate)
+        });
+    let Some(binary) = binary else {
+        println!(
+            "cargo:warning=rong_jscore_sys: could not find JavaScriptCore framework binary under {}",
+            framework_dir.display()
+        );
+        return;
+    };
+
+    let status = Command::new("install_name_tool")
+        .arg("-id")
+        .arg(&binary)
+        .arg(&binary)
+        .status();
+    match status {
+        Ok(status) if status.success() => {}
+        Ok(status) => {
+            println!("cargo:warning=rong_jscore_sys: install_name_tool failed with status {status}")
+        }
+        Err(err) => {
+            println!("cargo:warning=rong_jscore_sys: could not run install_name_tool: {err}")
+        }
+    }
 }
 
 struct SourceLayout {
@@ -296,7 +415,7 @@ fn resolve_source_layout(target: &str) -> SourceLayout {
 /// `$HOME/.cache/rong/webkit` (`%USERPROFILE%\.cache\rong\webkit` on Windows).
 fn cache_target_dir(target: &str) -> Option<PathBuf> {
     println!("cargo:rerun-if-env-changed=RONG_JSC_CACHE_DIR");
-    let base = if let Some(dir) = env::var_os("RONG_JSC_CACHE_DIR") {
+    let mut base = if let Some(dir) = env::var_os("RONG_JSC_CACHE_DIR") {
         PathBuf::from(dir)
     } else if let Some(xdg) = env::var_os("XDG_CACHE_HOME") {
         PathBuf::from(xdg).join("rong").join("webkit")
@@ -307,6 +426,9 @@ fn cache_target_dir(target: &str) -> Option<PathBuf> {
             .join("rong")
             .join("webkit")
     };
+    if base.is_relative() {
+        base = env::current_dir().ok()?.join(base);
+    }
     Some(base.join(target))
 }
 
@@ -445,23 +567,53 @@ fn maybe_download(target: &str) {
 /// Download `url` to `dest` using `curl`, falling back to `wget`.
 fn download_file(url: &str, dest: &Path) -> Result<(), String> {
     // curl: -f fail on HTTP error, -S show errors, -L follow redirects
-    // (GitHub release assets 302 to a CDN), --retry for flaky networks.
+    // (GitHub release assets 302 to a CDN), --retry for flaky networks/CDN 504s.
+    let _ = std::fs::remove_file(dest);
     let curl = Command::new("curl")
-        .args(["-fSL", "--retry", "3", "-o"])
+        .args([
+            "-fSL",
+            "--retry",
+            "8",
+            "--retry-delay",
+            "10",
+            "--connect-timeout",
+            "30",
+            "--max-time",
+            "900",
+            "-o",
+        ])
         .arg(dest)
         .arg(url)
         .status();
     match curl {
-        Ok(s) if s.success() => return Ok(()),
-        Ok(s) => return Err(format!("curl exited with {s}")),
-        Err(_) => { /* curl not found — try wget */ }
+        Ok(s) if s.success() => Ok(()),
+        Ok(s) => {
+            let _ = std::fs::remove_file(dest);
+            match download_file_with_wget(url, dest) {
+                Ok(()) => Ok(()),
+                Err(err) => Err(format!("curl exited with {s}; {err}")),
+            }
+        }
+        Err(err) => {
+            let _ = std::fs::remove_file(dest);
+            match download_file_with_wget(url, dest) {
+                Ok(()) => Ok(()),
+                Err(wget_err) => Err(format!("could not run curl: {err}; {wget_err}")),
+            }
+        }
     }
+}
 
-    let wget = Command::new("wget").arg("-O").arg(dest).arg(url).status();
+fn download_file_with_wget(url: &str, dest: &Path) -> Result<(), String> {
+    let wget = Command::new("wget")
+        .args(["--tries=8", "--waitretry=10", "--timeout=30", "-O"])
+        .arg(dest)
+        .arg(url)
+        .status();
     match wget {
         Ok(s) if s.success() => Ok(()),
         Ok(s) => Err(format!("wget exited with {s}")),
-        Err(_) => Err("neither curl nor wget is available to download the artifact".to_string()),
+        Err(err) => Err(format!("could not run wget: {err}")),
     }
 }
 
@@ -567,9 +719,9 @@ mod sha256 {
 
 fn link_libs(target_os: &str) -> Vec<String> {
     let mut libs = vec![
-        "static=JavaScriptCore".to_string(),
-        "static=WTF".to_string(),
-        "static=bmalloc".to_string(),
+        static_archive_lib(target_os, "JavaScriptCore"),
+        static_archive_lib(target_os, "WTF"),
+        static_archive_lib(target_os, "bmalloc"),
     ];
 
     match target_os {
@@ -582,14 +734,19 @@ fn link_libs(target_os: &str) -> Vec<String> {
         }
         "linux" | "android" => {
             libs.extend([
-                "static=icui18n".to_string(),
-                "static=icuuc".to_string(),
-                "static=icudata".to_string(),
-                "dylib=c++".to_string(),
+                static_dep_lib(target_os, "icui18n"),
+                static_dep_lib(target_os, "icuuc"),
+                static_dep_lib(target_os, "icudata"),
                 "dylib=pthread".to_string(),
             ]);
             if target_os == "linux" {
-                libs.extend(["dylib=dl".to_string(), "dylib=m".to_string()]);
+                libs.extend([
+                    "dylib=dl".to_string(),
+                    "dylib=m".to_string(),
+                    "dylib=atomic".to_string(),
+                ]);
+            } else {
+                libs.push("dylib=c++".to_string());
             }
         }
         "windows" => {
@@ -597,11 +754,30 @@ fn link_libs(target_os: &str) -> Vec<String> {
                 "static=sicuin".to_string(),
                 "static=sicuuc".to_string(),
                 "static=sicudt".to_string(),
+                "dylib=advapi32".to_string(),
+                "dylib=shell32".to_string(),
+                "dylib=winmm".to_string(),
             ]);
         }
         other => panic!("source backend: unsupported target OS '{other}'"),
     }
     libs
+}
+
+fn static_archive_lib(target_os: &str, name: &str) -> String {
+    if matches!(target_os, "linux" | "android") {
+        format!("static:+whole-archive,-bundle={name}")
+    } else {
+        format!("static={name}")
+    }
+}
+
+fn static_dep_lib(target_os: &str, name: &str) -> String {
+    if matches!(target_os, "linux" | "android") {
+        format!("static:-bundle={name}")
+    } else {
+        format!("static={name}")
+    }
 }
 
 fn target_env_path(base: &str, target: &str) -> Option<PathBuf> {

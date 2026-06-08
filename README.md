@@ -141,11 +141,11 @@ Switch to JavaScriptCore explicitly:
 cargo run -p rong_cli --no-default-features --features jscore,tls-aws-lc
 ```
 
-On **macOS and iOS**, `jscore` links the system `JavaScriptCore.framework`. All
-other targets (Linux, Windows, Android, …) link a source-built WebKit/JSCOnly
-artifact instead. `build.rs` downloads a pinned prebuilt artifact when one is
-listed for the target, or uses `RONG_JSC_ROOT` when an explicit artifact is
-provided. Force
+On **macOS and iOS**, `jscore` links the system `JavaScriptCore.framework`.
+Supported source-backend targets use a source-built WebKit/JSCOnly artifact
+instead; Windows source artifacts are temporarily rejected. `build.rs` downloads
+a pinned prebuilt artifact when one is listed for the target, or uses
+`RONG_JSC_ROOT` when an explicit artifact is provided. Force
 the source backend on macOS/iOS too with the `jscore-source` feature on the
 `rong` library. See [`javascriptcore/sys/README.md`](javascriptcore/sys/README.md)
 for source-backend setup and bytecode support.
