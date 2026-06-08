@@ -40,7 +40,11 @@
 ## `release.yml` (manual publish)
 
 - **Trigger:** manual (`workflow_dispatch`)
-- **Runs:** validates the current workspace version and matching `CHANGELOG.md` entry, publishes crates and all repo-maintained `@rongjs/*` npm packages, creates repo tag `vX.Y.Z`, and creates the GitHub Release from the changelog text
+- **Input:** `package_scope` controls the package family:
+  - `all`: publish crates and repo-maintained `@rongjs/*` npm packages, then create repo tag `vX.Y.Z` and the GitHub Release
+  - `rust`: publish crates only; skip npm, tag, and GitHub Release creation
+  - `npm`: publish repo-maintained `@rongjs/*` npm packages only; skip crates, tag, and GitHub Release creation
+- **Runs:** validates the current workspace version and matching `CHANGELOG.md` entry, then publishes according to `package_scope`
 - **Requirements:** run from `master`; `CHANGELOG.md` must already contain the release entry
 
 ## Secrets

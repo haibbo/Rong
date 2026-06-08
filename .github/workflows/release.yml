@@ -2,6 +2,16 @@ name: "Release: Publish Packages"
 
 on:
   workflow_dispatch:
+    inputs:
+      package_scope:
+        description: "What to publish. all creates the repo tag and GitHub Release; rust/npm only publish that package family."
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - rust
+          - npm
 
 concurrency:
   group: release-${{ github.ref_name }}
@@ -22,31 +32,23 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install system dependencies (macOS)
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-        run: |
-          brew install llvm
-          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
-
       - name: Resolve release metadata
+        env:
+          PUBLISH_SCOPE: ${{ inputs.package_scope }}
         run: |
           if [ "${GITHUB_REF_NAME}" != "master" ]; then
             echo "Run this workflow from master."
             exit 1
           fi
+
+          case "$PUBLISH_SCOPE" in
+            all|rust|npm)
+              ;;
+            *)
+              echo "Unsupported package_scope: $PUBLISH_SCOPE"
+              exit 1
+              ;;
+          esac
 
           VERSION="$(grep -A 2 '^\[workspace.package\]' Cargo.toml | grep '^version' | sed 's/version = "\(.*\)"/\1/')"
           if [ -z "$VERSION" ]; then
@@ -56,32 +58,75 @@ jobs:
 
           TAG="v${VERSION}"
 
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists in the checked-out repository."
-            exit 1
-          fi
-
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists on origin."
-            exit 1
-          fi
-
           bash ./scripts/extract_changelog_entry.sh "$VERSION" > /tmp/rong-release-notes.md
           if [ ! -s /tmp/rong-release-notes.md ]; then
             echo "CHANGELOG.md entry for $VERSION is empty."
             exit 1
           fi
 
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          if [ "$PUBLISH_SCOPE" = "all" ]; then
+            if git rev-parse "$TAG" >/dev/null 2>&1; then
+              echo "Tag $TAG already exists in the checked-out repository."
+              exit 1
+            fi
+
+            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "Tag $TAG already exists on origin."
+              exit 1
+            fi
+          fi
+
+          {
+            echo "VERSION=$VERSION"
+            echo "TAG=$TAG"
+            echo "PUBLISH_SCOPE=$PUBLISH_SCOPE"
+          } >> "$GITHUB_ENV"
+
+          {
+            echo "### Release publish scope"
+            echo
+            echo "- Version: \`$VERSION\`"
+            echo "- Scope: \`$PUBLISH_SCOPE\`"
+            if [ "$PUBLISH_SCOPE" = "all" ]; then
+              echo "- Creates tag and GitHub Release: \`true\`"
+            else
+              echo "- Creates tag and GitHub Release: \`false\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install Rust
+        if: inputs.package_scope == 'all' || inputs.package_scope == 'rust'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Node.js
+        if: inputs.package_scope == 'all' || inputs.package_scope == 'npm'
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Cache cargo
+        if: inputs.package_scope == 'all' || inputs.package_scope == 'rust'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install system dependencies (macOS)
+        if: inputs.package_scope == 'all' || inputs.package_scope == 'rust'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
 
       - name: Publish crates
+        if: inputs.package_scope == 'all' || inputs.package_scope == 'rust'
         run: ./scripts/publish.sh --yes
 
       - name: Publish npm packages
+        if: inputs.package_scope == 'all' || inputs.package_scope == 'npm'
         run: ./scripts/publish_npm.sh
 
       - name: Create release tag
+        if: inputs.package_scope == 'all'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -89,6 +134,7 @@ jobs:
           git push origin "$TAG"
 
       - name: Create GitHub release
+        if: inputs.package_scope == 'all'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "$TAG" --title "$TAG" --notes-file /tmp/rong-release-notes.md

@@ -66,7 +66,8 @@ git config --local core.hooksPath .githooks
 
 1. Update the release version and `CHANGELOG.md`.
 2. Land the release change on `master`.
-3. GitHub → Actions → run workflow `Release: Publish Packages` from `master`.
+3. GitHub → Actions → run workflow `Release: Publish Packages` from `master`
+   with `package_scope=all`.
 
 Notes:
 
@@ -74,6 +75,8 @@ Notes:
 - `Release: Publish Packages` requires a matching `CHANGELOG.md` entry for that version.
 - `./scripts/bump_version.sh` syncs repo-maintained npm package versions with the workspace version.
 - `Release: Publish Packages` publishes crates.io packages and all `@rongjs/*` npm packages, then creates the repository tag `vX.Y.Z` and the GitHub Release.
+- `package_scope=rust` and `package_scope=npm` are package-only recovery paths;
+  they skip the repository tag and GitHub Release.
 - `Release: Publish Packages` requires `CARGO_REGISTRY_TOKEN` and `NPM_TOKEN`.
 
 ## Local fallback flow

@@ -26,22 +26,29 @@ Use this for ordinary releases.
 
 3. Merge the release PR into `master`.
 
-4. In GitHub Actions, run `Release: Publish Packages` from `master`.
+4. In GitHub Actions, run `Release: Publish Packages` from `master` with
+   `package_scope=all`.
 
 The publish workflow:
 
 - reads the release version from `Cargo.toml`
 - requires a matching `CHANGELOG.md` section
-- publishes crates through `scripts/publish.sh`
-- publishes all repo-maintained `@rongjs/*` npm packages through `scripts/publish_npm.sh`
-- creates the repository tag as `vX.Y.Z`
-- creates the GitHub Release from the changelog entry
+- publishes crates through `scripts/publish.sh` when `package_scope` is `all` or
+  `rust`
+- publishes all repo-maintained `@rongjs/*` npm packages through
+  `scripts/publish_npm.sh` when `package_scope` is `all` or `npm`
+- creates the repository tag as `vX.Y.Z` and the GitHub Release from the
+  changelog entry only when `package_scope=all`
 
 Requirements:
 
 - `Release: Publish Packages` must run from `master`
 - `CARGO_REGISTRY_TOKEN` must be configured in GitHub Actions
 - `NPM_TOKEN` must be configured in GitHub Actions
+
+`package_scope=rust` and `package_scope=npm` are recovery/partial-publish paths.
+They publish only the selected package family and intentionally skip repository
+tag and GitHub Release creation. Use `package_scope=all` for normal releases.
 
 ## Changelog Style
 
@@ -128,8 +135,10 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
 - `publish.sh` publishes crates in dependency order and waits for crates.io index propagation between packages.
 - `publish_npm.sh` publishes all repo-maintained `@rongjs/*` npm packages and skips versions that already exist.
 - When adding or removing published crates, update `scripts/publish.sh`.
+- The GitHub release workflow's `package_scope=all` is the only path that creates
+  the `vX.Y.Z` tag and GitHub Release; `rust` and `npm` are package-only paths.
 
 ## Short Version
 
-- Normal release: open a normal PR with version + changelog changes, merge it, then run `Release: Publish Packages`
+- Normal release: open a normal PR with version + changelog changes, merge it, then run `Release: Publish Packages` with `package_scope=all`
 - Fallback release: bump version, update changelog, run `publish.sh` and `publish_npm.sh`, then create `vX.Y.Z` tag and GitHub Release manually

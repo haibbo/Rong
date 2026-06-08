@@ -156,7 +156,12 @@ Preferred flow:
 
 1. Prepare a normal PR with the version bump and matching `CHANGELOG.md` update.
 2. Merge that PR into `master`.
-3. Run `Release: Publish Packages` in GitHub Actions from `master`.
+3. Run `Release: Publish Packages` in GitHub Actions from `master` with
+   `package_scope=all`.
+
+Use `package_scope=rust` or `package_scope=npm` only for partial publish
+recovery. Those modes publish the selected package family and intentionally skip
+the repository tag and GitHub Release.
 
 For local release details, see [`scripts/README.md`](scripts/README.md).
 For the full maintainer checklist, see [`docs/releasing.md`](docs/releasing.md).

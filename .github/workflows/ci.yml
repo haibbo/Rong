@@ -46,6 +46,17 @@ jobs:
               fi
             fi
 
+            if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              echo "Base commit $base is not available in this checkout."
+              if git rev-parse "$head^" >/dev/null 2>&1; then
+                base="$(git rev-parse "$head^")"
+                echo "Falling back to first parent $base for changed-file scope."
+              else
+                base="$(git rev-list --max-parents=0 "$head")"
+                echo "Falling back to root commit $base for changed-file scope."
+              fi
+            fi
+
             git diff --name-only "$base" "$head" > /tmp/changed-files.txt
 
             while IFS= read -r file; do
