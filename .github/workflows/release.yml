@@ -78,7 +78,7 @@ jobs:
       - name: Publish crates
         run: ./scripts/publish.sh --yes
 
-      - name: Publish npm package
+      - name: Publish npm packages
         run: ./scripts/publish_npm.sh
 
       - name: Create release tag

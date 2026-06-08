@@ -1,4 +1,4 @@
-# rong-skill
+# @rongjs/rong-skill
 
 Installer and packaging tools for Rong agent skills.
 
@@ -18,37 +18,37 @@ under `assets/` when packed or when the CLI is run from a source checkout.
 Install all bundled skills:
 
 ```bash
-npx rong-skill install
+npx @rongjs/rong-skill install
 ```
 
 Project-local install:
 
 ```bash
-npx rong-skill install --project
+npx @rongjs/rong-skill install --project
 ```
 
 Install one skill:
 
 ```bash
-npx rong-skill install --skill rong-module-author
+npx @rongjs/rong-skill install --skill rong-module-author
 ```
 
 Custom skills directory:
 
 ```bash
-npx rong-skill install --dir /path/to/skills
+npx @rongjs/rong-skill install --dir /path/to/skills
 ```
 
 Overwrite existing installed copies:
 
 ```bash
-npx rong-skill install --force
+npx @rongjs/rong-skill install --force
 ```
 
 List bundled skills:
 
 ```bash
-npx rong-skill list
+npx @rongjs/rong-skill list
 ```
 
 ## Layout

@@ -5,13 +5,13 @@
 // can discover it. No registration step is needed - a skill is just a folder
 // with a SKILL.md.
 //
-//   npx rong-skill install            # ~/.claude/skills/<skill>... (personal)
-//   npx rong-skill install --project  # ./.claude/skills/<skill>... (project)
-//   npx rong-skill install --dir DIR  # DIR/<skill>...              (custom)
-//   npx rong-skill install --skill rong-module-author
-//   npx rong-skill install --force    # overwrite an existing copy
-//   npx rong-skill list
-//   npx rong-skill --help
+//   npx @rongjs/rong-skill install            # ~/.claude/skills/<skill>... (personal)
+//   npx @rongjs/rong-skill install --project  # ./.claude/skills/<skill>... (project)
+//   npx @rongjs/rong-skill install --dir DIR  # DIR/<skill>...              (custom)
+//   npx @rongjs/rong-skill install --skill rong-module-author
+//   npx @rongjs/rong-skill install --force    # overwrite an existing copy
+//   npx @rongjs/rong-skill list
+//   npx @rongjs/rong-skill --help
 
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
@@ -83,8 +83,8 @@ function printHelp() {
   console.log(`rong-skill v${version} - install Rong agent skills
 
 Usage:
-  npx rong-skill install [options]
-  npx rong-skill list
+  npx @rongjs/rong-skill install [options]
+  npx @rongjs/rong-skill list
 
 Options:
   -p, --project     Install into ./.claude/skills (this project only)

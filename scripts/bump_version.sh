@@ -9,6 +9,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 WORKSPACE_TOML="Cargo.toml"
+NPM_PACKAGE_JSONS=("rong_types/package.json" "skill/package.json")
 
 usage() {
   cat << EOF
@@ -38,7 +39,8 @@ WORKFLOW:
   1. Updates [workspace.package] version
   2. Updates the root [package] version
   3. Syncs all [workspace.dependencies] versions
-  4. Creates git commit (if --commit)
+  4. Syncs repo-maintained npm package versions
+  5. Creates git commit (if --commit)
 
 DEFAULT BEHAVIOR:
   By default, this script only updates Cargo.toml without git operations.
@@ -193,12 +195,27 @@ perl -i -pe '
 echo -e "${GREEN}✓ Synced all workspace.dependencies to ${NEW_VERSION}${NC}"
 echo ""
 
+echo -e "${BLUE}Step 4: Syncing npm package versions${NC}"
+
+for package_json in "${NPM_PACKAGE_JSONS[@]}"; do
+  if [ -f "$package_json" ]; then
+    node -e '
+      const fs = require("fs");
+      const [file, version] = process.argv.slice(1);
+      const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
+      pkg.version = version;
+      fs.writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
+    ' "$package_json" "$NEW_VERSION"
+    echo -e "${GREEN}✓ Updated ${package_json} to ${NEW_VERSION}${NC}"
+  fi
+done
+
 echo ""
 
 if [ "$DO_COMMIT" = true ]; then
-  echo -e "${BLUE}Step 4: Creating git commit${NC}"
+  echo -e "${BLUE}Step 5: Creating git commit${NC}"
 
-  git add Cargo.toml
+  git add Cargo.toml "${NPM_PACKAGE_JSONS[@]}"
   git commit -m "chore: bump version to ${NEW_VERSION}"
 
   echo -e "${GREEN}✓ Created commit${NC}"

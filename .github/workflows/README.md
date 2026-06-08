@@ -6,15 +6,17 @@
 - **Concurrency:** PR and branch runs cancel older in-progress runs for the same PR/ref, so the Actions page shows the latest relevant CI instead of stale queued attempts.
 - **Scope:** a lightweight `scope` job classifies changed files. `docs/*`,
   `skill/*`, Markdown, and GitHub metadata changes do not run the Rust/JSC
-  matrix. `docs/api`, `docs/skills`, and `skill` changes run only the skill
-  packaging job. Manual `workflow_dispatch` runs all scopes.
+  matrix. `docs/api`, `docs/skills`, `rong_types`, `skill`, and npm release
+  script changes run only the npm package validation job. Manual
+  `workflow_dispatch` runs all scopes.
 - **Runs:** for Rust/source changes, `cargo fmt` runs once, then separate host
   `check`, `clippy`, and `test` jobs:
   - `quickjs` on Windows, Linux, and macOS
   - `jscore` on macOS using the system `JavaScriptCore.framework`
   - `jscore-source-*` on macOS, Linux, and Windows, gated by pinned prebuilt artifact rows in `javascriptcore/sys/webkit-artifacts.tsv`
-- **Skill packaging:** validates `docs/skills` + `docs/api` can generate
-  self-contained installable skills through `skill/bin/pack.mjs`.
+- **npm packaging:** builds the Rong type package and validates `docs/skills` +
+  `docs/api` can generate self-contained installable skills through
+  `skill/bin/pack.mjs`.
 - **Source backend behavior:** `jscore-source-*` is the production-style prebuilt consumer path. It downloads and caches the pinned artifact through `rong_jscore_sys/build.rs`; if no row exists for a supported target, CI fails instead of silently skipping.
 - **Steps:** `cargo fmt --check` plus `cargo make check-engine`, `cargo make clippy-engine`, and `cargo make test-engine`
 
@@ -35,7 +37,7 @@
 ## `release.yml` (manual publish)
 
 - **Trigger:** manual (`workflow_dispatch`)
-- **Runs:** validates the current workspace version and matching `CHANGELOG.md` entry, publishes crates and `@lingxia/rong`, creates repo tag `vX.Y.Z`, and creates the GitHub Release from the changelog text
+- **Runs:** validates the current workspace version and matching `CHANGELOG.md` entry, publishes crates and all repo-maintained `@rongjs/*` npm packages, creates repo tag `vX.Y.Z`, and creates the GitHub Release from the changelog text
 - **Requirements:** run from `master`; `CHANGELOG.md` must already contain the release entry
 
 ## Secrets

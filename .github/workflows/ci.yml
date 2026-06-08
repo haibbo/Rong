@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       rust: ${{ steps.scope.outputs.rust }}
-      skill: ${{ steps.scope.outputs.skill }}
+      npm: ${{ steps.scope.outputs.npm }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -29,11 +29,11 @@ jobs:
           set -euo pipefail
 
           rust=false
-          skill=false
+          npm=false
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             rust=true
-            skill=true
+            npm=true
             printf '%s\n' "workflow_dispatch runs all CI scopes" > /tmp/changed-files.txt
           else
             head="${{ github.sha }}"
@@ -52,13 +52,13 @@ jobs:
               [ -n "$file" ] || continue
 
               case "$file" in
-                docs/api/*|docs/skills/*|skill/*|.github/workflows/ci.yml)
-                  skill=true
+                docs/api/*|docs/skills/*|rong_types/*|skill/*|scripts/bump_version.sh|scripts/publish_npm.sh|.github/workflows/ci.yml|.github/workflows/release.yml)
+                  npm=true
                   ;;
               esac
 
               case "$file" in
-                docs/*|skill/*|*.md|.gitignore|.gitattributes|.github/*)
+                docs/*|rong_types/*|skill/*|scripts/bump_version.sh|scripts/publish_npm.sh|*.md|.gitignore|.gitattributes|.github/*)
                   ;;
                 *)
                   rust=true
@@ -69,14 +69,14 @@ jobs:
 
           {
             echo "rust=$rust"
-            echo "skill=$skill"
+            echo "npm=$npm"
           } >> "$GITHUB_OUTPUT"
 
           {
             echo "### CI scope"
             echo
             echo "- Rust/JSC matrix: \`$rust\`"
-            echo "- Skill package: \`$skill\`"
+            echo "- npm packages: \`$npm\`"
             echo
             echo "Changed files:"
             sed 's/^/- `/' /tmp/changed-files.txt | sed 's/$/`/'
@@ -98,9 +98,9 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
 
-  skill-package:
+  npm-package:
     needs: scope
-    if: needs.scope.outputs.skill == 'true'
+    if: needs.scope.outputs.npm == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -111,7 +111,12 @@ jobs:
         with:
           node-version: 20
 
-      - name: Check skill package
+      - name: Check Rong type package
+        run: |
+          npm --prefix rong_types install --no-package-lock
+          npm --prefix rong_types run build
+
+      - name: Check Rong skill package
         run: |
           npm --prefix skill run check
           node skill/bin/cli.mjs list

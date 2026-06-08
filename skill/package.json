@@ -1,6 +1,6 @@
 {
-  "name": "rong-skill",
-  "version": "0.1.0",
+  "name": "@rongjs/rong-skill",
+  "version": "0.3.2",
   "description": "Self-contained agent skills for Rong runtime scripting and module authoring.",
   "type": "module",
   "bin": {
@@ -18,6 +18,9 @@
   ],
   "engines": {
     "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "rong",
