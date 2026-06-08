@@ -47,6 +47,18 @@ mod tests {
     use super::*;
     use rong_test::*;
     use std::env;
+    use std::path::PathBuf;
+
+    #[cfg(windows)]
+    fn js_path(path: PathBuf) -> String {
+        let path = path.to_string_lossy();
+        path.strip_prefix(r"\\?\").unwrap_or(&path).to_owned()
+    }
+
+    #[cfg(not(windows))]
+    fn js_path(path: PathBuf) -> String {
+        path.to_string_lossy().into_owned()
+    }
 
     #[test]
     fn test_filesystem() {
@@ -58,21 +70,17 @@ mod tests {
             rong_exception::init(&ctx)?;
             init(&ctx)?;
 
-            // Get workspace root path
-            let workspace_root = env::current_dir()
-                .map_err(|e| {
-                    HostError::new(
-                        rong::error::E_INTERNAL,
-                        format!("Failed to get current dir: {}", e),
-                    )
-                })?
-                .parent()
-                .and_then(|p| p.parent()) // Go up two levels
-                .ok_or_else(|| {
-                    HostError::new(rong::error::E_INTERNAL, "Failed to get workspace root")
-                })?
-                .to_string_lossy()
-                .into_owned();
+            // Keep permission-sensitive cases (chmod) on the OS temp
+            // filesystem. WSL's /mnt/c drvfs does not reliably preserve Unix
+            // mode bits even when the repo itself lives there.
+            let workspace_root_path =
+                env::temp_dir().join(format!("rong-fs-tests-{}", std::process::id()));
+            std::fs::create_dir_all(&workspace_root_path).unwrap();
+            let workspace_root = js_path(
+                workspace_root_path
+                    .canonicalize()
+                    .unwrap_or(workspace_root_path),
+            );
 
             // Inject workspace root into JavaScript environment
             ctx.global().set("WORKSPACE_ROOT", workspace_root)?;

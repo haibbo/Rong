@@ -204,7 +204,8 @@ unsafe fn set_function_name(
             function,
             name_key,
             name_value,
-            jsc::kJSPropertyAttributeReadOnly | jsc::kJSPropertyAttributeDontEnum,
+            jsc::attr(jsc::kJSPropertyAttributeReadOnly)
+                | jsc::attr(jsc::kJSPropertyAttributeDontEnum),
             ptr::null_mut(),
         );
         jsc::JSStringRelease(name_key);
@@ -225,7 +226,7 @@ unsafe fn set_prototype_constructor(
             prototype,
             constructor_key,
             constructor,
-            jsc::kJSPropertyAttributeDontEnum,
+            jsc::attr(jsc::kJSPropertyAttributeDontEnum),
             ptr::null_mut(),
         );
         jsc::JSStringRelease(constructor_key);
@@ -254,7 +255,7 @@ unsafe fn ensure_constructor_prototype(
                 function,
                 prototype_key,
                 prototype,
-                jsc::kJSPropertyAttributeDontEnum,
+                jsc::attr(jsc::kJSPropertyAttributeDontEnum),
                 &mut exception,
             );
         }
@@ -358,7 +359,7 @@ where
         // Subclassing is supported via the JSObjectMakeConstructor function, however.
         let class_def = jsc::JSClassDefinition {
             version: 0,
-            attributes: jsc::kJSClassAttributeNone,
+            attributes: jsc::attr(jsc::kJSClassAttributeNone),
             className: class_name_cstr.as_ptr(),
             parentClass: ptr::null_mut(),
             staticValues: ptr::null(),

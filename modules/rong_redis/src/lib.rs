@@ -66,14 +66,16 @@ mod tests {
         drop(listener);
 
         // Try common redis-server locations
-        let candidates = [
+        let mut candidates = vec![
             "redis-server",
-            "redis-server.exe",
             "/usr/local/opt/redis/bin/redis-server",
             "/opt/homebrew/opt/redis/bin/redis-server",
             "/usr/bin/redis-server",
             "/usr/local/bin/redis-server",
         ];
+        if cfg!(windows) {
+            candidates.insert(1, "redis-server.exe");
+        }
 
         let bin = candidates.iter().find(|c| {
             std::process::Command::new(c)

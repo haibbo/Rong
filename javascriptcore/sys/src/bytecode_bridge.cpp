@@ -17,6 +17,62 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <utility>
+
+#if __has_include(<expected>)
+#include <expected>
+#endif
+
+// Current WebKit WTF exposes its Expected alias through a Library Fundamentals
+// fallback, but the bundled Expected.h references unexpected<E> without defining
+// it when used from installed private headers. C++23 standard libraries provide
+// std::unexpected, which unqualified lookup can find from std::experimental; use
+// this shim only for older standard libraries.
+#if !defined(__cpp_lib_expected)
+namespace std {
+namespace experimental {
+inline namespace fundamentals_v3 {
+template<class E> class unexpected {
+public:
+    constexpr explicit unexpected(const E& error)
+        : m_error(error)
+    {
+    }
+
+    constexpr explicit unexpected(E&& error)
+        : m_error(std::move(error))
+    {
+    }
+
+    constexpr E& error() &
+    {
+        return m_error;
+    }
+
+    constexpr const E& error() const&
+    {
+        return m_error;
+    }
+
+    constexpr E&& error() &&
+    {
+        return std::move(m_error);
+    }
+
+    constexpr const E&& error() const&&
+    {
+        return std::move(m_error);
+    }
+
+private:
+    E m_error;
+};
+}
+}
+
+template<class E> using unexpected = experimental::unexpected<E>;
+}
+#endif
 
 #if __has_include("InitializeThreading.h")
 #include "InitializeThreading.h"
@@ -56,9 +112,9 @@ extern "C" void rong_jsc_initialize(void)
 // <cache>/include/JavaScriptCore/private/ in bytecode-capable artifacts.
 // ---------------------------------------------------------------------------
 
-// The private headers assume they are rooted at the JSC source directory and
-// use relative includes ("VM.h", "SourceCode.h", etc.). The build.rs cc step
-// adds the private/ directory to the include path so these resolve.
+// Prefer the canonical <JavaScriptCore/...> private-header path when source
+// artifacts expose it. Falling back to flat private headers keeps older local
+// artifacts usable, but mixing both paths can bypass #pragma once.
 #if __has_include("config.h")
 #include "config.h"
 #endif
@@ -70,6 +126,19 @@ extern "C" void rong_jsc_initialize(void)
 #define WTF_EXPORT_PRIVATE
 #endif
 
+#if __has_include(<JavaScriptCore/APICast.h>)
+#include <JavaScriptCore/APICast.h>
+#include <JavaScriptCore/BytecodeCacheError.h>
+#include <JavaScriptCore/CachedBytecode.h>
+#include <JavaScriptCore/Completion.h>
+#include <JavaScriptCore/Exception.h>
+#include <JavaScriptCore/SourceCode.h>
+#include <JavaScriptCore/SourceProvider.h>
+#include <JavaScriptCore/SourceTaintedOrigin.h>
+#include <JavaScriptCore/ThrowScope.h>
+#include <JavaScriptCore/VM.h>
+#include <JavaScriptCore/JSCInlines.h>
+#else
 #include "APICast.h"
 #include "BytecodeCacheError.h"
 #include "CachedBytecode.h"
@@ -78,12 +147,17 @@ extern "C" void rong_jsc_initialize(void)
 #include "SourceCode.h"
 #include "SourceProvider.h"
 #include "SourceTaintedOrigin.h"
+#include "ThrowScope.h"
 #include "VM.h"
 #include "JSCInlines.h"
+#endif
 
 #include <cstring>
 #include <limits>
-#include <wtf/MallocPtr.h>
+#include <span>
+#include <wtf/FileHandle.h>
+#include <wtf/MallocSpan.h>
+#include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
 
 // ============================================================================
@@ -102,17 +176,31 @@ constexpr size_t kHeaderSize = kURLLenOffset + sizeof(uint64_t);
 
 static_assert(kMagicSize == 8);
 
+template<typename StringType = String>
+String stringFromUTF8(const char* data, size_t len)
+    requires requires { StringType::fromUTF8(std::span<const char>(data, len)); }
+{
+    return StringType::fromUTF8(std::span<const char>(data, len));
+}
+
+template<typename StringType = String>
+String stringFromUTF8(const char* data, size_t len)
+    requires (!requires { StringType::fromUTF8(std::span<const char>(data, len)); })
+{
+    return StringType::fromUTF8(data, len);
+}
+
 char* copyCString(const char* message)
 {
     if (!message)
         message = "unknown JavaScriptCore bytecode bridge error";
     size_t len = std::strlen(message);
-    char* out = static_cast<char*>(JSC::fastMalloc(len + 1));
+    char* out = static_cast<char*>(fastMalloc(len + 1));
     std::memcpy(out, message, len + 1);
     return out;
 }
 
-char* copyString(const JSC::String& message)
+char* copyString(const String& message)
 {
     auto utf8 = message.utf8();
     return copyCString(utf8.data());
@@ -123,7 +211,7 @@ RongJSCBytecodeResult compileError(const char* message)
     return { nullptr, 0, copyCString(message) };
 }
 
-RongJSCBytecodeResult compileError(const JSC::String& message)
+RongJSCBytecodeResult compileError(const String& message)
 {
     return { nullptr, 0, copyString(message) };
 }
@@ -185,7 +273,7 @@ JSValueRef makeErrorValue(JSContextRef ctx, const char* message)
     return error;
 }
 
-JSC::SourceCode makeProgramSource(const JSC::String& source, const JSC::String& sourceURL)
+JSC::SourceCode makeProgramSource(const String& source, const String& sourceURL)
 {
     JSC::SourceOrigin origin { URL({ }, sourceURL) };
     return JSC::makeSource(
@@ -200,16 +288,16 @@ JSC::SourceCode makeProgramSource(const JSC::String& source, const JSC::String& 
 class RongCachedSourceProvider final : public JSC::SourceProvider {
 public:
     static Ref<RongCachedSourceProvider> create(
-        JSC::String source,
+        String source,
         const JSC::SourceOrigin& sourceOrigin,
-        JSC::String sourceURL,
+        String sourceURL,
         RefPtr<JSC::CachedBytecode>&& bytecode)
     {
         return adoptRef(*new RongCachedSourceProvider(
-            WTFMove(source),
+            WTF::move(source),
             sourceOrigin,
-            WTFMove(sourceURL),
-            WTFMove(bytecode)));
+            WTF::move(sourceURL),
+            WTF::move(bytecode)));
     }
 
     unsigned hash() const override
@@ -229,23 +317,23 @@ public:
 
 private:
     RongCachedSourceProvider(
-        JSC::String&& source,
+        String&& source,
         const JSC::SourceOrigin& sourceOrigin,
-        JSC::String&& sourceURL,
+        String&& sourceURL,
         RefPtr<JSC::CachedBytecode>&& bytecode)
         : JSC::SourceProvider(
             sourceOrigin,
-            WTFMove(sourceURL),
-            JSC::String(),
+            WTF::move(sourceURL),
+            String(),
             JSC::SourceTaintedOrigin::Untainted,
             TextPosition(),
             JSC::SourceProviderSourceType::Program)
-        , m_source(WTFMove(source))
-        , m_bytecode(WTFMove(bytecode))
+        , m_source(WTF::move(source))
+        , m_bytecode(WTF::move(bytecode))
     {
     }
 
-    JSC::String m_source;
+    String m_source;
     RefPtr<JSC::CachedBytecode> m_bytecode;
 };
 
@@ -263,13 +351,13 @@ int rong_jsc_bytecode_supported(void) {
 /// Free a bytecode buffer returned by rong_jsc_compile_to_bytecode.
 void rong_jsc_free_bytecode(uint8_t* data) {
     if (data) {
-        JSC::fastFree(data);
+        fastFree(data);
     }
 }
 
 void rong_jsc_free_error(const char* error) {
     if (error) {
-        JSC::fastFree(const_cast<char*>(error));
+        fastFree(const_cast<char*>(error));
     }
 }
 
@@ -297,17 +385,16 @@ RongJSCBytecodeResult rong_jsc_compile_to_bytecode(
         return compileError("invalid JavaScript source URL");
 
     // Recover the C++ VM object from the opaque C context handle.
-    ExecState* exec = toJS(ctx);
-    JSGlobalObject* globalObject = exec->lexicalGlobalObject();
+    JSGlobalObject* globalObject = toJS(ctx);
     VM& vm = globalObject->vm();
 
     JSLockHolder lock(vm);
-    auto scope = DECLARE_CATCH_SCOPE(vm);
+    auto scope = DECLARE_THROW_SCOPE(vm);
 
     // ---------------------------------------------------------------
     // 1. Build a JSC SourceCode from the caller-supplied bytes + URL.
     // ---------------------------------------------------------------
-    String sourceString    = String::fromUTF8(source, source_len);
+    String sourceString    = stringFromUTF8(source, source_len);
     String urlString       = String::fromUTF8(source_url);
     SourceCode sourceCode  = makeProgramSource(sourceString, urlString);
 
@@ -316,14 +403,15 @@ RongJSCBytecodeResult rong_jsc_compile_to_bytecode(
     //    unlinked program code block without evaluating the script.
     // ---------------------------------------------------------------
     BytecodeCacheError error;
+    FileSystem::FileHandle bytecodeFile;
     RefPtr<CachedBytecode> bytecode = generateProgramBytecode(
         vm,
         sourceCode,
-        FileSystem::invalidPlatformFileHandle,
+        bytecodeFile,
         error);
-    if (scope.exception()) {
-        auto message = scope.exception()->value().toWTFString(globalObject);
-        scope.clearException();
+    if (auto* exception = scope.exception()) {
+        auto message = exception->value().toWTFString(globalObject);
+        (void)scope.tryClearException();
         return compileError(message);
     }
     if (!bytecode) {
@@ -332,8 +420,9 @@ RongJSCBytecodeResult rong_jsc_compile_to_bytecode(
         return compileError("JavaScriptCore failed to compile source to bytecode");
     }
 
-    const uint8_t* payloadData = bytecode->data();
-    size_t payloadSize = bytecode->size();
+    auto payload = bytecode->span();
+    const uint8_t* payloadData = payload.data();
+    size_t payloadSize = payload.size();
     if (!payloadData || payloadSize == 0) {
         return compileError("JavaScriptCore bytecode compilation produced an empty payload");
     }
@@ -353,7 +442,7 @@ RongJSCBytecodeResult rong_jsc_compile_to_bytecode(
         return compileError("JavaScriptCore bytecode envelope is too large");
 
     size_t totalSize = kHeaderSize + source_len + urlLen + payloadSize;
-    uint8_t* buffer = static_cast<uint8_t*>(JSC::fastMalloc(totalSize));
+    uint8_t* buffer = static_cast<uint8_t*>(fastMalloc(totalSize));
     if (!buffer) {
         return compileError("allocation failed");
     }
@@ -388,8 +477,7 @@ RongJSCRunBytecodeResult rong_jsc_run_bytecode(
     if (!bytes && size)
         return runError("invalid JavaScriptCore bytecode pointer");
 
-    ExecState* exec = toJS(ctx);
-    JSGlobalObject* globalObject = exec->lexicalGlobalObject();
+    JSGlobalObject* globalObject = toJS(ctx);
     VM& vm = globalObject->vm();
 
     // Hold the VM lock before touching the heap. createTypeError below (and the
@@ -397,7 +485,7 @@ RongJSCRunBytecodeResult rong_jsc_run_bytecode(
     // acquiring it only after the version check would create the error value
     // without the lock.
     JSLockHolder lock(vm);
-    auto scope = DECLARE_CATCH_SCOPE(vm);
+    auto scope = DECLARE_THROW_SCOPE(vm);
 
     if (size < kHeaderSize || std::memcmp(bytes, kMagic, kMagicSize) != 0)
         return runException(makeErrorValue(ctx, "Invalid JavaScriptCore bytecode envelope"));
@@ -425,23 +513,23 @@ RongJSCRunBytecodeResult rong_jsc_run_bytecode(
 
     // We must copy the bytes into a JSC-owned allocation because
     // CachedBytecode::create takes ownership.
-    auto payloadCopy = MallocPtr<uint8_t, VMMalloc>::malloc(payloadSize);
+    auto payloadCopy = MallocSpan<uint8_t, VMMalloc>::malloc(payloadSize);
     if (!payloadCopy) {
         return runException(makeErrorValue(ctx, "JavaScriptCore bytecode allocation failed"));
     }
-    std::memcpy(payloadCopy.get(), payloadStart, payloadSize);
+    std::memcpy(payloadCopy.mutableSpan().data(), payloadStart, payloadSize);
 
     RefPtr<CachedBytecode> cachedBytecode =
-        CachedBytecode::create(WTFMove(payloadCopy), payloadSize, { });
+        CachedBytecode::create(WTF::move(payloadCopy), { });
 
-    String urlString = String::fromUTF8(reinterpret_cast<const char*>(urlStart), urlSize);
+    String urlString = stringFromUTF8(reinterpret_cast<const char*>(urlStart), urlSize);
     SourceOrigin origin { URL({ }, urlString) };
-    String sourceString = String::fromUTF8(reinterpret_cast<const char*>(sourceStart), sourceSize);
+    String sourceString = stringFromUTF8(reinterpret_cast<const char*>(sourceStart), sourceSize);
     SourceCode sourceCode(RongCachedSourceProvider::create(
         sourceString,
         origin,
         urlString,
-        WTFMove(cachedBytecode)));
+        WTF::move(cachedBytecode)));
 
     // ---------------------------------------------------------------
     // Evaluate the source with a provider that supplies cached bytecode. JSC
@@ -452,9 +540,9 @@ RongJSCRunBytecodeResult rong_jsc_run_bytecode(
 
     if (returnedException)
         return runException(toRef(globalObject, returnedException->value()));
-    if (scope.exception()) {
-        JSValueRef exceptionValue = toRef(globalObject, scope.exception()->value());
-        scope.clearException();
+    if (auto* exception = scope.exception()) {
+        JSValueRef exceptionValue = toRef(globalObject, exception->value());
+        (void)scope.tryClearException();
         return runException(exceptionValue);
     }
 

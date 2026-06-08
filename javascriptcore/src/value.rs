@@ -205,10 +205,14 @@ unsafe fn bigint_to_string(
             let len = unsafe { jsc::JSStringGetMaximumUTF8CStringSize(js_string) };
             let mut buffer = vec![0u8; len];
             unsafe {
-                jsc::JSStringGetUTF8CString(js_string, buffer.as_mut_ptr() as *mut i8, len);
+                jsc::JSStringGetUTF8CString(
+                    js_string,
+                    buffer.as_mut_ptr().cast::<std::os::raw::c_char>(),
+                    len,
+                );
             }
             unsafe { jsc::JSStringRelease(js_string) };
-            let cstr = unsafe { std::ffi::CStr::from_ptr(buffer.as_ptr() as *const i8) };
+            let cstr = unsafe { std::ffi::CStr::from_ptr(buffer.as_ptr().cast()) };
             return cstr.to_str().ok().map(|s| s.to_string());
         }
     }
