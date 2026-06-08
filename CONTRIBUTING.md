@@ -8,6 +8,7 @@ Requirements:
 
 - Rust stable toolchain
 - `cargo-make`
+- Node.js 20+ for npm package and agent skill validation
 - On macOS, `llvm` is required for bindgen-based crates
 
 Install helper tools:
@@ -49,11 +50,22 @@ Run the default CI engine set locally:
 cargo make ci-verify-all
 ```
 
+Validate npm packages when changing `rong_types`, `skill`, `docs/api`, or
+`docs/skills`:
+
+```bash
+npm --prefix rong_types install --no-package-lock
+npm --prefix rong_types run build
+npm --prefix skill run check
+```
+
 What these tasks do:
 
 - `pre-commit`: `cargo fmt --check` + `cargo check` + `cargo clippy`
 - `ci-verify`: `pre-commit` checks plus `bash test.sh -e <engine>`
 - `ci-verify-all`: runs `ci-verify` sequentially for `quickjs` and `jscore`
+- `npm --prefix skill run check`: syntax-checks the skill CLI/packer and verifies
+  `docs/skills` plus `docs/api` can be packed into self-contained skills
 
 The shared tasks exclude `rong_arkjs`, `rong_arkjs_sys`, and the device-only
 `rong_test_device` crate from the default host CI gate. ArkJS/OHOS is validated
@@ -84,11 +96,13 @@ Run them manually:
 
 ## Test Matrix
 
-- `quickjs`: default local engine; CI runs it on Windows and macOS
-- `jscore`: secondary CI engine; CI runs it on macOS (system framework). It also
-  builds and tests on supported source-backend hosts when a
-  WebKit/JSCOnly artifact is available (see [`javascriptcore/sys/README.md`](javascriptcore/sys/README.md));
-  `test.sh` skips `jscore` on non-Apple hosts that have no artifact configured.
+- `quickjs`: default local engine; CI runs it on Windows, Linux, and macOS
+- `jscore`: secondary CI engine; CI runs it on macOS with the system
+  `JavaScriptCore.framework`
+- `jscore-source-*`: source-backend consumer jobs run on macOS, Linux, and
+  Windows when pinned WebKit/JSCOnly artifacts are listed in
+  [`javascriptcore/sys/webkit-artifacts.tsv`](javascriptcore/sys/webkit-artifacts.tsv)
+  (see [`javascriptcore/sys/README.md`](javascriptcore/sys/README.md))
 - `arkjs`: verified separately through Harmony/OHOS checks; not part of the default host verification gate
 
 For ad hoc engine tests, the lower-level runner remains available:
@@ -108,6 +122,34 @@ For future self-hosted Harmony CI coverage, provision a local runner with
 `OHOS_NDK_HOME` and the `harmony` runner label, then use the
 `Harmony CI (Self-Hosted)` workflow.
 
+## CI Scope
+
+The main `CI` workflow starts with a lightweight `scope` job:
+
+- Docs, Markdown, and GitHub metadata changes do not run the Rust/JSC host
+  matrix unless they touch workflow behavior.
+- Changes under `docs/api`, `docs/skills`, `rong_types`, `skill`, or npm
+  release scripts run the npm package validation job.
+- Rust/source changes run format, host engine checks, clippy, tests, and the
+  `jscore-source-*` prebuilt-consumer jobs.
+- Manual `workflow_dispatch` runs all scopes.
+
+There is no standalone `JSC Windows (source)` workflow. Windows source-backend
+coverage is split between `Build JSC artifacts` for producing prebuilt JSC
+tarballs and the normal `CI` workflow's `jscore-source-x86_64-pc-windows-msvc`
+job for consuming the pinned artifact.
+
+## Agent Skills And npm Packages
+
+- Source skill documentation lives under [`docs/skills`](docs/skills).
+- Shared runtime/API reference material lives under [`docs/api`](docs/api).
+- The npm package in [`skill`](skill) packs those docs into installable,
+  self-contained skills. Treat generated `skill/assets` output as build output,
+  not source documentation.
+- The repo-maintained npm packages are published under the `@rongjs` scope:
+  `@rongjs/rong` from [`rong_types`](rong_types) and `@rongjs/rong-skill` from
+  [`skill`](skill).
+
 ## Release Flow
 
 Preferred flow:
@@ -119,8 +161,17 @@ Preferred flow:
 For local release details, see [`scripts/README.md`](scripts/README.md).
 For the full maintainer checklist, see [`docs/releasing.md`](docs/releasing.md).
 
+`./scripts/bump_version.sh` syncs Cargo workspace versions and repo-maintained
+npm package versions. `./scripts/publish_npm.sh` publishes all repo-maintained
+`@rongjs/*` npm packages.
+
 ## Notes For Contributors
 
 - Keep CI and local commands aligned. Prefer updating `Makefile.toml` instead of adding one-off commands to workflows.
 - When adding or removing published crates, update `scripts/publish.sh`.
+- When adding or removing repo-maintained npm packages, update
+  `scripts/publish_npm.sh`, the release workflow, and the npm package CI scope.
+- When changing pinned JSC source artifacts, run `Build JSC artifacts`, review
+  the emitted TSV rows, update `javascriptcore/sys/webkit-artifacts.tsv`, then
+  rely on normal `CI` `jscore-source-*` jobs to verify consumption.
 - If a check is engine-specific, be explicit about which engine it applies to.

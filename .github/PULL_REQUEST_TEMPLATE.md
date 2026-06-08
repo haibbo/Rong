@@ -6,10 +6,11 @@
 
 - [ ] `cargo make ci-verify`
 - [ ] `ENGINE=jscore cargo make ci-verify` (if macOS / JavaScriptCore behavior changed)
-- [ ] GitHub Actions `CI` passed for Windows/Linux/macOS `quickjs` and macOS `jscore`
-- [ ] GitHub Actions `JSC Windows (source)` passed (if JavaScriptCore source backend changed)
-- [ ] Windows/Linux `jscore-source-test` passed or intentionally skipped because no pinned prebuilt JSC artifact exists
-- [ ] `build-jsc-artifacts.yml` was run and `javascriptcore/sys/webkit-artifacts.tsv` updated (if JSC source artifact version changed)
+- [ ] GitHub Actions `CI` passed, or only `scope` / `npm-package` ran for docs or npm-only changes
+- [ ] GitHub Actions `CI` `jscore-source-*` jobs passed on macOS/Linux/Windows (if JavaScriptCore source backend changed)
+- [ ] GitHub Actions `Build JSC artifacts` was run and `javascriptcore/sys/webkit-artifacts.tsv` updated (if pinned JSC artifact version changed)
+- [ ] `npm --prefix rong_types run build` (if Rong TypeScript package changed)
+- [ ] `npm --prefix skill run check` (if `docs/skills`, `docs/api`, or the skill package changed)
 - [ ] `cargo make check-arkjs-ohos` (if ArkJS / OHOS code changed)
 - [ ] `cargo make clippy-arkjs-ohos` (if ArkJS / OHOS code changed)
 - [ ] `./testing/harmony/dev.sh test` on a device or local Harmony runner (if Harmony runtime behavior changed)
