@@ -2,3 +2,4 @@ target
 Cargo.lock
 rong_types/node_modules/
 testing/harmony/app/oh_modules/
+skill/assets/
