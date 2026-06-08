@@ -43,6 +43,24 @@ Requirements:
 - `CARGO_REGISTRY_TOKEN` must be configured in GitHub Actions
 - `NPM_TOKEN` must be configured in GitHub Actions
 
+## Changelog Style
+
+Write release notes for downstream users first, not as a commit log.
+
+- Keep `## [Unreleased]` at the top.
+- Add one section per release as `## [X.Y.Z] - YYYY-MM-DD`; the version must
+  match `Cargo.toml` because the publish workflow extracts that exact section.
+- Start formal releases with a short summary paragraph that explains the release
+  outcome and audience.
+- Use stable headings such as `Highlights`, `Added`, `Changed`, `Fixed`, and
+  `Removed`.
+- Prefer user-facing behavior, packaging changes, supported platforms, and
+  migration-relevant details over internal commit or PR descriptions.
+- Mention CI/release changes only when they affect contributors, package
+  publication, artifact availability, or supported platforms.
+- Keep generated GitHub Release notes self-contained; do not rely on surrounding
+  `CHANGELOG.md` context.
+
 ## Local Fallback
 
 Use this only when GitHub Actions is unavailable or when you are recovering from a partial release.
