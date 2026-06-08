@@ -56,7 +56,9 @@ git config --local core.hooksPath .githooks
 ./scripts/publish_npm.sh
 ```
 
-- Publishes the `@lingxia/rong` npm package from `rong_types`
+- Publishes all repo-maintained npm packages:
+  - `@rongjs/rong` from `rong_types`
+  - `@rongjs/rong-skill` from `skill`
 - Requires `NPM_TOKEN` or `NODE_AUTH_TOKEN`
 - Skips the publish if the same npm version already exists
 
@@ -70,7 +72,8 @@ Notes:
 
 - `Release: Publish Packages` reads the version from `Cargo.toml`.
 - `Release: Publish Packages` requires a matching `CHANGELOG.md` entry for that version.
-- `Release: Publish Packages` publishes crates.io packages and `@lingxia/rong`, then creates the repository tag `vX.Y.Z` and the GitHub Release.
+- `./scripts/bump_version.sh` syncs repo-maintained npm package versions with the workspace version.
+- `Release: Publish Packages` publishes crates.io packages and all `@rongjs/*` npm packages, then creates the repository tag `vX.Y.Z` and the GitHub Release.
 - `Release: Publish Packages` requires `CARGO_REGISTRY_TOKEN` and `NPM_TOKEN`.
 
 ## Local fallback flow
@@ -81,7 +84,7 @@ Use this when GitHub Actions is unavailable or when you need to recover manually
 2. Update `CHANGELOG.md` for the same version.
 3. Review, commit, and push the release changes.
 4. Run `./scripts/publish.sh` to publish crates.
-5. Run `./scripts/publish_npm.sh` to publish `@lingxia/rong`.
+5. Run `./scripts/publish_npm.sh` to publish all repo-maintained `@rongjs/*` npm packages.
 6. Create tag `v<version>` and the GitHub Release manually.
 
 ## Troubleshooting

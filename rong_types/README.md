@@ -1,4 +1,4 @@
-# @lingxia/rong
+# @rongjs/rong
 
 TypeScript type definitions for the Rong JavaScript runtime (globals injected by Rust).
 
@@ -18,7 +18,7 @@ The type package relies on TypeScript’s DOM libs for shared Web API base types
 ## Installation
 
 ```bash
-npm install @lingxia/rong
+npm install @rongjs/rong
 ```
 
 ## Usage (typechecking only)
@@ -28,7 +28,7 @@ Add to your `tsconfig.json`:
 ```json
 {
   "compilerOptions": {
-    "types": ["@lingxia/rong"]
+    "types": ["@rongjs/rong"]
   }
 }
 ```
@@ -39,7 +39,7 @@ Notes:
 - Ensure your `tsconfig.json` `lib` includes `"DOM"` if you want DOM globals (e.g. `URL`, `ReadableStream`) to be typed.
 - `Worker` uses the DOM global type name. The package exports `RongWorker`/`RongWorkerMessageEvent`/`RongWorkerErrorEvent` for the precise Rong subset when you want stricter annotations.
 - Rong’s runtime `Storage` constructor intentionally is not redeclared globally in the type package, because the DOM lib already owns the global `Storage` name. Use the exported `Storage`/`StorageConstructor` types as local annotations when needed.
-- The package only supports the root export `@lingxia/rong`; `src/*` and `dist/*` are not public import paths.
+- The package only supports the root export `@rongjs/rong`; `src/*` and `dist/*` are not public import paths.
 
 ## Accuracy notes (common gotchas)
 

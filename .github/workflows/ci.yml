@@ -11,7 +11,80 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.scope.outputs.rust }}
+      npm: ${{ steps.scope.outputs.npm }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Classify changes
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rust=false
+          npm=false
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            rust=true
+            npm=true
+            printf '%s\n' "workflow_dispatch runs all CI scopes" > /tmp/changed-files.txt
+          else
+            head="${{ github.sha }}"
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              base="${{ github.event.pull_request.base.sha }}"
+            else
+              base="${{ github.event.before }}"
+              if [ "$base" = "0000000000000000000000000000000000000000" ]; then
+                base="$(git rev-list --max-parents=0 "$head")"
+              fi
+            fi
+
+            git diff --name-only "$base" "$head" > /tmp/changed-files.txt
+
+            while IFS= read -r file; do
+              [ -n "$file" ] || continue
+
+              case "$file" in
+                docs/api/*|docs/skills/*|rong_types/*|skill/*|scripts/bump_version.sh|scripts/publish_npm.sh|.github/workflows/ci.yml|.github/workflows/release.yml)
+                  npm=true
+                  ;;
+              esac
+
+              case "$file" in
+                docs/*|rong_types/*|skill/*|scripts/bump_version.sh|scripts/publish_npm.sh|*.md|.gitignore|.gitattributes|.github/*)
+                  ;;
+                *)
+                  rust=true
+                  ;;
+              esac
+            done < /tmp/changed-files.txt
+          fi
+
+          {
+            echo "rust=$rust"
+            echo "npm=$npm"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### CI scope"
+            echo
+            echo "- Rust/JSC matrix: \`$rust\`"
+            echo "- npm packages: \`$npm\`"
+            echo
+            echo "Changed files:"
+            sed 's/^/- `/' /tmp/changed-files.txt | sed 's/$/`/'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   fmt:
+    needs: scope
+    if: needs.scope.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,8 +98,36 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
 
+  npm-package:
+    needs: scope
+    if: needs.scope.outputs.npm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check Rong type package
+        run: |
+          npm --prefix rong_types install --no-package-lock
+          npm --prefix rong_types run build
+
+      - name: Check Rong skill package
+        run: |
+          npm --prefix skill run check
+          node skill/bin/cli.mjs list
+          rm -rf /tmp/rong-skills-ci
+          node skill/bin/cli.mjs install --dir /tmp/rong-skills-ci --force
+          test -f /tmp/rong-skills-ci/rong-module-author/references/module-structure.md
+          test -f /tmp/rong-skills-ci/rong-runtime-developer/references/api-http.md
+
   host-check:
-    needs: fmt
+    needs: [scope, fmt]
+    if: needs.scope.outputs.rust == 'true'
     name: host-check-${{ matrix.engine }}-${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -72,7 +173,8 @@ jobs:
         run: cargo make check-engine
 
   host-clippy:
-    needs: fmt
+    needs: [scope, fmt]
+    if: needs.scope.outputs.rust == 'true'
     name: host-clippy-${{ matrix.engine }}-${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -118,7 +220,8 @@ jobs:
         run: cargo make clippy-engine
 
   host-test:
-    needs: fmt
+    needs: [scope, fmt]
+    if: needs.scope.outputs.rust == 'true'
     name: host-test-${{ matrix.engine }}-${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -194,7 +297,8 @@ jobs:
           }
 
   jscore-source-test:
-    needs: fmt
+    needs: [scope, fmt]
+    if: needs.scope.outputs.rust == 'true'
     name: jscore-source-${{ matrix.target }} (${{ matrix.os }})
     strategy:
       fail-fast: false

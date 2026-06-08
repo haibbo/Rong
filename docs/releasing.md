@@ -4,7 +4,7 @@ This repository uses a maintainer-driven release flow:
 
 - maintainers choose the version
 - maintainers write `CHANGELOG.md`
-- automation publishes crates and the npm package, creates the repository tag, and creates the GitHub Release
+- automation publishes crates and npm packages, creates the repository tag, and creates the GitHub Release
 
 There is no generated release PR and no automatic version inference.
 
@@ -33,7 +33,7 @@ The publish workflow:
 - reads the release version from `Cargo.toml`
 - requires a matching `CHANGELOG.md` section
 - publishes crates through `scripts/publish.sh`
-- publishes `@lingxia/rong` through `scripts/publish_npm.sh`
+- publishes all repo-maintained `@rongjs/*` npm packages through `scripts/publish_npm.sh`
 - creates the repository tag as `vX.Y.Z`
 - creates the GitHub Release from the changelog entry
 
@@ -89,7 +89,7 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
    ./scripts/publish.sh --yes
    ```
 
-7. Publish the npm package:
+7. Publish the npm packages:
 
    ```bash
    ./scripts/publish_npm.sh
@@ -105,10 +105,10 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
 
 ## Maintainer Notes
 
-- `bump_version.sh` updates the workspace version, the root package version, and internal workspace dependency versions.
+- `bump_version.sh` updates the workspace version, the root package version, internal workspace dependency versions, and repo-maintained npm package versions.
 - `publish.sh` does not change versions or changelog content.
 - `publish.sh` publishes crates in dependency order and waits for crates.io index propagation between packages.
-- `publish_npm.sh` publishes the `@lingxia/rong` npm package and skips versions that already exist.
+- `publish_npm.sh` publishes all repo-maintained `@rongjs/*` npm packages and skips versions that already exist.
 - When adding or removing published crates, update `scripts/publish.sh`.
 
 ## Short Version
