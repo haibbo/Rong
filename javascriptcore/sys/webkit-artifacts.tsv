@@ -7,7 +7,7 @@
 # curl + tar; disable it with RONG_JSC_DOWNLOAD=0.
 #
 # Once rows are populated, this is what makes the source backend "just work" on
-# Linux and Windows with no local WebKit build. Rows should point at vanilla
+# supported targets with no local WebKit build. Rows should point at vanilla
 # JSCOnly artifacts: static archives off-Apple, a JavaScriptCore.framework on
 # Apple.
 #
@@ -19,8 +19,7 @@
 # (.github/workflows/build-jsc-artifacts.yml), or locally run
 # `scripts/build_jsc_artifact.sh --package <file>.tar.gz`. Both print the row
 # (target, release-tag, filename, sha256) to paste below.
-#
-# No rows yet → source builds require a manually-provided artifact. Example of a
-# populated row (commented out):
-#
-#   x86_64-unknown-linux-gnu   webkit-2025.05.01    rong-webkit-x86_64-unknown-linux-gnu.tar.gz  0000000000000000000000000000000000000000000000000000000000000000
+
+x86_64-apple-darwin       jsc-artifacts-webkit-6da8ead481eb-20260608  rong-webkit-x86_64-apple-darwin.tar.gz       35efb66d072761e2d5df20fabdd18fc7c6bc5ec0ebf5087a1ae6786cfdc411d9
+x86_64-pc-windows-msvc    jsc-artifacts-webkit-6da8ead481eb-20260608  rong-webkit-x86_64-pc-windows-msvc.tar.gz    bf11caacb7eb710154510fb13aad7b03f49c8359e491c7cd5ba174163d254e90
+x86_64-unknown-linux-gnu  jsc-artifacts-webkit-6da8ead481eb-20260608  rong-webkit-x86_64-unknown-linux-gnu.tar.gz  b96321c6fd984d1be0c222899a8593d65bd99dd19ec7affd94d0f8522e080434
