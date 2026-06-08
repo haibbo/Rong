@@ -44,11 +44,33 @@ Requirements:
 
 - `Release: Publish Packages` must run from `master`
 - `CARGO_REGISTRY_TOKEN` must be configured in GitHub Actions
-- `NPM_TOKEN` must be configured in GitHub Actions
+- npm trusted publishing must be configured for each repo-maintained npm package
 
 `package_scope=rust` and `package_scope=npm` are recovery/partial-publish paths.
 They publish only the selected package family and intentionally skip repository
 tag and GitHub Release creation. Use `package_scope=all` for normal releases.
+
+## npm Trusted Publishing
+
+The release workflow publishes npm packages with npm Trusted Publishing (GitHub
+Actions OIDC), not token-based npm credentials.
+
+Before the workflow can publish a package, npm must know that package and its
+trusted publisher:
+
+- `@rongjs/rong` publishes from [`rong_types`](../rong_types)
+- `@rongjs/rong-skill` publishes from [`skill`](../skill)
+- GitHub repository: `LingXia-Dev/Rong`
+- Workflow file: `.github/workflows/release.yml`
+
+npm trusted publisher configuration is package-level, so the package must exist
+before the trusted publisher can be attached. For the first `@rongjs/*` publish,
+create the package outside this repository automation, then add the trusted
+publisher in npm package settings and use `Release: Publish Packages` for
+subsequent releases.
+
+The workflow has `id-token: write` permission and uses npm CLI 11.5.1+ so npm can
+exchange the GitHub OIDC token during `npm publish`.
 
 ## Changelog Style
 
@@ -68,9 +90,11 @@ Write release notes for downstream users first, not as a commit log.
 - Keep generated GitHub Release notes self-contained; do not rely on surrounding
   `CHANGELOG.md` context.
 
-## Local Fallback
+## Manual Rust Recovery
 
-Use this only when GitHub Actions is unavailable or when you are recovering from a partial release.
+Use this only when GitHub Actions is unavailable or when you are recovering the
+Rust crate publish path manually. npm publishing is intentionally CI-only through
+Trusted Publishing.
 
 1. Run verification:
 
@@ -95,11 +119,10 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
 
 4. Review, commit, and push the full release change if needed.
 
-5. Export the publish tokens:
+5. Export the crates.io publish token:
 
    ```bash
    export CARGO_REGISTRY_TOKEN=...
-   export NPM_TOKEN=...
    ```
 
 6. Publish crates:
@@ -114,13 +137,7 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
    ./scripts/publish.sh --yes
    ```
 
-7. Publish the npm packages:
-
-   ```bash
-   ./scripts/publish_npm.sh
-   ```
-
-8. Create the repository tag and GitHub Release manually:
+7. Create the repository tag and GitHub Release manually:
 
    ```bash
    git tag -a v<version> -m "Rong v<version>"
@@ -133,7 +150,7 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
 - `bump_version.sh` updates the workspace version, the root package version, internal workspace dependency versions, and repo-maintained npm package versions.
 - `publish.sh` does not change versions or changelog content.
 - `publish.sh` publishes crates in dependency order and waits for crates.io index propagation between packages.
-- `publish_npm.sh` publishes all repo-maintained `@rongjs/*` npm packages and skips versions that already exist.
+- `publish_npm.sh` publishes all repo-maintained `@rongjs/*` npm packages and skips versions that already exist. It runs only in GitHub Actions with trusted publishing.
 - When adding or removing published crates, update `scripts/publish.sh`.
 - The GitHub release workflow's `package_scope=all` is the only path that creates
   the `vX.Y.Z` tag and GitHub Release; `rust` and `npm` are package-only paths.
@@ -141,4 +158,4 @@ Use this only when GitHub Actions is unavailable or when you are recovering from
 ## Short Version
 
 - Normal release: open a normal PR with version + changelog changes, merge it, then run `Release: Publish Packages` with `package_scope=all`
-- Fallback release: bump version, update changelog, run `publish.sh` and `publish_npm.sh`, then create `vX.Y.Z` tag and GitHub Release manually
+- Manual Rust recovery: bump version, update changelog, run `publish.sh`, then create `vX.Y.Z` tag and GitHub Release manually

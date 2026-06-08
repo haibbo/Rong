@@ -50,8 +50,11 @@
 ## Secrets
 
 - `CARGO_REGISTRY_TOKEN` (required for publish)
-- `NPM_TOKEN` (required for npm publish)
 - `GITHUB_TOKEN` (default Actions token; used to push the release tag and create the GitHub Release)
+
+npm publishing uses Trusted Publishing through GitHub Actions OIDC. Configure the
+trusted publisher for each repo-maintained npm package in npm package settings;
+do not configure token-based npm credentials for this workflow.
 
 ## Local testing
 

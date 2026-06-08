@@ -3,12 +3,21 @@ set -euo pipefail
 
 PACKAGE_DIRS=("rong_types" "skill")
 
-if [ -z "${NPM_TOKEN:-}" ] && [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-  echo "NPM_TOKEN or NODE_AUTH_TOKEN is required to publish npm packages" >&2
+if [ "${GITHUB_ACTIONS:-}" != "true" ] \
+  || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] \
+  || [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+  echo "npm publish is restricted to GitHub Actions trusted publishing." >&2
+  echo "Run the Release: Publish Packages workflow with id-token: write." >&2
   exit 1
 fi
 
-export NODE_AUTH_TOKEN="${NODE_AUTH_TOKEN:-${NPM_TOKEN:-}}"
+if [ -n "${NODE_AUTH_TOKEN:-}" ] || [ -n "${NPM_TOKEN:-}" ]; then
+  echo "NPM_TOKEN and NODE_AUTH_TOKEN are not used for npm publishing." >&2
+  echo "Remove token-based npm credentials and use trusted publishing." >&2
+  exit 1
+fi
+
+echo "npm publish auth mode: trusted-publishing"
 
 for package_dir in "${PACKAGE_DIRS[@]}"; do
   package_json="${package_dir}/package.json"
@@ -22,6 +31,22 @@ for package_dir in "${PACKAGE_DIRS[@]}"; do
   fi
 
   echo "Preparing npm publish for ${package_name}@${package_version}"
+
+  package_exists=false
+  if npm view "${package_name}" name >/dev/null 2>&1; then
+    package_exists=true
+  fi
+
+  if [ "$package_exists" = false ]; then
+    cat >&2 << EOF
+${package_name} does not exist on npm yet.
+
+npm trusted publishing is configured on an existing package. Create
+${package_name} outside this repository automation, configure its trusted
+publisher for GitHub Actions in npm package settings, then rerun this workflow.
+EOF
+    exit 1
+  fi
 
   existing_version="$(npm view "${package_name}@${package_version}" version 2>/dev/null || true)"
   if [ "$existing_version" = "$package_version" ]; then

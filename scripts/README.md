@@ -59,8 +59,10 @@ git config --local core.hooksPath .githooks
 - Publishes all repo-maintained npm packages:
   - `@rongjs/rong` from `rong_types`
   - `@rongjs/rong-skill` from `skill`
-- Requires `NPM_TOKEN` or `NODE_AUTH_TOKEN`
+- Runs only in GitHub Actions with npm Trusted Publishing through OIDC
 - Skips the publish if the same npm version already exists
+- First-time npm package creation must happen outside this repository automation
+  before trusted publishing can be configured for that package
 
 ## GitHub publish flow (recommended)
 
@@ -77,18 +79,20 @@ Notes:
 - `Release: Publish Packages` publishes crates.io packages and all `@rongjs/*` npm packages, then creates the repository tag `vX.Y.Z` and the GitHub Release.
 - `package_scope=rust` and `package_scope=npm` are package-only recovery paths;
   they skip the repository tag and GitHub Release.
-- `Release: Publish Packages` requires `CARGO_REGISTRY_TOKEN` and `NPM_TOKEN`.
+- `Release: Publish Packages` requires `CARGO_REGISTRY_TOKEN` for Rust crates and
+  npm trusted publisher configuration for npm packages.
 
-## Local fallback flow
+## Local Rust recovery flow
 
-Use this when GitHub Actions is unavailable or when you need to recover manually:
+Use this when GitHub Actions is unavailable or when you need to recover Rust
+crate publishing manually. npm publishing is intentionally CI-only through
+Trusted Publishing.
 
 1. Run `./scripts/bump_version.sh <version>`.
 2. Update `CHANGELOG.md` for the same version.
 3. Review, commit, and push the release changes.
 4. Run `./scripts/publish.sh` to publish crates.
-5. Run `./scripts/publish_npm.sh` to publish all repo-maintained `@rongjs/*` npm packages.
-6. Create tag `v<version>` and the GitHub Release manually.
+5. Create tag `v<version>` and the GitHub Release manually.
 
 ## Troubleshooting
 

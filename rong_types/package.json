@@ -25,6 +25,15 @@
   ],
   "author": "",
   "license": "MIT",
+  "homepage": "https://github.com/LingXia-Dev/Rong#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LingXia-Dev/Rong.git",
+    "directory": "rong_types"
+  },
+  "bugs": {
+    "url": "https://github.com/LingXia-Dev/Rong/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
