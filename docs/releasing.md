@@ -58,8 +58,8 @@ Actions OIDC), not token-based npm credentials.
 Before the workflow can publish a package, npm must know that package and its
 trusted publisher:
 
-- `@rongjs/rong` publishes from [`rong_types`](../rong_types)
-- `@rongjs/rong-skill` publishes from [`skill`](../skill)
+- `@rongjs/rong` publishes from [`packages/rong_types`](../packages/rong_types)
+- `@rongjs/rong-skill` publishes from [`packages/skill`](../packages/skill)
 - GitHub repository: `LingXia-Dev/Rong`
 - Workflow file: `.github/workflows/release.yml`
 

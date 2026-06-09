@@ -31,14 +31,14 @@ function ensureBundledAssets() {
   if (hasBundledAssets()) return;
 
   const packScript = join(here, "pack.mjs");
-  const docsSkillsDir = join(here, "..", "..", "docs", "skills");
+  const docsSkillsDir = join(here, "..", "..", "..", "docs", "skills");
   if (existsSync(packScript) && existsSync(docsSkillsDir)) {
     const result = spawnSync(process.execPath, [packScript], { stdio: "inherit" });
     if (result.status === 0 && hasBundledAssets()) return;
   }
 
   console.error(
-    "rong-skill: bundled assets are missing. Run `node skill/bin/pack.mjs` from a Rong source checkout, or reinstall the published package.",
+    "rong-skill: bundled assets are missing. Run `node packages/skill/bin/pack.mjs` from a Rong source checkout, or reinstall the published package.",
   );
   process.exit(1);
 }

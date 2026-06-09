@@ -50,13 +50,13 @@ Run the default CI engine set locally:
 cargo make ci-verify-all
 ```
 
-Validate npm packages when changing `rong_types`, `skill`, `docs/api`, or
+Validate npm packages when changing `packages/rong_types`, `packages/skill`, `docs/api`, or
 `docs/skills`:
 
 ```bash
-npm --prefix rong_types install --no-package-lock
-npm --prefix rong_types run build
-npm --prefix skill run check
+npm --prefix packages/rong_types install --no-package-lock
+npm --prefix packages/rong_types run build
+npm --prefix packages/skill run check
 ```
 
 What these tasks do:
@@ -64,7 +64,7 @@ What these tasks do:
 - `pre-commit`: `cargo fmt --check` + `cargo check` + `cargo clippy`
 - `ci-verify`: `pre-commit` checks plus `bash test.sh -e <engine>`
 - `ci-verify-all`: runs `ci-verify` sequentially for `quickjs` and `jscore`
-- `npm --prefix skill run check`: syntax-checks the skill CLI/packer and verifies
+- `npm --prefix packages/skill run check`: syntax-checks the skill CLI/packer and verifies
   `docs/skills` plus `docs/api` can be packed into self-contained skills
 
 The shared tasks exclude `rong_arkjs`, `rong_arkjs_sys`, and the device-only
@@ -128,7 +128,7 @@ The main `CI` workflow starts with a lightweight `scope` job:
 
 - Docs, Markdown, and GitHub metadata changes do not run the Rust/JSC host
   matrix unless they touch workflow behavior.
-- Changes under `docs/api`, `docs/skills`, `rong_types`, `skill`, or npm
+- Changes under `docs/api`, `docs/skills`, `packages/rong_types`, `packages/skill`, or npm
   release scripts run the npm package validation job.
 - Rust/source changes run format, host engine checks, clippy, tests, and the
   `jscore-source-*` prebuilt-consumer jobs.
@@ -143,12 +143,12 @@ job for consuming the pinned artifact.
 
 - Source skill documentation lives under [`docs/skills`](docs/skills).
 - Shared runtime/API reference material lives under [`docs/api`](docs/api).
-- The npm package in [`skill`](skill) packs those docs into installable,
-  self-contained skills. Treat generated `skill/assets` output as build output,
+- The npm package in [`packages/skill`](packages/skill) packs those docs into installable,
+  self-contained skills. Treat generated `packages/skill/assets` output as build output,
   not source documentation.
 - The repo-maintained npm packages are published under the `@rongjs` scope:
-  `@rongjs/rong` from [`rong_types`](rong_types) and `@rongjs/rong-skill` from
-  [`skill`](skill).
+  `@rongjs/rong` from [`packages/rong_types`](packages/rong_types) and
+  `@rongjs/rong-skill` from [`packages/skill`](packages/skill).
 
 ## Release Flow
 

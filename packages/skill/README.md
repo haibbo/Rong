@@ -2,8 +2,8 @@
 
 Installer and packaging tools for Rong agent skills.
 
-The source skills live under `../docs/skills/`. Public runtime API references
-come from `../docs/api/`. This package generates self-contained install assets
+The source skills live under `../../docs/skills/`. Public runtime API references
+come from `../../docs/api/`. This package generates self-contained install assets
 under `assets/` when packed or when the CLI is run from a source checkout.
 
 ## Bundled Skills
@@ -56,7 +56,7 @@ npx @rongjs/rong-skill list
 Source of truth:
 
 ```text
-../docs/
+../../docs/
 |-- api/
 `-- skills/
     |-- rong-module-author/
@@ -92,19 +92,19 @@ structure. `assets/` is generated and is not the documentation source of truth.
 Validate skill packaging without writing `assets/`:
 
 ```bash
-npm --prefix skill run check
+npm --prefix packages/skill run check
 ```
 
 Generate `assets/` explicitly:
 
 ```bash
-npm --prefix skill run pack:skills
+npm --prefix packages/skill run pack:skills
 ```
 
 Remove generated `assets/`:
 
 ```bash
-node skill/bin/pack.mjs --clean
+node packages/skill/bin/pack.mjs --clean
 ```
 
 ## Requirements

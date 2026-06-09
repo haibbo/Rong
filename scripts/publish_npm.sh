@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PACKAGE_DIRS=("rong_types" "skill")
+PACKAGE_DIRS=("packages/rong_types" "packages/skill")
 
 if [ "${GITHUB_ACTIONS:-}" != "true" ] \
   || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] \

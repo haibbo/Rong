@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = join(here, "..");
-const repoRoot = join(packageRoot, "..");
+const repoRoot = join(packageRoot, "..", "..");
 const docsSkillsDir = join(repoRoot, "docs", "skills");
 const apiDocsDir = join(repoRoot, "docs", "api");
 const assetsDir = join(packageRoot, "assets");
@@ -115,9 +115,9 @@ function build(outDir) {
 const args = new Set(process.argv.slice(2));
 if (args.has("--help") || args.has("-h")) {
   console.log(`Usage:
-  node skill/bin/pack.mjs          Generate skill/assets from docs.
-  node skill/bin/pack.mjs --check  Validate generation without writing skill/assets.
-  node skill/bin/pack.mjs --clean  Remove generated skill/assets.`);
+  node packages/skill/bin/pack.mjs          Generate packages/skill/assets from docs.
+  node packages/skill/bin/pack.mjs --check  Validate generation without writing packages/skill/assets.
+  node packages/skill/bin/pack.mjs --clean  Remove generated packages/skill/assets.`);
   process.exit(0);
 }
 

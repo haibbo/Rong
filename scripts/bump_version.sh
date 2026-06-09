@@ -9,7 +9,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 WORKSPACE_TOML="Cargo.toml"
-NPM_PACKAGE_JSONS=("rong_types/package.json" "skill/package.json")
+NPM_PACKAGE_JSONS=("packages/rong_types/package.json" "packages/skill/package.json")
 
 usage() {
   cat << EOF

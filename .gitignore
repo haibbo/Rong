@@ -1,5 +1,5 @@
 target
 Cargo.lock
-rong_types/node_modules/
+packages/rong_types/node_modules/
 testing/harmony/app/oh_modules/
-skill/assets/
+packages/skill/assets/
