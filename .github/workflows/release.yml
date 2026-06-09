@@ -1,4 +1,6 @@
-name: "Release: Publish Packages"
+name: "Publish Release"
+
+run-name: "Publish ${{ inputs.package_scope }} from ${{ github.ref_name }}"
 
 on:
   workflow_dispatch:
