@@ -182,7 +182,7 @@ perl -i -pe '
     $in_deps = 0;
   }
 
-  if ($in_deps && /^rong[_a-z]* = \{/) {
+  if ($in_deps && /^rong[_a-z0-9]* = \{/) {
     # Remove existing version attribute
     s/, *version = "[^"]*"//g;
     s/version = "[^"]*", *//g;
