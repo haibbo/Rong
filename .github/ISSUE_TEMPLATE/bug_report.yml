@@ -1,0 +1,123 @@
+name: Bug report
+description: Report a reproducible Rong bug or regression.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please include a minimal reproduction when possible.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+      placeholder: Describe the bug and the affected behavior.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Runtime core
+        - QuickJS backend
+        - JavaScriptCore backend
+        - JavaScriptCore source artifacts
+        - ArkJS / Harmony backend
+        - Built-in module
+        - CLI
+        - npm package
+        - Release / CI
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: package
+    attributes:
+      label: Package or crate
+      description: Name the affected package, crate, or module if known.
+      placeholder: rong_timer, rong_jscore, @rongjs/rong, etc.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Which released version, git tag, or commit are you using?
+      placeholder: 0.4.0, v0.4.0, or a commit SHA
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Harmony / OHOS
+        - Cross-platform
+        - Not platform-specific
+        - Unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: engine
+    attributes:
+      label: JavaScript engine
+      options:
+        - QuickJS
+        - JavaScriptCore (system framework)
+        - JavaScriptCore (source artifact)
+        - ArkJS
+        - Not engine-specific
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide commands, code, or a small test case that reproduces the issue.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: What happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Paste relevant output. Remove secrets, tokens, and private URLs.
+      render: text
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I included a minimal reproduction or explained why one is not available.
+          required: true
+        - label: I removed secrets, tokens, and private data from logs.
+          required: true

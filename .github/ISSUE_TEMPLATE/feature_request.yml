@@ -1,0 +1,75 @@
+name: Feature request
+description: Suggest a new Rong capability or API improvement.
+title: "feat: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the developer workflow or runtime capability you want to improve.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what is hard or missing today?
+      placeholder: Describe the use case and current limitation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior, API, module, or workflow you would like.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Runtime core
+        - Engine backend
+        - Built-in module
+        - CLI
+        - npm package
+        - Release / CI
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: package
+    attributes:
+      label: Package or crate
+      description: Name the package, crate, or module if this request is scoped.
+      placeholder: rong_http, rong_worker, rong_jscore, @rongjs/rong, etc.
+
+  - type: textarea
+    id: api
+    attributes:
+      label: API sketch or example
+      description: Optional example of the desired Rust or JavaScript usage.
+      render: text
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing workarounds or other designs you considered.
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and release impact
+      description: Note any expected breaking changes, new dependencies, platform limits, or package release impact.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I described the use case and why existing APIs are not enough.
+          required: true
