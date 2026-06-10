@@ -6,13 +6,41 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+No 0.4.1 release is planned. These changes remain unreleased and will be
+included in the next planned release.
+
+### Added
+
+- Added independent Rust crate and npm package publishing controls for selecting
+  releases by crate, package group, package family, or changed files.
+- Added optional package-level git tags for independently published crates and
+  npm packages.
+- Added runtime reporting for the source-built JavaScriptCore artifact revision
+  so the active JSC source build can be identified at runtime.
+
 ### Changed
 
-- Changed release tooling to support independent Rust crate versions and
-  package-level publishing by crate, group, or changed files instead of requiring
-  every workspace crate to share one version.
-- Changed package publishing to create optional package-level git tags, while
-  leaving product-level `vX.Y.Z` tags as explicit maintainer decisions.
+- Changed the release workflow from a monolithic product release flow to package
+  publishing, with explicit `all`, `rust`, and `npm` scopes and
+  maintainer-selected Rust package arguments.
+- Changed Rust workspace manifests to use explicit per-crate versions, so
+  package updates no longer force a full workspace version bump.
+- Rebuilt and repinned JavaScriptCore source artifacts for macOS, Linux, and
+  Windows, including macOS linkage changes that avoid downstream rpath
+  workarounds.
+- Updated CI maintenance settings to use Node 24-compatible GitHub Actions, pin
+  Windows jobs to the `windows-2025-vs2026` runner image, and make Cargo
+  registry downloads more resilient.
+
+### Fixed
+
+- Fixed timer interval scheduling to avoid catch-up bursts after delayed ticks.
+- Reduced timing sensitivity in timer module tests.
+
+### Removed
+
+- Removed the final `NPM_TOKEN` release workflow path; npm publishing now relies
+  only on npm Trusted Publishing.
 
 ## [0.4.0] - 2026-06-09
 
