@@ -1,0 +1,842 @@
+---
+import { Code } from "astro:components";
+import Layout from "../layouts/Layout.astro";
+import { MODULES } from "../data/modules";
+import { SITE_VERSION, SITE_VERSION_MINOR } from "../data/version";
+import { HOME } from "../i18n/home";
+import { homeBase, type Locale } from "../i18n/ui";
+
+interface Props {
+  lang: Locale;
+}
+
+const { lang } = Astro.props;
+const t = HOME[lang];
+
+const repo = "https://github.com/LingXia-Dev/Rong";
+const base = import.meta.env.BASE_URL;
+// Locale-aware prefix for internal links (en at the root, zh under /zh).
+const home = homeBase(lang, base);
+
+// Code samples are shared across locales.
+const quickStart = `use rong::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Create a JavaScript runtime and context
+    let rt = RongJS::runtime();
+    let ctx = rt.context();
+
+    // Execute JavaScript directly
+    let result: i32 = ctx.eval(Source::from_bytes(b"2 + 3"))?;
+    println!("Result: {}", result); // Result: 5
+
+    Ok(())
+}`;
+
+const workerPool = `use rong::{Rong, RongJS, Source};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // shared() for stateless work on any available worker;
+    // pinned::<K, S>() keeps keyed work on the same runtime.
+    let rong = Rong::<RongJS>::builder().shared().workers(2).build()?;
+
+    let value: i32 = rong.call(|runtime, _receiver| async move {
+        let ctx = runtime.context();
+        ctx.eval(Source::from_bytes(b"21 * 2"))
+    }).await?;
+
+    println!("JS result: {value}"); // JS result: 42
+    Ok(())
+}`;
+
+const classBindings = `use rong::*;
+use rong::{js_class, js_export, js_method};
+
+#[js_export]
+struct Point { x: i32, y: i32 }
+
+#[js_class(rename = "Point2D")]
+impl Point {
+    #[js_method(constructor)]
+    fn new(x: i32, y: i32) -> Self { Self { x, y } }
+
+    #[js_method(getter, enumerable)]
+    fn x(&self) -> i32 { self.x }
+
+    #[js_method(rename = "moveBy")]
+    fn move_by(&mut self, dx: i32, dy: i32) {
+        self.x += dx;
+        self.y += dy;
+    }
+
+    // Static method: Point2D.origin()
+    #[js_method]
+    fn origin() -> Self { Self { x: 0, y: 0 } }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let rt = RongJS::runtime();
+    let ctx = rt.context();
+
+    // Register once, then use from JavaScript:
+    //   const p = new Point2D(1, 2); p.moveBy(3, 4);
+    ctx.register_class::<Point>()?;
+    Ok(())
+}`;
+
+const cargoToml = `[dependencies]
+# Engines are mutually exclusive — pick one, plus a TLS backend.
+# Desktop: tls-aws-lc · HarmonyOS/OpenHarmony: tls-ring
+rong = { version = "${SITE_VERSION_MINOR}", features = ["quickjs", "tls-aws-lc"] }`;
+
+const cliUsage = `# Run the Rong CLI / REPL — QuickJS + aws-lc by default on desktop
+cargo run -p rong_cli
+
+# Switch to JavaScriptCore explicitly
+cargo run -p rong_cli --no-default-features --features jscore,tls-aws-lc
+
+# Build for ArkJS on OpenHarmony targets
+cargo build --no-default-features --features arkjs,tls-ring \\
+  --target aarch64-unknown-linux-ohos`;
+
+const codeSamples = [
+  { code: quickStart, lang: "rust" },
+  { code: workerPool, lang: "rust" },
+  { code: classBindings, lang: "rust" },
+  { code: cargoToml, lang: "toml" },
+  { code: cliUsage, lang: "bash" },
+] as const;
+---
+
+<Layout lang={lang}>
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-glyph" aria-hidden="true">融</div>
+    <div class="container hero-inner">
+      <a class="hero-badge" href={`${repo}/blob/master/CHANGELOG.md`} target="_blank" rel="noopener">
+        <span class="dot"></span> v{SITE_VERSION} · {t.hero.badge}
+      </a>
+      <h1>
+        {t.hero.title1}<br />
+        <span class="gradient-text">{t.hero.title2}</span>
+      </h1>
+      <p class="hero-sub" set:html={t.hero.subHtml} />
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#start">
+          {t.hero.getStarted}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="btn btn-ghost" href={repo} target="_blank" rel="noopener">{t.hero.viewOnGitHub}</a>
+      </div>
+      <div class="hero-install">
+        <code>cargo add rong --features quickjs,tls-aws-lc</code>
+        <button class="copy-btn" data-copy="cargo add rong --features quickjs,tls-aws-lc" aria-label="Copy install command">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+      <ul class="hero-engines" aria-label={t.hero.enginesLabel}>
+        <li><span style="--c:var(--jade)"></span>QuickJS</li>
+        <li><span style="--c:var(--celadon)"></span>JavaScriptCore</li>
+        <li><span style="--c:var(--gold)"></span>ArkJS</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <div class="stats-band">
+    <div class="container stats" data-reveal>
+      {t.stats.map(([n, label]) => (
+        <div class="stat">
+          <span class="stat-n">{n}</span>
+          <span class="stat-label">{label}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">{t.featuresHead.eyebrow}</span>
+        <h2>{t.featuresHead.title}</h2>
+        <p>{t.featuresHead.body}</p>
+      </div>
+      <div class="features-grid">
+        {t.features.map((f, i) => (
+          <article class="card feature" data-reveal style={`transition-delay:${i * 60}ms`}>
+            <div class="feature-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d={f.icon}/></svg>
+            </div>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ENGINES -->
+  <section id="engines">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">{t.enginesHead.eyebrow}</span>
+        <h2>{t.enginesHead.title}</h2>
+        <p>{t.enginesHead.body}</p>
+      </div>
+      <div class="engines-grid">
+        {t.engines.map((e, i) => (
+          <article class="card engine" data-reveal style={`transition-delay:${i * 80}ms`}>
+            <div class="engine-bar" style={`background:${e.accent}`}></div>
+            <span class="engine-tag" style={`color:${e.accent}`}>{e.tag}</span>
+            <h3>{e.name}</h3>
+            <p>{e.body}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section id="architecture" class="arch-section">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">{t.archHead.eyebrow}</span>
+        <h2>{t.archHead.title}</h2>
+        <p>{t.archHead.body}</p>
+      </div>
+      <div class="arch" data-reveal>
+        <div class="arch-layer arch-core">
+          <span class="arch-title">{t.arch.core}</span>
+        </div>
+        <div class="arch-layer arch-row arch-services">
+          {t.arch.services.map((s) => <span>{s}</span>)}
+        </div>
+        <div class="arch-layer arch-row arch-engines">
+          <span style="--c:var(--jade)">QuickJS</span>
+          <span style="--c:var(--celadon)">JavaScriptCore</span>
+          <span style="--c:var(--gold)">ArkJS</span>
+        </div>
+        <div class="arch-layer arch-modules">
+          <span class="arch-modules-title">{t.arch.modulesTitle}</span>
+          <div class="arch-modules-row">
+            <span>Timer</span><span>HTTP</span><span>FS</span><span>Console</span><span>S3</span><span>SQLite</span><span>Redis</span><span>Worker</span><span>…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CODE -->
+  <section id="start">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">{t.startHead.eyebrow}</span>
+        <h2>{t.startHead.title}</h2>
+        <p>{t.startHead.body}</p>
+      </div>
+
+      <div class="code-block" data-reveal>
+        <div class="code-tabs" role="tablist">
+          {t.codeTabs.map((label, i) => (
+            <button class:list={["code-tab", { "is-active": i === 0 }]} data-tab={`${i}`} role="tab">{label}</button>
+          ))}
+        </div>
+        <div class="code-panes">
+          {codeSamples.map((s, i) => (
+            <div class:list={["code-pane", { "is-active": i === 0 }]} data-pane={`${i}`}><Code code={s.code} lang={s.lang} theme="vitesse-dark" /></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODULES -->
+  <section id="modules" class="modules-section">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">{t.modulesHead.eyebrow}</span>
+        <h2>{t.modulesHead.title}</h2>
+        <p>{t.modulesHead.body}</p>
+      </div>
+      <div class="modules-grid">
+        {MODULES.map((m, i) => (
+          <a class="module" href={`${home}/modules/${m.name}/`} data-reveal style={`transition-delay:${(i % 4) * 50}ms`}>
+            <code>{m.name}</code>
+            <span>{m.desc[lang]}</span>
+            <svg class="module-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ECOSYSTEM -->
+  <section class="eco-section">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">{t.ecoHead.eyebrow}</span>
+        <h2>{t.ecoHead.title}</h2>
+        <p>{t.ecoHead.body}</p>
+      </div>
+      <div class="eco-grid">
+        <a class="card eco" data-reveal href="https://crates.io/crates/rong" target="_blank" rel="noopener">
+          <span class="eco-kind">crates.io</span>
+          <h3>rong</h3>
+          <p>{t.eco.crate}</p>
+        </a>
+        <a class="card eco" data-reveal style="transition-delay:80ms" href="https://www.npmjs.com/package/@rongjs/rong" target="_blank" rel="noopener">
+          <span class="eco-kind">npm</span>
+          <h3>@rongjs/rong</h3>
+          <p>{t.eco.types}</p>
+        </a>
+        <a class="card eco" data-reveal style="transition-delay:160ms" href="https://www.npmjs.com/package/@rongjs/rong-skill" target="_blank" rel="noopener">
+          <span class="eco-kind">npm</span>
+          <h3>@rongjs/rong-skill</h3>
+          <p>{t.eco.skill}</p>
+        </a>
+        <a class="card eco" data-reveal style="transition-delay:240ms" href={`${repo}/tree/master/rong_cli`} target="_blank" rel="noopener">
+          <span class="eco-kind">CLI</span>
+          <h3>rong_cli</h3>
+          <p>{t.eco.cli}</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- AGENT SKILLS -->
+  <section id="skills" class="skills-section">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <span class="eyebrow">{t.skillsHead.eyebrow}</span>
+        <h2>{t.skillsHead.title}</h2>
+        <p set:html={t.skillsHead.bodyHtml} />
+      </div>
+      <div class="skills-grid">
+        <article class="card skill-card" data-reveal>
+          <h3><code>rong-runtime-developer</code></h3>
+          <p set:html={t.skills.runtimeDev} />
+        </article>
+        <article class="card skill-card" data-reveal style="transition-delay:80ms">
+          <h3><code>rong-module-author</code></h3>
+          <p set:html={t.skills.moduleAuthor} />
+        </article>
+      </div>
+      <div class="skill-install" data-reveal>
+        <code>npx @rongjs/rong-skill install</code>
+        <button class="copy-btn" data-copy="npx @rongjs/rong-skill install" aria-label="Copy skill install command">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+      <p class="skill-note" data-reveal set:html={t.skills.noteHtml} />
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="container">
+      <div class="cta" data-reveal>
+        <div class="cta-glyph" aria-hidden="true">融</div>
+        <h2>{t.cta.title}</h2>
+        <p>{t.cta.body}</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href={repo} target="_blank" rel="noopener">{t.cta.start}</a>
+          <a class="btn btn-ghost" href={`${repo}/blob/master/docs/internals/module_development.md`} target="_blank" rel="noopener">{t.cta.moduleGuide}</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  /* HERO */
+  .hero {
+    position: relative;
+    padding-block: clamp(96px, 15vw, 156px) clamp(56px, 8vw, 96px);
+    overflow: hidden;
+  }
+  .hero-glyph {
+    position: absolute;
+    top: 50%;
+    right: -4%;
+    transform: translateY(-50%);
+    font-size: min(48vw, 620px);
+    font-weight: 800;
+    line-height: 1;
+    background: var(--grad-hero);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    opacity: 0.09;
+    pointer-events: none;
+    user-select: none;
+  }
+  .hero-inner { position: relative; max-width: 840px; }
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 15px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    backdrop-filter: blur(8px);
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+  .hero-badge:hover { color: var(--text); border-color: var(--jade); }
+  .hero-badge .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--jade);
+    box-shadow: 0 0 10px var(--jade);
+  }
+  .hero h1 {
+    font-size: clamp(2rem, 6.4vw, 4.6rem);
+    font-weight: 800;
+    margin-block: 26px 22px;
+  }
+  .hero-sub {
+    font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+    max-width: 600px;
+    color: var(--text-muted);
+  }
+  .hero-sub :global(strong) { color: var(--text); }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; }
+
+  .hero-install {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 28px;
+    padding: 12px 12px 12px 18px;
+    background: #081010;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-family: var(--font-mono);
+    font-size: 0.92rem;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .hero-install code { color: var(--text); white-space: nowrap; }
+  .hero-install code::before { content: "$ "; color: var(--jade); }
+  .copy-btn {
+    flex-shrink: 0;
+    display: grid; place-items: center;
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .copy-btn:hover { color: var(--text); background: var(--surface-hover); }
+  .copy-btn.copied { color: var(--jade); border-color: var(--jade); }
+
+  .hero-engines {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 26px;
+    margin-top: 40px;
+    list-style: none;
+    color: var(--text-faint);
+    font-size: 0.9rem;
+  }
+  .hero-engines li { display: inline-flex; align-items: center; gap: 9px; }
+  .hero-engines span {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--c);
+    box-shadow: 0 0 12px var(--c);
+  }
+
+  /* STATS */
+  .stats-band {
+    border-block: 1px solid var(--border);
+    background: var(--bg-soft);
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    padding-block: 34px;
+  }
+  .stat { text-align: center; }
+  .stat-n {
+    display: block;
+    font-size: 1.65rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .stat-label {
+    font-size: 0.86rem;
+    color: var(--text-faint);
+  }
+
+  /* FEATURES */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .feature-icon {
+    display: grid; place-items: center;
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    background: var(--grad-soft);
+    border: 1px solid var(--border);
+    color: var(--jade);
+    margin-bottom: 18px;
+  }
+  .feature h3 { font-size: 1.18rem; margin-bottom: 9px; }
+  .feature p { font-size: 0.96rem; }
+
+  /* ENGINES */
+  .engines-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .engine { padding-top: 30px; }
+  .engine-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    opacity: 0.85;
+  }
+  .engine-tag {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .engine h3 { font-size: 1.4rem; margin-block: 10px 12px; }
+  .engine p { font-size: 0.96rem; }
+
+  /* ARCHITECTURE */
+  .arch-section { background: var(--bg-soft); border-block: 1px solid var(--border); }
+  .arch {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 860px;
+  }
+  .arch-layer {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 18px 22px;
+  }
+  .arch-core {
+    text-align: center;
+    background: var(--grad-soft);
+    border-color: var(--border-strong);
+  }
+  .arch-title { font-weight: 700; font-size: 1.1rem; letter-spacing: 0.02em; }
+  .arch-row {
+    display: grid;
+    gap: 12px;
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+  .arch-services { grid-template-columns: repeat(4, 1fr); }
+  .arch-engines { grid-template-columns: repeat(3, 1fr); }
+  .arch-row span {
+    text-align: center;
+    padding: 16px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-elevated);
+    font-size: 0.92rem;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+  .arch-engines span {
+    color: var(--text);
+    font-weight: 600;
+    border-color: color-mix(in srgb, var(--c) 40%, var(--border));
+    box-shadow: inset 0 -2px 0 0 var(--c);
+  }
+  .arch-modules { text-align: center; }
+  .arch-modules-title {
+    display: block;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    margin-bottom: 14px;
+  }
+  .arch-modules-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .arch-modules-row span {
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+  }
+
+  /* CODE */
+  .code-block {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: #081010;
+  }
+  .code-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 10px 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .code-tab {
+    flex-shrink: 0;
+    padding: 9px 16px;
+    background: transparent;
+    border: none;
+    border-radius: 8px 8px 0 0;
+    color: var(--text-faint);
+    font-size: 0.9rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: color 0.2s ease, background 0.2s ease;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .code-tab:hover { color: var(--text-muted); }
+  .code-tab.is-active {
+    color: var(--text);
+    border-bottom-color: var(--jade);
+  }
+  .code-pane { display: none; }
+  .code-pane.is-active { display: block; }
+  .code-block :global(.astro-code) {
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0;
+  }
+
+  /* MODULES */
+  .modules-section { background: var(--bg-soft); border-block: 1px solid var(--border); }
+  .modules-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+  .module {
+    position: relative;
+    display: block;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+  }
+  .module:hover {
+    border-color: rgba(62, 219, 178, 0.3);
+    transform: translateY(-3px);
+    background: var(--surface-hover);
+  }
+  .module code {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--jade);
+    margin-bottom: 6px;
+  }
+  .module > span { font-size: 0.86rem; color: var(--text-muted); }
+  .module-arrow {
+    position: absolute;
+    top: 18px;
+    right: 16px;
+    color: var(--text-faint);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
+  }
+  .module:hover .module-arrow {
+    opacity: 1;
+    transform: none;
+    color: var(--jade);
+  }
+
+  /* ECOSYSTEM */
+  .eco-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+  .eco { display: block; }
+  .eco-kind {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 14px;
+  }
+  .eco h3 {
+    font-family: var(--font-mono);
+    font-size: 1.05rem;
+    margin-bottom: 9px;
+  }
+  .eco p { font-size: 0.9rem; }
+
+  /* AGENT SKILLS */
+  .skills-section { background: var(--bg-soft); border-block: 1px solid var(--border); }
+  .skills-section :global(.inline-code) {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.1em 0.4em;
+    color: var(--text);
+  }
+  .skills-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    max-width: 860px;
+  }
+  .skill-card h3 {
+    font-size: 1.05rem;
+    margin-bottom: 10px;
+  }
+  .skill-card h3 code {
+    font-family: var(--font-mono);
+    color: var(--jade);
+  }
+  .skill-card p { font-size: 0.95rem; }
+  .skill-install {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 28px;
+    padding: 12px 12px 12px 18px;
+    background: #081010;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-family: var(--font-mono);
+    font-size: 0.92rem;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .skill-install code { color: var(--text); white-space: nowrap; }
+  .skill-install code::before { content: "$ "; color: var(--jade); }
+  .skill-note {
+    margin-top: 16px;
+    font-size: 0.9rem;
+    color: var(--text-faint);
+    max-width: 640px;
+  }
+
+  /* CTA */
+  .cta-section { padding-bottom: clamp(80px, 12vw, 140px); }
+  .cta {
+    position: relative;
+    text-align: center;
+    padding: clamp(48px, 7vw, 80px) 28px;
+    border: 1px solid var(--border-strong);
+    border-radius: 24px;
+    background:
+      radial-gradient(40rem 20rem at 50% 0%, rgba(62, 219, 178, 0.1), transparent 70%),
+      var(--bg-elevated);
+    overflow: hidden;
+  }
+  .cta-glyph {
+    position: absolute;
+    bottom: -38%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 28rem;
+    font-weight: 800;
+    line-height: 1;
+    background: var(--grad-hero);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    opacity: 0.06;
+    pointer-events: none;
+  }
+  .cta h2 {
+    position: relative;
+    font-size: clamp(1.7rem, 4vw, 2.6rem);
+    max-width: 640px;
+    margin-inline: auto;
+  }
+  .cta p {
+    position: relative;
+    max-width: 540px;
+    margin: 16px auto 0;
+    font-size: 1.05rem;
+  }
+  .cta .hero-cta { position: relative; justify-content: center; }
+
+  /* RESPONSIVE */
+  @media (max-width: 940px) {
+    .features-grid { grid-template-columns: repeat(2, 1fr); }
+    .modules-grid { grid-template-columns: repeat(3, 1fr); }
+    .eco-grid { grid-template-columns: repeat(2, 1fr); }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .engines-grid { grid-template-columns: 1fr; }
+    .features-grid { grid-template-columns: 1fr; }
+    .eco-grid { grid-template-columns: 1fr; }
+    .arch-services { grid-template-columns: repeat(2, 1fr); }
+    .modules-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 480px) {
+    .arch-services, .arch-engines { grid-template-columns: 1fr; }
+    .modules-grid { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: 1fr 1fr; gap: 18px; }
+    .hero-install { width: 100%; }
+  }
+</style>
+
+<script>
+  // Copy buttons
+  document.querySelectorAll<HTMLButtonElement>(".copy-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const text = btn.dataset.copy ?? "";
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.classList.add("copied");
+        setTimeout(() => btn.classList.remove("copied"), 1500);
+      } catch {
+        /* clipboard unavailable */
+      }
+    });
+  });
+
+  // Code tabs
+  const tabs = document.querySelectorAll<HTMLButtonElement>(".code-tab");
+  const panes = document.querySelectorAll<HTMLElement>(".code-pane");
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const idx = tab.dataset.tab;
+      tabs.forEach((t) => t.classList.toggle("is-active", t === tab));
+      panes.forEach((p) => p.classList.toggle("is-active", p.dataset.pane === idx));
+    });
+  });
+</script>

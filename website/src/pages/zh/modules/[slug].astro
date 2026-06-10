@@ -1,0 +1,12 @@
+---
+import ModulePage from "../../../components/ModulePage.astro";
+import { MODULES } from "../../../data/modules";
+
+export async function getStaticPaths() {
+  return MODULES.map((m) => ({ params: { slug: m.name } }));
+}
+
+const { slug } = Astro.params;
+---
+
+<ModulePage slug={slug} lang="zh" />

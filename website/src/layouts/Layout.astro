@@ -1,22 +1,27 @@
 ---
 import "../styles/global.css";
+import { LAYOUT, htmlLang, homeBase, localeUrls, type Locale } from "../i18n/ui";
 
 interface Props {
+  lang?: Locale;
   title?: string;
   description?: string;
 }
 
-const {
-  title = "Rong (融) — JavaScript Runtime for Rust",
-  description = "Rong is a JavaScript runtime for Rust with a unified API over multiple engines — QuickJS, JavaScriptCore, and ArkJS. Built for embedding, Rust-driven JS APIs, and long-lived worker runtimes.",
-} = Astro.props;
+const { lang = "en" } = Astro.props;
+const t = LAYOUT[lang];
+const { title = t.title, description = t.description } = Astro.props;
 
 const base = import.meta.env.BASE_URL;
 const repo = "https://github.com/LingXia-Dev/Rong";
+// Locale-aware prefix for internal links, and same-page URLs per locale for
+// the language switcher / hreflang alternates.
+const home = homeBase(lang, base);
+const alt = localeUrls(Astro.url.pathname, base);
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={htmlLang(lang)}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -26,6 +31,10 @@ const repo = "https://github.com/LingXia-Dev/Rong";
     <meta name="theme-color" content="#070b0b" />
     <meta name="color-scheme" content="dark" />
     <link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
+
+    <link rel="alternate" hreflang="en" href={new URL(alt.en, Astro.site)} />
+    <link rel="alternate" hreflang="zh-CN" href={new URL(alt.zh, Astro.site)} />
+    <link rel="alternate" hreflang="x-default" href={new URL(alt.en, Astro.site)} />
 
     <meta property="og:type" content="website" />
     <meta property="og:title" content={title} />
@@ -45,22 +54,29 @@ const repo = "https://github.com/LingXia-Dev/Rong";
   <body>
     <header class="nav" id="nav">
       <div class="container nav-inner">
-        <a class="brand" href={base}>
+        <a class="brand" href={`${home}/`}>
           <span class="brand-glyph">融</span>
           <span class="brand-name">Rong</span>
         </a>
         <nav class="nav-links">
-          <a href={`${base}/#features`}>Features</a>
-          <a href={`${base}/#engines`}>Engines</a>
-          <a href={`${base}/#architecture`}>Architecture</a>
-          <a href={`${base}/#modules`}>Modules</a>
-          <a href={`${base}/#skills`}>Agent Skills</a>
-          <a href={`${base}/#start`}>Quick Start</a>
+          <a href={`${home}/#features`}>{t.nav.features}</a>
+          <a href={`${home}/#engines`}>{t.nav.engines}</a>
+          <a href={`${home}/#architecture`}>{t.nav.architecture}</a>
+          <a href={`${home}/#modules`}>{t.nav.modules}</a>
+          <a href={`${home}/#skills`}>{t.nav.skills}</a>
+          <a href={`${home}/#start`}>{t.nav.start}</a>
         </nav>
-        <a class="btn btn-ghost nav-cta" href={repo} target="_blank" rel="noopener">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.78 0 12.29c0 5.2 3.44 9.6 8.21 11.16.6.11.82-.25.82-.57v-2c-3.34.71-4.04-1.42-4.04-1.42-.55-1.36-1.33-1.72-1.33-1.72-1.09-.72.08-.71.08-.71 1.2.08 1.84 1.21 1.84 1.21 1.07 1.79 2.81 1.27 3.5.97.11-.76.42-1.27.76-1.56-2.67-.29-5.47-1.29-5.47-5.75 0-1.27.47-2.31 1.23-3.12-.12-.29-.53-1.47.12-3.06 0 0 1-.31 3.3 1.19a11.6 11.6 0 0 1 6 0c2.3-1.5 3.3-1.19 3.3-1.19.65 1.59.24 2.77.12 3.06.77.81 1.23 1.85 1.23 3.12 0 4.47-2.81 5.45-5.49 5.74.43.36.81 1.08.81 2.18v3.24c0 .32.22.69.83.57A12.02 12.02 0 0 0 24 12.29C24 5.78 18.63.5 12 .5Z"/></svg>
-          <span>GitHub</span>
-        </a>
+        <div class="nav-actions">
+          <nav class="lang-switch" aria-label="Language">
+            <a class:list={["lang-opt", { "is-current": lang === "en" }]} href={alt.en} lang="en" aria-current={lang === "en" ? "true" : undefined}>EN</a>
+            <span class="lang-sep" aria-hidden="true">/</span>
+            <a class:list={["lang-opt", { "is-current": lang === "zh" }]} href={alt.zh} lang="zh-CN" aria-current={lang === "zh" ? "true" : undefined}>中文</a>
+          </nav>
+          <a class="btn btn-ghost nav-cta" href={repo} target="_blank" rel="noopener">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.37.5 0 5.78 0 12.29c0 5.2 3.44 9.6 8.21 11.16.6.11.82-.25.82-.57v-2c-3.34.71-4.04-1.42-4.04-1.42-.55-1.36-1.33-1.72-1.33-1.72-1.09-.72.08-.71.08-.71 1.2.08 1.84 1.21 1.84 1.21 1.07 1.79 2.81 1.27 3.5.97.11-.76.42-1.27.76-1.56-2.67-.29-5.47-1.29-5.47-5.75 0-1.27.47-2.31 1.23-3.12-.12-.29-.53-1.47.12-3.06 0 0 1-.31 3.3 1.19a11.6 11.6 0 0 1 6 0c2.3-1.5 3.3-1.19 3.3-1.19.65 1.59.24 2.77.12 3.06.77.81 1.23 1.85 1.23 3.12 0 4.47-2.81 5.45-5.49 5.74.43.36.81 1.08.81 2.18v3.24c0 .32.22.69.83.57A12.02 12.02 0 0 0 24 12.29C24 5.78 18.63.5 12 .5Z"/></svg>
+            <span>GitHub</span>
+          </a>
+        </div>
       </div>
     </header>
 
@@ -75,38 +91,38 @@ const repo = "https://github.com/LingXia-Dev/Rong";
             <span class="brand-glyph">融</span>
             <span class="brand-name">Rong</span>
           </div>
-          <p>Fusing JavaScript engines with Rust, creating harmony in diversity.</p>
+          <p>{t.footer.tagline}</p>
         </div>
         <div class="footer-cols">
           <div>
-            <h4>Project</h4>
-            <a href={repo} target="_blank" rel="noopener">Repository</a>
-            <a href={`${repo}/blob/master/CONTRIBUTING.md`} target="_blank" rel="noopener">Contributing</a>
-            <a href={`${repo}/blob/master/CHANGELOG.md`} target="_blank" rel="noopener">Changelog</a>
+            <h4>{t.footer.project}</h4>
+            <a href={repo} target="_blank" rel="noopener">{t.footer.repository}</a>
+            <a href={`${repo}/blob/master/CONTRIBUTING.md`} target="_blank" rel="noopener">{t.footer.contributing}</a>
+            <a href={`${repo}/blob/master/CHANGELOG.md`} target="_blank" rel="noopener">{t.footer.changelog}</a>
           </div>
           <div>
-            <h4>Docs</h4>
-            <a href={`${repo}/blob/master/docs/internals/module_development.md`} target="_blank" rel="noopener">Module Development</a>
-            <a href={`${repo}/blob/master/docs/internals/worker_execution_model.md`} target="_blank" rel="noopener">Worker Model</a>
-            <a href={`${repo}/blob/master/docs/internals/value_system.md`} target="_blank" rel="noopener">Value System</a>
-            <a href={`${repo}/blob/master/docs/internals/error_handling.md`} target="_blank" rel="noopener">Error Handling</a>
+            <h4>{t.footer.docs}</h4>
+            <a href={`${repo}/blob/master/docs/internals/module_development.md`} target="_blank" rel="noopener">{t.footer.moduleDev}</a>
+            <a href={`${repo}/blob/master/docs/internals/worker_execution_model.md`} target="_blank" rel="noopener">{t.footer.workerModel}</a>
+            <a href={`${repo}/blob/master/docs/internals/value_system.md`} target="_blank" rel="noopener">{t.footer.valueSystem}</a>
+            <a href={`${repo}/blob/master/docs/internals/error_handling.md`} target="_blank" rel="noopener">{t.footer.errorHandling}</a>
           </div>
           <div>
-            <h4>Packages</h4>
-            <a href="https://crates.io/crates/rong" target="_blank" rel="noopener">rong on crates.io</a>
+            <h4>{t.footer.packages}</h4>
+            <a href="https://crates.io/crates/rong" target="_blank" rel="noopener">{t.footer.cratesIo}</a>
             <a href="https://www.npmjs.com/package/@rongjs/rong" target="_blank" rel="noopener">@rongjs/rong</a>
             <a href="https://www.npmjs.com/package/@rongjs/rong-skill" target="_blank" rel="noopener">@rongjs/rong-skill</a>
           </div>
           <div>
-            <h4>License</h4>
+            <h4>{t.footer.license}</h4>
             <a href={`${repo}/blob/master/LICENSE-MIT`} target="_blank" rel="noopener">MIT</a>
             <a href={`${repo}/blob/master/LICENSE-APACHE`} target="_blank" rel="noopener">Apache 2.0</a>
           </div>
         </div>
       </div>
       <div class="container footer-bottom">
-        <span>© 2026 Rong. Licensed under MIT or Apache-2.0.</span>
-        <span>Built with Astro.</span>
+        <span>{t.footer.copyright}</span>
+        <span>{t.footer.builtWith}</span>
       </div>
     </footer>
 
@@ -158,6 +174,27 @@ const repo = "https://github.com/LingXia-Dev/Rong";
       }
       .nav-links a { transition: color 0.2s ease; }
       .nav-links a:hover { color: var(--text); }
+      .nav-actions {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .lang-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 0.88rem;
+      }
+      .lang-switch .lang-opt {
+        color: var(--text-faint);
+        transition: color 0.2s ease;
+      }
+      .lang-switch .lang-opt:hover { color: var(--text); }
+      .lang-switch .lang-opt.is-current {
+        color: var(--jade);
+        font-weight: 600;
+      }
+      .lang-sep { color: var(--border-strong); }
       .nav-cta { padding: 9px 16px; font-size: 0.9rem; }
 
       .footer {
