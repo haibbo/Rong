@@ -20,6 +20,6 @@
 # `scripts/build_jsc_artifact.sh --package <file>.tar.gz`. Both print the row
 # (target, release-tag, filename, sha256) to paste below.
 
-x86_64-apple-darwin       jsc-artifacts-webkit-6da8ead481eb-20260608  rong-webkit-x86_64-apple-darwin.tar.gz       35efb66d072761e2d5df20fabdd18fc7c6bc5ec0ebf5087a1ae6786cfdc411d9
-x86_64-pc-windows-msvc    jsc-artifacts-webkit-6da8ead481eb-20260608  rong-webkit-x86_64-pc-windows-msvc.tar.gz    bf11caacb7eb710154510fb13aad7b03f49c8359e491c7cd5ba174163d254e90
-x86_64-unknown-linux-gnu  jsc-artifacts-webkit-6da8ead481eb-20260608  rong-webkit-x86_64-unknown-linux-gnu.tar.gz  b96321c6fd984d1be0c222899a8593d65bd99dd19ec7affd94d0f8522e080434
+x86_64-apple-darwin       jsc-artifacts-webkit-6da8ead481eb-20260610  rong-webkit-x86_64-apple-darwin.tar.gz       aa5aa8842e738528287a21b522cf41c7bfba4e97c96e8a03046938f7a228038e
+x86_64-pc-windows-msvc    jsc-artifacts-webkit-6da8ead481eb-20260610  rong-webkit-x86_64-pc-windows-msvc.tar.gz    d2ea4149f304e7c1ebf50005a17a410533db108a3d86b65f1370db1e5ea2628b
+x86_64-unknown-linux-gnu  jsc-artifacts-webkit-6da8ead481eb-20260610  rong-webkit-x86_64-unknown-linux-gnu.tar.gz  497126ba27fe9e435110bc0d6a1f838412b8a974123ef1b4eb97e1b9dba5ce49
