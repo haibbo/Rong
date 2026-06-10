@@ -239,7 +239,13 @@ run_module_test() {
         feature_set="$(jscore_features)"
     fi
 
-    if run_cargo_test -p "$module_name" --no-default-features --features="$feature_set" --quiet; then
+    local cargo_args=(-p "$module_name" --no-default-features --features="$feature_set" --quiet)
+    if [[ "$module_name" == "rong_timer" ]]; then
+        # Timer tests share the global host executor and are sensitive to crate-level test overlap.
+        cargo_args+=(-- --test-threads=1)
+    fi
+
+    if run_cargo_test "${cargo_args[@]}"; then
         log_success "Module test $module_name passed on $engine"
         PASSED_TESTS=$((PASSED_TESTS + 1))
         return 0

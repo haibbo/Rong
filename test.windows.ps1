@@ -195,7 +195,13 @@ function Run-ModuleTest([string]$ModuleName, [string]$EngineName) {
         $featureSet = Get-JscoreFeatures
     }
 
-    & cargo test "-p" $ModuleName "--no-default-features" "--features=$featureSet" "--quiet"
+    $testArgs = @("-p", $ModuleName, "--no-default-features", "--features=$featureSet", "--quiet")
+    if ($ModuleName -eq "rong_timer") {
+        # Timer tests share the global host executor and are sensitive to crate-level test overlap.
+        $testArgs += @("--", "--test-threads=1")
+    }
+
+    & cargo test @testArgs
     if ($LASTEXITCODE -eq 0) {
         Log-Pass "Module test $ModuleName passed on $EngineName"
         $script:PassedTests++
