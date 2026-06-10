@@ -68,7 +68,7 @@ impl TimerCallbackQueue {
 
         spawn_local(async move {
             while let Some(id) = rx.recv().await {
-                let (callback, repeat, pending) = {
+                let (callback, repeat, pending, processed) = {
                     let mut timers = lock_poison(&registry.inner.timers);
                     let Some(entry) = timers.get_mut(&id) else {
                         continue;
@@ -76,11 +76,12 @@ impl TimerCallbackQueue {
                     let callback = entry.callback.clone();
                     let repeat = entry.repeat;
                     let pending = entry.pending.clone();
+                    let processed = entry.processed.clone();
                     if !repeat {
                         // One-shot: drop callback on the JS thread after this dispatch.
                         let _ = timers.remove(&id);
                     }
-                    (callback, repeat, pending)
+                    (callback, repeat, pending, processed)
                 };
 
                 if let Some(cb) = callback {
@@ -96,6 +97,7 @@ impl TimerCallbackQueue {
                 let _ = pending.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
                     Some(v.saturating_sub(1))
                 });
+                processed.notify_waiters();
             }
         });
     }
@@ -114,6 +116,7 @@ struct TimerEntry {
     callback: Option<JSFunc>,
     repeat: bool,
     pending: Arc<AtomicU8>,
+    processed: Arc<Notify>,
 }
 
 struct TimerRegistryInner {
@@ -153,6 +156,7 @@ impl TimerRegistry {
                 callback: None,
                 repeat: false,
                 pending: Arc::new(AtomicU8::new(0)),
+                processed: Arc::new(Notify::new()),
             },
         );
     }
@@ -162,6 +166,7 @@ impl TimerRegistry {
         id: u32,
         cancel: Arc<Notify>,
         pending: Arc<AtomicU8>,
+        processed: Arc<Notify>,
         callback: JSFunc,
         repeat: bool,
     ) {
@@ -172,6 +177,7 @@ impl TimerRegistry {
                 callback: Some(callback),
                 repeat,
                 pending,
+                processed,
             },
         );
     }
@@ -182,10 +188,14 @@ impl TimerRegistry {
         }
     }
 
-    fn get_entry_for_bg(&self, id: u32) -> Option<(Arc<Notify>, Arc<AtomicU8>)> {
+    fn get_entry_for_bg(&self, id: u32) -> Option<(Arc<Notify>, Arc<AtomicU8>, Arc<Notify>)> {
         let timers = lock_poison(&self.inner.timers);
         let entry = timers.get(&id)?;
-        Some((entry.cancel.clone(), entry.pending.clone()))
+        Some((
+            entry.cancel.clone(),
+            entry.pending.clone(),
+            entry.processed.clone(),
+        ))
     }
 
     fn shutdown(&self) {
@@ -212,31 +222,40 @@ fn set_timeout_with_repeat(
     delay: Optional<f64>,
     repeat: bool,
 ) -> u32 {
-    const MAX_QUEUED_TICKS: u8 = 8;
+    const MAX_QUEUED_TICKS: u8 = 1;
 
     let id = registry.next_id();
     let cancel = Arc::new(Notify::new());
     let pending = Arc::new(AtomicU8::new(0));
+    let processed = Arc::new(Notify::new());
 
-    registry.register_timer_with_callback(id, cancel.clone(), pending.clone(), callback, repeat);
+    registry.register_timer_with_callback(
+        id,
+        cancel.clone(),
+        pending.clone(),
+        processed.clone(),
+        callback,
+        repeat,
+    );
     let delay = delay.unwrap_or(0.0).max(0.0) as u64;
     let interval_duration = Duration::from_millis(delay.max(1));
 
     // Grab the per-timer cancel/pending handles for cross-thread operation.
-    let Some((cancel_bg, pending_bg)) = registry.get_entry_for_bg(id) else {
+    let Some((cancel_bg, pending_bg, processed_bg)) = registry.get_entry_for_bg(id) else {
         return id;
     };
 
     let run_timer = move |cancel: Arc<Notify>,
                           pending: Arc<AtomicU8>,
+                          processed: Arc<Notify>,
                           tx: mpsc::UnboundedSender<u32>| async move {
-        let send_tick = || {
-            // Keep a small bounded backlog so intervals can "catch up" after brief stalls
-            // without letting unbounded channels grow forever.
+        let send_tick = || -> bool {
+            // Coalesce ticks while the JS thread is busy. Running an interval
+            // backlog back-to-back violates the minimum delay users expect.
             let mut cur = pending.load(Ordering::SeqCst);
             loop {
                 if cur >= MAX_QUEUED_TICKS {
-                    return;
+                    return false;
                 }
                 match pending.compare_exchange(
                     cur,
@@ -253,22 +272,27 @@ fn set_timeout_with_repeat(
                 let _ = pending.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
                     Some(v.saturating_sub(1))
                 });
+                return false;
             }
+            true
         };
 
         if repeat {
-            let mut next_deadline = tokio::time::Instant::now() + interval_duration;
             loop {
                 tokio::select! {
-                    _ = tokio::time::sleep_until(next_deadline) => {}
+                    _ = tokio::time::sleep(interval_duration) => {}
                     _ = cancel.notified() => break,
                 }
-                send_tick();
 
-                next_deadline += interval_duration;
-                let now = tokio::time::Instant::now();
-                if next_deadline <= now {
-                    next_deadline = now + interval_duration;
+                if !send_tick() {
+                    continue;
+                }
+
+                while pending.load(Ordering::SeqCst) > 0 {
+                    tokio::select! {
+                        _ = processed.notified() => {}
+                        _ = cancel.notified() => return,
+                    }
                 }
             }
             return;
@@ -284,7 +308,7 @@ fn set_timeout_with_repeat(
     };
 
     // Run timer on the global host executor for reliable timing.
-    RongExecutor::global().spawn(run_timer(cancel_bg, pending_bg, callback_tx));
+    RongExecutor::global().spawn(run_timer(cancel_bg, pending_bg, processed_bg, callback_tx));
 
     id
 }
