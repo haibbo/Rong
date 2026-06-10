@@ -1,0 +1,250 @@
+:root {
+  /* Palette — 墨玉·青瓷: deep ink black, jade & celadon, muted gold accents */
+  --bg: #070b0b;
+  --bg-soft: #0a1010;
+  --bg-elevated: #0e1616;
+  --surface: rgba(214, 244, 235, 0.03);
+  --surface-hover: rgba(214, 244, 235, 0.06);
+  --border: rgba(214, 244, 235, 0.08);
+  --border-strong: rgba(214, 244, 235, 0.16);
+
+  --text: #eef4f2;
+  --text-muted: #a3b3ae;
+  --text-faint: #667873;
+
+  --jade: #3edbb2;
+  --celadon: #4fb8d8;
+  --gold: #d4b46a;
+
+  --accent: var(--jade);
+  --grad: linear-gradient(110deg, var(--jade) 0%, var(--celadon) 100%);
+  --grad-hero: linear-gradient(105deg, var(--gold) 0%, var(--jade) 45%, var(--celadon) 100%);
+  --grad-soft: linear-gradient(110deg, rgba(62, 219, 178, 0.13), rgba(79, 184, 216, 0.13));
+
+  --ink-on-jade: #04231b;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --maxw: 1140px;
+
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* Dark scrollbars/form controls everywhere — without this, browsers paint
+     light (white) native scrollbar tracks inside dark scroll areas. */
+  color-scheme: dark;
+  background: #070b0b;
+  scroll-behavior: smooth;
+  scroll-padding-top: 90px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Ambient background glow + grid */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(58rem 38rem at 80% -10%, rgba(62, 219, 178, 0.1), transparent 60%),
+    radial-gradient(50rem 36rem at 8% 6%, rgba(79, 184, 216, 0.08), transparent 60%),
+    radial-gradient(36rem 26rem at 50% 110%, rgba(212, 180, 106, 0.05), transparent 65%);
+  pointer-events: none;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-image:
+    linear-gradient(to right, rgba(214, 244, 235, 0.022) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(214, 244, 235, 0.022) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 100% 70% at 50% 0%, #000 30%, transparent 75%);
+  pointer-events: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1, h2, h3, h4 {
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 650;
+}
+
+p { color: var(--text-muted); }
+
+::selection {
+  background: rgba(62, 219, 178, 0.28);
+  color: #fff;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+.gradient-text {
+  background: var(--grad-hero);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Sections */
+section {
+  position: relative;
+  padding-block: clamp(64px, 10vw, 128px);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.eyebrow::before {
+  content: "";
+  width: 22px;
+  height: 1px;
+  background: var(--gold);
+  opacity: 0.7;
+}
+
+.section-head {
+  max-width: 660px;
+  margin-bottom: 56px;
+}
+
+.section-head h2 {
+  font-size: clamp(1.9rem, 4vw, 2.7rem);
+  margin-block: 16px 14px;
+}
+
+.section-head p {
+  font-size: 1.08rem;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 22px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+  transition: transform 0.18s ease, box-shadow 0.25s ease, background 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  will-change: transform;
+}
+.btn:hover { transform: translateY(-2px); }
+
+.btn-primary {
+  background: var(--grad);
+  color: var(--ink-on-jade);
+  box-shadow: 0 10px 30px -10px rgba(62, 219, 178, 0.45);
+}
+.btn-primary:hover { box-shadow: 0 16px 40px -12px rgba(62, 219, 178, 0.55); }
+
+.btn-ghost {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+  backdrop-filter: blur(8px);
+}
+.btn-ghost:hover { background: var(--surface-hover); border-color: rgba(62, 219, 178, 0.4); }
+
+/* Cards */
+.card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 26px;
+  transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+  overflow: hidden;
+}
+.card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(62, 219, 178, 0.3);
+  background: var(--surface-hover);
+}
+
+/* Scroll reveal */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  [data-reveal] { opacity: 1; transform: none; }
+}
+
+/* Astro code blocks */
+.astro-code {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  padding: 20px 22px !important;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  font-family: var(--font-mono);
+  overflow-x: auto;
+  background: #081010 !important;
+}
+
+/* Slim, palette-matched scrollbars for horizontally scrolling code/tab areas */
+.astro-code::-webkit-scrollbar,
+.code-tabs::-webkit-scrollbar {
+  height: 8px;
+}
+.astro-code::-webkit-scrollbar-track,
+.code-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+.astro-code::-webkit-scrollbar-thumb,
+.code-tabs::-webkit-scrollbar-thumb {
+  background: rgba(214, 244, 235, 0.14);
+  border-radius: 999px;
+}
+.astro-code,
+.code-tabs {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(214, 244, 235, 0.14) transparent;
+}
