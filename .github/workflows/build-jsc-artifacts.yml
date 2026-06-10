@@ -51,7 +51,7 @@ jobs:
         run: |
           case "${{ inputs.target }}" in
             all)
-              include='[{"target":"x86_64-apple-darwin","os":"macos-15-intel"},{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest"},{"target":"x86_64-pc-windows-msvc","os":"windows-latest"}]'
+              include='[{"target":"x86_64-apple-darwin","os":"macos-15-intel"},{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest"},{"target":"x86_64-pc-windows-msvc","os":"windows-2025-vs2026"}]'
               ;;
             x86_64-apple-darwin)
               include='[{"target":"x86_64-apple-darwin","os":"macos-15-intel"}]'
@@ -60,7 +60,7 @@ jobs:
               include='[{"target":"x86_64-unknown-linux-gnu","os":"ubuntu-latest"}]'
               ;;
             x86_64-pc-windows-msvc)
-              include='[{"target":"x86_64-pc-windows-msvc","os":"windows-latest"}]'
+              include='[{"target":"x86_64-pc-windows-msvc","os":"windows-2025-vs2026"}]'
               ;;
             *)
               echo "Unsupported target: ${{ inputs.target }}" >&2

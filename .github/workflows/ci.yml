@@ -149,7 +149,7 @@ jobs:
       matrix:
         include:
           - engine: quickjs
-            os: windows-latest
+            os: windows-2025-vs2026
           - engine: quickjs
             os: ubuntu-latest
           - engine: quickjs
@@ -196,7 +196,7 @@ jobs:
       matrix:
         include:
           - engine: quickjs
-            os: windows-latest
+            os: windows-2025-vs2026
           - engine: quickjs
             os: ubuntu-latest
           - engine: quickjs
@@ -243,7 +243,7 @@ jobs:
       matrix:
         include:
           - engine: quickjs
-            os: windows-latest
+            os: windows-2025-vs2026
           - engine: quickjs
             os: ubuntu-latest
           - engine: quickjs
@@ -323,7 +323,7 @@ jobs:
             target: x86_64-apple-darwin
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: windows-latest
+          - os: windows-2025-vs2026
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     env:
@@ -352,7 +352,7 @@ jobs:
 
       - name: Cache JSC source artifact
         if: steps.source-artifact.outputs.run_source == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.RONG_JSC_CACHE_DIR }}/${{ matrix.target }}
           key: jsc-source-${{ matrix.target }}-${{ hashFiles('javascriptcore/sys/webkit-artifacts.tsv') }}
