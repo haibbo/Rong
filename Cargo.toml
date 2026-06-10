@@ -41,8 +41,8 @@ rong = { path = ".", default-features = false      , version = "0.4.0" }
 rong_core = { path = "core"      , version = "0.4.0" }
 rong_quickjs = { path = "quickjs"      , version = "0.4.0" }
 rong_quickjs_sys = { path = "quickjs/sys"      , version = "0.4.0" }
-rong_jscore = { path = "javascriptcore"      , version = "0.4.0" }
-rong_jscore_sys = { path = "javascriptcore/sys"      , version = "0.4.0" }
+rong_jscore = { path = "javascriptcore"      , version = "0.4.1" }
+rong_jscore_sys = { path = "javascriptcore/sys"      , version = "0.4.1" }
 rong_arkjs = { path = "arkjs"      , version = "0.4.0" }
 rong_arkjs_sys = { path = "arkjs/sys"      , version = "0.4.0" }
 rong_macro = { path = "macro"      , version = "0.4.0" }
@@ -53,7 +53,7 @@ rong_modules = { path = "rong_modules"      , version = "0.4.0" }
 rong_rt = { path = "rong_rt"   , default-features = false   , version = "0.4.0" }
 
 # Module dependencies
-rong_timer = { path = "modules/rong_timer"   , default-features = false   , version = "0.4.0" }
+rong_timer = { path = "modules/rong_timer"   , default-features = false   , version = "0.4.1" }
 rong_cron = { path = "modules/rong_cron"   , default-features = false   , version = "0.4.0" }
 rong_console = { path = "modules/rong_console"   , default-features = false   , version = "0.4.0" }
 rong_assert = { path = "modules/rong_assert"   , default-features = false   , version = "0.4.0" }

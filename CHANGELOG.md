@@ -6,17 +6,37 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
-### Added
+## [0.4.1] - 2026-06-10
+
+Rong 0.4.1 is a focused patch release for the timer module and the
+JavaScriptCore engine path. It publishes `rong_timer`, `rong_jscore`, and
+`rong_jscore_sys` at 0.4.1; other crates are unchanged and continue to resolve
+through their `0.4` requirements. The release also lands the repo-level
+release tooling and website automation used to ship it.
+
+### Timer
+
+- Fixed an internal `rong_timer` interval scheduler bug that could run delayed
+  `setInterval` ticks back-to-back instead of coalescing them.
+- Reduced timing sensitivity in timer module tests.
+
+### JavaScriptCore
+
+- Rebuilt and repinned JavaScriptCore source artifacts for macOS, Linux, and
+  Windows, including macOS linkage changes that avoid downstream rpath
+  workarounds.
+- Added runtime reporting for the source-built JavaScriptCore artifact revision
+  so the active JSC source build can be identified at runtime.
+
+### Release tooling
 
 - Added independent Rust crate and npm package publishing controls for selecting
   releases by crate, package group, package family, or changed files.
 - Added optional package-level git tags for independently published crates and
   npm packages.
-- Added runtime reporting for the source-built JavaScriptCore artifact revision
-  so the active JSC source build can be identified at runtime.
 - Added `--changed` selection to the publish script: crates are compared
-  against their own latest package tags with version-only manifest churn
-  ignored, so partial-release plans reflect real code changes.
+  against their own latest package tags with internal version churn ignored,
+  so partial-release plans reflect real code changes.
 - Added publish drift detection (`--dry-run` warnings and `--check-drift`) for
   selected crates whose current version is already on crates.io, plus an
   informational pending-release-plan summary on `master` CI runs.
@@ -25,39 +45,29 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
   changelog entry after a successful publish.
 - Added crates.io Trusted Publishing (GitHub OIDC) support to the publish
   workflow, with `CARGO_REGISTRY_TOKEN` as the fallback.
-
-### Changed
-
 - Changed the release workflow from a monolithic product release flow to package
   publishing, with explicit `all`, `rust`, and `npm` scopes and
-  maintainer-selected Rust package arguments.
+  maintainer-selected Rust package arguments, split into validation, Rust
+  (macOS), npm (Linux), and product-release jobs.
 - Changed Rust workspace manifests to use explicit per-crate versions, so
   package updates no longer force a full workspace version bump.
-- Rebuilt and repinned JavaScriptCore source artifacts for macOS, Linux, and
-  Windows, including macOS linkage changes that avoid downstream rpath
-  workarounds.
-- Updated CI maintenance settings to use Node 24-compatible GitHub Actions, pin
-  Windows jobs to the `windows-2025-vs2026` runner image, and make Cargo
-  registry downloads more resilient.
-- Split the publish workflow into validation, Rust (macOS), npm (Linux), and
-  product-release jobs, so npm-only publishes no longer use a macOS runner.
 - Changed published-version checks in the publish script to query the crates.io
   sparse index for exact version matches instead of `cargo search`.
 - The publish script now validates its crate list against the workspace's
   publishable members and fails fast on drift, and no longer treats files of
   nested crates (such as `quickjs/sys` under `quickjs`) as changes to the
   enclosing crate.
-
-### Fixed
-
-- Fixed an internal `rong_timer` interval scheduler bug that could run delayed
-  `setInterval` ticks back-to-back instead of coalescing them.
-- Reduced timing sensitivity in timer module tests.
-
-### Removed
-
 - Removed the final `NPM_TOKEN` release workflow path; npm publishing now relies
   only on npm Trusted Publishing.
+
+### CI & website
+
+- Updated CI maintenance settings to use Node 24-compatible GitHub Actions, pin
+  Windows jobs to the `windows-2025-vs2026` runner image, and make Cargo
+  registry downloads more resilient.
+- Added the project website (Astro, GitHub Pages) with module API pages
+  generated from `docs/api`, deployed automatically on doc changes and product
+  releases, with the site version resolved from release tags.
 
 ## [0.4.0] - 2026-06-09
 
