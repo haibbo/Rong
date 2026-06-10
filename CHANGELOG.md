@@ -34,7 +34,8 @@ included in the next planned release.
 
 ### Fixed
 
-- Fixed timer interval scheduling to avoid catch-up bursts after delayed ticks.
+- Fixed an internal `rong_timer` interval scheduler bug that could run delayed
+  `setInterval` ticks back-to-back instead of coalescing them.
 - Reduced timing sensitivity in timer module tests.
 
 ### Removed
