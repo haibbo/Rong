@@ -14,4 +14,9 @@ fn main() {
     if std::env::var("DEP_JSCORE_BACKEND").as_deref() == Ok("source") {
         println!("cargo:rustc-cfg=jsc_source");
     }
+
+    println!("cargo:rerun-if-env-changed=DEP_JSCORE_WEBKIT_REVISION");
+    if let Ok(revision) = std::env::var("DEP_JSCORE_WEBKIT_REVISION") {
+        println!("cargo:rustc-env=RONG_JSC_WEBKIT_REVISION={revision}");
+    }
 }

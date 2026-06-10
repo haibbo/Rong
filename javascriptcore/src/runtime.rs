@@ -46,26 +46,19 @@ impl JSEngine for JavaScriptCore {
     type Runtime = JSCRuntime;
 
     fn name() -> &'static str {
-        // Distinguish the source-built JSCOnly backend from the system
-        // JavaScriptCore.framework so the active engine is identifiable at runtime.
-        #[cfg(jsc_source)]
-        {
-            "JavaScriptCore (source)"
-        }
-        #[cfg(not(jsc_source))]
-        {
-            "JavaScriptCore"
-        }
+        "JavaScriptCore"
     }
 
     fn version() -> String {
         #[cfg(jsc_source)]
         {
-            String::from("JSCOnly (source build)")
+            option_env!("RONG_JSC_WEBKIT_REVISION")
+                .map(|revision| format!("source:{revision}"))
+                .unwrap_or_else(|| String::from("source"))
         }
         #[cfg(not(jsc_source))]
         {
-            String::from("system framework")
+            String::from("framework")
         }
     }
 }

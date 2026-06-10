@@ -308,6 +308,9 @@ fn build_source(target_os: &str) {
     emit_metadata("backend", "source");
     emit_metadata("include", &source.include.display().to_string());
     emit_metadata("lib", &source.lib.display().to_string());
+    if let Some(webkit_revision) = &source.webkit_revision {
+        emit_metadata("webkit_revision", webkit_revision);
+    }
 }
 
 fn stamp_apple_framework_install_name(framework_dir: &Path) {
@@ -352,6 +355,12 @@ fn stamp_apple_framework_install_name(framework_dir: &Path) {
 struct SourceLayout {
     include: PathBuf,
     lib: PathBuf,
+    webkit_revision: Option<String>,
+}
+
+enum SourceOrigin {
+    Env,
+    PinnedArtifact,
 }
 
 fn resolve_source_layout(target: &str) -> SourceLayout {
@@ -361,17 +370,20 @@ fn resolve_source_layout(target: &str) -> SourceLayout {
     //      as `RONG_JSC_ROOT_AARCH64_UNKNOWN_LINUX_GNU` are also honored.
     //   2. The shared per-target cache (`~/.cache/rong/webkit/<target>`).
     //   3. A pinned prebuilt artifact downloaded into that cache.
-    let mut root =
-        target_env_path("RONG_JSC_ROOT", target).or_else(|| default_cache_artifact(target));
+    let mut root = target_env_path("RONG_JSC_ROOT", target)
+        .map(|root| (root, SourceOrigin::Env))
+        .or_else(|| {
+            default_cache_artifact(target).map(|root| (root, SourceOrigin::PinnedArtifact))
+        });
 
     // No artifact anywhere: try the pinned prebuilt artifact. This is the
     // cross-platform path for Windows/Linux and keeps Cargo builds lightweight.
     if root.is_none() {
         maybe_download(target);
-        root = default_cache_artifact(target);
+        root = default_cache_artifact(target).map(|root| (root, SourceOrigin::PinnedArtifact));
     }
 
-    let Some(root) = root else {
+    let Some((root, origin)) = root else {
         panic!(
             "source JavaScriptCore backend needs an artifact for {target}. Options: let the build \
              download a pinned prebuilt one (a release must publish it; see webkit-artifacts.tsv), \
@@ -398,7 +410,17 @@ fn resolve_source_layout(target: &str) -> SourceLayout {
 
     for (include, lib) in candidates {
         if include.join("JavaScriptCore/JavaScript.h").exists() && lib.is_dir() {
-            return SourceLayout { include, lib };
+            let webkit_revision = match origin {
+                SourceOrigin::PinnedArtifact => artifact_for(target)
+                    .and_then(|artifact| webkit_revision_from_tag(&artifact.tag))
+                    .map(|revision| format!("webkit-{revision}")),
+                SourceOrigin::Env => None,
+            };
+            return SourceLayout {
+                include,
+                lib,
+                webkit_revision,
+            };
         }
     }
 
@@ -476,6 +498,13 @@ fn artifact_for(target: &str) -> Option<Artifact> {
         return Some(Artifact { tag, file, sha256 });
     }
     None
+}
+
+fn webkit_revision_from_tag(tag: &str) -> Option<String> {
+    tag.strip_prefix("jsc-artifacts-webkit-")
+        .and_then(|rest| rest.split_once('-').map(|(revision, _)| revision))
+        .filter(|revision| !revision.is_empty())
+        .map(str::to_string)
 }
 
 /// Download + verify + extract a pinned prebuilt JSCOnly artifact into the
