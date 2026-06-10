@@ -37,20 +37,29 @@
 - **Runs:** ArkJS/OHOS `check`, `clippy`, and the Rust-side Harmony smoke-library build on a self-hosted runner with `OHOS_NDK_HOME`
 - **Requirements:** runner labels `self-hosted` and `harmony`; intended for future local-runner coverage, not GitHub-hosted CI
 
-## `release.yml` (manual publish)
+## `release.yml` (manual package publish)
 
 - **Trigger:** manual (`workflow_dispatch`)
 - **Input:** `package_scope` controls the package family:
-  - `all`: publish crates and repo-maintained `@rongjs/*` npm packages, then create repo tag `vX.Y.Z` and the GitHub Release
-  - `rust`: publish crates only; skip npm, tag, and GitHub Release creation
-  - `npm`: publish repo-maintained `@rongjs/*` npm packages only; skip crates, tag, and GitHub Release creation
-- **Runs:** validates the current workspace version and matching `CHANGELOG.md` entry, then publishes according to `package_scope`
-- **Requirements:** run from `master`; `CHANGELOG.md` must already contain the release entry
+  - `all`: publish selected Rust crates and repo-maintained `@rongjs/*` npm packages
+  - `rust`: publish selected Rust crates only
+  - `npm`: publish repo-maintained `@rongjs/*` npm packages only
+- **Input:** `rust_selection` is passed to `scripts/publish.sh`; examples:
+  - `--crate rong_timer`
+  - `--crate rong_jscore_sys --crate rong_jscore`
+  - `--group engines`
+  - `--changed-since v0.4.0`
+- **Input:** `create_tags` creates package-level tags such as
+  `rong_timer-v0.4.1` and `npm-rongjs-rong-v0.4.1`
+- **Runs:** publishes the selected package set; it does not create repo-level
+  `vX.Y.Z` tags or GitHub Releases
+- **Requirements:** run from `master`; package versions and `CHANGELOG.md` must
+  already be updated when relevant
 
 ## Secrets
 
 - `CARGO_REGISTRY_TOKEN` (required for publish)
-- `GITHUB_TOKEN` (default Actions token; used to push the release tag and create the GitHub Release)
+- `GITHUB_TOKEN` (default Actions token; used when `create_tags=true`)
 
 npm publishing uses Trusted Publishing through GitHub Actions OIDC. Configure the
 trusted publisher for each repo-maintained npm package in npm package settings;

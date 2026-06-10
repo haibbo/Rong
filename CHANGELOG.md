@@ -6,6 +6,14 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
+### Changed
+
+- Changed release tooling to support independent Rust crate versions and
+  package-level publishing by crate, group, or changed files instead of requiring
+  every workspace crate to share one version.
+- Changed package publishing to create optional package-level git tags, while
+  leaving product-level `vX.Y.Z` tags as explicit maintainer decisions.
+
 ## [0.4.0] - 2026-06-09
 
 Rong 0.4.0 is the first official release. Compared with the 0.3.0 development

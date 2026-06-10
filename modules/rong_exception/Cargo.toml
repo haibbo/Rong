@@ -1,6 +1,6 @@
 [package]
 name = "rong_exception"
-version.workspace = true
+version = "0.4.0"
 edition.workspace = true
 
 description = "Exception module for RongJS"

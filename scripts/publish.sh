@@ -1,46 +1,42 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Color output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Default options
 NO_VERIFY=false
 ALLOW_DIRTY=false
 AUTO_CONFIRM=false
-WAIT_TIMEOUT=180  # Maximum wait time for crates.io sync
-POLL_INTERVAL=5  # Check every 5 seconds
+WAIT_TIMEOUT=180
+POLL_INTERVAL=5
 START_FROM=""
 SKIP_PUBLISHED_CHECK=false
 VERIFY_FEATURES="quickjs"
+CREATE_TAGS=false
+CHANGED_SINCE=""
+DRY_RUN=false
 
 WORKSPACE_TOML="Cargo.toml"
 
-# Publishing order (topologically sorted by dependencies)
+# Publishable crates in dependency order.
 CRATES=(
-  # Layer 1 - Foundation (no workspace deps)
   "rong_macro"
   "rong_rt"
   "rong_core"
 
-  # Layer 2 - System bindings
   "rong_quickjs_sys"
   "rong_jscore_sys"
   "rong_arkjs_sys"
 
-  # Layer 3 - Engine backends
   "rong_quickjs"
   "rong_jscore"
   "rong_arkjs"
 
-  # Layer 4 - Main runtime facade
   "rong"
 
-  # Layer 5 - Basic modules
   "rong_console"
   "rong_assert"
   "rong_encoding"
@@ -50,12 +46,10 @@ CRATES=(
   "rong_event"
   "rong_buffer"
 
-  # Layer 6 - Intermediate modules
   "rong_exception"
   "rong_abort"
   "rong_stream"
 
-  # Layer 7 - Advanced modules
   "rong_fs"
   "rong_storage"
   "rong_http"
@@ -65,61 +59,159 @@ CRATES=(
   "rong_sqlite"
   "rong_worker"
   "rong_s3"
-  # Layer 8 - Meta package
+
   "rong_modules"
   "rong_cli"
-
-  # NOTE: rong_test and examples are NOT published
 )
+
+CORE_CRATES=(
+  "rong_macro"
+  "rong_rt"
+  "rong_core"
+  "rong"
+)
+
+ENGINE_CRATES=(
+  "rong_quickjs_sys"
+  "rong_jscore_sys"
+  "rong_arkjs_sys"
+  "rong_quickjs"
+  "rong_jscore"
+  "rong_arkjs"
+)
+
+MODULE_CRATES=(
+  "rong_console"
+  "rong_assert"
+  "rong_encoding"
+  "rong_url"
+  "rong_timer"
+  "rong_cron"
+  "rong_event"
+  "rong_buffer"
+  "rong_exception"
+  "rong_abort"
+  "rong_stream"
+  "rong_fs"
+  "rong_storage"
+  "rong_http"
+  "rong_compression"
+  "rong_command"
+  "rong_redis"
+  "rong_sqlite"
+  "rong_worker"
+  "rong_s3"
+)
+
+BUNDLE_CRATES=(
+  "rong_modules"
+  "rong_cli"
+)
+
+SELECTED_CRATES=()
+HAS_SELECTOR=false
 
 usage() {
   cat << EOF
 Usage: $0 [OPTIONS]
 
-Publish all workspace crates to crates.io in dependency order.
+Publish selected Rust crates to crates.io in dependency order.
 
-OPTIONS:
-  -n, --no-verify       Skip build verification with --no-verify (default: false)
-  -a, --allow-dirty     Allow publishing with uncommitted changes (default: false)
-  -s, --start-from NAME Start publishing from the given crate (inclusive)
-      --skip-published-check
-                        Skip `cargo search` pre-check for already-published crates
-      --verify-features FEATURES
-                        Cargo features used for publish verification (default: quickjs)
-  -y, --yes             Skip confirmation prompt (default: false)
-  -t, --timeout SECONDS Maximum wait time for crates.io sync (default: 180)
-  -p, --poll SECONDS    Poll interval for checking crates.io (default: 5)
-  -h, --help            Show this help message
+SELECTION:
+  --crate NAME               Publish one crate; repeatable
+  --group NAME               Publish a crate group; repeatable
+                             groups: core, engines, modules, bundles,
+                                     non-modules, rust, all
+  --changed-since REF        Add crates with files changed since REF
+  -s, --start-from NAME      Slice the selected plan from NAME, inclusive
+
+PUBLISH OPTIONS:
+  -n, --no-verify            Skip cargo publish verification
+  -a, --allow-dirty          Allow publishing with uncommitted changes
+      --skip-published-check Skip crates.io pre-check for existing versions
+      --verify-features LIST Cargo features used for crates that need an engine
+                             feature during publish verification (default: quickjs)
+      --tag                  Create and push <crate>-v<version> tags for
+                             published or already-published selected crates
+      --dry-run              Print the publish plan without requiring tokens or
+                             publishing anything
+  -y, --yes                  Skip confirmation prompt
+  -t, --timeout SECONDS      Maximum wait time for crates.io sync (default: 180)
+  -p, --poll SECONDS         Poll interval for crates.io sync (default: 5)
+  -h, --help                 Show this help message
 
 EXAMPLES:
-  # Publish with verification (recommended)
-  $0
-
-  # Fast publish without verification
-  $0 --no-verify
-
-  # Publish with uncommitted changes
-  $0 --allow-dirty
-
-  # Resume publish from a specific crate
-  $0 --start-from rong
-
-  # Skip pre-check and let cargo publish decide
-  $0 --start-from rong --skip-published-check
-
-  # Verify with jscore instead of quickjs
-  $0 --start-from rong --verify-features jscore
-
-  # Non-interactive publish
-  $0 --yes
-
-  # Custom timeout settings
-  $0 --timeout 120 --poll 3
+  $0 --crate rong_timer
+  $0 --crate rong_jscore_sys --crate rong_jscore
+  $0 --group engines
+  $0 --group modules --tag
+  $0 --changed-since v0.4.0
 EOF
   exit 0
 }
 
-# Parse arguments
+contains() {
+  local needle=$1
+  shift
+  local value
+  for value in "$@"; do
+    if [ "$value" = "$needle" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+is_publishable_crate() {
+  contains "$1" "${CRATES[@]}"
+}
+
+add_crate() {
+  local crate=$1
+  HAS_SELECTOR=true
+  if ! is_publishable_crate "$crate"; then
+    echo -e "${RED}ERROR: unknown or non-publishable crate: $crate${NC}" >&2
+    echo "Available crates:" >&2
+    printf '  - %s\n' "${CRATES[@]}" >&2
+    exit 1
+  fi
+  if [ ${#SELECTED_CRATES[@]} -eq 0 ] || ! contains "$crate" "${SELECTED_CRATES[@]}"; then
+    SELECTED_CRATES+=("$crate")
+  fi
+}
+
+add_group() {
+  local group=$1
+  local crate
+  HAS_SELECTOR=true
+  case "$group" in
+    core)
+      for crate in "${CORE_CRATES[@]}"; do add_crate "$crate"; done
+      ;;
+    engines)
+      for crate in "${ENGINE_CRATES[@]}"; do add_crate "$crate"; done
+      ;;
+    modules)
+      for crate in "${MODULE_CRATES[@]}"; do add_crate "$crate"; done
+      ;;
+    bundles)
+      for crate in "${BUNDLE_CRATES[@]}"; do add_crate "$crate"; done
+      ;;
+    non-modules)
+      add_group core
+      add_group engines
+      add_group bundles
+      ;;
+    rust|all)
+      for crate in "${CRATES[@]}"; do add_crate "$crate"; done
+      ;;
+    *)
+      echo -e "${RED}ERROR: unknown group: $group${NC}" >&2
+      usage
+      ;;
+  esac
+}
+
 while [[ $# -gt 0 ]]; do
   case $1 in
     -n|--no-verify)
@@ -132,10 +224,35 @@ while [[ $# -gt 0 ]]; do
       ;;
     -s|--start-from)
       if [[ $# -lt 2 ]]; then
-        echo "Error: --start-from requires a crate name"
+        echo "Error: --start-from requires a crate name" >&2
         exit 1
       fi
       START_FROM="$2"
+      shift 2
+      ;;
+    --crate)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --crate requires a crate name" >&2
+        exit 1
+      fi
+      add_crate "$2"
+      shift 2
+      ;;
+    --group)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --group requires a group name" >&2
+        exit 1
+      fi
+      add_group "$2"
+      shift 2
+      ;;
+    --changed-since)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --changed-since requires a git ref" >&2
+        exit 1
+      fi
+      HAS_SELECTOR=true
+      CHANGED_SINCE="$2"
       shift 2
       ;;
     --skip-published-check)
@@ -144,11 +261,19 @@ while [[ $# -gt 0 ]]; do
       ;;
     --verify-features)
       if [[ $# -lt 2 ]]; then
-        echo "Error: --verify-features requires a feature list"
+        echo "Error: --verify-features requires a feature list" >&2
         exit 1
       fi
       VERIFY_FEATURES="$2"
       shift 2
+      ;;
+    --tag)
+      CREATE_TAGS=true
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      shift
       ;;
     -y|--yes)
       AUTO_CONFIRM=true
@@ -166,49 +291,145 @@ while [[ $# -gt 0 ]]; do
       usage
       ;;
     *)
-      echo "Unknown option: $1"
+      echo "Unknown option: $1" >&2
       usage
       ;;
   esac
 done
 
-# Confirmation prompt (auto-approve in CI)
 if [ "${CI:-}" = "true" ]; then
   AUTO_CONFIRM=true
 fi
 
-# Select publishing slice
-PUBLISH_CRATES=("${CRATES[@]}")
+METADATA_FILE="$(mktemp)"
+CHANGED_FILE_LIST="$(mktemp)"
+trap 'rm -f "$METADATA_FILE" "$CHANGED_FILE_LIST"' EXIT
+cargo metadata --no-deps --format-version 1 > "$METADATA_FILE"
+
+workspace_root() {
+  node - "$METADATA_FILE" <<'NODE'
+const fs = require("fs");
+const [metadataPath] = process.argv.slice(2);
+const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+process.stdout.write(metadata.workspace_root);
+NODE
+}
+
+WORKSPACE_ROOT="$(workspace_root)"
+
+manifest_for_crate() {
+  node - "$METADATA_FILE" "$1" <<'NODE'
+const fs = require("fs");
+const [metadataPath, crate] = process.argv.slice(2);
+const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+const pkg = metadata.packages.find((item) => item.name === crate);
+if (!pkg) process.exit(1);
+process.stdout.write(pkg.manifest_path);
+NODE
+}
+
+crate_version() {
+  local manifest=$1
+  awk '
+    /^\[package\]/ { in_package = 1; next }
+    /^\[/ && in_package { exit }
+    in_package && /^version[[:space:]]*=/ {
+      gsub(/"/, "", $3);
+      print $3;
+      exit
+    }
+  ' "$manifest"
+}
+
+add_changed_since_selection() {
+  local ref=$1
+  local crate manifest rel dir file
+
+  git diff --name-only "$ref"..HEAD -- > "$CHANGED_FILE_LIST"
+
+  for crate in "${CRATES[@]}"; do
+    manifest="$(manifest_for_crate "$crate")"
+    rel="${manifest#$WORKSPACE_ROOT/}"
+    dir="$(dirname "$rel")"
+
+    while IFS= read -r file; do
+      [ -n "$file" ] || continue
+
+      if [ "$dir" = "." ]; then
+        case "$file" in
+          Cargo.toml|README.md|CHANGELOG.md|src/*)
+            add_crate "$crate"
+            break
+            ;;
+        esac
+      elif [ "$file" = "$rel" ] || [[ "$file" == "$dir/"* ]]; then
+        add_crate "$crate"
+        break
+      fi
+    done < "$CHANGED_FILE_LIST"
+  done
+}
+
+if [ -n "$CHANGED_SINCE" ]; then
+  add_changed_since_selection "$CHANGED_SINCE"
+fi
+
+if [ "$HAS_SELECTOR" = false ]; then
+  echo -e "${YELLOW}No crate selection provided; defaulting to all publishable Rust crates.${NC}"
+  for crate in "${CRATES[@]}"; do add_crate "$crate"; done
+fi
+
+# Reorder the selection according to the topological publish order.
+ORDERED_SELECTION=()
+for crate in "${CRATES[@]}"; do
+  if [ ${#SELECTED_CRATES[@]} -gt 0 ] && contains "$crate" "${SELECTED_CRATES[@]}"; then
+    ORDERED_SELECTION+=("$crate")
+  fi
+done
+PUBLISH_CRATES=()
+if [ ${#ORDERED_SELECTION[@]} -gt 0 ]; then
+  PUBLISH_CRATES=("${ORDERED_SELECTION[@]}")
+fi
+
 if [ -n "$START_FROM" ]; then
   FOUND_START=false
-  for i in "${!CRATES[@]}"; do
-    if [ "${CRATES[$i]}" = "$START_FROM" ]; then
-      PUBLISH_CRATES=("${CRATES[@]:$i}")
-      FOUND_START=true
-      break
-    fi
-  done
+  SLICED=()
+  if [ ${#PUBLISH_CRATES[@]} -gt 0 ]; then
+    for crate in "${PUBLISH_CRATES[@]}"; do
+      if [ "$crate" = "$START_FROM" ]; then
+        FOUND_START=true
+      fi
+      if [ "$FOUND_START" = true ]; then
+        SLICED+=("$crate")
+      fi
+    done
+  fi
   if [ "$FOUND_START" = false ]; then
-    echo -e "${RED}ERROR: start crate not found in publish list: ${START_FROM}${NC}"
-    echo "Available crates:"
-    printf '  - %s\n' "${CRATES[@]}"
+    echo -e "${RED}ERROR: start crate not found in selected publish plan: ${START_FROM}${NC}" >&2
+    if [ ${#PUBLISH_CRATES[@]} -gt 0 ]; then
+      printf '  - %s\n' "${PUBLISH_CRATES[@]}" >&2
+    fi
     exit 1
   fi
+  PUBLISH_CRATES=()
+  if [ ${#SLICED[@]} -gt 0 ]; then
+    PUBLISH_CRATES=("${SLICED[@]}")
+  fi
 fi
+
 TOTAL_CRATES=${#PUBLISH_CRATES[@]}
-
-# Extract the expected version so we can wait for crates.io index to reflect the
-# publish we just did (not merely the crate's existence).
-EXPECTED_VERSION="$(grep -A 2 '^\[workspace.package\]' "$WORKSPACE_TOML" 2>/dev/null | grep '^version' | sed 's/version = "\(.*\)"/\1/' || true)"
-if [ -z "$EXPECTED_VERSION" ]; then
-  echo -e "${YELLOW}⚠️  Could not read workspace.package.version from ${WORKSPACE_TOML}; crates.io sync waiting may be unreliable.${NC}"
+if [ "$TOTAL_CRATES" -eq 0 ]; then
+  echo -e "${RED}ERROR: publish plan is empty.${NC}" >&2
+  exit 1
 fi
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  RongJS Workspace Publishing Script${NC}"
+echo -e "${BLUE}  RongJS Rust Publishing Script${NC}"
 echo -e "${BLUE}========================================${NC}"
-echo ""
 echo -e "Total crates to publish: ${GREEN}${TOTAL_CRATES}${NC}"
+if [ -n "$CHANGED_SINCE" ]; then
+  echo -e "Changed since: ${YELLOW}${CHANGED_SINCE}${NC}"
+fi
 if [ -n "$START_FROM" ]; then
   echo -e "Start from: ${YELLOW}${START_FROM}${NC}"
 fi
@@ -216,24 +437,37 @@ echo -e "Skip published pre-check: ${YELLOW}${SKIP_PUBLISHED_CHECK}${NC}"
 echo -e "Verify features: ${YELLOW}${VERIFY_FEATURES}${NC}"
 echo -e "No verify: ${YELLOW}${NO_VERIFY}${NC}"
 echo -e "Allow dirty: ${YELLOW}${ALLOW_DIRTY}${NC}"
+echo -e "Create crate tags: ${YELLOW}${CREATE_TAGS}${NC}"
 echo -e "Auto confirm: ${YELLOW}${AUTO_CONFIRM}${NC}"
-echo -e "Expected version: ${YELLOW}${EXPECTED_VERSION:-unknown}${NC}"
 echo -e "Sync timeout: ${YELLOW}${WAIT_TIMEOUT}s${NC}"
 echo -e "Poll interval: ${YELLOW}${POLL_INTERVAL}s${NC}"
 echo ""
+echo -e "${BLUE}Publish plan:${NC}"
+for crate in "${PUBLISH_CRATES[@]}"; do
+  manifest="$(manifest_for_crate "$crate")"
+  echo "  - $crate $(crate_version "$manifest")"
+done
+echo ""
 
-# Check if CARGO_REGISTRY_TOKEN is set
+if [ "$DRY_RUN" = true ]; then
+  echo -e "${GREEN}Dry run complete; no crates were published.${NC}"
+  exit 0
+fi
+
+if [ "$CREATE_TAGS" = true ] && [ "$ALLOW_DIRTY" != true ] && ! git diff-index --quiet HEAD -- 2>/dev/null; then
+  echo -e "${RED}ERROR: --tag requires a clean tracked working tree unless --allow-dirty is set.${NC}" >&2
+  exit 1
+fi
+
 if [ -z "${CARGO_REGISTRY_TOKEN:-}" ]; then
-  echo -e "${RED}ERROR: CARGO_REGISTRY_TOKEN is not set${NC}"
-  echo "Please set it with: export CARGO_REGISTRY_TOKEN=your_token"
-  echo "Get your token from: https://crates.io/me"
+  echo -e "${RED}ERROR: CARGO_REGISTRY_TOKEN is not set${NC}" >&2
+  echo "Please set it with: export CARGO_REGISTRY_TOKEN=your_token" >&2
   exit 1
 fi
 
 if [ "$AUTO_CONFIRM" = true ]; then
-  echo -e "${YELLOW}⚠️  Auto-confirm enabled; proceeding with publish.${NC}"
+  echo -e "${YELLOW}Auto-confirm enabled; proceeding with publish.${NC}"
 else
-  echo -e "${YELLOW}⚠️  This will publish ${TOTAL_CRATES} crates to crates.io!${NC}"
   read -p "Are you sure you want to continue? (yes/no): " -r
   echo
   if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
@@ -242,27 +476,13 @@ else
   fi
 fi
 
-# Function to check if a crate version is already published
 is_crate_published() {
   local crate=$1
   local version=$2
 
-  if [ -z "$version" ]; then
-    # No version specified, just check if crate exists
-    if cargo search "$crate" --limit 1 2>/dev/null | grep -q "^$crate = "; then
-      return 0
-    fi
-  else
-    # Check for specific version
-    if cargo search "$crate" --limit 1 2>/dev/null | grep -q "^$crate = \"${version}\""; then
-      return 0
-    fi
-  fi
-  return 1
+  cargo search "$crate" --limit 1 2>/dev/null | grep -q "^$crate = \"${version}\""
 }
 
-# Crates that expose JS engine feature forwarding and should be verified with
-# an explicit engine feature to avoid no-engine compilation failures.
 needs_engine_verify_features() {
   local crate=$1
   case "$crate" in
@@ -275,7 +495,6 @@ needs_engine_verify_features() {
   esac
 }
 
-# Function to wait for crate to appear in crates.io index
 wait_for_crate() {
   local crate=$1
   local version=$2
@@ -283,24 +502,11 @@ wait_for_crate() {
   local poll_interval=$4
   local elapsed=0
 
-  if [ -z "$version" ]; then
-    echo -e "${YELLOW}Waiting for ${crate} to appear in crates.io index...${NC}"
-  else
-    echo -e "${YELLOW}Waiting for ${crate} ${version} to appear in crates.io index...${NC}"
-  fi
-
-  while [ $elapsed -lt "$timeout" ]; do
-    # Try to search for the crate
-    if [ -z "$version" ]; then
-      if cargo search "$crate" --limit 1 2>/dev/null | grep -q "^$crate = "; then
-        echo -e "${GREEN}✓ ${crate} found in index after ${elapsed}s${NC}"
-        return 0
-      fi
-    else
-      if cargo search "$crate" --limit 1 2>/dev/null | grep -q "^$crate = \"${version}\""; then
-        echo -e "${GREEN}✓ ${crate} ${version} found in index after ${elapsed}s${NC}"
-        return 0
-      fi
+  echo -e "${YELLOW}Waiting for ${crate} ${version} to appear in crates.io index...${NC}"
+  while [ "$elapsed" -lt "$timeout" ]; do
+    if is_crate_published "$crate" "$version"; then
+      echo -e "${GREEN}Found ${crate} ${version} in index after ${elapsed}s${NC}"
+      return 0
     fi
 
     sleep "$poll_interval"
@@ -308,34 +514,52 @@ wait_for_crate() {
     echo -e "${YELLOW}  Still waiting... (${elapsed}s/${timeout}s)${NC}"
   done
 
-  if [ -z "$version" ]; then
-    echo -e "${RED}⚠ Timeout waiting for ${crate} (waited ${timeout}s)${NC}"
-  else
-    echo -e "${RED}⚠ Timeout waiting for ${crate} ${version} (waited ${timeout}s)${NC}"
-  fi
-  echo -e "${YELLOW}  Continuing anyway, verification might fail...${NC}"
+  echo -e "${YELLOW}Timeout waiting for ${crate} ${version}; proceeding anyway.${NC}"
   return 1
 }
 
-# Publish each crate
+ensure_crate_tag() {
+  local crate=$1
+  local version=$2
+  local tag="${crate}-v${version}"
+
+  if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+    echo -e "${YELLOW}Tag ${tag} already exists locally.${NC}"
+    return 0
+  fi
+
+  if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+    echo -e "${YELLOW}Tag ${tag} already exists on origin.${NC}"
+    return 0
+  fi
+
+  git tag -a "$tag" -m "${crate} v${version}"
+  git push origin "$tag"
+  echo -e "${GREEN}Created tag ${tag}${NC}"
+}
+
 PUBLISHED=0
 SKIPPED=0
 FAILED=0
 
 for crate in "${PUBLISH_CRATES[@]}"; do
+  manifest="$(manifest_for_crate "$crate")"
+  version="$(crate_version "$manifest")"
+
   echo ""
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-  echo -e "${BLUE}Publishing [$((PUBLISHED + SKIPPED + 1))/${TOTAL_CRATES}]: ${GREEN}${crate}${NC}"
+  echo -e "${BLUE}Publishing [$((PUBLISHED + SKIPPED + 1))/${TOTAL_CRATES}]: ${GREEN}${crate} ${version}${NC}"
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-  # Check if crate is already published and skip it
-  if [ "$SKIP_PUBLISHED_CHECK" = false ] && is_crate_published "$crate" "$EXPECTED_VERSION"; then
-    echo -e "${YELLOW}⊘ Skipping ${crate} ${EXPECTED_VERSION} (already published)${NC}"
+  if [ "$SKIP_PUBLISHED_CHECK" = false ] && is_crate_published "$crate" "$version"; then
+    echo -e "${YELLOW}Skipping ${crate} ${version}; already published.${NC}"
     SKIPPED=$((SKIPPED + 1))
+    if [ "$CREATE_TAGS" = true ]; then
+      ensure_crate_tag "$crate" "$version"
+    fi
     continue
   fi
 
-  # Build cargo publish command
   cmd=(cargo publish -p "$crate")
 
   if [ "$NO_VERIFY" = true ]; then
@@ -350,49 +574,46 @@ for crate in "${PUBLISH_CRATES[@]}"; do
 
   echo -e "${YELLOW}Running: ${cmd[*]}${NC}"
 
-  # Execute publish command
   if publish_output="$("${cmd[@]}" 2>&1)"; then
     printf '%s\n' "$publish_output"
     PUBLISHED=$((PUBLISHED + 1))
-    echo -e "${GREEN}✓ Successfully published ${crate}${NC}"
+    echo -e "${GREEN}Successfully published ${crate} ${version}${NC}"
 
-    # Wait for crates.io to sync (except for last crate)
-    if [ $((PUBLISHED + SKIPPED)) -lt ${TOTAL_CRATES} ]; then
-      if ! wait_for_crate "$crate" "$EXPECTED_VERSION" "$WAIT_TIMEOUT" "$POLL_INTERVAL"; then
-        echo -e "${YELLOW}⚠ Proceeding despite crates.io index lag for ${crate}.${NC}"
+    if [ "$CREATE_TAGS" = true ]; then
+      ensure_crate_tag "$crate" "$version"
+    fi
+
+    if [ $((PUBLISHED + SKIPPED)) -lt "$TOTAL_CRATES" ]; then
+      if ! wait_for_crate "$crate" "$version" "$WAIT_TIMEOUT" "$POLL_INTERVAL"; then
+        echo -e "${YELLOW}Proceeding despite crates.io index lag for ${crate}.${NC}"
       fi
     fi
   else
     printf '%s\n' "$publish_output"
     if grep -Eq 'already exists on crates\.io index|already uploaded' <<<"$publish_output"; then
       SKIPPED=$((SKIPPED + 1))
-      echo -e "${YELLOW}⊘ Skipping ${crate} ${EXPECTED_VERSION} (already published; detected during cargo publish)${NC}"
+      echo -e "${YELLOW}Skipping ${crate} ${version}; already published.${NC}"
+      if [ "$CREATE_TAGS" = true ]; then
+        ensure_crate_tag "$crate" "$version"
+      fi
       continue
     fi
 
     FAILED=$((FAILED + 1))
-    echo -e "${RED}✗ Failed to publish ${crate}${NC}"
-    echo -e "${RED}Stopping publish process due to error.${NC}"
+    echo -e "${RED}Failed to publish ${crate} ${version}${NC}"
     exit 1
   fi
 done
 
-# Summary
 echo ""
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Publishing Summary${NC}"
 echo -e "${BLUE}========================================${NC}"
-echo -e "${GREEN}✓ Successfully published: ${PUBLISHED}${NC}"
-if [ $SKIPPED -gt 0 ]; then
-  echo -e "${YELLOW}⊘ Skipped (already published): ${SKIPPED}${NC}"
-fi
-if [ $FAILED -gt 0 ]; then
-  echo -e "${RED}✗ Failed: ${FAILED}${NC}"
+echo -e "${GREEN}Published: ${PUBLISHED}${NC}"
+echo -e "${YELLOW}Skipped: ${SKIPPED}${NC}"
+if [ "$FAILED" -gt 0 ]; then
+  echo -e "${RED}Failed: ${FAILED}${NC}"
   exit 1
-else
-  if [ $SKIPPED -gt 0 ]; then
-    echo -e "${GREEN}🎉 All crates processed! (${PUBLISHED} published, ${SKIPPED} skipped)${NC}"
-  else
-    echo -e "${GREEN}🎉 All crates published successfully!${NC}"
-  fi
 fi
+
+echo -e "${GREEN}All selected crates processed.${NC}"

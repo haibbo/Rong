@@ -154,21 +154,24 @@ job for consuming the pinned artifact.
 
 Preferred flow:
 
-1. Prepare a normal PR with the version bump and matching `CHANGELOG.md` update.
+1. Prepare a normal PR with the package version bump(s) and matching
+   `CHANGELOG.md` update.
 2. Merge that PR into `master`.
-3. Run `Release: Publish Packages` in GitHub Actions from `master` with
-   `package_scope=all`.
+3. Run `Publish Packages` in GitHub Actions from `master`.
+4. Choose the package family and Rust selection that match the packages being
+   released.
 
-Use `package_scope=rust` or `package_scope=npm` only for partial publish
-recovery. Those modes publish the selected package family and intentionally skip
-the repository tag and GitHub Release.
+The publish workflow can publish Rust crates, npm packages, or both. It creates
+package-level tags only when `create_tags=true`; product-level tags such as
+`v0.4.1` are explicit maintainer decisions and are not created by CI.
 
 For local release details, see [`scripts/README.md`](scripts/README.md).
 For the full maintainer checklist, see [`docs/releasing.md`](docs/releasing.md).
 
-`./scripts/bump_version.sh` syncs Cargo workspace versions and repo-maintained
-npm package versions. `./scripts/publish_npm.sh` publishes all repo-maintained
-`@rongjs/*` npm packages.
+`./scripts/bump_version.sh` bumps selected Rust crates and/or repo-maintained npm
+packages. `./scripts/publish.sh` publishes selected Rust crates in dependency
+order. `./scripts/publish_npm.sh` publishes all repo-maintained `@rongjs/*` npm
+packages.
 
 ## Notes For Contributors
 

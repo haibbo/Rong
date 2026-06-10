@@ -26,7 +26,6 @@ members = [
 exclude = ["testing/harmony/rong_harmony_smoke"]
 
 [workspace.package]
-version = "0.4.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/LingXia-Dev/Rong"

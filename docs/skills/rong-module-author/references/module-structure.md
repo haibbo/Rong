@@ -70,7 +70,10 @@ pub fn init(ctx: &JSContext) -> JSResult<()> {
 1. **Workspace** (`/Cargo.toml`):
    - add `"modules/rong_<name>"` to `[workspace] members`;
    - add to `[workspace.dependencies]`:
-     `rong_<name> = { path = "modules/rong_<name>", default-features = false, version = "<workspace version>" }`.
+     `rong_<name> = { path = "modules/rong_<name>", default-features = false, version = "<crate version>" }`.
+
+   Published crates use independent versions, so choose the module's own crate
+   version rather than assuming a workspace-wide version.
 
 2. **`rong_modules/Cargo.toml`**:
    - dependency: `rong_<name> = { workspace = true, optional = true }`

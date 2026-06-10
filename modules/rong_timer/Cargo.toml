@@ -1,6 +1,6 @@
 [package]
 name = "rong_timer"
-version.workspace = true
+version = "0.4.0"
 edition.workspace = true
 
 description = "Timer module for RongJS"

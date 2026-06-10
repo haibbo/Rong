@@ -2,12 +2,43 @@
 set -euo pipefail
 
 PACKAGE_DIRS=("packages/rong_types" "packages/skill")
+CREATE_TAGS=false
+
+usage() {
+  cat << EOF
+Usage: $0 [OPTIONS]
+
+Publish repo-maintained npm packages using npm trusted publishing.
+
+OPTIONS:
+  --tag       Create and push npm-<package>-v<version> git tags for published
+              or already-published packages
+  -h, --help  Show this help message
+EOF
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --tag)
+      CREATE_TAGS=true
+      shift
+      ;;
+    -h|--help)
+      usage
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage
+      ;;
+  esac
+done
 
 if [ "${GITHUB_ACTIONS:-}" != "true" ] \
   || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ] \
   || [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
   echo "npm publish is restricted to GitHub Actions trusted publishing." >&2
-  echo "Run the Release: Publish Packages workflow with id-token: write." >&2
+  echo "Run the Publish Packages workflow with id-token: write." >&2
   exit 1
 fi
 
@@ -18,6 +49,30 @@ if [ -n "${NODE_AUTH_TOKEN:-}" ] || [ -n "${NPM_TOKEN:-}" ]; then
 fi
 
 echo "npm publish auth mode: trusted-publishing"
+
+ensure_npm_tag() {
+  local package_name=$1
+  local package_version=$2
+  local slug
+  local tag
+
+  slug="$(printf '%s' "$package_name" | sed 's/^@//; s#[/@]#-#g')"
+  tag="npm-${slug}-v${package_version}"
+
+  if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+    echo "Tag ${tag} already exists locally."
+    return 0
+  fi
+
+  if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+    echo "Tag ${tag} already exists on origin."
+    return 0
+  fi
+
+  git tag -a "$tag" -m "${package_name} v${package_version}"
+  git push origin "$tag"
+  echo "Created tag ${tag}"
+}
 
 for package_dir in "${PACKAGE_DIRS[@]}"; do
   package_json="${package_dir}/package.json"
@@ -51,6 +106,9 @@ EOF
   existing_version="$(npm view "${package_name}@${package_version}" version 2>/dev/null || true)"
   if [ "$existing_version" = "$package_version" ]; then
     echo "Skipping ${package_name}@${package_version}; already published."
+    if [ "$CREATE_TAGS" = true ]; then
+      ensure_npm_tag "$package_name" "$package_version"
+    fi
     continue
   fi
 
@@ -59,4 +117,8 @@ EOF
     npm install --no-package-lock
     npm publish --access public
   )
+
+  if [ "$CREATE_TAGS" = true ]; then
+    ensure_npm_tag "$package_name" "$package_version"
+  fi
 done

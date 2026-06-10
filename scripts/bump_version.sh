@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Color output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -11,47 +10,155 @@ NC='\033[0m'
 WORKSPACE_TOML="Cargo.toml"
 NPM_PACKAGE_JSONS=("packages/rong_types/package.json" "packages/skill/package.json")
 
+CORE_CRATES=(
+  "rong_macro"
+  "rong_rt"
+  "rong_core"
+  "rong"
+)
+
+ENGINE_CRATES=(
+  "rong_quickjs_sys"
+  "rong_jscore_sys"
+  "rong_arkjs_sys"
+  "rong_quickjs"
+  "rong_jscore"
+  "rong_arkjs"
+)
+
+MODULE_CRATES=(
+  "rong_console"
+  "rong_assert"
+  "rong_encoding"
+  "rong_url"
+  "rong_timer"
+  "rong_cron"
+  "rong_event"
+  "rong_buffer"
+  "rong_exception"
+  "rong_abort"
+  "rong_stream"
+  "rong_fs"
+  "rong_storage"
+  "rong_http"
+  "rong_compression"
+  "rong_command"
+  "rong_redis"
+  "rong_sqlite"
+  "rong_worker"
+  "rong_s3"
+)
+
+BUNDLE_CRATES=(
+  "rong_modules"
+  "rong_cli"
+)
+
 usage() {
   cat << EOF
 Usage: $0 <new-version> [OPTIONS]
 
-Bump workspace version by updating the root Cargo.toml.
-
-NOTE: Maintainers decide versions and changelog entries manually. This script
-only updates Cargo.toml metadata. It does NOT create repository tags, publish
-crates, or create GitHub releases.
+Bump selected package versions. Rust crates are versioned independently; this
+script does not update a global workspace version.
 
 ARGUMENTS:
-  <new-version>         New version number (e.g., 0.1.2, 0.2.0, 1.0.0)
+  <new-version>              New version number, e.g. 0.4.1
+
+SELECTION:
+  --crate NAME               Bump one Rust crate; repeatable
+  --group NAME               Bump a Rust/npm group; repeatable
+                             groups: core, engines, modules, bundles,
+                                     non-modules, rust, npm, all
+  --npm                      Bump all repo-maintained npm packages
+  --npm-package PATH_OR_NAME Bump one npm package by package.json path or name
 
 OPTIONS:
-  --commit              Create git commit (disabled by default)
-  -h, --help            Show this help message
+  --commit                   Create a git commit
+  -y, --yes                  Skip confirmation prompt
+  -h, --help                 Show this help message
 
 EXAMPLES:
-  # Default: just update Cargo.toml (no git ops)
-  $0 0.1.2
-
-  # Update and commit
-  $0 0.1.2 --commit
-
-WORKFLOW:
-  1. Updates [workspace.package] version
-  2. Updates the root [package] version
-  3. Syncs all [workspace.dependencies] versions
-  4. Syncs repo-maintained npm package versions
-  5. Creates git commit (if --commit)
-
-DEFAULT BEHAVIOR:
-  By default, this script only updates Cargo.toml without git operations.
-  You must explicitly use --commit for git operations.
+  $0 0.4.1 --crate rong_timer
+  $0 0.4.1 --crate rong_jscore_sys --crate rong_jscore
+  $0 0.4.1 --group modules
+  $0 0.4.1 --group npm
+  $0 0.4.1 --group all --commit
 EOF
   exit 0
 }
 
-# Parse arguments
 NEW_VERSION=""
 DO_COMMIT=false
+AUTO_CONFIRM=false
+SELECTED_CRATES=()
+SELECTED_NPM_JSONS=()
+
+add_unique() {
+  local value=$1
+  shift
+  local existing
+  for existing in "$@"; do
+    if [ "$existing" = "$value" ]; then
+      return 1
+    fi
+  done
+  return 0
+}
+
+add_crate() {
+  local crate=$1
+  if [ ${#SELECTED_CRATES[@]} -eq 0 ] || add_unique "$crate" "${SELECTED_CRATES[@]}"; then
+    SELECTED_CRATES+=("$crate")
+  fi
+}
+
+add_npm_json() {
+  local package_json=$1
+  if [ ${#SELECTED_NPM_JSONS[@]} -eq 0 ] || add_unique "$package_json" "${SELECTED_NPM_JSONS[@]}"; then
+    SELECTED_NPM_JSONS+=("$package_json")
+  fi
+}
+
+add_group() {
+  local group=$1
+  local crate
+  case "$group" in
+    core)
+      for crate in "${CORE_CRATES[@]}"; do add_crate "$crate"; done
+      ;;
+    engines)
+      for crate in "${ENGINE_CRATES[@]}"; do add_crate "$crate"; done
+      ;;
+    modules)
+      for crate in "${MODULE_CRATES[@]}"; do add_crate "$crate"; done
+      ;;
+    bundles)
+      for crate in "${BUNDLE_CRATES[@]}"; do add_crate "$crate"; done
+      ;;
+    non-modules)
+      add_group core
+      add_group engines
+      add_group bundles
+      ;;
+    rust)
+      add_group core
+      add_group engines
+      add_group modules
+      add_group bundles
+      ;;
+    npm)
+      for package_json in "${NPM_PACKAGE_JSONS[@]}"; do add_npm_json "$package_json"; done
+      ;;
+    all)
+      add_group rust
+      add_group npm
+      ;;
+    *)
+      echo -e "${RED}Error: Unknown group: $group${NC}" >&2
+      usage
+      ;;
+  esac
+}
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -62,15 +169,47 @@ while [[ $# -gt 0 ]]; do
       DO_COMMIT=true
       shift
       ;;
+    -y|--yes)
+      AUTO_CONFIRM=true
+      shift
+      ;;
+    --crate)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --crate requires a crate name" >&2
+        exit 1
+      fi
+      add_crate "$2"
+      shift 2
+      ;;
+    --group)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --group requires a group name" >&2
+        exit 1
+      fi
+      add_group "$2"
+      shift 2
+      ;;
+    --npm)
+      add_group npm
+      shift
+      ;;
+    --npm-package)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --npm-package requires a package.json path or package name" >&2
+        exit 1
+      fi
+      add_npm_json "$2"
+      shift 2
+      ;;
     -*)
-      echo "Unknown option: $1"
+      echo "Unknown option: $1" >&2
       usage
       ;;
     *)
       if [ -z "$NEW_VERSION" ]; then
         NEW_VERSION="$1"
       else
-        echo "Error: Unexpected argument: $1"
+        echo "Error: Unexpected argument: $1" >&2
         usage
       fi
       shift
@@ -78,166 +217,208 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Validate new version
+if [ "${CI:-}" = "true" ]; then
+  AUTO_CONFIRM=true
+fi
+
 if [ -z "$NEW_VERSION" ]; then
-  echo -e "${RED}Error: New version is required${NC}"
+  echo -e "${RED}Error: New version is required${NC}" >&2
   usage
 fi
 
-# Validate version format (semantic versioning)
 if ! [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$ ]]; then
-  echo -e "${RED}Error: Invalid version format: $NEW_VERSION${NC}"
-  echo -e "${YELLOW}Expected format: X.Y.Z (e.g., 0.1.2, 1.0.0, 2.1.3-beta.1)${NC}"
+  echo -e "${RED}Error: Invalid version format: $NEW_VERSION${NC}" >&2
   exit 1
 fi
 
-# Extract current version
-CURRENT_VERSION=$(grep -A 2 '^\[workspace.package\]' "$WORKSPACE_TOML" | grep '^version' | sed 's/version = "\(.*\)"/\1/')
-
-if [ -z "$CURRENT_VERSION" ]; then
-  echo -e "${RED}Error: Could not find workspace.package.version in $WORKSPACE_TOML${NC}"
+if [ ${#SELECTED_CRATES[@]} -eq 0 ] && [ ${#SELECTED_NPM_JSONS[@]} -eq 0 ]; then
+  echo -e "${RED}Error: No packages selected.${NC}" >&2
+  echo "Select packages with --crate, --group, --npm, or --npm-package." >&2
   exit 1
 fi
 
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  RongJS Version Bump${NC}"
-echo -e "${BLUE}========================================${NC}"
-echo ""
-echo -e "Current version: ${YELLOW}${CURRENT_VERSION}${NC}"
-echo -e "New version:     ${GREEN}${NEW_VERSION}${NC}"
-echo ""
-if [ "$DO_COMMIT" = true ]; then
-  echo -e "Git operations:"
-  [ "$DO_COMMIT" = true ] && echo -e "  - ${GREEN}✓${NC} Create commit"
-else
-  echo -e "${YELLOW}⚠️  DRY RUN MODE${NC}"
-  echo -e "   Only updating Cargo.toml, no git operations"
-  echo -e "   Use --commit to commit the change"
-fi
-echo ""
-
-# Check for uncommitted changes
 if [ "$DO_COMMIT" = true ] && ! git diff-index --quiet HEAD -- 2>/dev/null; then
-  echo -e "${RED}Error: You have uncommitted changes${NC}"
-  echo -e "${YELLOW}Please commit or stash your changes before bumping version${NC}"
+  echo -e "${RED}Error: You have uncommitted changes${NC}" >&2
   exit 1
 fi
 
-# Confirm
-read -p "Proceed with version bump? (yes/no): " -r
-echo
-if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
-  echo "Aborted."
-  exit 0
-fi
+METADATA_FILE="$(mktemp)"
+trap 'rm -f "$METADATA_FILE"' EXIT
+cargo metadata --no-deps --format-version 1 > "$METADATA_FILE"
 
-echo -e "${BLUE}Step 1: Updating workspace.package.version${NC}"
+manifest_for_crate() {
+  node - "$METADATA_FILE" "$1" <<'NODE'
+const fs = require("fs");
+const [metadataPath, crate] = process.argv.slice(2);
+const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+const pkg = metadata.packages.find((item) => item.name === crate);
+if (!pkg) process.exit(1);
+process.stdout.write(pkg.manifest_path);
+NODE
+}
 
-# Update workspace.package.version using Perl
-perl -i -pe '
-  BEGIN { $in_pkg = 0; }
+crate_version() {
+  local manifest=$1
+  awk '
+    /^\[package\]/ { in_package = 1; next }
+    /^\[/ && in_package { exit }
+    in_package && /^version[[:space:]]*=/ {
+      gsub(/"/, "", $3);
+      print $3;
+      exit
+    }
+  ' "$manifest"
+}
 
-  if (/^\[workspace\.package\]/) {
-    $in_pkg = 1;
-  } elsif (/^\[/ && $in_pkg) {
-    $in_pkg = 0;
-  }
+npm_json_for_selector() {
+  local selector=$1
+  local package_json
 
-  if ($in_pkg && /^version = /) {
-    s/^version = ".*"/version = "'"$NEW_VERSION"'"/;
-  }
-' "$WORKSPACE_TOML"
-
-echo -e "${GREEN}✓ Updated workspace.package.version to ${NEW_VERSION}${NC}"
-echo ""
-
-echo -e "${BLUE}Step 2: Updating root package version${NC}"
-
-perl -i -pe '
-  BEGIN { $in_pkg = 0; }
-
-  if (/^\[package\]/) {
-    $in_pkg = 1;
-  } elsif (/^\[/ && $in_pkg) {
-    $in_pkg = 0;
-  }
-
-  if ($in_pkg && /^version = /) {
-    s/^version = ".*"/version = "'"$NEW_VERSION"'"/;
-  }
-' "$WORKSPACE_TOML"
-
-echo -e "${GREEN}✓ Updated root package version to ${NEW_VERSION}${NC}"
-echo ""
-
-echo -e "${BLUE}Step 3: Syncing workspace.dependencies${NC}"
-
-# Sync all workspace.dependencies versions
-perl -i -pe '
-  BEGIN { $version = "'"$NEW_VERSION"'"; $in_deps = 0; }
-
-  if (/^\[workspace\.dependencies\]/) {
-    $in_deps = 1;
-  } elsif (/^\[/ && !/^\[workspace\.dependencies\]/) {
-    $in_deps = 0;
-  }
-
-  if ($in_deps && /^rong[_a-z0-9]* = \{/) {
-    # Remove existing version attribute
-    s/, *version = "[^"]*"//g;
-    s/version = "[^"]*", *//g;
-
-    # Add new version before closing brace
-    s/\}$/, version = "$version" }/;
-  }
-' "$WORKSPACE_TOML"
-
-echo -e "${GREEN}✓ Synced all workspace.dependencies to ${NEW_VERSION}${NC}"
-echo ""
-
-echo -e "${BLUE}Step 4: Syncing npm package versions${NC}"
-
-for package_json in "${NPM_PACKAGE_JSONS[@]}"; do
-  if [ -f "$package_json" ]; then
-    node -e '
-      const fs = require("fs");
-      const [file, version] = process.argv.slice(1);
-      const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
-      pkg.version = version;
-      fs.writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
-    ' "$package_json" "$NEW_VERSION"
-    echo -e "${GREEN}✓ Updated ${package_json} to ${NEW_VERSION}${NC}"
+  if [ -f "$selector" ]; then
+    printf '%s' "$selector"
+    return 0
   fi
-done
 
+  for package_json in "${NPM_PACKAGE_JSONS[@]}"; do
+    if [ -f "$package_json" ] && [ "$(node -p "require('./${package_json}').name")" = "$selector" ]; then
+      printf '%s' "$package_json"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+RESOLVED_NPM_JSONS=()
+if [ ${#SELECTED_NPM_JSONS[@]} -gt 0 ]; then
+  for package_json in "${SELECTED_NPM_JSONS[@]}"; do
+    if resolved="$(npm_json_for_selector "$package_json")"; then
+      if [ ${#RESOLVED_NPM_JSONS[@]} -eq 0 ] || add_unique "$resolved" "${RESOLVED_NPM_JSONS[@]}"; then
+        RESOLVED_NPM_JSONS+=("$resolved")
+      fi
+    else
+      echo -e "${RED}Error: Unknown npm package: $package_json${NC}" >&2
+      exit 1
+    fi
+  done
+fi
+
+SELECTED_NPM_JSONS=()
+if [ ${#RESOLVED_NPM_JSONS[@]} -gt 0 ]; then
+  SELECTED_NPM_JSONS=("${RESOLVED_NPM_JSONS[@]}")
+fi
+
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}  RongJS Package Version Bump${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo -e "New version: ${GREEN}${NEW_VERSION}${NC}"
 echo ""
 
+if [ ${#SELECTED_CRATES[@]} -gt 0 ]; then
+  echo -e "${BLUE}Rust crates:${NC}"
+  for crate in "${SELECTED_CRATES[@]}"; do
+    manifest="$(manifest_for_crate "$crate" || true)"
+    if [ -z "$manifest" ]; then
+      echo -e "${RED}Error: Unknown Rust crate: $crate${NC}" >&2
+      exit 1
+    fi
+    echo "  - $crate ($(crate_version "$manifest") -> $NEW_VERSION)"
+  done
+fi
+
+if [ ${#SELECTED_NPM_JSONS[@]} -gt 0 ]; then
+  echo -e "${BLUE}npm packages:${NC}"
+  for package_json in "${SELECTED_NPM_JSONS[@]}"; do
+    package_name="$(node -p "require('./${package_json}').name")"
+    package_version="$(node -p "require('./${package_json}').version")"
+    echo "  - $package_name ($package_version -> $NEW_VERSION)"
+  done
+fi
+
+echo ""
+if [ "$AUTO_CONFIRM" != true ]; then
+  read -p "Proceed with version bump? (yes/no): " -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    echo "Aborted."
+    exit 0
+  fi
+fi
+
+FILES_TO_ADD=()
+
+set_manifest_version() {
+  local manifest=$1
+  NEW_VERSION="$NEW_VERSION" perl -0pi -e '
+    my $version = $ENV{NEW_VERSION};
+    s/(\[package\][^\[]*?\nversion\s*=\s*")[^"]+(")/$1$version$2/s
+      or die "could not update [package].version in $ARGV\n";
+  ' "$manifest"
+}
+
+set_workspace_dependency_version() {
+  local crate=$1
+  CRATE="$crate" NEW_VERSION="$NEW_VERSION" perl -0pi -e '
+    my $crate = $ENV{CRATE};
+    my $version = $ENV{NEW_VERSION};
+    s{(\[workspace\.dependencies\]\n)(.*?)(?=\n\[|\z)}{
+      my ($heading, $body) = ($1, $2);
+      $body =~ s{(^\Q$crate\E\s*=\s*\{[^\n]*)(\})}{
+        my ($line, $close) = ($1, $2);
+        if ($line =~ /version\s*=\s*"[^"]*"/) {
+          $line =~ s/version\s*=\s*"[^"]*"/version = "$version"/;
+        } else {
+          $line =~ s/\s+$//;
+          $line .= qq{, version = "$version"};
+        }
+        $line . $close;
+      }mge;
+      $heading . $body;
+    }se;
+  ' "$WORKSPACE_TOML"
+}
+if [ ${#SELECTED_CRATES[@]} -gt 0 ]; then
+  for crate in "${SELECTED_CRATES[@]}"; do
+    manifest="$(manifest_for_crate "$crate")"
+    set_manifest_version "$manifest"
+    set_workspace_dependency_version "$crate"
+    if [ ${#FILES_TO_ADD[@]} -eq 0 ] || add_unique "$manifest" "${FILES_TO_ADD[@]}"; then
+      FILES_TO_ADD+=("$manifest")
+    fi
+    if [ "$manifest" != "$WORKSPACE_TOML" ]; then
+      if [ ${#FILES_TO_ADD[@]} -eq 0 ] || add_unique "$WORKSPACE_TOML" "${FILES_TO_ADD[@]}"; then
+        FILES_TO_ADD+=("$WORKSPACE_TOML")
+      fi
+    fi
+    echo -e "${GREEN}✓ Updated $crate to $NEW_VERSION${NC}"
+  done
+fi
+
+if [ ${#SELECTED_NPM_JSONS[@]} -gt 0 ]; then
+  for package_json in "${SELECTED_NPM_JSONS[@]}"; do
+    node - "$package_json" "$NEW_VERSION" <<'NODE'
+const fs = require("fs");
+const [file, version] = process.argv.slice(2);
+const pkg = JSON.parse(fs.readFileSync(file, "utf8"));
+pkg.version = version;
+fs.writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
+NODE
+    if [ ${#FILES_TO_ADD[@]} -eq 0 ] || add_unique "$package_json" "${FILES_TO_ADD[@]}"; then
+      FILES_TO_ADD+=("$package_json")
+    fi
+    echo -e "${GREEN}✓ Updated $package_json to $NEW_VERSION${NC}"
+  done
+fi
+
 if [ "$DO_COMMIT" = true ]; then
-  echo -e "${BLUE}Step 5: Creating git commit${NC}"
-
-  git add Cargo.toml "${NPM_PACKAGE_JSONS[@]}"
-  git commit -m "chore: bump version to ${NEW_VERSION}"
-
+  git add "${FILES_TO_ADD[@]}"
+  git commit -m "chore: bump selected packages to ${NEW_VERSION}"
   echo -e "${GREEN}✓ Created commit${NC}"
-  echo ""
 fi
 
-echo -e "${GREEN}Version bump complete.${NC}"
-echo -e "Version bumped from ${YELLOW}${CURRENT_VERSION}${NC} to ${GREEN}${NEW_VERSION}${NC}"
 echo ""
-
-if [ "$DO_COMMIT" = true ]; then
-  echo -e "${YELLOW}Next steps:${NC}"
-  echo -e "  1. Review: ${BLUE}git show${NC}"
-  echo -e "  2. Update: ${BLUE}edit CHANGELOG.md for ${NEW_VERSION}${NC}"
-  echo -e "  3. Push: ${BLUE}git push${NC}"
-  echo -e "  4. Release: ${BLUE}run the Release: Publish Packages workflow from master${NC}"
-else
-  echo -e "${YELLOW}Next steps:${NC}"
-  echo -e "  1. Review: ${BLUE}git diff Cargo.toml${NC}"
-  echo -e "  2. Update: ${BLUE}edit CHANGELOG.md for ${NEW_VERSION}${NC}"
-  echo -e "  3. Commit: ${BLUE}git add Cargo.toml && git commit -m 'chore: bump version to ${NEW_VERSION}'${NC}"
-  echo -e "  4. Push: ${BLUE}git push${NC}"
-  echo -e "  5. Release: ${BLUE}run the Release: Publish Packages workflow from master${NC}"
-  echo ""
-fi
+echo -e "${GREEN}Version bump complete.${NC}"
+echo -e "${YELLOW}Next steps:${NC}"
+echo -e "  1. Review: ${BLUE}git diff -- ${FILES_TO_ADD[*]}${NC}"
+echo -e "  2. Update CHANGELOG.md for the packages being released"
+echo -e "  3. Publish with scripts/publish.sh using matching --crate/--group selection"

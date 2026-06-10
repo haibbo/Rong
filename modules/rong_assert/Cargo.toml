@@ -1,6 +1,6 @@
 [package]
 name = "rong_assert"
-version.workspace = true
+version = "0.4.0"
 edition.workspace = true
 
 description = "Assert module for RongJS"

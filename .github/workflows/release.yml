@@ -1,4 +1,4 @@
-name: "Publish Release"
+name: "Publish Packages"
 
 run-name: "Publish ${{ inputs.package_scope }} from ${{ github.ref_name }}"
 
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       package_scope:
-        description: "What to publish. all creates the repo tag and GitHub Release; rust/npm only publish that package family."
+        description: "Which package family to publish."
         required: true
         default: all
         type: choice
@@ -14,13 +14,23 @@ on:
           - all
           - rust
           - npm
+      rust_selection:
+        description: "Rust selection passed to scripts/publish.sh, e.g. --crate rong_timer, --group engines, --changed-since v0.4.0."
+        required: false
+        default: "--group rust"
+        type: string
+      create_tags:
+        description: "Create package-level git tags for published or already-published packages."
+        required: true
+        default: true
+        type: boolean
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: publish-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  publish:
     runs-on: macos-latest
     permissions:
       contents: write
@@ -32,66 +42,46 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Resolve release metadata
+      - name: Resolve publish scope
         env:
-          PUBLISH_SCOPE: ${{ inputs.package_scope }}
+          PACKAGE_SCOPE: ${{ inputs.package_scope }}
+          RUST_SELECTION: ${{ inputs.rust_selection }}
+          CREATE_TAGS: ${{ inputs.create_tags }}
         run: |
           if [ "${GITHUB_REF_NAME}" != "master" ]; then
             echo "Run this workflow from master."
             exit 1
           fi
 
-          case "$PUBLISH_SCOPE" in
+          case "$PACKAGE_SCOPE" in
             all|rust|npm)
               ;;
             *)
-              echo "Unsupported package_scope: $PUBLISH_SCOPE"
+              echo "Unsupported package_scope: $PACKAGE_SCOPE"
               exit 1
               ;;
           esac
 
-          VERSION="$(grep -A 2 '^\[workspace.package\]' Cargo.toml | grep '^version' | sed 's/version = "\(.*\)"/\1/')"
-          if [ -z "$VERSION" ]; then
-            echo "Unable to resolve workspace version from Cargo.toml."
-            exit 1
-          fi
-
-          TAG="v${VERSION}"
-
-          bash ./scripts/extract_changelog_entry.sh "$VERSION" > /tmp/rong-release-notes.md
-          if [ ! -s /tmp/rong-release-notes.md ]; then
-            echo "CHANGELOG.md entry for $VERSION is empty."
-            exit 1
-          fi
-
-          if [ "$PUBLISH_SCOPE" = "all" ]; then
-            if git rev-parse "$TAG" >/dev/null 2>&1; then
-              echo "Tag $TAG already exists in the checked-out repository."
-              exit 1
-            fi
-
-            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-              echo "Tag $TAG already exists on origin."
+          if [ "$PACKAGE_SCOPE" = "all" ] || [ "$PACKAGE_SCOPE" = "rust" ]; then
+            if [ -z "$RUST_SELECTION" ]; then
+              echo "rust_selection is required when publishing Rust packages."
               exit 1
             fi
           fi
 
           {
-            echo "VERSION=$VERSION"
-            echo "TAG=$TAG"
-            echo "PUBLISH_SCOPE=$PUBLISH_SCOPE"
+            echo "PACKAGE_SCOPE=$PACKAGE_SCOPE"
+            echo "RUST_SELECTION=$RUST_SELECTION"
+            echo "CREATE_TAGS=$CREATE_TAGS"
           } >> "$GITHUB_ENV"
 
           {
-            echo "### Release publish scope"
+            echo "### Package publish scope"
             echo
-            echo "- Version: \`$VERSION\`"
-            echo "- Scope: \`$PUBLISH_SCOPE\`"
-            if [ "$PUBLISH_SCOPE" = "all" ]; then
-              echo "- Creates tag and GitHub Release: \`true\`"
-            else
-              echo "- Creates tag and GitHub Release: \`false\`"
-            fi
+            echo "- Package scope: \`$PACKAGE_SCOPE\`"
+            echo "- Rust selection: \`$RUST_SELECTION\`"
+            echo "- Create package tags: \`$CREATE_TAGS\`"
+            echo "- Creates repo-level release tag: \`false\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install Rust
@@ -126,22 +116,18 @@ jobs:
         if: inputs.package_scope == 'all' || inputs.package_scope == 'rust'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: ./scripts/publish.sh --yes
+        run: |
+          read -r -a rust_args <<< "$RUST_SELECTION"
+          if [ "$CREATE_TAGS" = "true" ]; then
+            rust_args+=(--tag)
+          fi
+          ./scripts/publish.sh --yes "${rust_args[@]}"
 
       - name: Publish npm packages
         if: inputs.package_scope == 'all' || inputs.package_scope == 'npm'
-        run: ./scripts/publish_npm.sh
-
-      - name: Create release tag
-        if: inputs.package_scope == 'all'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "Rong $TAG"
-          git push origin "$TAG"
-
-      - name: Create GitHub release
-        if: inputs.package_scope == 'all'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$TAG" --title "$TAG" --notes-file /tmp/rong-release-notes.md
+          npm_args=()
+          if [ "$CREATE_TAGS" = "true" ]; then
+            npm_args+=(--tag)
+          fi
+          ./scripts/publish_npm.sh "${npm_args[@]}"
