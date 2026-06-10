@@ -37,13 +37,25 @@ Use this for ordinary package releases.
 1. Decide the release set:
 
    ```bash
-   # Examples
+   # Recommended: crates changed since their own latest release tags,
+   # with drift warnings for crates that still need a version bump.
+   ./scripts/publish.sh --changed --dry-run
+
+   # Explicit selections
    ./scripts/publish.sh --crate rong_timer --dry-run
    ./scripts/publish.sh --crate rong_jscore_sys --crate rong_jscore --dry-run
    ./scripts/publish.sh --group engines --dry-run
    ```
 
-   Use `--changed-since <ref>` as a planning aid, then review the generated plan.
+   `--changed` compares each crate against its own latest package tag
+   (`<crate>-vX.Y.Z`, falling back to the latest repo `vX.Y.Z` tag) and ignores
+   internal version churn (the crate's own version and `rong*` dependency
+   version syncs — external dependency bumps still count), so the plan
+   reflects real code changes. CI also
+   posts this plan in the job summary on every `master` push. Add
+   `--check-drift` to fail (exit 2) when a selected crate's version is already
+   published — useful as a release-PR gate. Review the generated plan either
+   way.
 
 2. Prepare a normal release PR. The PR should include:
    - version bumps for the selected Rust crates and/or npm packages
@@ -68,24 +80,30 @@ Use this for ordinary package releases.
 
 5. In GitHub Actions, run `Publish Packages` from `master`:
    - `package_scope=rust`, `npm`, or `all`
-   - `rust_selection` such as `--crate rong_timer`, `--group engines`, or
-     `--changed-since v0.4.0`
+   - `rust_selection` such as `--changed`, `--crate rong_timer`,
+     `--group engines`, or `--changed-since v0.4.0`
    - `create_tags=true` when package-level git tags should be pushed
+   - `product_release=v<version>` (optional) when this publish should also
+     create the repo-level product tag and a GitHub Release
 
 The publish workflow:
 
-- publishes selected crates through `scripts/publish.sh`
+- publishes selected crates through `scripts/publish.sh` (macOS job)
 - publishes repo-maintained `@rongjs/*` npm packages through
-  `scripts/publish_npm.sh`
+  `scripts/publish_npm.sh` (Linux job; npm-only runs never pay for a macOS
+  runner)
 - optionally creates package-level tags such as `rong_timer-v0.4.1`,
   `rong_jscore-v0.4.1`, or `npm-rongjs-rong-v0.4.1`
-- does not create repo-level product tags such as `v0.4.1`
-- does not create GitHub Releases
+- creates a repo-level product tag and GitHub Release only when the optional
+  `product_release` input is set; the release notes come from the matching
+  `CHANGELOG.md` entry, which must exist
 
 Requirements:
 
 - `Publish Packages` must run from `master`
-- `CARGO_REGISTRY_TOKEN` must be configured in GitHub Actions for Rust publishes
+- Rust publishes prefer crates.io Trusted Publishing (GitHub OIDC) and fall
+  back to the `CARGO_REGISTRY_TOKEN` secret; keep the secret configured until
+  every crate has a trusted publisher configured on crates.io
 - npm trusted publishing must be configured for each repo-maintained npm package
 
 ## Product Tags
@@ -93,8 +111,15 @@ Requirements:
 Repo-level product tags such as `v0.4.0` are explicit maintainer decisions. They
 mark a product-level release point, not every package publish.
 
-Create them manually when the released package set should be treated as a
-cohesive product release:
+When a publish run should also be a product release, set the
+`product_release` input on `Publish Packages` (for example `v0.4.1`). After
+the selected packages publish successfully, the workflow creates the annotated
+tag and a GitHub Release whose notes are the matching `CHANGELOG.md` entry.
+The step is rerun-safe: an existing tag is accepted only when it points at the
+current `HEAD` (otherwise the run fails rather than re-releasing different
+content), and a missing GitHub Release is created for the existing tag.
+
+Creating them manually still works:
 
 ```bash
 git tag -a v<version> -m "Rong v<version>"
@@ -102,6 +127,24 @@ git push origin v<version>
 ```
 
 Create a GitHub Release only when a product-level release note is useful.
+
+## crates.io Trusted Publishing
+
+The publish workflow first tries crates.io Trusted Publishing (GitHub Actions
+OIDC) through `rust-lang/crates-io-auth-action`, and falls back to the
+`CARGO_REGISTRY_TOKEN` secret when the token exchange is unavailable.
+
+To finish the migration off the long-lived token, configure the trusted
+publisher for each published crate on crates.io (crate Settings → Trusted
+Publishing):
+
+- GitHub repository: `LingXia-Dev/Rong`
+- Workflow file: `release.yml`
+
+Trusted publisher configuration is crate-level, so a brand-new crate's first
+publish still needs the token fallback; configure the trusted publisher right
+after the first publish. Once every crate in `scripts/publish.sh` is
+configured, the `CARGO_REGISTRY_TOKEN` secret can be removed.
 
 ## npm Trusted Publishing
 
@@ -180,6 +223,13 @@ Trusted Publishing.
 - `publish.sh` does not change versions or changelog content.
 - `publish.sh` publishes crates in dependency order and waits for crates.io index
   propagation between packages.
+- `publish.sh` validates its `CRATES` list against the workspace's publishable
+  members on every run and fails fast on drift, so adding a crate to the
+  workspace without adding it to `scripts/publish.sh` is caught immediately.
+- Published-version checks query the crates.io sparse index for exact version
+  matches, with `cargo search` as a network fallback.
+- CI posts an informational "Pending release plan" summary on `master` pushes
+  (`publish.sh --changed --dry-run`).
 - `publish_npm.sh` publishes all repo-maintained `@rongjs/*` npm packages and
   skips versions that already exist. It runs only in GitHub Actions with trusted
   publishing.

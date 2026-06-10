@@ -47,17 +47,32 @@ git config --local core.hooksPath .githooks
 ## publish.sh
 
 ```
-./scripts/publish.sh [--crate NAME]... [--group NAME]... [--changed-since REF] [--tag] [--dry-run] [--yes]
+./scripts/publish.sh [--crate NAME]... [--group NAME]... [--changed] [--changed-since REF] [--tag] [--dry-run] [--check-drift] [--yes]
 ```
 
 - Publishes selected Rust crates in dependency order
-- Supports `--crate`, `--group`, and `--changed-since` selection
+- Supports `--crate`, `--group`, `--changed`, and `--changed-since` selection
+- `--changed` selects crates with publish-relevant changes since their own
+  latest package tag (`<crate>-vX.Y.Z`), falling back to the latest repo tag
+  (`vX.Y.Z`). Internal version churn — the crate's own `[package]`/
+  `[workspace.package]` version and the `bump_version.sh` version syncs on
+  `rong*` dependency entries — and files belonging to nested crates are
+  ignored, so the selection reflects real code changes. External dependency
+  version changes (e.g. bumping `tokio`) still count as changes.
+- `--changed-since REF` is the same change detection against one explicit ref
 - Defaults to all publishable Rust crates only when no selection is provided,
   preserving the old full-publish behavior
+- Fails fast when the script's `CRATES` list drifts from the workspace's
+  publishable members, so a new crate cannot be silently left unpublished
+- Published-version checks use the crates.io sparse index (exact version match),
+  with `cargo search` as a network fallback
 - Requires `CARGO_REGISTRY_TOKEN`
 - Smart waiting: polls crates.io until each package is indexed
 - Optional `--tag` creates package-level tags such as `rong_timer-v0.4.1`
-- `--dry-run` prints the selected publish plan without requiring a token
+- `--dry-run` prints the selected publish plan without requiring a token, and
+  flags drift: selected crates whose current version is already on crates.io
+  (they need a version bump before publishing)
+- `--check-drift` makes `--dry-run` exit with status 2 when drift is found
 - `--yes` skips the confirmation prompt (useful for CI)
 
 ## publish_npm.sh
@@ -88,13 +103,21 @@ Notes:
 
 - `Publish Packages` does not infer a workspace version.
 - `rust_selection` is passed to `scripts/publish.sh`, for example
-  `--crate rong_timer`, `--group engines`, or `--changed-since v0.4.0`.
+  `--changed`, `--crate rong_timer`, `--group engines`, or
+  `--changed-since v0.4.0`.
 - Package-level tags are optional and separate, e.g. `rong_timer-v0.4.1` or
   `npm-rongjs-rong-v0.4.1`.
-- Product-level tags such as `v0.4.1` are explicit maintainer decisions and are
-  not created by CI.
-- `Publish Packages` requires `CARGO_REGISTRY_TOKEN` for Rust crates and
-  npm trusted publisher configuration for npm packages.
+- Product-level tags such as `v0.4.1` remain explicit maintainer decisions.
+  Set the optional `product_release` input (e.g. `v0.4.1`) when you want the
+  workflow to create the tag and a GitHub Release from the matching
+  `CHANGELOG.md` entry after a successful publish; leave it empty otherwise.
+- Rust publishes authenticate with crates.io Trusted Publishing (GitHub OIDC)
+  when the trusted publisher is configured for the crates, and fall back to the
+  `CARGO_REGISTRY_TOKEN` secret. npm packages require npm trusted publisher
+  configuration.
+- CI on `master` pushes posts an informational "Pending release plan"
+  (`publish.sh --changed --dry-run`) in the job summary, showing which crates
+  have unreleased changes and which need version bumps.
 
 ## Local Rust recovery flow
 

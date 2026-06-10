@@ -17,6 +17,8 @@ SKIP_PUBLISHED_CHECK=false
 VERIFY_FEATURES="quickjs"
 CREATE_TAGS=false
 CHANGED_SINCE=""
+CHANGED_MODE=false
+CHECK_DRIFT=false
 DRY_RUN=false
 
 WORKSPACE_TOML="Cargo.toml"
@@ -122,7 +124,14 @@ SELECTION:
   --group NAME               Publish a crate group; repeatable
                              groups: core, engines, modules, bundles,
                                      non-modules, rust, all
-  --changed-since REF        Add crates with files changed since REF
+  --changed                  Add crates changed since their own latest package
+                             tag (<crate>-vX.Y.Z), falling back to the latest
+                             repo tag (vX.Y.Z). Internal version churn (the
+                             crate's own version and rong* dependency version
+                             syncs) is ignored; external dependency version
+                             changes still count.
+  --changed-since REF        Add crates with files changed since REF, with the
+                             same internal version churn filtering.
   -s, --start-from NAME      Slice the selected plan from NAME, inclusive
 
 PUBLISH OPTIONS:
@@ -135,6 +144,9 @@ PUBLISH OPTIONS:
                              published or already-published selected crates
       --dry-run              Print the publish plan without requiring tokens or
                              publishing anything
+      --check-drift          With --dry-run: exit 2 when a selected crate's
+                             current version is already on crates.io (it needs
+                             a version bump before it can be published)
   -y, --yes                  Skip confirmation prompt
   -t, --timeout SECONDS      Maximum wait time for crates.io sync (default: 180)
   -p, --poll SECONDS         Poll interval for crates.io sync (default: 5)
@@ -145,6 +157,7 @@ EXAMPLES:
   $0 --crate rong_jscore_sys --crate rong_jscore
   $0 --group engines
   $0 --group modules --tag
+  $0 --changed --dry-run
   $0 --changed-since v0.4.0
 EOF
   exit 0
@@ -246,6 +259,11 @@ while [[ $# -gt 0 ]]; do
       add_group "$2"
       shift 2
       ;;
+    --changed)
+      HAS_SELECTOR=true
+      CHANGED_MODE=true
+      shift
+      ;;
     --changed-since)
       if [[ $# -lt 2 ]]; then
         echo "Error: --changed-since requires a git ref" >&2
@@ -254,6 +272,10 @@ while [[ $# -gt 0 ]]; do
       HAS_SELECTOR=true
       CHANGED_SINCE="$2"
       shift 2
+      ;;
+    --check-drift)
+      CHECK_DRIFT=true
+      shift
       ;;
     --skip-published-check)
       SKIP_PUBLISHED_CHECK=true
@@ -302,8 +324,7 @@ if [ "${CI:-}" = "true" ]; then
 fi
 
 METADATA_FILE="$(mktemp)"
-CHANGED_FILE_LIST="$(mktemp)"
-trap 'rm -f "$METADATA_FILE" "$CHANGED_FILE_LIST"' EXIT
+trap 'rm -f "$METADATA_FILE"' EXIT
 cargo metadata --no-deps --format-version 1 > "$METADATA_FILE"
 
 workspace_root() {
@@ -316,6 +337,54 @@ NODE
 }
 
 WORKSPACE_ROOT="$(workspace_root)"
+
+# The CRATES list is maintained by hand; fail fast when it drifts from the
+# workspace so a new publishable crate cannot be silently left unpublished.
+validate_crate_list() {
+  local meta_crates name
+  local missing=()
+  local extra=()
+
+  meta_crates="$(node - "$METADATA_FILE" <<'NODE'
+const fs = require("fs");
+const [metadataPath] = process.argv.slice(2);
+const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+const members = new Set(metadata.workspace_members);
+for (const pkg of metadata.packages) {
+  if (!members.has(pkg.id)) continue;
+  if (Array.isArray(pkg.publish) && pkg.publish.length === 0) continue;
+  console.log(pkg.name);
+}
+NODE
+)"
+
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    if ! contains "$name" "${CRATES[@]}"; then
+      missing+=("$name")
+    fi
+  done <<< "$meta_crates"
+
+  for name in "${CRATES[@]}"; do
+    if ! grep -qx "$name" <<< "$meta_crates"; then
+      extra+=("$name")
+    fi
+  done
+
+  if [ ${#missing[@]} -gt 0 ] || [ ${#extra[@]} -gt 0 ]; then
+    if [ ${#missing[@]} -gt 0 ]; then
+      echo -e "${RED}ERROR: publishable workspace crates missing from the CRATES list in scripts/publish.sh:${NC}" >&2
+      printf '  - %s\n' "${missing[@]}" >&2
+    fi
+    if [ ${#extra[@]} -gt 0 ]; then
+      echo -e "${RED}ERROR: CRATES entries in scripts/publish.sh that are not publishable workspace members:${NC}" >&2
+      printf '  - %s\n' "${extra[@]}" >&2
+    fi
+    exit 1
+  fi
+}
+
+validate_crate_list
 
 manifest_for_crate() {
   node - "$METADATA_FILE" "$1" <<'NODE'
@@ -341,37 +410,229 @@ crate_version() {
   ' "$manifest"
 }
 
-add_changed_since_selection() {
-  local ref=$1
-  local crate manifest rel dir file
+# Crate directories (relative to the workspace root), parallel to CRATES.
+# Computed once because manifest_for_crate shells out to node per call.
+CRATE_DIRS_REL=()
+precompute_crate_dirs() {
+  local crate manifest
 
-  git diff --name-only "$ref"..HEAD -- > "$CHANGED_FILE_LIST"
-
+  if [ ${#CRATE_DIRS_REL[@]} -gt 0 ]; then
+    return 0
+  fi
   for crate in "${CRATES[@]}"; do
     manifest="$(manifest_for_crate "$crate")"
-    rel="${manifest#$WORKSPACE_ROOT/}"
-    dir="$(dirname "$rel")"
+    CRATE_DIRS_REL+=("$(dirname "${manifest#$WORKSPACE_ROOT/}")")
+  done
+}
 
+crate_dir_for() {
+  local i
+
+  for ((i = 0; i < ${#CRATES[@]}; i++)); do
+    if [ "${CRATES[$i]}" = "$1" ]; then
+      printf '%s' "${CRATE_DIRS_REL[$i]}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Crate directories nest (e.g. quickjs/ contains quickjs/sys/). Files that
+# belong to a nested crate must not mark the enclosing crate as changed.
+file_belongs_to_nested_crate() {
+  local dir=$1
+  local file=$2
+  local i other_dir
+
+  for ((i = 0; i < ${#CRATES[@]}; i++)); do
+    other_dir="${CRATE_DIRS_REL[$i]}"
+    [ "$other_dir" = "$dir" ] && continue
+    case "$other_dir" in
+      "$dir"/*)
+        case "$file" in
+          "$other_dir"/*) return 0 ;;
+        esac
+        ;;
+    esac
+  done
+  return 1
+}
+
+# Baseline ref for --changed: the crate's own latest package tag, falling back
+# to the latest repo-level release tag. Empty when neither exists.
+latest_tag_for_crate() {
+  local crate=$1
+  local tag
+
+  tag="$(git tag --list "${crate}-v*" --sort=-v:refname | head -n 1)"
+  if [ -z "$tag" ]; then
+    tag="$(git tag --list "v[0-9]*" --sort=-v:refname | head -n 1)"
+  fi
+  printf '%s' "$tag"
+}
+
+# True when REF..HEAD changes to a manifest only touch `version = "..."`
+# values. bump_version.sh syncs versions across [workspace.dependencies], so
+# version-only churn must not count as a publishable change.
+# Strip only internal version-bump churn so it does not count as a change:
+# the crate's own version in [package] (including the legacy
+# `version.workspace = true` form), and version fields on internal `rong*`
+# dependency entries, which bump_version.sh syncs across
+# [workspace.dependencies]. External dependency version changes (e.g. tokio)
+# are real changes and must survive normalization.
+normalize_manifest_versions() {
+  awk '
+    /^\[/ { section = $0 }
+    {
+      line = $0
+
+      # Own package version (or its workspace form), including the shared
+      # version under [workspace.package]: drop the whole line.
+      if (section ~ /^\[(workspace\.)?package\]/ \
+          && line ~ /^[[:space:]]*version([[:space:]]*=|\.workspace)/) {
+        next
+      }
+
+      # Internal rong* dependency entries: strip just the version field.
+      if (line ~ /^[[:space:]]*"?rong[a-z0-9_]*"?[[:space:]]*=/ \
+          || section ~ /^\[.*dependencies\.rong[a-z0-9_]*\]/) {
+        gsub(/version[[:space:]]*=[[:space:]]*"[^"]*"/, "", line)
+        gsub(/version\.workspace[[:space:]]*=[[:space:]]*true/, "", line)
+      }
+
+      # Tidy leftover commas/whitespace so both sides compare cleanly.
+      gsub(/[[:space:]]+/, " ", line)
+      gsub(/, *,/, ",", line)
+      gsub(/\{ *,/, "{ ", line)
+      gsub(/, *\}/, " }", line)
+      sub(/^ +/, "", line)
+      sub(/ +$/, "", line)
+      sub(/,+ *$/, "", line)
+      if (line == "") next
+      print line
+    }
+  '
+}
+
+is_version_only_manifest_change() {
+  local ref=$1
+  local file=$2
+  local old new
+
+  old="$(git show "${ref}:${file}" 2>/dev/null | normalize_manifest_versions)" || return 1
+  new="$(git show "HEAD:${file}" 2>/dev/null | normalize_manifest_versions)" || return 1
+  [ "$old" = "$new" ]
+}
+
+# True when CRATE has publish-relevant changes in REF..HEAD. For the root
+# crate, only its manifest, README, and src/ count; CHANGELOG.md is
+# workspace-wide and intentionally ignored.
+crate_changed_since() {
+  local crate=$1
+  local ref=$2
+  local dir rel file
+
+  dir="$(crate_dir_for "$crate")"
+  rel="${dir}/Cargo.toml"
+
+  if [ "$dir" = "." ]; then
     while IFS= read -r file; do
       [ -n "$file" ] || continue
+      case "$file" in
+        Cargo.toml)
+          is_version_only_manifest_change "$ref" "$file" || return 0
+          ;;
+        README.md|src/*)
+          return 0
+          ;;
+      esac
+    done < <(git diff --name-only "$ref"..HEAD --)
+    return 1
+  fi
 
-      if [ "$dir" = "." ]; then
-        case "$file" in
-          Cargo.toml|README.md|CHANGELOG.md|src/*)
-            add_crate "$crate"
-            break
-            ;;
-        esac
-      elif [ "$file" = "$rel" ] || [[ "$file" == "$dir/"* ]]; then
-        add_crate "$crate"
-        break
-      fi
-    done < "$CHANGED_FILE_LIST"
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    if file_belongs_to_nested_crate "$dir" "$file"; then
+      continue
+    fi
+    if [ "$file" = "$rel" ]; then
+      is_version_only_manifest_change "$ref" "$file" || return 0
+    else
+      return 0
+    fi
+  done < <(git diff --name-only "$ref"..HEAD -- "$dir/")
+  return 1
+}
+
+add_changed_since_selection() {
+  local ref=$1
+  local crate
+
+  precompute_crate_dirs
+  for crate in "${CRATES[@]}"; do
+    if crate_changed_since "$crate" "$ref"; then
+      add_crate "$crate"
+    fi
   done
+}
+
+add_changed_selection() {
+  local crate baseline
+
+  precompute_crate_dirs
+  for crate in "${CRATES[@]}"; do
+    baseline="$(latest_tag_for_crate "$crate")"
+    if [ -z "$baseline" ]; then
+      echo -e "${YELLOW}No release tag found for ${crate}; treating it as changed.${NC}" >&2
+      add_crate "$crate"
+      continue
+    fi
+    if crate_changed_since "$crate" "$baseline"; then
+      add_crate "$crate"
+    fi
+  done
+}
+
+# Exact published-version lookup via the crates.io sparse index. `cargo search`
+# only reports the latest version, so it cannot answer "is X.Y.Z published".
+sparse_index_path() {
+  local crate
+  crate="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "${#crate}" in
+    1) printf '1/%s' "$crate" ;;
+    2) printf '2/%s' "$crate" ;;
+    3) printf '3/%s/%s' "${crate:0:1}" "$crate" ;;
+    *) printf '%s/%s/%s' "${crate:0:2}" "${crate:2:2}" "$crate" ;;
+  esac
+}
+
+is_crate_published() {
+  local crate=$1
+  local version=$2
+  local url body status
+
+  url="https://index.crates.io/$(sparse_index_path "$crate")"
+  status=0
+  body="$(curl -fsSL --retry 3 --retry-delay 2 "$url" 2>/dev/null)" || status=$?
+
+  if [ "$status" -eq 22 ]; then
+    # HTTP error response; 404 means the crate has never been published.
+    return 1
+  fi
+  if [ "$status" -ne 0 ]; then
+    # Network trouble: fall back to cargo search (latest version only).
+    cargo search "$crate" --limit 1 2>/dev/null | grep -q "^$crate = \"${version}\""
+    return
+  fi
+  grep -q "\"vers\":\"${version}\"" <<< "$body"
 }
 
 if [ -n "$CHANGED_SINCE" ]; then
   add_changed_since_selection "$CHANGED_SINCE"
+fi
+
+if [ "$CHANGED_MODE" = true ]; then
+  add_changed_selection
 fi
 
 if [ "$HAS_SELECTOR" = false ]; then
@@ -427,6 +688,9 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  RongJS Rust Publishing Script${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo -e "Total crates to publish: ${GREEN}${TOTAL_CRATES}${NC}"
+if [ "$CHANGED_MODE" = true ]; then
+  echo -e "Changed since: ${YELLOW}per-crate package tags${NC}"
+fi
 if [ -n "$CHANGED_SINCE" ]; then
   echo -e "Changed since: ${YELLOW}${CHANGED_SINCE}${NC}"
 fi
@@ -445,11 +709,30 @@ echo ""
 echo -e "${BLUE}Publish plan:${NC}"
 for crate in "${PUBLISH_CRATES[@]}"; do
   manifest="$(manifest_for_crate "$crate")"
-  echo "  - $crate $(crate_version "$manifest")"
+  if [ "$CHANGED_MODE" = true ]; then
+    echo "  - $crate $(crate_version "$manifest") (baseline: $(latest_tag_for_crate "$crate"))"
+  else
+    echo "  - $crate $(crate_version "$manifest")"
+  fi
 done
 echo ""
 
 if [ "$DRY_RUN" = true ]; then
+  DRIFT=0
+  for crate in "${PUBLISH_CRATES[@]}"; do
+    manifest="$(manifest_for_crate "$crate")"
+    version="$(crate_version "$manifest")"
+    if is_crate_published "$crate" "$version"; then
+      echo -e "${YELLOW}drift: ${crate} ${version} is already on crates.io; bump its version before publishing.${NC}"
+      DRIFT=$((DRIFT + 1))
+    fi
+  done
+  if [ "$DRIFT" -gt 0 ]; then
+    echo -e "${YELLOW}${DRIFT} selected crate(s) need a version bump before they can publish.${NC}"
+    if [ "$CHECK_DRIFT" = true ]; then
+      exit 2
+    fi
+  fi
   echo -e "${GREEN}Dry run complete; no crates were published.${NC}"
   exit 0
 fi
@@ -475,13 +758,6 @@ else
     exit 1
   fi
 fi
-
-is_crate_published() {
-  local crate=$1
-  local version=$2
-
-  cargo search "$crate" --limit 1 2>/dev/null | grep -q "^$crate = \"${version}\""
-}
 
 needs_engine_verify_features() {
   local crate=$1

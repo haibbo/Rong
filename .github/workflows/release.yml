@@ -15,7 +15,7 @@ on:
           - rust
           - npm
       rust_selection:
-        description: "Rust selection passed to scripts/publish.sh, e.g. --crate rong_timer, --group engines, --changed-since v0.4.0."
+        description: "Rust selection passed to scripts/publish.sh, e.g. --changed, --crate rong_timer, --group engines, --changed-since v0.4.0."
         required: false
         default: "--group rust"
         type: string
@@ -24,29 +24,33 @@ on:
         required: true
         default: true
         type: boolean
+      product_release:
+        description: "Optional repo-level product tag (e.g. v0.4.1). After publishing, creates the tag and a GitHub Release from its CHANGELOG.md entry. Leave empty to skip."
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: publish-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  publish:
-    runs-on: macos-latest
+  validate:
+    runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          submodules: recursive
 
       - name: Resolve publish scope
         env:
           PACKAGE_SCOPE: ${{ inputs.package_scope }}
           RUST_SELECTION: ${{ inputs.rust_selection }}
           CREATE_TAGS: ${{ inputs.create_tags }}
+          PRODUCT_RELEASE: ${{ inputs.product_release }}
         run: |
           if [ "${GITHUB_REF_NAME}" != "master" ]; then
             echo "Run this workflow from master."
@@ -69,11 +73,34 @@ jobs:
             fi
           fi
 
-          {
-            echo "PACKAGE_SCOPE=$PACKAGE_SCOPE"
-            echo "RUST_SELECTION=$RUST_SELECTION"
-            echo "CREATE_TAGS=$CREATE_TAGS"
-          } >> "$GITHUB_ENV"
+          if [ -n "$PRODUCT_RELEASE" ] \
+            && ! printf '%s' "$PRODUCT_RELEASE" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "product_release must look like v0.4.1, got: $PRODUCT_RELEASE"
+            exit 1
+          fi
+
+          if [ -n "$PRODUCT_RELEASE" ]; then
+            version="${PRODUCT_RELEASE#v}"
+            if ! ./scripts/extract_changelog_entry.sh "$version" > /tmp/product-release-notes.md \
+              || [ ! -s /tmp/product-release-notes.md ]; then
+              echo "CHANGELOG.md has no entry for ${version}; add it before publishing with product_release."
+              exit 1
+            fi
+
+            if ! git rev-parse -q --verify "refs/tags/${PRODUCT_RELEASE}" >/dev/null \
+              && git ls-remote --exit-code --tags origin "refs/tags/${PRODUCT_RELEASE}" >/dev/null 2>&1; then
+              git fetch origin "refs/tags/${PRODUCT_RELEASE}:refs/tags/${PRODUCT_RELEASE}"
+            fi
+
+            if git rev-parse -q --verify "refs/tags/${PRODUCT_RELEASE}" >/dev/null; then
+              tag_commit="$(git rev-parse "${PRODUCT_RELEASE}^{commit}")"
+              head_commit="$(git rev-parse HEAD)"
+              if [ "$tag_commit" != "$head_commit" ]; then
+                echo "Tag ${PRODUCT_RELEASE} already exists but points at ${tag_commit}, not HEAD (${head_commit})."
+                exit 1
+              fi
+            fi
+          fi
 
           {
             echo "### Package publish scope"
@@ -81,41 +108,49 @@ jobs:
             echo "- Package scope: \`$PACKAGE_SCOPE\`"
             echo "- Rust selection: \`$RUST_SELECTION\`"
             echo "- Create package tags: \`$CREATE_TAGS\`"
-            echo "- Creates repo-level release tag: \`false\`"
+            echo "- Product release: \`${PRODUCT_RELEASE:-none}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  publish-rust:
+    needs: validate
+    if: inputs.package_scope == 'all' || inputs.package_scope == 'rust'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
       - name: Install Rust
-        if: inputs.package_scope == 'all' || inputs.package_scope == 'rust'
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Node.js
-        if: inputs.package_scope == 'all' || inputs.package_scope == 'npm'
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-
-      - name: Install npm with trusted publishing support
-        if: inputs.package_scope == 'all' || inputs.package_scope == 'npm'
-        run: |
-          npm install -g npm@^11.5.1
-          npm --version
-
       - name: Cache cargo
-        if: inputs.package_scope == 'all' || inputs.package_scope == 'rust'
         uses: Swatinem/rust-cache@v2
 
       - name: Install system dependencies (macOS)
-        if: inputs.package_scope == 'all' || inputs.package_scope == 'rust'
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
           brew install llvm
           echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
 
+      # crates.io Trusted Publishing (GitHub OIDC). Requires the trusted
+      # publisher to be configured for each crate on crates.io; until every
+      # crate is configured, the CARGO_REGISTRY_TOKEN secret is the fallback.
+      - name: Authenticate with crates.io (OIDC)
+        id: cargo-auth
+        continue-on-error: true
+        uses: rust-lang/crates-io-auth-action@v1
+
       - name: Publish crates
-        if: inputs.package_scope == 'all' || inputs.package_scope == 'rust'
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.cargo-auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+          RUST_SELECTION: ${{ inputs.rust_selection }}
+          CREATE_TAGS: ${{ inputs.create_tags }}
         run: |
           read -r -a rust_args <<< "$RUST_SELECTION"
           if [ "$CREATE_TAGS" = "true" ]; then
@@ -123,11 +158,106 @@ jobs:
           fi
           ./scripts/publish.sh --yes "${rust_args[@]}"
 
+  publish-npm:
+    needs: validate
+    if: inputs.package_scope == 'all' || inputs.package_scope == 'npm'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install npm with trusted publishing support
+        run: |
+          npm install -g npm@^11.5.1
+          npm --version
+
       - name: Publish npm packages
-        if: inputs.package_scope == 'all' || inputs.package_scope == 'npm'
+        env:
+          CREATE_TAGS: ${{ inputs.create_tags }}
         run: |
           npm_args=()
           if [ "$CREATE_TAGS" = "true" ]; then
             npm_args+=(--tag)
           fi
           ./scripts/publish_npm.sh "${npm_args[@]}"
+
+  product-release:
+    needs: [publish-rust, publish-npm]
+    if: >-
+      !cancelled() && inputs.product_release != '' &&
+      (needs.publish-rust.result == 'success' || needs.publish-rust.result == 'skipped') &&
+      (needs.publish-npm.result == 'success' || needs.publish-npm.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Create product tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT_RELEASE: ${{ inputs.product_release }}
+        run: |
+          version="${PRODUCT_RELEASE#v}"
+
+          if ! ./scripts/extract_changelog_entry.sh "$version" > release-notes.md \
+            || [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md has no entry for ${version}; add it before creating a product release."
+            exit 1
+          fi
+
+          # Tag handling is rerun-safe: an existing tag is accepted only when
+          # it points at the current HEAD, so a recovery run can continue to
+          # the GitHub Release step without re-releasing different content.
+          if ! git rev-parse -q --verify "refs/tags/${PRODUCT_RELEASE}" >/dev/null \
+            && git ls-remote --exit-code --tags origin "refs/tags/${PRODUCT_RELEASE}" >/dev/null 2>&1; then
+            git fetch origin "refs/tags/${PRODUCT_RELEASE}:refs/tags/${PRODUCT_RELEASE}"
+          fi
+
+          if git rev-parse -q --verify "refs/tags/${PRODUCT_RELEASE}" >/dev/null; then
+            tag_commit="$(git rev-parse "${PRODUCT_RELEASE}^{commit}")"
+            head_commit="$(git rev-parse HEAD)"
+            if [ "$tag_commit" != "$head_commit" ]; then
+              echo "Tag ${PRODUCT_RELEASE} already exists but points at ${tag_commit}," \
+                "not the current HEAD (${head_commit})."
+              echo "Refusing to reuse it; pick a new version or delete the tag deliberately."
+              exit 1
+            fi
+            echo "Tag ${PRODUCT_RELEASE} already exists and points at HEAD; continuing."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$PRODUCT_RELEASE" -m "Rong ${PRODUCT_RELEASE}"
+            git push origin "$PRODUCT_RELEASE"
+          fi
+
+          if gh release view "$PRODUCT_RELEASE" >/dev/null 2>&1; then
+            echo "GitHub Release ${PRODUCT_RELEASE} already exists; nothing to create."
+            release_state="already existed"
+          else
+            gh release create "$PRODUCT_RELEASE" \
+              --verify-tag \
+              --title "Rong ${PRODUCT_RELEASE}" \
+              --notes-file release-notes.md
+            release_state="created from CHANGELOG.md entry \`$version\`"
+          fi
+
+          {
+            echo "### Product release"
+            echo
+            echo "- Tag: \`$PRODUCT_RELEASE\`"
+            echo "- GitHub Release: ${release_state}"
+          } >> "$GITHUB_STEP_SUMMARY"

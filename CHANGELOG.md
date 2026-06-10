@@ -6,9 +6,6 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ## [Unreleased]
 
-No 0.4.1 release is planned. These changes remain unreleased and will be
-included in the next planned release.
-
 ### Added
 
 - Added independent Rust crate and npm package publishing controls for selecting
@@ -17,6 +14,17 @@ included in the next planned release.
   npm packages.
 - Added runtime reporting for the source-built JavaScriptCore artifact revision
   so the active JSC source build can be identified at runtime.
+- Added `--changed` selection to the publish script: crates are compared
+  against their own latest package tags with version-only manifest churn
+  ignored, so partial-release plans reflect real code changes.
+- Added publish drift detection (`--dry-run` warnings and `--check-drift`) for
+  selected crates whose current version is already on crates.io, plus an
+  informational pending-release-plan summary on `master` CI runs.
+- Added an optional `product_release` input to the publish workflow that
+  creates the repo-level product tag and a GitHub Release from the matching
+  changelog entry after a successful publish.
+- Added crates.io Trusted Publishing (GitHub OIDC) support to the publish
+  workflow, with `CARGO_REGISTRY_TOKEN` as the fallback.
 
 ### Changed
 
@@ -31,6 +39,14 @@ included in the next planned release.
 - Updated CI maintenance settings to use Node 24-compatible GitHub Actions, pin
   Windows jobs to the `windows-2025-vs2026` runner image, and make Cargo
   registry downloads more resilient.
+- Split the publish workflow into validation, Rust (macOS), npm (Linux), and
+  product-release jobs, so npm-only publishes no longer use a macOS runner.
+- Changed published-version checks in the publish script to query the crates.io
+  sparse index for exact version matches instead of `cargo search`.
+- The publish script now validates its crate list against the workspace's
+  publishable members and fails fast on drift, and no longer treats files of
+  nested crates (such as `quickjs/sys` under `quickjs`) as changes to the
+  enclosing crate.
 
 ### Fixed
 

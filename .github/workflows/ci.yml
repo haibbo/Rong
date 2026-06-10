@@ -113,6 +113,41 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
 
+  # Informational only: shows which crates have publish-relevant changes since
+  # their last release tag, and which need a version bump. Never fails the
+  # build; the actual gate is publish.sh --check-drift in release planning.
+  release-plan:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Compute pending release plan
+        run: |
+          set +e
+          plan="$(./scripts/publish.sh --changed --dry-run 2>&1)"
+          status=$?
+          set -e
+          {
+            echo "### Pending release plan"
+            echo
+            echo "Crates with publish-relevant changes since their latest release tag:"
+            echo
+            echo '```'
+            printf '%s\n' "$plan" | sed -E 's/\x1B\[[0-9;]*m//g'
+            echo '```'
+            if [ "$status" -ne 0 ]; then
+              echo
+              echo "publish.sh exited with status ${status}."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   npm-package:
     needs: scope
     if: needs.scope.outputs.npm == 'true'
