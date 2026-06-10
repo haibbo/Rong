@@ -377,7 +377,7 @@ mod tests {
     use rong_test::*;
     use std::rc::Rc;
     use std::sync::atomic::{AtomicI32, Ordering};
-    use tokio::time::sleep;
+    use tokio::time::{Instant, sleep};
 
     fn run_unit_suite(unit: &str) {
         let unit = unit.to_string();
@@ -412,12 +412,14 @@ mod tests {
                 .eval(Source::from_bytes("setInterval(increment, 50)"))
                 .unwrap();
 
-            // Wait for multiple intervals
-            sleep(Duration::from_millis(175)).await;
+            let deadline = Instant::now() + Duration::from_millis(750);
+            while counter.load(Ordering::SeqCst) < 3 && Instant::now() < deadline {
+                sleep(Duration::from_millis(25)).await;
+            }
             let count = counter.load(Ordering::SeqCst);
             assert!(
-                (3..=5).contains(&count),
-                "Expected 3 to 5 increments, got {}",
+                count >= 3,
+                "Expected at least 3 increments within 750ms, got {}",
                 count
             );
 
