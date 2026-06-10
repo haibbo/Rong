@@ -48,9 +48,10 @@ or directly at a WebKit build tree such as `WebKitBuild/JSCOnly/Release`;
 `JavaScriptCore/JavaScript.h`.
 
 When the artifact is a `JavaScriptCore.framework` produced on Apple, the crate
-links it as a framework. Otherwise it links the
-static `JavaScriptCore`, `WTF`, and `bmalloc` archives plus the usual ICU/C++
-runtime libraries for the target OS.
+links it as a framework and stamps the framework install name to the extracted
+artifact path, so downstream binaries do not need to add their own rpath.
+Otherwise it links the static `JavaScriptCore`, `WTF`, and `bmalloc` archives
+plus the usual ICU/C++ runtime libraries for the target OS.
 
 ## Building an artifact
 

@@ -294,9 +294,6 @@ fn build_source(target_os: &str) {
         stamp_apple_framework_install_name(&framework_dir);
         println!("cargo:rustc-link-search=framework={}", source.lib.display());
         println!("cargo:rustc-link-lib=framework=JavaScriptCore");
-        if matches!(target_os, "macos" | "ios" | "tvos" | "watchos") {
-            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", source.lib.display());
-        }
     } else {
         println!("cargo:rustc-link-search=native={}", source.lib.display());
         for lib in link_libs(target_os) {
@@ -314,21 +311,11 @@ fn build_source(target_os: &str) {
 }
 
 fn stamp_apple_framework_install_name(framework_dir: &Path) {
-    let binary = framework_dir
-        .join("Versions")
-        .read_dir()
-        .ok()
-        .and_then(|entries| {
-            entries.filter_map(Result::ok).find_map(|entry| {
-                let candidate = entry.path().join("JavaScriptCore");
-                candidate.is_file().then_some(candidate)
-            })
-        })
-        .or_else(|| {
-            let candidate = framework_dir.join("JavaScriptCore");
-            candidate.is_file().then_some(candidate)
-        });
-    let Some(binary) = binary else {
+    // The artifact builder preserves the standard framework symlinks. Stamp the
+    // framework entry point that the linker sees so executables record this
+    // extracted artifact path directly instead of needing an LC_RPATH entry.
+    let binary = framework_dir.join("JavaScriptCore");
+    if !binary.is_file() {
         println!(
             "cargo:warning=rong_jscore_sys: could not find JavaScriptCore framework binary under {}",
             framework_dir.display()

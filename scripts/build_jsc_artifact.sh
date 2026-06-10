@@ -850,7 +850,8 @@ copy_nonframework_headers() {
 if [[ -n "$FRAMEWORK" ]]; then
     ARTIFACT_KIND="framework"
     echo "    framework: $FRAMEWORK"
-    cp -RL "$FRAMEWORK" "$OUT_DIR/lib/JavaScriptCore.framework"
+    rm -rf "$OUT_DIR/lib/JavaScriptCore.framework"
+    ditto "$FRAMEWORK" "$OUT_DIR/lib/JavaScriptCore.framework"
     # Linkers can prefer .tbd stubs inside frameworks and record the stub's
     # @rpath install name instead of the real binary's stamped install name.
     # Keep the artifact relocatable and let build.rs stamp the real binary at
@@ -985,9 +986,6 @@ if [[ "${RONG_JSC_SKIP_SMOKE:-0}" != "1" && "$HOST_TARGET" == "$TARGET" ]]; then
     echo "==> Smoke-testing artifact"
     SMOKE_JSC_ROOT="$OUT_DIR"
     SMOKE_ENV=("RONG_JSC_ROOT=$SMOKE_JSC_ROOT" "RONG_JSC_REQUIRE_BYTECODE=1")
-    if [[ "$IS_DARWIN" -eq 1 && "${ARTIFACT_KIND:-}" == "framework" ]]; then
-        SMOKE_ENV+=("RUSTFLAGS=${RUSTFLAGS:+$RUSTFLAGS }-C link-arg=-Wl,-rpath,$OUT_DIR/lib")
-    fi
     if [[ "$IS_WINDOWS" -eq 1 ]]; then
         SMOKE_JSC_ROOT="$(to_cmake_path "$OUT_DIR")"
         SMOKE_ENV=("RONG_JSC_ROOT=$SMOKE_JSC_ROOT" "RONG_JSC_REQUIRE_BYTECODE=1")

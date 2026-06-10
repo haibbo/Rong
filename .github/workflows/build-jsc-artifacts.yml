@@ -325,9 +325,6 @@ jobs:
             sleep 15
           done
           case "${{ matrix.target }}" in
-            *-apple-*)
-              export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=-Wl,-rpath,$RONG_JSC_CACHE_DIR/${{ matrix.target }}/lib"
-              ;;
             *-pc-windows-msvc)
               msvc_bin=""
               msvc_bin="$(cygpath -u "${VCToolsInstallDir%\\}/bin/HostX64/x64")"
