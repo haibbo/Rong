@@ -200,6 +200,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -261,3 +262,13 @@ jobs:
             echo "- Tag: \`$PRODUCT_RELEASE\`"
             echo "- GitHub Release: ${release_state}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # Tags/releases created with GITHUB_TOKEN do not trigger other
+      # workflows, so the website deploy (version badge + module API docs)
+      # is dispatched explicitly.
+      - name: Deploy website
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run deploy-website.yml --ref master
+          echo "- Website deploy dispatched" >> "$GITHUB_STEP_SUMMARY"

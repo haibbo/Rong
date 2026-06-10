@@ -1,0 +1,68 @@
+name: "Deploy Website"
+
+# Builds the Astro site in ./website and publishes it to GitHub Pages.
+# Runs on website/API-doc changes pushed to master, and is dispatched by the
+# Publish Packages workflow after a product release so the site version badge
+# and module API docs stay current. Requires repo Settings → Pages →
+# "Build and deployment" → Source: GitHub Actions.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "website/**"
+      - "docs/api/**"
+      - "modules/*/README.md"
+      - ".github/workflows/deploy-website.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # Full history so the site version resolves from git release tags.
+          fetch-depth: 0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build site
+        run: npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

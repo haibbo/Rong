@@ -38,18 +38,23 @@ npm run preview  # serve the production build locally
 
 This site is configured for a **project Pages site** at
 `https://lingxia-dev.github.io/Rong` — note `base: '/Rong'` in
-[`astro.config.mjs`](./astro.config.mjs).
+[`astro.config.mjs`](./astro.config.mjs). Pages must be set to
+**Settings → Pages → Build and deployment → Source: GitHub Actions**.
 
-Two options:
+The repo-root workflow `.github/workflows/deploy-website.yml` builds and
+publishes automatically when:
 
-1. **GitHub Actions (recommended).** The workflow in
-   [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) builds and
-   publishes on every push to `master` that touches `website/`. In the repo,
-   go to **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-   (Move this workflow to the repo-root `.github/workflows/` if it isn't picked up.)
+- a push to `master` touches `website/**`, `docs/api/**`, or
+  `modules/*/README.md` (module API pages are generated from those files)
+- the `Publish Packages` workflow completes a product release (it dispatches
+  this workflow so the version badge updates)
+- it is run manually via workflow dispatch
 
-2. **Manual.** Run `npm run build` and push the contents of `dist/` to a
-   `gh-pages` branch, or upload it however you prefer.
+## Release integration
+
+The hero version badge and the Cargo example version are resolved at build
+time by [`src/data/version.ts`](./src/data/version.ts): latest `vX.Y.Z` git
+tag first, `CHANGELOG.md` heading as fallback. Nothing to edit when releasing.
 
 ### Deploying somewhere else?
 
